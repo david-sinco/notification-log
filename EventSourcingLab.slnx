@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="EventSourcingLab.ApiService/EventSourcingLab.ApiService.csproj" />
+  <Project Path="EventSourcingLab.AppHost/EventSourcingLab.AppHost.csproj" />
+  <Project Path="EventSourcingLab.ServiceDefaults/EventSourcingLab.ServiceDefaults.csproj" />
+  <Project Path="EventSourcingLab.Tests/EventSourcingLab.Tests.csproj" />
+  <Project Path="EventSourcingLab.Web/EventSourcingLab.Web.csproj" />
+</Solution>
