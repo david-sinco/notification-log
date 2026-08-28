@@ -1,5 +1,10 @@
 ﻿using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
+using NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;
+using NotificationLog.NotificationService.Application.Templates.Commands.UpdateTemplateContent;
+using NotificationLog.NotificationService.Application.Templates.Queries.GetTemplateById;
+using NotificationLog.NotificationService.Application.Templates.Queries.ListTemplates;
 using NotificationLog.NotificationService.Application.Triggers.Commands.CreateTrigger;
 using NotificationLog.NotificationService.Application.Triggers.Queries.GetTriggerById;
 using NotificationLog.NotificationService.Application.Triggers.Queries.ListTriggers;
@@ -25,6 +30,13 @@ public static class DependencyInjection
         //services.AddScoped<DisableConfigurationHandler>();
         //services.AddScoped<GetTriggerByIdHandler>();
 
+
+        // Templates
+        services.AddScoped<CreateTemplateHandler>();
+        services.AddScoped<UpdateTemplateContentHandler>();
+        services.AddScoped<SetTemplateStatusHandler>();
+        services.AddScoped<GetTemplateByIdHandler>();
+        services.AddScoped<ListTemplatesHandler>();
 
         return services;
     }

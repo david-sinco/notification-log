@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using NotificationLog.NotificationService.Domain.Templates;
 using NotificationLog.NotificationService.Domain.Triggers;
 
 namespace NotificationLog.NotificationService.Infrastructure.Persistence.Configuration;
@@ -20,5 +21,10 @@ internal sealed class NotificationConfigurationConfiguration
 
         builder.HasIndex("NotificationTriggerId", nameof(NotificationConfiguration.Channel))
             .HasDatabaseName("IX_NotificationConfigurations_Trigger_Channel");
+
+        builder.HasOne<NotificationTemplate>()
+            .WithMany()
+            .HasForeignKey(c => c.TemplateId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

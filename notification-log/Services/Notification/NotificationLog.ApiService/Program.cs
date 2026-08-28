@@ -1,7 +1,9 @@
+using Microsoft.EntityFrameworkCore;
 using NotificationLog.ApiService.Endpoints;
 using NotificationLog.ApiService.Exceptions;
 using NotificationLog.NotificationService.Application;
 using NotificationLog.NotificationService.Infrastructure;
+using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,6 +22,12 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
+    await db.Database.MigrateAsync();
+}
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -29,6 +37,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapDefaultEndpoints();
+
 app.MapTriggers();
+app.MapTemplates();
 
 app.Run();

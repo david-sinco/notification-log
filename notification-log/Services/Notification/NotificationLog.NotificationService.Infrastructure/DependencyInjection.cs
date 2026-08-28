@@ -2,8 +2,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.NotificationService.Application.Abstractions;
+using NotificationLog.NotificationService.Domain.Templates;
 using NotificationLog.NotificationService.Domain.Triggers;
-using NotificationLog.NotificationService.Infrastructure.Persistence.DbContext;
+using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Repositories;
 
 namespace NotificationLog.NotificationService.Infrastructure;
@@ -30,6 +31,7 @@ public static class DependencyInjection
             sp.GetRequiredService<NotificationDbContext>());
 
         services.AddScoped<INotificationTriggerRepository, NotificationTriggerRepository>();
+        services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
 
         return services;
     }

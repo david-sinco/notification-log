@@ -10,6 +10,9 @@
   <Folder Name="/Shared/">
     <Project Path="Shared/NotificationLog.ServiceDefaults/NotificationLog.ServiceDefaults.csproj" />
   </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path="CLAUDE.md" />
+  </Folder>
   <Project Path="NotificationLog.AppHost/NotificationLog.AppHost.csproj" />
   <Project Path="NotificationLog.Web/NotificationLog.Web.csproj" />
 </Solution>

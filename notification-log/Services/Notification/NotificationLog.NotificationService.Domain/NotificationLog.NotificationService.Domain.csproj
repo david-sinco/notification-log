@@ -8,7 +8,6 @@
 
   <ItemGroup>
     <Folder Include="Recipients\" />
-    <Folder Include="Templates\" />
   </ItemGroup>
 
 </Project>

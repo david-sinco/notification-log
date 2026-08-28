@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using NotificationLog.NotificationService.Domain.Triggers;
-using NotificationLog.NotificationService.Infrastructure.Persistence.DbContext;
+using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 
 namespace NotificationLog.NotificationService.Infrastructure.Persistence.Repositories;
 
