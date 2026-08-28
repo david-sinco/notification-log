@@ -1,0 +1,274 @@
+@page "/users"
+@inject UsersApiClient Users
+
+<h1>Users</h1>
+
+<section class="card">
+    <h2 style="margin-top:0">Register</h2>
+    <div class="field">
+        <label for="reg-name">Name</label>
+        <input id="reg-name" @bind="registerName" @bind:event="oninput" placeholder="Ana" />
+    </div>
+    <button @onclick="RegisterAsync" disabled="@busy">Register</button>
+</section>
+
+<section class="card">
+    <h2 style="margin-top:0">Current user</h2>
+    <div class="field">
+        <label for="user-id">User id</label>
+        <input id="user-id" @bind="currentId" @bind:event="oninput" placeholder="paste a user id, or register above" />
+    </div>
+
+    <h3>Contact verification</h3>
+    <div class="inline">
+        <input @bind="emailInput" @bind:event="oninput" placeholder="email address" style="max-width:220px" />
+        <button class="secondary" @onclick="RequestEmailChangeAsync" disabled="@busy">Request email change</button>
+    </div>
+    <div class="inline" style="margin-top:0.5rem">
+        <input @bind="emailToken" @bind:event="oninput" placeholder="token" style="max-width:220px" />
+        <button class="secondary" @onclick="VerifyEmailAsync" disabled="@busy">Verify email</button>
+    </div>
+    <div class="inline" style="margin-top:1rem">
+        <input @bind="phoneInput" @bind:event="oninput" placeholder="+15551234567" style="max-width:220px" />
+        <button class="secondary" @onclick="RequestPhoneChangeAsync" disabled="@busy">Request phone change</button>
+    </div>
+    <div class="inline" style="margin-top:0.5rem">
+        <input @bind="phoneToken" @bind:event="oninput" placeholder="token" style="max-width:220px" />
+        <button class="secondary" @onclick="VerifyPhoneAsync" disabled="@busy">Verify phone</button>
+    </div>
+
+    <h3>Preferences</h3>
+    <div class="inline">
+        <label><input type="checkbox" @bind="prefEmail" /> Email</label>
+        <label><input type="checkbox" @bind="prefSms" /> SMS (needs a verified phone)</label>
+        <button class="secondary" @onclick="ChangePreferencesAsync" disabled="@busy">Save preferences</button>
+    </div>
+
+    <h3>Lifecycle</h3>
+    <div class="inline">
+        <button class="danger" @onclick="DeactivateAsync" disabled="@busy">Deactivate</button>
+        <button class="secondary" @onclick="ReactivateAsync" disabled="@busy">Reactivate</button>
+    </div>
+
+    <h3>Inspect</h3>
+    <div class="inline">
+        <button class="secondary" @onclick="LoadProfileAsync" disabled="@busy">Load profile</button>
+        <button class="secondary" @onclick="LoadEventsAsync" disabled="@busy">Load raw events</button>
+    </div>
+</section>
+
+@if (lastRaw is not null)
+{
+    <section class="card">
+        <h2 style="margin-top:0">
+            Last response
+            <span class="@(lastSuccess ? "status-ok" : "status-err")">@lastStatus</span>
+        </h2>
+        <pre class="result">@lastRaw</pre>
+    </section>
+}
+
+@if (profile is not null)
+{
+    <section class="card">
+        <h2 style="margin-top:0">Profile (UserProfile — inline projection)</h2>
+        <table>
+            <tbody>
+                <tr><th>Name</th><td>@profile.Name</td></tr>
+                <tr><th>Email</th><td>@profile.Email @(profile.EmailVerified ? "(verified)" : "")</td></tr>
+                <tr><th>Phone</th><td>@profile.Phone @(profile.PhoneVerified ? "(verified)" : "")</td></tr>
+                <tr><th>Active</th><td>@profile.Active</td></tr>
+                <tr><th>Preferences</th><td>email=@profile.Preferences.EmailEnabled, sms=@profile.Preferences.SmsEnabled</td></tr>
+                <tr><th>Version</th><td>@profile.Version</td></tr>
+                <tr><th>Updated</th><td>@profile.UpdatedAt</td></tr>
+            </tbody>
+        </table>
+    </section>
+}
+
+@if (events is not null)
+{
+    <section class="card">
+        <h2 style="margin-top:0">Raw event stream</h2>
+        <table>
+            <thead><tr><th>#</th><th>Type</th><th>Occurred</th><th>Data</th></tr></thead>
+            <tbody>
+                @foreach (var e in events)
+                {
+                    <tr>
+                        <td>@e.Version</td>
+                        <td>@e.Type</td>
+                        <td>@e.OccurredAt</td>
+                        <td><code>@e.Data.ToString()</code></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+}
+
+<section class="card">
+    <h2 style="margin-top:0">Verification funnel</h2>
+    <button class="secondary" @onclick="LoadFunnelAsync" disabled="@busy">Load funnel</button>
+    @if (funnel is not null)
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Day</th><th>Registrations</th><th>Email req.</th><th>Email verified</th>
+                    <th>Phone req.</th><th>Phone verified</th><th>Deactivations</th>
+                    <th>Mismatch</th><th>Expired</th><th>Too many</th><th>Conversion</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var b in funnel)
+                {
+                    <tr>
+                        <td>@b.Id</td><td>@b.Registrations</td><td>@b.EmailChangesRequested</td>
+                        <td>@b.EmailsVerified</td><td>@b.PhoneChangesRequested</td><td>@b.PhonesVerified</td>
+                        <td>@b.Deactivations</td><td>@b.TokenMismatchFailures</td>
+                        <td>@b.TokenExpiredFailures</td><td>@b.TooManyAttemptsFailures</td>
+                        <td>@b.ConversionRate.ToString("P1")</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private string registerName = "";
+    private string currentId = "";
+    private string emailInput = "";
+    private string emailToken = "";
+    private string phoneInput = "";
+    private string phoneToken = "";
+    private bool prefEmail = true;
+    private bool prefSms;
+
+    private bool busy;
+    private string? lastRaw;
+    private int lastStatus;
+    private bool lastSuccess;
+
+    private UserProfileDto? profile;
+    private List<EventEntryDto>? events;
+    private List<FunnelBucketDto>? funnel;
+
+    private bool TryGetId(out Guid id) => Guid.TryParse(currentId, out id);
+
+    private Task RegisterAsync() => RunAsync(async () =>
+    {
+        var result = await Users.RegisterAsync(registerName, CancellationToken.None);
+        if (result.Success && result.Value is not null)
+            currentId = result.Value.Id.ToString();
+        ShowResult(result);
+    });
+
+    private Task RequestEmailChangeAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        var result = await Users.RequestEmailChangeAsync(id, emailInput, CancellationToken.None);
+        if (result.Success && result.Value is not null)
+            emailToken = result.Value.Token;
+        ShowResult(result);
+    });
+
+    private Task VerifyEmailAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        ShowResult(await Users.VerifyEmailAsync(id, emailToken, CancellationToken.None));
+    });
+
+    private Task RequestPhoneChangeAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        var result = await Users.RequestPhoneChangeAsync(id, phoneInput, CancellationToken.None);
+        if (result.Success && result.Value is not null)
+            phoneToken = result.Value.Token;
+        ShowResult(result);
+    });
+
+    private Task VerifyPhoneAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        ShowResult(await Users.VerifyPhoneAsync(id, phoneToken, CancellationToken.None));
+    });
+
+    private Task ChangePreferencesAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        ShowResult(await Users.ChangePreferencesAsync(id, prefEmail, prefSms, null, null, CancellationToken.None));
+    });
+
+    private Task DeactivateAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        ShowResult(await Users.DeactivateAsync(id, CancellationToken.None));
+    });
+
+    private Task ReactivateAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        ShowResult(await Users.ReactivateAsync(id, CancellationToken.None));
+    });
+
+    private Task LoadProfileAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        var result = await Users.GetProfileAsync(id, CancellationToken.None);
+        profile = result.Success ? result.Value : null;
+        ShowResult(result);
+    });
+
+    private Task LoadEventsAsync() => RunAsync(async () =>
+    {
+        if (!TryGetId(out var id)) return;
+        var result = await Users.GetEventsAsync(id, CancellationToken.None);
+        events = result.Success ? result.Value : null;
+        ShowResult(result);
+    });
+
+    private Task LoadFunnelAsync() => RunAsync(async () =>
+    {
+        var result = await Users.GetFunnelAsync(CancellationToken.None);
+        funnel = result.Success ? result.Value : null;
+        ShowResult(result);
+    });
+
+    private void ShowResult<T>(ApiResult<T> result)
+    {
+        lastStatus = result.StatusCode;
+        lastSuccess = result.Success;
+        lastRaw = Pretty(result.RawBody);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        StateHasChanged();
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string Pretty(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "(empty body)";
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+}

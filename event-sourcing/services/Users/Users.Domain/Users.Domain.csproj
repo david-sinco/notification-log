@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Zero package references, by design (SPEC.md §3): if a Marten, Kafka or ASP.NET type
+       becomes reachable from this project, the layering is broken. -->
+
+</Project>

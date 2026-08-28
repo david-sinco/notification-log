@@ -1,0 +1,174 @@
+@page "/notifications"
+@inject NotificationsApiClient Notifications
+
+<h1>Notifications</h1>
+
+<section class="card">
+    <h2 style="margin-top:0">Request a notification</h2>
+    <div class="field">
+        <label for="notif-user">User id</label>
+        <input id="notif-user" @bind="userId" @bind:event="oninput" placeholder="a user id already replicated here" />
+    </div>
+    <div class="field">
+        <label for="notif-channel">Channel</label>
+        <select id="notif-channel" @bind="channel">
+            <option value="Email">Email</option>
+            <option value="Sms">Sms</option>
+        </select>
+    </div>
+    <div class="field">
+        <label for="notif-key">Idempotency key</label>
+        <input id="notif-key" @bind="idempotencyKey" @bind:event="oninput" placeholder="unique per attempt" />
+    </div>
+    <div class="field">
+        <label for="notif-body">Body</label>
+        <input id="notif-body" @bind="body" @bind:event="oninput" placeholder="hello!" />
+    </div>
+    <button @onclick="RequestNotificationAsync" disabled="@busy">Request</button>
+</section>
+
+<section class="card">
+    <h2 style="margin-top:0">Look up a notification</h2>
+    <div class="inline">
+        <input @bind="notificationId" @bind:event="oninput" placeholder="notification id" style="max-width:320px" />
+        <button class="secondary" @onclick="LoadNotificationAsync" disabled="@busy">Load</button>
+    </div>
+    @if (notification is not null)
+    {
+        <table>
+            <tbody>
+                <tr><th>Status</th><td>@notification.Status</td></tr>
+                <tr><th>Channel</th><td>@notification.Channel</td></tr>
+                <tr><th>Attempts</th><td>@notification.Attempts</td></tr>
+                <tr><th>Scheduled for</th><td>@notification.ScheduledFor</td></tr>
+                <tr><th>Sent at</th><td>@notification.SentAt</td></tr>
+                <tr><th>Last error</th><td>@notification.LastError</td></tr>
+            </tbody>
+        </table>
+    }
+</section>
+
+<section class="card">
+    <h2 style="margin-top:0">Replica (independently folded from users.events, not translated via Users)</h2>
+    <div class="inline">
+        <button class="secondary" @onclick="LoadReplicaStatusAsync" disabled="@busy">Replica status</button>
+        @if (replicaCount is not null)
+        {
+            <span>Replicated users: <strong>@replicaCount</strong></span>
+        }
+    </div>
+    <div class="inline" style="margin-top:0.75rem">
+        <input @bind="replicaLookupUserId" @bind:event="oninput" placeholder="user id" style="max-width:320px" />
+        <button class="secondary" @onclick="LoadReplicaByUserAsync" disabled="@busy">Look up replica</button>
+    </div>
+    @if (contact is not null)
+    {
+        <table>
+            <tbody>
+                <tr><th>Name</th><td>@contact.Name</td></tr>
+                <tr><th>Email</th><td>@contact.Email (verified=@contact.EmailVerified, optIn=@contact.EmailOptIn)</td></tr>
+                <tr><th>Phone</th><td>@contact.Phone (verified=@contact.PhoneVerified, optIn=@contact.SmsOptIn)</td></tr>
+                <tr><th>Active</th><td>@contact.Active</td></tr>
+                <tr><th>Updated</th><td>@contact.UpdatedAt</td></tr>
+            </tbody>
+        </table>
+    }
+</section>
+
+@if (lastRaw is not null)
+{
+    <section class="card">
+        <h2 style="margin-top:0">
+            Last response
+            <span class="@(lastSuccess ? "status-ok" : "status-err")">@lastStatus</span>
+        </h2>
+        <pre class="result">@lastRaw</pre>
+    </section>
+}
+
+@code {
+    private string userId = "";
+    private string channel = "Email";
+    private string idempotencyKey = "";
+    private string body = "";
+    private string notificationId = "";
+    private string replicaLookupUserId = "";
+
+    private bool busy;
+    private string? lastRaw;
+    private int lastStatus;
+    private bool lastSuccess;
+
+    private NotificationDto? notification;
+    private int? replicaCount;
+    private UserContactDto? contact;
+
+    private Task RequestNotificationAsync() => RunAsync(async () =>
+    {
+        if (!Guid.TryParse(userId, out var id)) return;
+        var ch = channel == "Sms" ? ChannelDto.Sms : ChannelDto.Email;
+        var result = await Notifications.RequestNotificationAsync(id, ch, idempotencyKey, body, CancellationToken.None);
+        if (result.Success && result.Value is not null)
+            notificationId = result.Value.Id.ToString();
+        ShowResult(result);
+    });
+
+    private Task LoadNotificationAsync() => RunAsync(async () =>
+    {
+        if (!Guid.TryParse(notificationId, out var id)) return;
+        var result = await Notifications.GetByIdAsync(id, CancellationToken.None);
+        notification = result.Success ? result.Value : null;
+        ShowResult(result);
+    });
+
+    private Task LoadReplicaStatusAsync() => RunAsync(async () =>
+    {
+        var result = await Notifications.GetReplicaStatusAsync(CancellationToken.None);
+        replicaCount = result.Success ? result.Value?.Count : null;
+        ShowResult(result);
+    });
+
+    private Task LoadReplicaByUserAsync() => RunAsync(async () =>
+    {
+        if (!Guid.TryParse(replicaLookupUserId, out var id)) return;
+        var result = await Notifications.GetReplicaByUserAsync(id, CancellationToken.None);
+        contact = result.Success ? result.Value : null;
+        ShowResult(result);
+    });
+
+    private void ShowResult<T>(ApiResult<T> result)
+    {
+        lastStatus = result.StatusCode;
+        lastSuccess = result.Success;
+        lastRaw = Pretty(result.RawBody);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        StateHasChanged();
+        try
+        {
+            await action();
+        }
+        finally
+        {
+            busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private static string Pretty(string raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return "(empty body)";
+        try
+        {
+            using var doc = JsonDocument.Parse(raw);
+            return JsonSerializer.Serialize(doc, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return raw;
+        }
+    }
+}

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Marten, projections, outbox, transport adapters, DI registration. Implements
+       Users.Application's ports. -->
+
+  <ItemGroup>
+    <PackageReference Include="Marten" />
+    <PackageReference Include="Aspire.Npgsql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Users.Application\Users.Application.csproj" />
+    <ProjectReference Include="..\..\..\Shared\Messaging\Messaging.csproj" />
+  </ItemGroup>
+
+</Project>

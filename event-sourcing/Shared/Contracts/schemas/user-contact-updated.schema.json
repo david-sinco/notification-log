@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eventsourcinglab.local/schemas/user-contact-updated.schema.json",
+  "title": "UserContactUpdated",
+  "description": "Event-carried state transfer. Full current contact snapshot, not a delta: idempotent, self-sufficient, compactable. Owned by the Users service (SPEC.md §5).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["eventId", "type", "aggregateId", "version", "occurredAt", "schemaVersion", "data"],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid", "description": "For consumer-side de-duplication." },
+    "type": { "type": "string", "const": "UserContactUpdated", "description": "For routing." },
+    "aggregateId": { "type": "string", "format": "uuid", "description": "The Users stream id." },
+    "version": { "type": "integer", "minimum": 1, "description": "Marten stream version; consumers drop snapshots at or below their stored version." },
+    "occurredAt": { "type": "string", "format": "date-time", "description": "For lag measurement." },
+    "schemaVersion": { "type": "integer", "minimum": 1, "description": "For evolution; consumers should warn (not crash) on an unrecognized value." },
+    "data": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "additionalProperties is intentionally true: an old consumer must tolerate new fields.",
+      "required": ["userId", "name", "email", "phone", "emailVerified", "phoneVerified", "active", "preferences"],
+      "properties": {
+        "userId": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "email": { "type": ["string", "null"] },
+        "phone": { "type": ["string", "null"] },
+        "emailVerified": { "type": "boolean" },
+        "phoneVerified": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "preferences": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["email", "sms"],
+          "properties": {
+            "email": { "type": "boolean" },
+            "sms": { "type": "boolean" },
+            "quietHoursStart": { "type": ["string", "null"], "format": "time" },
+            "quietHoursEnd": { "type": ["string", "null"], "format": "time" }
+          }
+        }
+      }
+    }
+  }
+}

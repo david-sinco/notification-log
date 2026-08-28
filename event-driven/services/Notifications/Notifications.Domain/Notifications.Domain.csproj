@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Zero package references. Holds the Notification state machine, the UserContact replica, and
+       (unlike event-sourcing/'s Notifications.Domain) the local raw-event record shapes this
+       service folds users.events through — see RawUsersEvents.cs's own note on why they live
+       here rather than in Infrastructure. -->
+
+</Project>

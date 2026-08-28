@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Publishes the users.events schema only, no code. Unlike event-sourcing/'s Contracts (one
+       schema for one translated integration event), this documents the raw log itself: the
+       envelope shape plus the union of all ten Users domain event payloads, because in this
+       architecture that raw union is what's actually shared across the service boundary. -->
+
+  <ItemGroup>
+    <Content Include="schemas\**\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

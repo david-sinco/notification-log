@@ -1,0 +1,37 @@
+@page "/"
+
+<h1>Event Sourcing Lab — Test Console</h1>
+
+<p>
+    A thin Blazor front end for driving <code>Users.Api</code> and <code>Notifications.Api</code>
+    by hand, so you don't have to reach for curl to try out the flows in <code>SPEC.md</code> §4
+    and §8. It talks to both APIs over plain HTTP — the same requests <code>tools/seed.sh</code>
+    makes — nothing here reaches into either service's internals.
+</p>
+
+<section class="card">
+    <h2 style="margin-top:0">Where to look</h2>
+    <ul>
+        <li><strong><a href="users">Users</a></strong> — register, verify email/phone, change
+            preferences, deactivate/reactivate, inspect the raw event stream, and read the
+            verification funnel.</li>
+        <li><strong><a href="notifications">Notifications</a></strong> — schedule a notification,
+            watch it move through Scheduled → Sending → Sent/Discarded, and check the replica.</li>
+        <li><strong><a href="http://localhost:8025" target="_blank" rel="noopener">Mailpit</a></strong>
+            — every Email-channel notification that actually sends lands here for real; open it to
+            read the message instead of trusting the fake sender's word for it.</li>
+    </ul>
+</section>
+
+<section class="card">
+    <h2 style="margin-top:0">A typical run</h2>
+    <ol>
+        <li>Users → register a name, note the returned id.</li>
+        <li>Users → request an email change for that id, copy the returned token, verify it.</li>
+        <li>Users → enable the "sms" preference (only legal once a phone is verified — try it
+            before verifying a phone to see the 422).</li>
+        <li>Notifications → replica status should show your user once the outbox/consumer catch
+            up (a second or two).</li>
+        <li>Notifications → schedule an Email notification for that user id, then check Mailpit.</li>
+    </ol>
+</section>

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Publishes the integration-event schema only (SPEC.md §5). No shared DTO assembly: each
+       service writes its own classes against this published contract, deliberately duplicated
+       so a shared DLL never couples the two services' deployment cycles. -->
+
+  <ItemGroup>
+    <Content Include="schemas\**\*.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

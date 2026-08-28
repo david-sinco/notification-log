@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/Services/" />
+  <Folder Name="/Services/Notification/">
+    <Project Path="Services/Notification/NotificationLog.ApiService/NotificationLog.ApiService.csproj" />
+    <Project Path="Services/Notification/NotificationLog.NotificationService.Application/NotificationLog.NotificationService.Application.csproj" />
+    <Project Path="Services/Notification/NotificationLog.NotificationService.Domain/NotificationLog.NotificationService.Domain.csproj" />
+    <Project Path="Services/Notification/NotificationLog.NotificationService.Infrastructure/NotificationLog.NotificationService.Infrastructure.csproj" />
+    <Project Path="Services/Notification/NotificationLog.Tests/NotificationLog.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Shared/">
+    <Project Path="Shared/NotificationLog.ServiceDefaults/NotificationLog.ServiceDefaults.csproj" />
+  </Folder>
+  <Project Path="NotificationLog.AppHost/NotificationLog.AppHost.csproj" />
+  <Project Path="NotificationLog.Web/NotificationLog.Web.csproj" />
+</Solution>

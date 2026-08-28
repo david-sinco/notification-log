@@ -1,0 +1,22 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>eventsourcinglab-apphost</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Explicit on purpose: the Aspire.AppHost.Sdk target that adds this reference implicitly
+         only fires when no PackageReference for it exists yet. Under central package management
+         that implicit add collides with the PackageVersion entry in Directory.Packages.props
+         (NU1009), so it's listed here instead and versioned centrally like everything else. -->
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.PostgreSQL" />
+    <PackageReference Include="Aspire.Hosting.RabbitMQ" />
+    <PackageReference Include="Aspire.Hosting.Kafka" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\services\Users\Users.Api\Users.Api.csproj" />
+    <ProjectReference Include="..\services\Notifications\Notifications.Api\Notifications.Api.csproj" />
+    <ProjectReference Include="..\Web\Web.csproj" />
+  </ItemGroup>
+</Project>

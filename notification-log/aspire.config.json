@@ -1,0 +1,5 @@
+{
+  "appHost": {
+    "path": "NotificationLog.AppHost/NotificationLog.AppHost.csproj"
+  }
+}

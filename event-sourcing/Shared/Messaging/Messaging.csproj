@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Transport plumbing only: connect, publish, subscribe. Deliberately thin (SPEC.md §7) —
+       each service adapts this to its own port interface inside its own Infrastructure layer.
+       RabbitMQ and Kafka concrete implementations land in a later phase. -->
+
+  <ItemGroup>
+    <PackageReference Include="RabbitMQ.Client" />
+    <PackageReference Include="RabbitMQ.Stream.Client" />
+    <PackageReference Include="Confluent.Kafka" />
+  </ItemGroup>
+
+</Project>

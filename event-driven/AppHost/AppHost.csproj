@@ -1,0 +1,19 @@
+<Project Sdk="Aspire.AppHost.Sdk/13.5.0">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <UserSecretsId>eventdrivenlab-apphost</UserSecretsId>
+  </PropertyGroup>
+  <ItemGroup>
+    <!-- Explicit, not implicit: under central package management the SDK's implicit reference
+         collides with the PackageVersion entry in Directory.Packages.props (NU1009). No
+         Aspire.Hosting.PostgreSQL, no Aspire.Hosting.RabbitMQ — this solution has neither. -->
+    <PackageReference Include="Aspire.Hosting.AppHost" />
+    <PackageReference Include="Aspire.Hosting.Kafka" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\services\Users\Users.Api\Users.Api.csproj" />
+    <ProjectReference Include="..\services\Notifications\Notifications.Api\Notifications.Api.csproj" />
+    <ProjectReference Include="..\Web\Web.csproj" />
+  </ItemGroup>
+</Project>

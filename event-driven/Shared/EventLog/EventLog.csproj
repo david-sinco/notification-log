@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Purpose-built log plumbing, not a reuse of event-sourcing/'s Shared/Messaging: that
+       interface models generic pub/sub (publish/subscribe, no offsets exposed) for a system where
+       a private database is still the source of truth and the broker only carries a translated
+       notification. Here the log itself IS the database, so callers need the partition/offset a
+       produce landed on and an explicit "caught up to the current high-watermark" signal — neither
+       has a RabbitMQ/generic-pubsub analogue, so this stays Kafka-specific on purpose rather than
+       forcing a shared abstraction to fit two different jobs. -->
+
+  <ItemGroup>
+    <PackageReference Include="Confluent.Kafka" />
+  </ItemGroup>
+
+</Project>

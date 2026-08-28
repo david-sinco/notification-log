@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Zero package references, by design: if a Kafka or ASP.NET type becomes reachable from this
+       project, the layering is broken. Identical to event-sourcing/'s Users.Domain — the aggregate
+       itself doesn't change between the two architectures, only how its events get stored. -->
+
+</Project>

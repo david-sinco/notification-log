@@ -1,0 +1,39 @@
+@page "/"
+
+<h1>Event Driven Lab — Test Console</h1>
+
+<p>
+    A thin Blazor front end for driving <code>Users.Api</code> and <code>Notifications.Api</code>
+    by hand, so you don't have to reach for curl to try the flows described in
+    <code>README.md</code>. It talks to both APIs over plain HTTP — nothing here reaches into
+    either service's internals or into Kafka directly.
+</p>
+
+<section class="card">
+    <h2 style="margin-top:0">Where to look</h2>
+    <ul>
+        <li><strong><a href="users">Users</a></strong> — register, verify email/phone, change
+            preferences, deactivate/reactivate, inspect the raw <code>users.events</code> history
+            kept for that user, and read the verification funnel.</li>
+        <li><strong><a href="notifications">Notifications</a></strong> — schedule a notification,
+            watch it move through Scheduled → Sending → Sent/Discarded, and check the replica this
+            service folded independently from the same log.</li>
+        <li><strong><a href="http://localhost:8026" target="_blank" rel="noopener">Mailpit</a></strong>
+            — every Email-channel notification that actually sends lands here for real; open it to
+            read the message instead of trusting the fake sender's word for it.</li>
+    </ul>
+</section>
+
+<section class="card">
+    <h2 style="margin-top:0">A typical run</h2>
+    <ol>
+        <li>Users → register a name, note the returned id.</li>
+        <li>Users → request an email change for that id, copy the returned token, verify it.</li>
+        <li>Users → load profile — this reads straight from the in-memory fold, not a database.</li>
+        <li>Notifications → replica status should show your user once its own materializer has
+            caught up on <code>users.events</code> (usually well under a second).</li>
+        <li>Notifications → schedule an Email notification for that user id, then check Mailpit.</li>
+        <li>Restart the AppHost and repeat step 3 — the same profile reappears, rebuilt entirely
+            from Kafka. That's the experiment this whole solution exists to demonstrate.</li>
+    </ol>
+</section>

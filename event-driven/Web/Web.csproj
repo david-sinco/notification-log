@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- A Blazor Server testing console, not a service — same role as event-sourcing/'s Web: it
+       calls Users.Api/Notifications.Api over plain HTTP like curl would, so it has no project
+       reference to either, only to Shared/ServiceDefaults for telemetry/service-discovery wiring. -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\Shared\ServiceDefaults\ServiceDefaults.csproj" />
+  </ItemGroup>
+
+</Project>

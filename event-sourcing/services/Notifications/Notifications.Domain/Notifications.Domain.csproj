@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Zero package references. Holds the Notification aggregate (state machine) — the replica
+       (UserContact) is deliberately NOT event sourced and lives in Notifications.Infrastructure
+       as a plain document instead (SPEC.md §8). -->
+
+</Project>

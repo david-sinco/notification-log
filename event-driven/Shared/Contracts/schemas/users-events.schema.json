@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://eventsourcinglab.local/schemas/users-events.schema.json",
+  "title": "users.events envelope",
+  "description": "The wire shape for every record on the users.events topic (event-driven/README.md). Unlike event-sourcing/'s single translated UserContactUpdated schema, this describes the raw union of all ten Users domain events, because in this architecture the raw log itself is the shared artifact — there is no translated boundary event.",
+  "type": "object",
+  "required": ["eventId", "type", "aggregateId", "occurredAt", "schemaVersion", "data"],
+  "properties": {
+    "eventId": { "type": "string", "format": "uuid" },
+    "type": {
+      "type": "string",
+      "enum": [
+        "UserRegistered", "EmailChangeRequested", "EmailVerified", "EmailVerificationFailed",
+        "PhoneChangeRequested", "PhoneVerified", "PhoneVerificationFailed", "PreferencesChanged",
+        "UserDeactivated", "UserReactivated"
+      ]
+    },
+    "aggregateId": { "type": "string", "format": "uuid", "description": "The userId; also the Kafka message key." },
+    "occurredAt": { "type": "string", "format": "date-time" },
+    "schemaVersion": { "type": "integer", "minimum": 1 },
+    "data": {
+      "type": "object",
+      "description": "Shape depends on 'type' — see services/Users/Users.Domain/Events.cs for the ten record definitions this mirrors field-for-field.",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
