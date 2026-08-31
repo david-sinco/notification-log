@@ -34,14 +34,14 @@ public class NotificationTrigger : AggregateRoot
         };
     }
 
-    public Guid AddConfiguration(Guid templateId, NotificationChannel channel)
+    public NotificationConfiguration AddConfiguration(Guid templateId, NotificationChannel channel)
     {
         EnsureChannelIsFree(channel);
 
         var configuration = NotificationConfiguration.Create(templateId, channel);
         _configurations.Add(configuration);
 
-        return configuration.Id;
+        return configuration;
     }
 
     public void EnableConfiguration(Guid configurationId)
