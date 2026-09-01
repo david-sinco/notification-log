@@ -1,4 +1,4 @@
-﻿namespace NotificationLog.NotificationService.Application.Abstractions;
+namespace NotificationLog.NotificationService.Application.Recipients.Services.Sync;
 
 public sealed record UserChange(
     Guid UserId,

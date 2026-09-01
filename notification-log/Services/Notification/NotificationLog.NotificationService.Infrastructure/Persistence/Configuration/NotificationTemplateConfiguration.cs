@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NotificationLog.NotificationService.Domain.Templates;
 
@@ -31,16 +31,21 @@ internal sealed class NotificationTemplateConfiguration
             .HasConversion<int>()
             .IsRequired();
 
-        builder.Property(t => t.Subject)
-            .HasMaxLength(NotificationTemplate.SubjectMaxLength);
-
-        builder.Property(t => t.Body)
-            .HasMaxLength(NotificationTemplate.BodyMaxLength)
-            .IsRequired();
-
         builder.Property(t => t.IsEnabled).IsRequired();
 
         builder.HasIndex(t => new { t.Channel, t.IsEnabled })
             .HasDatabaseName("IX_NotificationTemplates_Channel_IsEnabled");
+
+        // CurrentVersion es una propiedad calculada sobre Versions, no una columna.
+        builder.Ignore(t => t.CurrentVersion);
+
+        builder.HasMany(t => t.Versions)
+            .WithOne()
+            .HasForeignKey("NotificationTemplateId")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata
+            .FindNavigation(nameof(NotificationTemplate.Versions))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
     }
 }

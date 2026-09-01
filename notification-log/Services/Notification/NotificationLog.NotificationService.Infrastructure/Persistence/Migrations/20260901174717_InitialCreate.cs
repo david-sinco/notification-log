@@ -18,8 +18,6 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "varchar(100)", unicode: false, maxLength: 100, nullable: false),
                     Channel = table.Column<int>(type: "int", nullable: false),
-                    Subject = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
-                    Body = table.Column<string>(type: "nvarchar(max)", maxLength: 20000, nullable: false),
                     IsEnabled = table.Column<bool>(type: "bit", nullable: false)
                 },
                 constraints: table =>
@@ -39,6 +37,47 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_NotificationTriggers", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Recipients",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Name = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: true),
+                    Phone = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: true),
+                    Locale = table.Column<string>(type: "nvarchar(20)", maxLength: 20, nullable: false),
+                    TimeZone = table.Column<string>(type: "nvarchar(50)", maxLength: 50, nullable: false),
+                    IsActive = table.Column<bool>(type: "bit", nullable: false),
+                    Attributes = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Recipients", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "TemplateVersions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Number = table.Column<int>(type: "int", nullable: false),
+                    Subject = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Body = table.Column<string>(type: "nvarchar(max)", maxLength: 20000, nullable: false),
+                    IsCurrent = table.Column<bool>(type: "bit", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    NotificationTemplateId = table.Column<Guid>(type: "uniqueidentifier", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_TemplateVersions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_TemplateVersions_NotificationTemplates_NotificationTemplateId",
+                        column: x => x.NotificationTemplateId,
+                        principalTable: "NotificationTemplates",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateTable(
@@ -94,6 +133,23 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                 table: "NotificationTriggers",
                 column: "EventKey",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Recipients_Email",
+                table: "Recipients",
+                column: "Email");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Recipients_IsActive",
+                table: "Recipients",
+                column: "IsActive");
+
+            migrationBuilder.CreateIndex(
+                name: "UX_TemplateVersions_Template_Number",
+                table: "TemplateVersions",
+                columns: new[] { "NotificationTemplateId", "Number" },
+                unique: true,
+                filter: "[NotificationTemplateId] IS NOT NULL");
         }
 
         /// <inheritdoc />
@@ -103,10 +159,16 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                 name: "NotificationConfigurations");
 
             migrationBuilder.DropTable(
-                name: "NotificationTemplates");
+                name: "Recipients");
+
+            migrationBuilder.DropTable(
+                name: "TemplateVersions");
 
             migrationBuilder.DropTable(
                 name: "NotificationTriggers");
+
+            migrationBuilder.DropTable(
+                name: "NotificationTemplates");
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿using NotificationLog.NotificationService.Application.Common;
+using NotificationLog.NotificationService.Application.Common;
 using NotificationLog.NotificationService.Application.Templates.Dtos;
 using NotificationLog.NotificationService.Domain.Templates;
 
@@ -22,7 +22,7 @@ public sealed class ListTemplatesHandler
 
         var dtos = items
             .Select(t => new TemplateSummaryDto(
-                t.Id, t.Name.Value, t.Channel.ToString(), t.Subject, t.IsEnabled))
+                t.Id, t.Name.Value, t.Channel.ToString(), t.CurrentVersion.Number, t.IsEnabled))
             .ToList();
 
         return new PagedResult<TemplateSummaryDto>(dtos, page, pageSize, total);

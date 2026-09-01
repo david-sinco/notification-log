@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using NotificationLog.NotificationService.Domain.Shared;
 using NotificationLog.NotificationService.Domain.Templates;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
@@ -12,7 +12,9 @@ internal sealed class NotificationTemplateRepository : INotificationTemplateRepo
     public NotificationTemplateRepository(NotificationDbContext db) => _db = db;
 
     public Task<NotificationTemplate?> GetByIdAsync(Guid id, CancellationToken ct)
-        => _db.Templates.SingleOrDefaultAsync(t => t.Id == id, ct);
+        => _db.Templates
+            .Include(t => t.Versions)
+            .SingleOrDefaultAsync(t => t.Id == id, ct);
 
     public Task<bool> ExistsAsync(TemplateName name, CancellationToken ct)
         => _db.Templates.AnyAsync(t => t.Name == name, ct);
@@ -24,7 +26,9 @@ internal sealed class NotificationTemplateRepository : INotificationTemplateRepo
         string? search, NotificationChannel? channel, bool? isEnabled,
         int page, int pageSize, CancellationToken ct)
     {
-        var query = _db.Templates.AsNoTracking();
+        var query = _db.Templates
+            .Include(t => t.Versions)
+            .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(search))
         {

@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using NotificationLog.NotificationService.Domain.Shared;
 using NotificationLog.NotificationService.Domain.Templates;
 
@@ -11,25 +11,22 @@ internal sealed class CreateTemplateValidator : AbstractValidator<CreateTemplate
 
     public CreateTemplateValidator()
     {
-        RuleFor(x => x.Name)
-            .NotEmpty()
-            .MaximumLength(TemplateName.MaxLength);
-
+        RuleFor(x => x.Name).NotEmpty().MaximumLength(TemplateName.MaxLength);
         RuleFor(x => x.Channel).IsInEnum();
+        RuleFor(x => x.Body).NotEmpty().MaximumLength(TemplateVersion.BodyMaxLength);
 
-        RuleFor(x => x.Subject)
-            .NotEmpty()
-            .MaximumLength(NotificationTemplate.SubjectMaxLength)
-            .When(x => ChannelsWithSubject.Contains(x.Channel))
-            .WithMessage("Las plantillas de este canal requieren asunto.");
-
-        RuleFor(x => x.Subject)
-            .Empty()
-            .When(x => !ChannelsWithSubject.Contains(x.Channel))
-            .WithMessage("Las plantillas de este canal no admiten asunto.");
-
-        RuleFor(x => x.Body)
-            .NotEmpty()
-            .MaximumLength(NotificationTemplate.BodyMaxLength);
+        When(x => ChannelsWithSubject.Contains(x.Channel), () =>
+        {
+            RuleFor(x => x.Subject)
+                .NotEmpty()
+                .MaximumLength(TemplateVersion.SubjectMaxLength)
+                .WithMessage("Las plantillas de este canal requieren asunto.");
+        })
+        .Otherwise(() =>
+        {
+            RuleFor(x => x.Subject)
+                .Empty()
+                .WithMessage("Las plantillas de este canal no admiten asunto.");
+        });
     }
 }

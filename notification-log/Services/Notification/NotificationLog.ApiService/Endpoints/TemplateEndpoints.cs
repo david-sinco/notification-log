@@ -1,8 +1,8 @@
 ﻿using NotificationLog.ApiService.Contracts.Templates;
 using NotificationLog.NotificationService.Application.Common;
 using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
+using NotificationLog.NotificationService.Application.Templates.Commands.PublishTemplateVersion;
 using NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;
-using NotificationLog.NotificationService.Application.Templates.Commands.UpdateTemplateContent;
 using NotificationLog.NotificationService.Application.Templates.Dtos;
 using NotificationLog.NotificationService.Application.Templates.Queries.GetTemplateById;
 using NotificationLog.NotificationService.Application.Templates.Queries.ListTemplates;
@@ -33,10 +33,10 @@ public static class TemplateEndpoints
             .WithSummary("Lista plantillas con filtros y paginación")
             .Produces<PagedResult<TemplateSummaryDto>>();
 
-        group.MapPut("/{id:guid}/content", UpdateContentAsync)
-            .WithName("UpdateTemplateContent")
-            .WithSummary("Actualiza el asunto y el cuerpo de una plantilla")
-            .Produces(StatusCodes.Status204NoContent)
+        group.MapPost("/{id:guid}/versions", PublishVersionAsync)
+            .WithName("PublishTemplateVersion")
+            .WithSummary("Publica una nueva versión (asunto y cuerpo) de una plantilla")
+            .Produces<PublishedTemplateVersionResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
@@ -72,16 +72,18 @@ public static class TemplateEndpoints
         CancellationToken ct)
         => Results.Ok(await handler.HandleAsync(query, ct));
 
-    private static async Task<IResult> UpdateContentAsync(
+    private static async Task<IResult> PublishVersionAsync(
         Guid id,
-        UpdateTemplateContentRequest body,
-        UpdateTemplateContentHandler handler,
+        PublishTemplateVersionRequest body,
+        PublishTemplateVersionHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(
-            new UpdateTemplateContentCommand(id, body.Subject, body.Body), ct);
+        var versionId = await handler.HandleAsync(
+            new PublishTemplateVersionCommand(id, body.Subject, body.Body), ct);
 
-        return Results.NoContent();
+        return Results.Created(
+            $"/api/templates/{id}/versions/{versionId}",
+            new PublishedTemplateVersionResponse(versionId));
     }
 
     private static async Task<IResult> SetStatusAsync(

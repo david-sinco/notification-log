@@ -1,5 +1,8 @@
 ﻿using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationFailure;
+using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationSuccess;
+using NotificationLog.NotificationService.Application.Notifications.Queries.ListNotifications;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Application.Recipients.Commands.SetRecipientStatus;
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientAttributes;
@@ -9,8 +12,8 @@ using NotificationLog.NotificationService.Application.Recipients.Commands.Update
 using NotificationLog.NotificationService.Application.Recipients.Queries.GetRecipientById;
 using NotificationLog.NotificationService.Application.Recipients.Queries.ListRecipients;
 using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
+using NotificationLog.NotificationService.Application.Templates.Commands.PublishTemplateVersion;
 using NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;
-using NotificationLog.NotificationService.Application.Templates.Commands.UpdateTemplateContent;
 using NotificationLog.NotificationService.Application.Templates.Queries.GetTemplateById;
 using NotificationLog.NotificationService.Application.Templates.Queries.ListTemplates;
 using NotificationLog.NotificationService.Application.Triggers.Commands.AddConfiguration;
@@ -50,7 +53,7 @@ public static class DependencyInjection
 
         // Templates
         services.AddScoped<CreateTemplateHandler>();
-        services.AddScoped<UpdateTemplateContentHandler>();
+        services.AddScoped<PublishTemplateVersionHandler>();
         services.AddScoped<SetTemplateStatusHandler>();
         services.AddScoped<GetTemplateByIdHandler>();
         services.AddScoped<ListTemplatesHandler>();
@@ -64,6 +67,20 @@ public static class DependencyInjection
         services.AddScoped<SetRecipientStatusHandler>();
         services.AddScoped<GetRecipientByIdHandler>();
         services.AddScoped<ListRecipientsHandler>();
+
+        // Notifications
+        services.AddScoped<RecordNotificationSuccessHandler>();
+        services.AddScoped<RecordNotificationFailureHandler>();
+        services.AddScoped<ListNotificationsHandler>();
+
+        // NotificationDispatchService (Notifications/Services/Dispatch) todavía no se registra.
+        // No es un BackgroundService: lo invoca directamente el consumer de infraestructura
+        // (p. ej. un IConsumer<T> de MassTransit) cada vez que le empujan un evento, dentro del
+        // mismo scope del mensaje. Depende de ITemplateRenderer y de un remitente por canal
+        // (IEmailNotificationSender, ISmsNotificationSender, IPushNotificationSender,
+        // IWhatsAppNotificationSender), que aún no tienen implementación en Infrastructure.
+        // Cuando existan, agregar aquí:
+        // services.AddScoped<Notifications.Services.Dispatch.NotificationDispatchService>();
 
         return services;
     }

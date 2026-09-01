@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using NotificationLog.NotificationService.Application.Abstractions;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Application.Recipients.Commands.SetRecipientStatus;
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientAttributes;
@@ -8,9 +8,9 @@ using NotificationLog.NotificationService.Application.Recipients.Commands.Update
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientPhone;
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientProfile;
 
-namespace NotificationLog.NotificationService.Application.Recipients.Sync;
+namespace NotificationLog.NotificationService.Application.Recipients.Services.Sync;
 
-public sealed class RecipientSyncService
+public sealed class RecipientSyncService : BackgroundService
 {
     private readonly IUserChangeStream _stream;
     private readonly IServiceScopeFactory _scopes;
@@ -22,13 +22,13 @@ public sealed class RecipientSyncService
         ILogger<RecipientSyncService> log)
         => (_stream, _scopes, _log) = (stream, scopes, log);
 
-    public async Task RunAsync(CancellationToken ct)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await foreach (var change in _stream.ReadAsync(ct))
+        await foreach (var change in _stream.ReadAsync(stoppingToken))
         {
             try
             {
-                await DispatchAsync(change, ct);
+                await DispatchAsync(change, stoppingToken);
             }
             catch (Exception ex)
             {

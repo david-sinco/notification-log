@@ -12,7 +12,7 @@ using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(NotificationDbContext))]
-    [Migration("20260828233451_InitialCreate")]
+    [Migration("20260901174717_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -25,15 +25,57 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
 
-            modelBuilder.Entity("NotificationLog.NotificationService.Domain.Templates.NotificationTemplate", b =>
+            modelBuilder.Entity("NotificationLog.NotificationService.Domain.Recipients.Recipient", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uniqueidentifier");
 
-                    b.Property<string>("Body")
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("nvarchar(320)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Locale")
                         .IsRequired()
-                        .HasMaxLength(20000)
-                        .HasColumnType("nvarchar(max)");
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("_attributes")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)")
+                        .HasColumnName("Attributes");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Email")
+                        .HasDatabaseName("IX_Recipients_Email");
+
+                    b.HasIndex("IsActive")
+                        .HasDatabaseName("IX_Recipients_IsActive");
+
+                    b.ToTable("Recipients", (string)null);
+                });
+
+            modelBuilder.Entity("NotificationLog.NotificationService.Domain.Templates.NotificationTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
 
                     b.Property<int>("Channel")
                         .HasColumnType("int");
@@ -48,10 +90,6 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                         .HasColumnType("varchar(100)")
                         .HasColumnName("Name");
 
-                    b.Property<string>("Subject")
-                        .HasMaxLength(200)
-                        .HasColumnType("nvarchar(200)");
-
                     b.HasKey("Id");
 
                     b.HasIndex("Name")
@@ -62,6 +100,42 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                         .HasDatabaseName("IX_NotificationTemplates_Channel_IsEnabled");
 
                     b.ToTable("NotificationTemplates", (string)null);
+                });
+
+            modelBuilder.Entity("NotificationLog.NotificationService.Domain.Templates.TemplateVersion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(20000)
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsCurrent")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid?>("NotificationTemplateId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Subject")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NotificationTemplateId", "Number")
+                        .IsUnique()
+                        .HasDatabaseName("UX_TemplateVersions_Template_Number")
+                        .HasFilter("[NotificationTemplateId] IS NOT NULL");
+
+                    b.ToTable("TemplateVersions", (string)null);
                 });
 
             modelBuilder.Entity("NotificationLog.NotificationService.Domain.Triggers.NotificationConfiguration", b =>
@@ -120,6 +194,14 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                     b.ToTable("NotificationTriggers", (string)null);
                 });
 
+            modelBuilder.Entity("NotificationLog.NotificationService.Domain.Templates.TemplateVersion", b =>
+                {
+                    b.HasOne("NotificationLog.NotificationService.Domain.Templates.NotificationTemplate", null)
+                        .WithMany("Versions")
+                        .HasForeignKey("NotificationTemplateId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
             modelBuilder.Entity("NotificationLog.NotificationService.Domain.Triggers.NotificationConfiguration", b =>
                 {
                     b.HasOne("NotificationLog.NotificationService.Domain.Triggers.NotificationTrigger", null)
@@ -132,6 +214,11 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                         .HasForeignKey("TemplateId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("NotificationLog.NotificationService.Domain.Templates.NotificationTemplate", b =>
+                {
+                    b.Navigation("Versions");
                 });
 
             modelBuilder.Entity("NotificationLog.NotificationService.Domain.Triggers.NotificationTrigger", b =>

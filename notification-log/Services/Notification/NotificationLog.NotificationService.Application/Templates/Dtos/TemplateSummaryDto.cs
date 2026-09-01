@@ -1,8 +1,3 @@
 ﻿namespace NotificationLog.NotificationService.Application.Templates.Dtos;
 
-public sealed record TemplateSummaryDto(
-    Guid Id,
-    string Name,
-    string Channel,
-    string? Subject,
-    bool IsEnabled);
+public sealed record TemplateSummaryDto(Guid Id, string Name, string Channel, int CurrentVersion, bool IsEnabled);

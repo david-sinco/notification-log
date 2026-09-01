@@ -7,6 +7,10 @@ public sealed class Recipient : AggregateRoot
 {
     public const int NameMaxLength = 200;
     public const int AttributeKeyMaxLength = 100;
+    public const int EmailMaxLength = 320;
+    public const int PhoneMaxLength = 20;
+    public const int LocaleMaxLength = 20;
+    public const int TimeZoneMaxLength = 50;
 
     private readonly Dictionary<string, string> _attributes = new();
 
