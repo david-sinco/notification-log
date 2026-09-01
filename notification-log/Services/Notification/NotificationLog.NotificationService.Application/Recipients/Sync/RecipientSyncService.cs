@@ -2,7 +2,11 @@
 using Microsoft.Extensions.Logging;
 using NotificationLog.NotificationService.Application.Abstractions;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
+using NotificationLog.NotificationService.Application.Recipients.Commands.SetRecipientStatus;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientAttributes;
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientEmail;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientPhone;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientProfile;
 
 namespace NotificationLog.NotificationService.Application.Recipients.Sync;
 

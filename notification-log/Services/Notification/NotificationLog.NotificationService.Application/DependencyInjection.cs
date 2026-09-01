@@ -1,5 +1,13 @@
 ﻿using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
+using NotificationLog.NotificationService.Application.Recipients.Commands.SetRecipientStatus;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientAttributes;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientEmail;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientPhone;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientProfile;
+using NotificationLog.NotificationService.Application.Recipients.Queries.GetRecipientById;
+using NotificationLog.NotificationService.Application.Recipients.Queries.ListRecipients;
 using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
 using NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;
 using NotificationLog.NotificationService.Application.Templates.Commands.UpdateTemplateContent;
@@ -46,6 +54,16 @@ public static class DependencyInjection
         services.AddScoped<SetTemplateStatusHandler>();
         services.AddScoped<GetTemplateByIdHandler>();
         services.AddScoped<ListTemplatesHandler>();
+
+        // Recipients
+        services.AddScoped<CreateRecipientHandler>();
+        services.AddScoped<UpdateRecipientEmailHandler>();
+        services.AddScoped<UpdateRecipientPhoneHandler>();
+        services.AddScoped<UpdateRecipientProfileHandler>();
+        services.AddScoped<UpdateRecipientAttributesHandler>();
+        services.AddScoped<SetRecipientStatusHandler>();
+        services.AddScoped<GetRecipientByIdHandler>();
+        services.AddScoped<ListRecipientsHandler>();
 
         return services;
     }

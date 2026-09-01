@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using NotificationLog.ApiService.Endpoints;
 using NotificationLog.ApiService.Exceptions;
 using NotificationLog.NotificationService.Application;
+using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Infrastructure;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 using Scalar.AspNetCore;
@@ -34,11 +35,24 @@ if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
     app.MapScalarApiReference();
+
+    app.MapPost("/api/dev/recipients", async (
+        CreateRecipientCommand cmd,
+        CreateRecipientHandler handler,
+        CancellationToken ct) =>
+    {
+        await handler.HandleAsync(cmd, ct);
+        return Results.Created($"/api/recipients/{cmd.RecipientId}", new { id = cmd.RecipientId });
+    })
+    .WithTags("Dev")
+    .WithSummary("Solo desarrollo: crea un destinatario manualmente");
 }
 
 app.MapDefaultEndpoints();
 
+// Endpoints
 app.MapTriggers();
 app.MapTemplates();
+app.MapRecipients();
 
 app.Run();
