@@ -1,5 +1,3 @@
-﻿using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Application.Recipients.Commands.SetRecipientStatus;
@@ -10,72 +8,63 @@ using NotificationLog.NotificationService.Application.Recipients.Commands.Update
 
 namespace NotificationLog.NotificationService.Application.Recipients.Services.Sync;
 
-public sealed class RecipientSyncService : BackgroundService
+// Puerto que invoca el consumer de infraestructura (p. ej. un IConsumer<T> de MassTransit) cada
+// vez que llega un cambio de usuario. No hace fetch: el mensaje se lo empujan una vez por
+// invocación, así que esta clase se resuelve en el scope que ya crea el propio consumer, sin
+// loop ni polling.
+public sealed class RecipientSyncService
 {
-    private readonly IUserChangeStream _stream;
-    private readonly IServiceScopeFactory _scopes;
+    private readonly CreateRecipientHandler _createRecipient;
+    private readonly UpdateRecipientEmailHandler _updateEmail;
+    private readonly UpdateRecipientPhoneHandler _updatePhone;
+    private readonly UpdateRecipientProfileHandler _updateProfile;
+    private readonly UpdateRecipientAttributesHandler _updateAttributes;
+    private readonly SetRecipientStatusHandler _setStatus;
     private readonly ILogger<RecipientSyncService> _log;
 
     public RecipientSyncService(
-        IUserChangeStream stream,
-        IServiceScopeFactory scopes,
+        CreateRecipientHandler createRecipient,
+        UpdateRecipientEmailHandler updateEmail,
+        UpdateRecipientPhoneHandler updatePhone,
+        UpdateRecipientProfileHandler updateProfile,
+        UpdateRecipientAttributesHandler updateAttributes,
+        SetRecipientStatusHandler setStatus,
         ILogger<RecipientSyncService> log)
-        => (_stream, _scopes, _log) = (stream, scopes, log);
+        => (_createRecipient, _updateEmail, _updatePhone, _updateProfile, _updateAttributes, _setStatus, _log)
+            = (createRecipient, updateEmail, updatePhone, updateProfile, updateAttributes, setStatus, log);
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    public async Task HandleAsync(UserChange change, CancellationToken ct)
     {
-        await foreach (var change in _stream.ReadAsync(stoppingToken))
-        {
-            try
-            {
-                await DispatchAsync(change, stoppingToken);
-            }
-            catch (Exception ex)
-            {
-                _log.LogError(ex,
-                    "Fallo al aplicar el cambio {Kind} del usuario {UserId}",
-                    change.Kind, change.UserId);
-            }
-        }
-    }
-
-    private async Task DispatchAsync(UserChange change, CancellationToken ct)
-    {
-        using var scope = _scopes.CreateScope();
-        var sp = scope.ServiceProvider;
-
         switch (change.Kind)
         {
             case UserChangeKind.Created:
-                await sp.GetRequiredService<CreateRecipientHandler>().HandleAsync(
+                await _createRecipient.HandleAsync(
                     new CreateRecipientCommand(
                         change.UserId, change.Name ?? "", change.Email, change.Phone), ct);
                 break;
 
             case UserChangeKind.EmailUpdated:
-                await sp.GetRequiredService<UpdateRecipientEmailHandler>().HandleAsync(
-                    new UpdateRecipientEmailCommand(change.UserId, change.Email), ct);
+                await _updateEmail.HandleAsync(new UpdateRecipientEmailCommand(change.UserId, change.Email), ct);
                 break;
 
             case UserChangeKind.PhoneUpdated:
-                await sp.GetRequiredService<UpdateRecipientPhoneHandler>().HandleAsync(
-                    new UpdateRecipientPhoneCommand(change.UserId, change.Phone), ct);
+                await _updatePhone.HandleAsync(new UpdateRecipientPhoneCommand(change.UserId, change.Phone), ct);
                 break;
 
             case UserChangeKind.ProfileUpdated:
-                await sp.GetRequiredService<UpdateRecipientProfileHandler>().HandleAsync(
+                await _updateProfile.HandleAsync(
                     new UpdateRecipientProfileCommand(
                         change.UserId, change.Name ?? "", change.Locale, change.TimeZone), ct);
                 break;
 
             case UserChangeKind.AttributesUpdated:
-                await sp.GetRequiredService<UpdateRecipientAttributesHandler>().HandleAsync(
+                await _updateAttributes.HandleAsync(
                     new UpdateRecipientAttributesCommand(
                         change.UserId, change.Attributes ?? new Dictionary<string, string?>()), ct);
                 break;
 
             case UserChangeKind.StatusUpdated:
-                await sp.GetRequiredService<SetRecipientStatusHandler>().HandleAsync(
+                await _setStatus.HandleAsync(
                     new SetRecipientStatusCommand(change.UserId, change.IsActive ?? true), ct);
                 break;
 

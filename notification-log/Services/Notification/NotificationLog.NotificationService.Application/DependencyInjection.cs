@@ -11,6 +11,7 @@ using NotificationLog.NotificationService.Application.Recipients.Commands.Update
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientProfile;
 using NotificationLog.NotificationService.Application.Recipients.Queries.GetRecipientById;
 using NotificationLog.NotificationService.Application.Recipients.Queries.ListRecipients;
+using NotificationLog.NotificationService.Application.Recipients.Services.Sync;
 using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
 using NotificationLog.NotificationService.Application.Templates.Commands.PublishTemplateVersion;
 using NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;
@@ -67,6 +68,12 @@ public static class DependencyInjection
         services.AddScoped<SetRecipientStatusHandler>();
         services.AddScoped<GetRecipientByIdHandler>();
         services.AddScoped<ListRecipientsHandler>();
+
+        // RecipientSyncService (Recipients/Services/Sync) sí se puede registrar ya: a diferencia
+        // de NotificationDispatchService, sus dependencias son los handlers de arriba, que ya
+        // existen. Falta el consumer de infraestructura (p. ej. un IConsumer<UserChange> de
+        // MassTransit) que invoque HandleAsync por cada mensaje recibido.
+        services.AddScoped<RecipientSyncService>();
 
         // Notifications
         services.AddScoped<RecordNotificationSuccessHandler>();
