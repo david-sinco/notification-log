@@ -1,0 +1,198 @@
+@page "/triggers"
+@inject TriggersApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Triggers · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Triggers</h1>
+        <p>Reglas que deciden qué notificar cuando ocurre un hecho de negocio.</p>
+    </div>
+    <button class="btn btn-primary" @onclick="OpenCreate">+ Nuevo trigger</button>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="filter-bar">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-6">
+            <label class="form-label">Buscar</label>
+            <input class="form-control" placeholder="Event key o descripción… (Enter para buscar)"
+                   @bind="search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">Estado</label>
+            <select class="form-select" @bind="statusFilter" @bind:after="RefreshAsync">
+                <option value="">Todos</option>
+                <option value="true">Habilitados</option>
+                <option value="false">Deshabilitados</option>
+            </select>
+        </div>
+        <div class="col-md-3 text-md-end">
+            <button class="btn btn-outline-secondary w-100 w-md-auto" @onclick="RefreshAsync">Filtrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (page is { Items.Count: 0 })
+    {
+        <EmptyState Text="No se encontraron triggers." Icon="⚡" />
+    }
+    else if (page is not null)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Event key</th>
+                        <th>Descripción</th>
+                        <th>Configuraciones activas</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var t in page.Items)
+                    {
+                        <tr class="row-link" @onclick='() => Nav.NavigateTo($"/triggers/{t.Id}")'>
+                            <td><code>@t.EventKey</code></td>
+                            <td>@t.Description</td>
+                            <td>@t.ActiveConfigurations</td>
+                            <td>
+                                <StatusPill Text="@(t.IsEnabled ? "Habilitado" : "Deshabilitado")"
+                                            Variant="@(t.IsEnabled ? "success" : "neutral")" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="px-3 pb-3">
+            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
+        </div>
+    }
+</div>
+
+<Modal Title="Nuevo trigger" @bind-IsVisible="showCreate">
+    <ChildContent>
+        <EditForm Model="createModel" OnValidSubmit="CreateAsync" id="create-trigger-form">
+            <DataAnnotationsValidator />
+            <div class="mb-3">
+                <label class="form-label">Event key</label>
+                <input class="form-control" @bind="createModel.EventKey" placeholder="p. ej. transaccion.realizada" />
+                <div class="form-hint">Nombra un hecho de negocio, no una plantilla ni un canal.</div>
+                <ValidationMessage For="() => createModel.EventKey" />
+            </div>
+            <div class="mb-1">
+                <label class="form-label">Descripción</label>
+                <textarea class="form-control" rows="3" @bind="createModel.Description"></textarea>
+                <ValidationMessage For="() => createModel.Description" />
+            </div>
+            @if (createError is not null)
+            {
+                <div class="mt-3">
+                    <ErrorAlert Exception="createError" />
+                </div>
+            }
+        </EditForm>
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showCreate = false">Cancelar</button>
+        <button type="submit" form="create-trigger-form" class="btn btn-primary" disabled="@creating">Crear</button>
+    </FooterContent>
+</Modal>
+
+@code {
+    private PagedResult<TriggerSummaryDto>? page;
+    private bool loading = true;
+    private ApiException? error;
+
+    private string search = "";
+    private string statusFilter = "";
+    private int currentPage = 1;
+
+    private bool showCreate;
+    private bool creating;
+    private ApiException? createError;
+    private CreateTriggerModel createModel = new();
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            bool? isEnabled = statusFilter switch { "true" => true, "false" => false, _ => null };
+            page = await Api.ListAsync(
+                string.IsNullOrWhiteSpace(search) ? null : search, isEnabled, currentPage, 10, CancellationToken.None);
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPage(int p)
+    {
+        currentPage = p;
+        return LoadAsync();
+    }
+
+    private Task OnSearchKeyUp(KeyboardEventArgs e) => e.Key == "Enter" ? RefreshAsync() : Task.CompletedTask;
+
+    private void OpenCreate()
+    {
+        createModel = new CreateTriggerModel();
+        createError = null;
+        showCreate = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        creating = true;
+        try
+        {
+            var id = await Api.CreateAsync(
+                new CreateTriggerRequest(createModel.EventKey, createModel.Description), CancellationToken.None);
+            showCreate = false;
+            Nav.NavigateTo($"/triggers/{id}");
+        }
+        catch (ApiException ex)
+        {
+            createError = ex;
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+
+    private sealed class CreateTriggerModel
+    {
+        [Required(ErrorMessage = "El event key es obligatorio.")]
+        public string EventKey { get; set; } = "";
+
+        [Required(ErrorMessage = "La descripción es obligatoria.")]
+        public string Description { get; set; } = "";
+    }
+}

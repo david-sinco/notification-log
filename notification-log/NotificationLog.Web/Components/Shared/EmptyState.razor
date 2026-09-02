@@ -1,0 +1,9 @@
+<div class="empty-state text-center py-5">
+    <div class="empty-state-icon">@Icon</div>
+    <p class="mb-0 text-muted">@Text</p>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "No hay resultados.";
+    [Parameter] public string Icon { get; set; } = "📭";
+}

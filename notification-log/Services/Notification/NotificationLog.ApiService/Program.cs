@@ -54,5 +54,6 @@ app.MapDefaultEndpoints();
 app.MapTriggers();
 app.MapTemplates();
 app.MapRecipients();
+app.MapNotifications();
 
 app.Run();

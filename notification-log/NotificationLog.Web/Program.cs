@@ -1,4 +1,7 @@
-using NotificationLog.Web;
+using NotificationLog.Web.Api.Notifications;
+using NotificationLog.Web.Api.Recipients;
+using NotificationLog.Web.Api.Templates;
+using NotificationLog.Web.Api.Triggers;
 using NotificationLog.Web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,12 +14,12 @@ builder.AddRedisOutputCache("cache");
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddHttpClient<WeatherApiClient>(client =>
-    {
-        // This URL uses "https+http://" to indicate HTTPS is preferred over HTTP.
-        // Learn more about service discovery scheme resolution at https://aka.ms/dotnet/sdschemes.
-        client.BaseAddress = new("https+http://apiservice");
-    });
+// Clientes tipados hacia NotificationLog.ApiService. La URL usa "https+http://" para preferir
+// HTTPS cuando esté disponible; la resuelve el descubrimiento de servicios de Aspire.
+builder.Services.AddHttpClient<TriggersApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
 
 var app = builder.Build();
 

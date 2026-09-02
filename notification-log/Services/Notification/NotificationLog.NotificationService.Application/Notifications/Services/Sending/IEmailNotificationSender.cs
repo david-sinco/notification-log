@@ -1,6 +1,6 @@
 using NotificationLog.NotificationService.Domain.Notifications;
 
-namespace NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
+namespace NotificationLog.NotificationService.Application.Notifications.Services.Sending;
 
 public interface IEmailNotificationSender
 {

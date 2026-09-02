@@ -1,0 +1,109 @@
+@page "/templates/new"
+@inject TemplatesApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Nueva plantilla · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/templates" class="small">← Volver a plantillas</a>
+</div>
+
+<div class="page-header">
+    <div>
+        <h1>Nueva plantilla</h1>
+        <p>Definí el nombre, el canal y la primera versión del contenido.</p>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="surface-card">
+            <div class="mb-3">
+                <label class="form-label">Nombre</label>
+                <input class="form-control" @bind="name" @bind:event="oninput" placeholder="p. ej. Confirmación de compra" />
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label">Canal</label>
+                <select class="form-select" style="max-width:220px" @bind="channel">
+                    <option value="Email">Email</option>
+                    <option value="Sms">SMS</option>
+                    <option value="Push">Push</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                </select>
+            </div>
+
+            @if (TemplateLimits.RequiresSubject(channel))
+            {
+                <div class="mb-3">
+                    <label class="form-label d-flex justify-content-between">
+                        <span>Asunto</span>
+                        <span class="form-hint">@subject.Length / @TemplateLimits.SubjectMaxLength</span>
+                    </label>
+                    <input class="form-control" @bind="subject" @bind:event="oninput"
+                           maxlength="@TemplateLimits.SubjectMaxLength" placeholder="Asunto del mensaje" />
+                    <div class="form-hint">Requerido para Email y Push.</div>
+                </div>
+            }
+
+            <div class="mb-1">
+                <label class="form-label d-flex justify-content-between">
+                    <span>Cuerpo</span>
+                    <span class="form-hint">@body.Length / @TemplateLimits.BodyMaxLength</span>
+                </label>
+                <textarea class="form-control font-monospace" rows="12" @bind="body" @bind:event="oninput"
+                          maxlength="@TemplateLimits.BodyMaxLength" placeholder="Contenido del mensaje…"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="surface-card mb-3">
+            <TemplateDataKeysHint />
+        </div>
+
+        @if (error is not null)
+        {
+            <ErrorAlert Exception="error" />
+        }
+
+        <button class="btn btn-primary w-100" disabled="@(!CanSubmit || creating)" @onclick="CreateAsync">
+            @(creating ? "Creando…" : "Crear plantilla")
+        </button>
+    </div>
+</div>
+
+@code {
+    private string name = "";
+    private NotificationChannel channel = NotificationChannel.Email;
+    private string subject = "";
+    private string body = "";
+    private bool creating;
+    private ApiException? error;
+
+    private bool CanSubmit =>
+        !string.IsNullOrWhiteSpace(name) &&
+        !string.IsNullOrWhiteSpace(body) &&
+        (!TemplateLimits.RequiresSubject(channel) || !string.IsNullOrWhiteSpace(subject));
+
+    private async Task CreateAsync()
+    {
+        creating = true;
+        try
+        {
+            var requiresSubject = TemplateLimits.RequiresSubject(channel);
+            var id = await Api.CreateAsync(
+                new CreateTemplateRequest(name, channel, requiresSubject ? subject : null, body),
+                CancellationToken.None);
+            Nav.NavigateTo($"/templates/{id}");
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+}

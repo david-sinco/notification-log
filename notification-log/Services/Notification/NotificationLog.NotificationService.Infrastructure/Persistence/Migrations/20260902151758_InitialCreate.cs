@@ -12,6 +12,29 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.CreateTable(
+                name: "Notifications",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    EventKey = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
+                    ConfigurationId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TemplateId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    TemplateVersionId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    RecipientId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    Channel = table.Column<int>(type: "int", nullable: false),
+                    Destination = table.Column<string>(type: "nvarchar(320)", maxLength: 320, nullable: false),
+                    Status = table.Column<int>(type: "int", nullable: false),
+                    ProviderMessageId = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: true),
+                    Error = table.Column<string>(type: "nvarchar(2000)", maxLength: 2000, nullable: true),
+                    OccurredAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    Payload = table.Column<string>(type: "nvarchar(max)", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Notifications", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "NotificationTemplates",
                 columns: table => new
                 {
@@ -118,6 +141,21 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                 columns: new[] { "NotificationTriggerId", "Channel" });
 
             migrationBuilder.CreateIndex(
+                name: "IX_Notifications_EventKey",
+                table: "Notifications",
+                column: "EventKey");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Notifications_RecipientId",
+                table: "Notifications",
+                column: "RecipientId");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Notifications_Status",
+                table: "Notifications",
+                column: "Status");
+
+            migrationBuilder.CreateIndex(
                 name: "IX_NotificationTemplates_Channel_IsEnabled",
                 table: "NotificationTemplates",
                 columns: new[] { "Channel", "IsEnabled" });
@@ -157,6 +195,9 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
         {
             migrationBuilder.DropTable(
                 name: "NotificationConfigurations");
+
+            migrationBuilder.DropTable(
+                name: "Notifications");
 
             migrationBuilder.DropTable(
                 name: "Recipients");

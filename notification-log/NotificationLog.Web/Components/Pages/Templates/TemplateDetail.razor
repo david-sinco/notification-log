@@ -1,0 +1,240 @@
+@page "/templates/{Id:guid}"
+@inject TemplatesApiClient Api
+
+<PageTitle>Plantilla · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/templates" class="small">← Volver a plantillas</a>
+</div>
+
+@if (loading)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (loadError is not null)
+{
+    <ErrorAlert Exception="loadError" />
+}
+else if (template is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1 class="d-flex align-items-center gap-2">
+                @template.Name
+                <ChannelBadge Channel="@template.Channel" />
+            </h1>
+            <p>Versión actual: v@(template.CurrentVersion.Number) · @template.CurrentVersion.CreatedAt.ToLocalTime().ToString("g")</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <StatusPill Text="@(template.IsEnabled ? "Habilitada" : "Deshabilitada")"
+                        Variant="@(template.IsEnabled ? "success" : "neutral")" />
+            <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="ToggleStatusAsync">
+                @(template.IsEnabled ? "Deshabilitar" : "Habilitar")
+            </button>
+        </div>
+    </div>
+
+    @if (actionError is not null)
+    {
+        <ErrorAlert Exception="actionError" />
+    }
+
+    <div class="surface-card mb-4">
+        <h2 class="h6">Contenido actual</h2>
+        @if (!string.IsNullOrEmpty(template.CurrentVersion.Subject))
+        {
+            <div class="mb-2">
+                <div class="form-hint mb-1">Asunto</div>
+                <div class="fw-medium">@template.CurrentVersion.Subject</div>
+            </div>
+        }
+        <div class="form-hint mb-1">Cuerpo</div>
+        <pre class="template-body-preview">@template.CurrentVersion.Body</pre>
+    </div>
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-8">
+            <div class="surface-card">
+                <h2 class="h6">Publicar nueva versión</h2>
+                <p class="form-hint">Se parte del contenido actual; editá lo que necesites y publicá.</p>
+
+                @if (TemplateLimits.RequiresSubject(templateChannel))
+                {
+                    <div class="mb-3">
+                        <label class="form-label d-flex justify-content-between">
+                            <span>Asunto</span>
+                            <span class="form-hint">@newSubject.Length / @TemplateLimits.SubjectMaxLength</span>
+                        </label>
+                        <input class="form-control" @bind="newSubject" @bind:event="oninput"
+                               maxlength="@TemplateLimits.SubjectMaxLength" />
+                    </div>
+                }
+
+                <div class="mb-2">
+                    <label class="form-label d-flex justify-content-between">
+                        <span>Cuerpo</span>
+                        <span class="form-hint">@newBody.Length / @TemplateLimits.BodyMaxLength</span>
+                    </label>
+                    <textarea class="form-control font-monospace" rows="12" @bind="newBody" @bind:event="oninput"
+                              maxlength="@TemplateLimits.BodyMaxLength"></textarea>
+                </div>
+
+                @if (publishError is not null)
+                {
+                    <ErrorAlert Exception="publishError" />
+                }
+
+                <div class="d-flex justify-content-end">
+                    <button class="btn btn-primary" disabled="@(!CanPublish || publishing)" @onclick="PublishAsync">
+                        @(publishing ? "Publicando…" : "Publicar nueva versión")
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="surface-card">
+                <TemplateDataKeysHint />
+            </div>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <div class="px-3 pt-3 pb-2">
+            <h2 class="h6 mb-0">Historial de versiones</h2>
+        </div>
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Versión</th>
+                        <th>Publicada</th>
+                        <th>Estado</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in template.History.OrderByDescending(v => v.Number))
+                    {
+                        <tr class="row-link" @onclick="() => ToggleExpand(v.Id)">
+                            <td>v@(v.Number)</td>
+                            <td class="text-muted small">@v.CreatedAt.ToLocalTime().ToString("g")</td>
+                            <td>
+                                @if (v.IsCurrent)
+                                {
+                                    <StatusPill Text="Actual" Variant="success" />
+                                }
+                            </td>
+                            <td class="text-end small text-muted">@(expanded.Contains(v.Id) ? "▲ ocultar" : "▼ ver contenido")</td>
+                        </tr>
+                        @if (expanded.Contains(v.Id))
+                        {
+                            <tr>
+                                <td colspan="4">
+                                    @if (!string.IsNullOrEmpty(v.Subject))
+                                    {
+                                        <div class="form-hint mb-1">Asunto</div>
+                                        <div class="fw-medium mb-2">@v.Subject</div>
+                                    }
+                                    <div class="form-hint mb-1">Cuerpo</div>
+                                    <pre class="template-body-preview">@v.Body</pre>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private TemplateDto? template;
+    private NotificationChannel templateChannel;
+    private bool loading = true;
+    private ApiException? loadError;
+    private ApiException? actionError;
+    private bool busy;
+
+    private string newSubject = "";
+    private string newBody = "";
+    private bool publishing;
+    private ApiException? publishError;
+
+    private readonly HashSet<Guid> expanded = [];
+
+    private bool CanPublish =>
+        !string.IsNullOrWhiteSpace(newBody) &&
+        (!TemplateLimits.RequiresSubject(templateChannel) || !string.IsNullOrWhiteSpace(newSubject));
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            template = await Api.GetByIdAsync(Id, CancellationToken.None);
+            templateChannel = Enum.Parse<NotificationChannel>(template.Channel);
+            newSubject = template.CurrentVersion.Subject ?? "";
+            newBody = template.CurrentVersion.Body;
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task ToggleStatusAsync()
+    {
+        if (template is null) return;
+        busy = true;
+        try
+        {
+            await Api.SetStatusAsync(Id, !template.IsEnabled, CancellationToken.None);
+            await LoadAsync();
+            actionError = null;
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task PublishAsync()
+    {
+        publishing = true;
+        try
+        {
+            var requiresSubject = TemplateLimits.RequiresSubject(templateChannel);
+            await Api.PublishVersionAsync(Id, requiresSubject ? newSubject : null, newBody, CancellationToken.None);
+            await LoadAsync();
+            publishError = null;
+        }
+        catch (ApiException ex)
+        {
+            publishError = ex;
+        }
+        finally
+        {
+            publishing = false;
+        }
+    }
+
+    private void ToggleExpand(Guid versionId)
+    {
+        if (!expanded.Add(versionId))
+            expanded.Remove(versionId);
+    }
+}

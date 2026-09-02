@@ -1,0 +1,5 @@
+<span class="badge channel-badge channel-@Channel.ToLowerInvariant()">@Channel</span>
+
+@code {
+    [Parameter, EditorRequired] public string Channel { get; set; } = "";
+}

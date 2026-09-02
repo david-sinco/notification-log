@@ -1,0 +1,156 @@
+@page "/notifications"
+@inject NotificationsApiClient Api
+
+<PageTitle>Notificaciones · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Notificaciones</h1>
+        <p>Historial de envíos, con el resultado de cada intento.</p>
+    </div>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="filter-bar">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Event key</label>
+            <input class="form-control" placeholder="p. ej. transaccion.realizada (Enter para buscar)"
+                   @bind="eventKey" @bind:event="oninput" @onkeyup="OnFilterKeyUp" />
+        </div>
+        <div class="col-md-4">
+            <label class="form-label">Id de destinatario</label>
+            <input class="form-control" placeholder="GUID del destinatario (Enter para buscar)"
+                   @bind="recipientIdText" @bind:event="oninput" @onkeyup="OnFilterKeyUp" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">Estado</label>
+            <select class="form-select" @bind="statusFilter" @bind:after="RefreshAsync">
+                <option value="">Todos</option>
+                <option value="Sent">Enviadas</option>
+                <option value="Failed">Fallidas</option>
+            </select>
+        </div>
+        <div class="col-md-2 text-md-end">
+            <button class="btn btn-outline-secondary w-100" @onclick="RefreshAsync">Filtrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (page is { Items.Count: 0 })
+    {
+        <EmptyState Text="No se encontraron notificaciones con esos filtros." Icon="🔔" />
+    }
+    else if (page is not null)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Fecha</th>
+                        <th>Evento</th>
+                        <th>Canal</th>
+                        <th>Destino</th>
+                        <th>Estado</th>
+                        <th>Detalle</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var n in page.Items)
+                    {
+                        <tr>
+                            <td class="text-muted small">@n.OccurredAt.ToLocalTime().ToString("g")</td>
+                            <td><code>@n.EventKey</code></td>
+                            <td><ChannelBadge Channel="@n.Channel" /></td>
+                            <td>@n.Destination</td>
+                            <td><StatusPill Text="@n.Status" Variant="@(n.Status == "Sent" ? "success" : "danger")" /></td>
+                            <td class="small">
+                                @if (n.Status == "Sent")
+                                {
+                                    @(n.ProviderMessageId ?? "—")
+                                }
+                                else
+                                {
+                                    <span class="text-danger">@(n.Error ?? "—")</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="px-3 pb-3">
+            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
+        </div>
+    }
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "recipientId")]
+    public Guid? RecipientIdQuery { get; set; }
+
+    private PagedResult<NotificationDto>? page;
+    private bool loading = true;
+    private ApiException? error;
+
+    private string eventKey = "";
+    private string recipientIdText = "";
+    private string statusFilter = "";
+    private int currentPage = 1;
+
+    protected override Task OnInitializedAsync()
+    {
+        if (RecipientIdQuery is { } id)
+            recipientIdText = id.ToString();
+
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            Guid? recipientId = Guid.TryParse(recipientIdText, out var parsed) ? parsed : null;
+            DeliveryStatus? status = string.IsNullOrEmpty(statusFilter)
+                ? null
+                : Enum.Parse<DeliveryStatus>(statusFilter);
+
+            page = await Api.ListAsync(
+                recipientId, string.IsNullOrWhiteSpace(eventKey) ? null : eventKey, status,
+                currentPage, 10, CancellationToken.None);
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPage(int p)
+    {
+        currentPage = p;
+        return LoadAsync();
+    }
+
+    private Task OnFilterKeyUp(KeyboardEventArgs e) => e.Key == "Enter" ? RefreshAsync() : Task.CompletedTask;
+}

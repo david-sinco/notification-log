@@ -1,7 +1,131 @@
-﻿@page "/"
+@page "/"
+@inject TriggersApiClient TriggersApi
+@inject TemplatesApiClient TemplatesApi
+@inject RecipientsApiClient RecipientsApi
+@inject NotificationsApiClient NotificationsApi
 
-<PageTitle>Home</PageTitle>
+<PageTitle>Panel · NotificationLog</PageTitle>
 
-<h1>Hello, world!</h1>
+<div class="page-header">
+    <div>
+        <h1>Panel</h1>
+        <p>Estado general del servicio de notificaciones.</p>
+    </div>
+</div>
 
-Welcome to your new app.
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="triggers">
+            <span class="stat-icon">⚡</span>
+            <span class="stat-label">Triggers</span>
+            <span class="stat-value">@(triggerCount?.ToString() ?? "—")</span>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="templates">
+            <span class="stat-icon">📄</span>
+            <span class="stat-label">Plantillas</span>
+            <span class="stat-value">@(templateCount?.ToString() ?? "—")</span>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="recipients">
+            <span class="stat-icon">👥</span>
+            <span class="stat-label">Destinatarios</span>
+            <span class="stat-value">@(recipientCount?.ToString() ?? "—")</span>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="notifications">
+            <span class="stat-icon">🔔</span>
+            <span class="stat-label">Notificaciones enviadas</span>
+            <span class="stat-value">@(notificationCount?.ToString() ?? "—")</span>
+        </a>
+    </div>
+</div>
+
+<div class="table-card">
+    <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
+        <h2 class="h6 mb-0">Actividad reciente</h2>
+        <a href="notifications" class="small">Ver todo →</a>
+    </div>
+
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (recent is { Count: 0 })
+    {
+        <EmptyState Text="Todavía no se envió ninguna notificación." Icon="🔕" />
+    }
+    else if (recent is not null)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Evento</th>
+                        <th>Canal</th>
+                        <th>Destino</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var n in recent)
+                    {
+                        <tr>
+                            <td><code>@n.EventKey</code></td>
+                            <td><ChannelBadge Channel="@n.Channel" /></td>
+                            <td>@n.Destination</td>
+                            <td><StatusPill Text="@n.Status" Variant="@(n.Status == "Sent" ? "success" : "danger")" /></td>
+                            <td class="text-muted small">@n.OccurredAt.ToLocalTime().ToString("g")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    private bool loading = true;
+    private ApiException? error;
+    private int? triggerCount;
+    private int? templateCount;
+    private int? recipientCount;
+    private int? notificationCount;
+    private IReadOnlyList<NotificationDto>? recent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var triggersTask = TriggersApi.ListAsync(null, null, 1, 1, CancellationToken.None);
+            var templatesTask = TemplatesApi.ListAsync(null, null, null, 1, 1, CancellationToken.None);
+            var recipientsTask = RecipientsApi.ListAsync(null, null, 1, 1, CancellationToken.None);
+            var notificationsTask = NotificationsApi.ListAsync(null, null, null, 1, 6, CancellationToken.None);
+
+            await Task.WhenAll(triggersTask, templatesTask, recipientsTask, notificationsTask);
+
+            triggerCount = triggersTask.Result.TotalCount;
+            templateCount = templatesTask.Result.TotalCount;
+            recipientCount = recipientsTask.Result.TotalCount;
+            notificationCount = notificationsTask.Result.TotalCount;
+            recent = notificationsTask.Result.Items;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

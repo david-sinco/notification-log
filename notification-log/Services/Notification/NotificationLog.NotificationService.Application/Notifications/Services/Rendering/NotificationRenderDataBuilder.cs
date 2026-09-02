@@ -1,6 +1,7 @@
+using NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
 using NotificationLog.NotificationService.Domain.Recipients;
 
-namespace NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
+namespace NotificationLog.NotificationService.Application.Notifications.Services.Rendering;
 
 internal static class NotificationRenderDataBuilder
 {

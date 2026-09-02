@@ -1,0 +1,97 @@
+@page "/recipients/{Id:guid}"
+@inject RecipientsApiClient Api
+
+<PageTitle>Destinatario · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/recipients" class="small">← Volver a destinatarios</a>
+</div>
+
+@if (loading)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (loadError is not null)
+{
+    <ErrorAlert Exception="loadError" />
+}
+else if (recipient is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1>@recipient.Name</h1>
+        </div>
+        <div>
+            <StatusPill Text="@(recipient.IsActive ? "Activo" : "Inactivo")"
+                        Variant="@(recipient.IsActive ? "success" : "neutral")" />
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="surface-card mb-4">
+                <h2 class="h6">Datos de contacto</h2>
+                <dl class="kv-list">
+                    <dt>Email</dt>
+                    <dd>@(recipient.Email ?? "—")</dd>
+                    <dt>Teléfono</dt>
+                    <dd>@(recipient.Phone ?? "—")</dd>
+                    <dt>Locale</dt>
+                    <dd>@recipient.Locale</dd>
+                    <dt>Zona horaria</dt>
+                    <dd>@recipient.TimeZone</dd>
+                </dl>
+            </div>
+
+            <a class='btn btn-outline-secondary btn-sm' href='@($"/notifications?recipientId={recipient.Id}")'>
+                Ver notificaciones de este destinatario →
+            </a>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="surface-card">
+                <h2 class="h6">Atributos</h2>
+                @if (recipient.Attributes.Count == 0)
+                {
+                    <p class="text-muted small mb-0">Este destinatario no tiene atributos adicionales.</p>
+                }
+                else
+                {
+                    <dl class="kv-list">
+                        @foreach (var attr in recipient.Attributes)
+                        {
+                            <dt>@attr.Key</dt>
+                            <dd>@attr.Value</dd>
+                        }
+                    </dl>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private RecipientDto? recipient;
+    private bool loading = true;
+    private ApiException? loadError;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            recipient = await Api.GetByIdAsync(Id, CancellationToken.None);
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

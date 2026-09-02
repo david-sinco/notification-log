@@ -1,4 +1,4 @@
-namespace NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
+namespace NotificationLog.NotificationService.Application.Notifications.Services.Sending;
 
 public sealed record NotificationSendResult(bool Succeeded, string? ProviderMessageId, string? Error)
 {

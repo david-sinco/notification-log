@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Logging;
 using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationFailure;
 using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationSuccess;
+using NotificationLog.NotificationService.Application.Notifications.Services.Rendering;
+using NotificationLog.NotificationService.Application.Notifications.Services.Sending;
 using NotificationLog.NotificationService.Domain.Notifications;
 using NotificationLog.NotificationService.Domain.Recipients;
 using NotificationLog.NotificationService.Domain.Shared;
@@ -45,25 +47,35 @@ public sealed class NotificationDispatchService
 
     public async Task DispatchAsync(BusinessEvent businessEvent, CancellationToken ct)
     {
-        var trigger = await _triggers.GetByEventKeyAsync(EventKey.Create(businessEvent.EventKey), ct);
-
-        if (trigger is null || !trigger.IsEnabled)
+        try
         {
-            _log.LogWarning(
-                "No hay un trigger habilitado para el evento {EventKey}", businessEvent.EventKey);
-            return;
+            var trigger = await _triggers.GetByEventKeyAsync(EventKey.Create(businessEvent.EventKey), ct);
+
+            if (trigger is null || !trigger.IsEnabled)
+            {
+                _log.LogWarning(
+                    "No hay un trigger habilitado para el evento {EventKey}", businessEvent.EventKey);
+                return;
+            }
+
+            var recipient = await _recipients.GetByIdAsync(businessEvent.RecipientId, ct);
+
+            if (recipient is null)
+            {
+                _log.LogWarning("El destinatario {RecipientId} no existe", businessEvent.RecipientId);
+                return;
+            }
+
+            foreach (var configuration in trigger.ResolveActiveConfigurations())
+                await DispatchConfigurationAsync(businessEvent, trigger.EventKey.Value, configuration, recipient, ct);
         }
-
-        var recipient = await _recipients.GetByIdAsync(businessEvent.RecipientId, ct);
-
-        if (recipient is null)
+        catch (Exception ex)
         {
-            _log.LogWarning("El destinatario {RecipientId} no existe", businessEvent.RecipientId);
-            return;
+            _log.LogError(ex,
+                "Fallo inesperado al procesar el evento {EventId} ({EventKey}) para el destinatario {RecipientId}",
+                businessEvent.EventId, businessEvent.EventKey, businessEvent.RecipientId);
+            throw;
         }
-
-        foreach (var configuration in trigger.ResolveActiveConfigurations())
-            await DispatchConfigurationAsync(businessEvent, trigger.EventKey.Value, configuration, recipient, ct);
     }
 
     private async Task DispatchConfigurationAsync(

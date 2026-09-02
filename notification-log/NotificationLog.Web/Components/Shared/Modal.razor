@@ -1,0 +1,35 @@
+@if (IsVisible)
+{
+    <div class="modal-backdrop-custom" @onclick="Close"></div>
+    <div class="modal d-block modal-custom" tabindex="-1" role="dialog">
+        <div class="modal-dialog @(Large ? "modal-lg" : "") modal-dialog-centered" role="document"
+             @onclick:stopPropagation="true">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">@Title</h5>
+                    <button type="button" class="btn-close" @onclick="Close" aria-label="Cerrar"></button>
+                </div>
+                <div class="modal-body">
+                    @ChildContent
+                </div>
+                @if (FooterContent is not null)
+                {
+                    <div class="modal-footer">
+                        @FooterContent
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? FooterContent { get; set; }
+
+    private Task Close() => IsVisibleChanged.InvokeAsync(false);
+}

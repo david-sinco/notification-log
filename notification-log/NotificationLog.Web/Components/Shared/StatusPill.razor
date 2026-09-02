@@ -1,0 +1,8 @@
+<span class="badge status-pill status-@Variant">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    // success | danger | neutral
+    [Parameter] public string Variant { get; set; } = "neutral";
+}

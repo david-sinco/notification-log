@@ -76,10 +76,10 @@ public static class DependencyInjection
         // NotificationDispatchService (Notifications/Services/Dispatch) todavía no se registra.
         // No es un BackgroundService: lo invoca directamente el consumer de infraestructura
         // (p. ej. un IConsumer<T> de MassTransit) cada vez que le empujan un evento, dentro del
-        // mismo scope del mensaje. Depende de ITemplateRenderer y de un remitente por canal
-        // (IEmailNotificationSender, ISmsNotificationSender, IPushNotificationSender,
-        // IWhatsAppNotificationSender), que aún no tienen implementación en Infrastructure.
-        // Cuando existan, agregar aquí:
+        // mismo scope del mensaje. Depende de ITemplateRenderer (Notifications/Services/Rendering)
+        // y de un remitente por canal (Notifications/Services/Sending: IEmailNotificationSender,
+        // ISmsNotificationSender, IPushNotificationSender, IWhatsAppNotificationSender), que aún
+        // no tienen implementación en Infrastructure. Cuando existan, agregar aquí:
         // services.AddScoped<Notifications.Services.Dispatch.NotificationDispatchService>();
 
         return services;
