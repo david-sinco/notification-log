@@ -4,11 +4,7 @@ using NotificationLog.NotificationService.Application.Notifications.Commands.Rec
 using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationSuccess;
 using NotificationLog.NotificationService.Application.Notifications.Queries.ListNotifications;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
-using NotificationLog.NotificationService.Application.Recipients.Commands.SetRecipientStatus;
-using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientAttributes;
-using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientEmail;
-using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientPhone;
-using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipientProfile;
+using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipient;
 using NotificationLog.NotificationService.Application.Recipients.Queries.GetRecipientById;
 using NotificationLog.NotificationService.Application.Recipients.Queries.ListRecipients;
 using NotificationLog.NotificationService.Application.Recipients.Services.Sync;
@@ -61,18 +57,12 @@ public static class DependencyInjection
 
         // Recipients
         services.AddScoped<CreateRecipientHandler>();
-        services.AddScoped<UpdateRecipientEmailHandler>();
-        services.AddScoped<UpdateRecipientPhoneHandler>();
-        services.AddScoped<UpdateRecipientProfileHandler>();
-        services.AddScoped<UpdateRecipientAttributesHandler>();
-        services.AddScoped<SetRecipientStatusHandler>();
+        services.AddScoped<UpdateRecipientHandler>();
         services.AddScoped<GetRecipientByIdHandler>();
         services.AddScoped<ListRecipientsHandler>();
 
-        // RecipientSyncService (Recipients/Services/Sync) sí se puede registrar ya: a diferencia
-        // de NotificationDispatchService, sus dependencias son los handlers de arriba, que ya
-        // existen. Falta el consumer de infraestructura (p. ej. un IConsumer<UserChange> de
-        // MassTransit) que invoque HandleAsync por cada mensaje recibido.
+        // RecipientSyncService (Recipients/Services/Sync): lo invoca el consumer de mensajería
+        // (Infrastructure/Messaging) una vez por UserChange recibido.
         services.AddScoped<RecipientSyncService>();
 
         // Notifications

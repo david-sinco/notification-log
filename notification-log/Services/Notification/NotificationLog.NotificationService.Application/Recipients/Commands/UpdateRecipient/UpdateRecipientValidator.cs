@@ -1,14 +1,19 @@
 using FluentValidation;
 using NotificationLog.NotificationService.Domain.Recipients;
 
-namespace NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
+namespace NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipient;
 
-internal sealed class CreateRecipientValidator : AbstractValidator<CreateRecipientCommand>
+internal sealed class UpdateRecipientValidator : AbstractValidator<UpdateRecipientCommand>
 {
-    public CreateRecipientValidator()
+    public UpdateRecipientValidator()
     {
         RuleFor(x => x.RecipientId).NotEmpty();
-        RuleFor(x => x.Name).NotEmpty().MaximumLength(Recipient.NameMaxLength);
+
+        // A diferencia de Email/Phone/Attributes, un Name vacío no es un valor válido a aplicar
+        // (el dominio no admite un Recipient sin nombre) — es NotEmpty siempre, no condicional.
+        RuleFor(x => x.Name)
+            .NotEmpty()
+            .MaximumLength(Recipient.NameMaxLength);
 
         RuleFor(x => x.Email)
             .MaximumLength(Recipient.EmailMaxLength)

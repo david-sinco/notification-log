@@ -6,6 +6,7 @@ using NotificationLog.NotificationService.Domain.Notifications;
 using NotificationLog.NotificationService.Domain.Recipients;
 using NotificationLog.NotificationService.Domain.Templates;
 using NotificationLog.NotificationService.Domain.Triggers;
+using NotificationLog.NotificationService.Infrastructure.Messaging.RabbitMq;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Repositories;
 
@@ -36,6 +37,11 @@ public static class DependencyInjection
         services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
         services.AddScoped<IRecipientRepository, RecipientRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+
+        // Ejemplo de mensajería con RabbitMQ (Messaging/RabbitMq): consume UserChange y llama a
+        // RecipientSyncService. Cuando se integre Kafka, este llamado se reemplaza por el
+        // equivalente en Messaging/Kafka sin tocar Application.
+        services.AddRabbitMqMessaging(configuration);
 
         return services;
     }

@@ -8,6 +8,7 @@
     <Project Path="Services/Notification/NotificationLog.Tests/NotificationLog.Tests.csproj" />
   </Folder>
   <Folder Name="/Shared/">
+    <Project Path="Shared/NotificationLog.Contracts/NotificationLog.Contracts.csproj" />
     <Project Path="Shared/NotificationLog.ServiceDefaults/NotificationLog.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">

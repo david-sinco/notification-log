@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+package Users.users;
+
+option csharp_namespace = "NotificationLog.Contracts.Users";
+
+import "google/protobuf/timestamp.proto";
+
+// Event-carried state transfer: el snapshot COMPLETO y actual de los datos ya confirmados de un
+// usuario — no un delta, no un evento de dominio crudo. Users lo publica solo cuando cambia un
+// hecho ya confirmado (email verificado, teléfono verificado, activo/inactivo); nunca por un
+// pedido de verificación pendiente ni por un intento fallido, porque a este consumer no le importa
+// un dato que todavía no es un hecho.
+//
+// "Completo" importa: si se pierde un mensaje, el próximo trae todo de nuevo — el consumer nunca
+// queda permanentemente desincronizado por un mensaje perdido, a diferencia de un delta.
+//
+// Ningún campo de usuario usa "optional": en un snapshot completo no existe el estado "no vino en
+// este mensaje" (eso es semántica de delta). "Vacío" es un valor real y con significado propio —
+// el usuario no tiene ese dato confirmado — no "no sé". Por eso alcanza con el default de proto3
+// (string vacío si no se setea) sin necesitar el bit de presencia que agrega "optional".
+message UserContactUpdated {
+  // Metadata del mensaje en sí (cuándo se generó este snapshot), no del usuario.
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  int32 schema_version = 3;
+
+  // Los datos finales del usuario. email/phone vacíos = sin dato confirmado (nunca lo tuvo, o se
+  // lo borraron) — las dos cosas se representan igual, a propósito.
+  string user_id = 10;
+  string name = 11;
+  string email = 12;
+  string phone = 13;
+  bool is_active = 14;
+  string locale = 15;
+  string time_zone = 16;
+
+  // map, no optional: la ausencia de una clave ya es la forma natural de decir "ya no tiene ese
+  // atributo" en un snapshot completo — el mismo principio que "vacío" en los campos de arriba,
+  // aplicado a nivel de membresía en vez de a nivel de valor escalar.
+  map<string, string> attributes = 17;
+}

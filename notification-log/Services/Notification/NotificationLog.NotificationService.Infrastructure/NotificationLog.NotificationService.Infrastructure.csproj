@@ -12,9 +12,13 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+    <PackageReference Include="WolverineFx.Protobuf" Version="6.33.0" />
+    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.32.0" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.32.0" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\NotificationLog.Contracts\NotificationLog.Contracts.csproj" />
     <ProjectReference Include="..\NotificationLog.NotificationService.Application\NotificationLog.NotificationService.Application.csproj" />
     <ProjectReference Include="..\NotificationLog.NotificationService.Domain\NotificationLog.NotificationService.Domain.csproj" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using NotificationLog.NotificationService.Application.Abstractions;
 using NotificationLog.NotificationService.Application.Common;
 using NotificationLog.NotificationService.Domain.Recipients;
@@ -22,6 +22,18 @@ public sealed class CreateRecipientHandler
             throw new AppValidationException($"El destinatario '{cmd.RecipientId}' ya existe.");
 
         var recipient = Recipient.Create(cmd.RecipientId, cmd.Name, cmd.Email, cmd.Phone);
+
+        // Recipient.Create no toma locale/timeZone/attributes/isActive — se aplican con los mismos
+        // métodos de dominio que usa UpdateRecipientHandler. ChangeLocalization en particular deja
+        // el default del agregado (es-CO / America/Bogota) si viene vacío, en vez de perder el dato
+        // si sí vino con un valor real.
+        recipient.ChangeLocalization(cmd.Locale, cmd.TimeZone);
+        recipient.ReplaceAttributes(cmd.Attributes ?? new Dictionary<string, string?>());
+
+        if (cmd.IsActive)
+            recipient.Activate();
+        else
+            recipient.Deactivate();
 
         await _recipients.AddAsync(recipient, ct);
         await _uow.SaveChangesAsync(ct);

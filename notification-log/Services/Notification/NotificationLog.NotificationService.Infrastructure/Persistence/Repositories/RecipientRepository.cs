@@ -11,6 +11,9 @@ internal sealed class RecipientRepository(NotificationDbContext db) : IRecipient
     public Task<Recipient?> GetByIdAsync(Guid id, CancellationToken ct)
         => _db.Recipients.SingleOrDefaultAsync(r => r.Id == id, ct);
 
+    public Task<bool> ExistsAsync(Guid id, CancellationToken ct)
+        => _db.Recipients.AnyAsync(r => r.Id == id, ct);
+
     public async Task AddAsync(Recipient recipient, CancellationToken ct)
         => await _db.Recipients.AddAsync(recipient, ct);
 
