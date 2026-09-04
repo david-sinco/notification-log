@@ -1,0 +1,201 @@
+@page "/ddd/context-map"
+
+<PageTitle>Context Map · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>4 · Context Map y patrones de integración</h1>
+        <p>Cómo se hablan los bounded contexts sin contaminarse entre sí.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Concepto">
+    <p>El Context Map documenta cómo se relacionan los bounded contexts. Los patrones más útiles en la práctica:</p>
+    <ul>
+        <li><strong>Anti-Corruption Layer (ACL):</strong> traduce el modelo ajeno para que no contamine el tuyo.</li>
+        <li><strong>Open Host Service / Published Language:</strong> un contrato estable que varios consumidores comparten.</li>
+        <li><strong>Customer–Supplier:</strong> el contexto río arriba considera las necesidades del de río abajo.</li>
+        <li><strong>Conformist:</strong> te adaptas al modelo ajeno sin traducir, sin poder de negociación.</li>
+        <li><strong>Shared Kernel:</strong> código de dominio compartido entre dos contextos — potente y peligroso.</li>
+        <li><strong>Separate Ways:</strong> integrar cuesta más de lo que aporta; duplicar es la respuesta correcta.</li>
+    </ul>
+</DddCallout>
+
+<h2 class="ddd-h2">El contrato: Published Language</h2>
+<p>
+    NotificationLog no consume el modelo interno del sistema de usuarios ni sus tablas. Consume un
+    contrato Protobuf versionado, publicado a propósito para varios consumidores — eso es un
+    <strong>Open Host Service</strong> con <strong>Published Language</strong>. El propio archivo
+    <code>.proto</code> documenta, en comentarios, por qué está diseñado como un snapshot completo y no
+    como un delta:
+</p>
+
+<CodeBlock Title="Shared/NotificationLog.Contracts/Users/user_contact_updated.proto" Code="@ProtoSnippet" />
+
+<p>
+    Fíjate en tres decisiones de diseño de Published Language que evitan acoplar a los consumidores a los
+    detalles internos del productor:
+</p>
+<ul>
+    <li><strong><code>schema_version</code>:</strong> permite evolucionar el contrato sin romper consumidores viejos.</li>
+    <li><strong>Snapshot completo, no delta:</strong> "event-carried state transfer" — si se pierde un mensaje, el siguiente trae todo de nuevo. Ningún consumidor queda permanentemente desincronizado por un mensaje perdido.</li>
+    <li><strong>Sin <code>optional</code>:</strong> un campo vacío es un valor real ("sin dato confirmado"), no "no sé". La ausencia de significado ambiguo es, otra vez, lenguaje ubicuo — pero del contrato, no del dominio interno.</li>
+</ul>
+
+<h2 class="ddd-h2">El Anti-Corruption Layer, en un archivo real</h2>
+<p>
+    El patrón más valioso del temario tiene una implementación exacta en este repositorio:
+    <code>UserContactUpdatedHandler</code>. Recibe el mensaje ajeno (Protobuf, generado desde el .proto
+    del productor) y lo traduce a un tipo <strong>propio</strong> de Notifications
+    (<code>UserChange</code>) antes de que ninguna regla de negocio lo toque. El modelo del productor
+    nunca cruza esa línea.
+</p>
+
+<CodeBlock Title="Infrastructure/Messaging/Consumers/UserContactUpdatedHandler.cs" Code="@AclSnippet" />
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 260" role="img" aria-labelledby="aclTitle">
+        <title id="aclTitle">Anti-Corruption Layer entre el contexto de Usuarios y el de Notificaciones</title>
+        <defs>
+            <marker id="cmArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="70" width="180" height="90" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="110" y="100" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Contexto Usuarios</text>
+        <text x="110" y="118" text-anchor="middle" font-size="9.5" fill="#334155">productor</text>
+        <text x="110" y="136" text-anchor="middle" font-size="9.5" fill="#334155">(Open Host Service)</text>
+
+        <line x1="200" y1="115" x2="255" y2="115" stroke="#4f46e5" stroke-width="2" marker-end="url(#cmArrow)" />
+
+        <rect x="255" y="85" width="180" height="60" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="345" y="107" text-anchor="middle" font-size="10" font-weight="600" fill="#334155">topic users.contact</text>
+        <text x="345" y="123" text-anchor="middle" font-size="9" fill="#64748b">UserContactUpdated (proto)</text>
+        <text x="345" y="70" text-anchor="middle" font-size="9" fill="#4338ca" font-weight="600">Published Language</text>
+
+        <line x1="435" y1="115" x2="490" y2="115" stroke="#4f46e5" stroke-width="2" marker-end="url(#cmArrow)" />
+
+        <rect x="490" y="30" width="200" height="170" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="590" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">Anti-Corruption Layer</text>
+        <rect x="510" y="65" width="160" height="42" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="590" y="83" text-anchor="middle" font-size="9.5" fill="#334155">UsersContactConsumer</text>
+        <text x="590" y="97" text-anchor="middle" font-size="8.5" fill="#64748b">deserializa + valida versión</text>
+        <rect x="510" y="115" width="160" height="42" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="590" y="133" text-anchor="middle" font-size="9.5" fill="#334155">UserContactUpdatedHandler</text>
+        <text x="590" y="147" text-anchor="middle" font-size="8.5" fill="#64748b">mapea a UserChange propio</text>
+        <text x="590" y="180" text-anchor="middle" font-size="8.5" fill="#9a3412" font-style="italic">el modelo ajeno nunca pasa de aquí</text>
+
+        <line x1="690" y1="115" x2="745" y2="115" stroke="#16a34a" stroke-width="2" marker-end="url(#cmArrow)" />
+
+        <rect x="745" y="70" width="60" height="90" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="775" y="100" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d" transform="rotate(0)">Recipient</text>
+        <text x="775" y="118" text-anchor="middle" font-size="8.5" fill="#14532d">(propio)</text>
+
+        <text x="345" y="230" text-anchor="middle" font-size="9.5" fill="#64748b">RecipientSyncService decide: crear o actualizar, en una sola transacción</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        El mensaje cruza tres traducciones antes de tocar una regla de negocio: Protobuf → tipo propio
+        (<code>UserChange</code>) → comando de aplicación. El dominio (<code>Recipient</code>) nunca ve Kafka ni Protobuf.
+    </p>
+</div>
+
+<h2 class="ddd-h2">Un solo comando, no uno por campo</h2>
+<p>
+    Vale la pena leer el comentario que dejó el propio equipo en <code>RecipientSyncService</code>,
+    porque explica una decisión de Customer–Supplier real: como el mensaje ya llega como snapshot completo,
+    descomponerlo en varios comandos (uno por campo cambiado) habría roto la atomicidad — si el tercer
+    comando fallaba, los dos anteriores ya habían hecho commit. Con un único comando que aplica todos los
+    campos sobre la misma instancia, la atomicidad sale gratis: un solo <code>SaveChangesAsync</code>.
+</p>
+
+<CodeBlock Title="Application/Recipients/Services/Sync/RecipientSyncService.cs" Code="@SyncSnippet" />
+
+<DddCallout Kind="advertencia" Title="Por qué esto NO es Conformist">
+    <p>
+        Sería fácil confundir esto con el patrón <em>Conformist</em> ("me adapto al modelo ajeno sin
+        traducir"). No lo es: <code>Recipient</code> tiene su propia forma, sus propias reglas
+        (<code>CanReceive</code>, normalización de teléfono/email) y su propio ciclo de vida — el mensaje
+        de Kafka solo lo <em>alimenta</em>. Si Notifications simplemente guardara el mensaje tal cual sin
+        una capa de traducción ni reglas propias, ahí sí sería Conformist. La línea que separa ambos
+        patrones es exactamente el ACL de arriba.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/bounded-context" PrevLabel="Bounded Context" NextHref="/ddd/value-objects" NextLabel="Value Objects" />
+
+@code {
+    private const string ProtoSnippet = """
+message UserContactUpdated {
+  // Metadata del mensaje en sí (cuándo se generó este snapshot), no del usuario.
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  int32 schema_version = 3;
+
+  // Los datos finales del usuario. email/phone vacíos = sin dato confirmado (nunca lo
+  // tuvo, o se lo borraron) — las dos cosas se representan igual, a propósito.
+  string user_id = 10;
+  string name = 11;
+  string email = 12;
+  string phone = 13;
+  bool is_active = 14;
+  string locale = 15;
+  string time_zone = 16;
+
+  // map, no optional: la ausencia de una clave ya es la forma natural de decir
+  // "ya no tiene ese atributo" en un snapshot completo.
+  map<string, string> attributes = 17;
+}
+""";
+
+    private const string AclSnippet = """
+public static class UserContactUpdatedHandler
+{
+    public static Task Handle(UserContactUpdated message, RecipientSyncService syncService, CancellationToken ct)
+    {
+        var change = MapToUserChange(message); // Protobuf -> el UserChange de Application
+        return syncService.HandleAsync(change, ct);
+    }
+
+    // email/phone vacíos ya son un valor con significado (sin dato confirmado), no "no vino" —
+    // el mensaje es un snapshot completo, así que se pasan tal cual, sin traducir "" a null.
+    private static UserChange MapToUserChange(UserContactUpdated message) =>
+        new(
+            UserId: Guid.Parse(message.UserId),
+            Name: message.Name,
+            Email: message.Email,
+            Phone: message.Phone,
+            Locale: message.Locale,
+            TimeZone: message.TimeZone,
+            Attributes: message.Attributes.ToDictionary(kv => kv.Key, kv => (string?)kv.Value),
+            IsActive: message.IsActive);
+}
+""";
+
+    private const string SyncSnippet = """
+public sealed class RecipientSyncService
+{
+    public async Task HandleAsync(UserChange change, CancellationToken ct)
+    {
+        var exists = await _recipients.ExistsAsync(change.UserId, ct);
+
+        if (!exists)
+        {
+            var createCommand = new CreateRecipientCommand(
+                change.UserId, change.Name ?? "", change.Email, change.Phone,
+                change.Locale, change.TimeZone, change.IsActive, change.Attributes);
+            await _createRecipient.HandleAsync(createCommand, ct);
+            return;
+        }
+
+        var updateCommand = new UpdateRecipientCommand(
+            change.UserId, change.Name, change.Email, change.Phone,
+            change.Locale, change.TimeZone, change.IsActive, change.Attributes);
+
+        await _updateRecipient.HandleAsync(updateCommand, ct);
+    }
+}
+""";
+}

@@ -1,0 +1,113 @@
+@page "/ddd/subdominios"
+
+<PageTitle>Subdominios · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>2 · Dominio, subdominios y Core Domain</h1>
+        <p>La decisión de inversión más importante del diseño.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Concepto">
+    <p>El dominio es el problema de negocio completo. Se divide en subdominios de tres tipos:</p>
+    <ul>
+        <li><strong>Core:</strong> donde está la ventaja competitiva. Ahí se invierte a la mejor gente y se aplica DDD táctico completo.</li>
+        <li><strong>Soporte:</strong> necesario pero no diferenciador. Código pragmático, sin sobreingeniería.</li>
+        <li><strong>Genérico:</strong> problema ya resuelto por el mercado. Se compra, no se construye (auth, facturación, notificaciones).</li>
+    </ul>
+    <p>El error clásico es aplicar DDD completo al subdominio genérico y CRUD al core.</p>
+</DddCallout>
+
+<h2 class="ddd-h2">¿Dónde cae NotificationLog?</h2>
+<p>
+    Esta es la pregunta incómoda que el temario pide hacer, y la respuesta honesta tiene matices. Si
+    tomas la lista de ejemplos del libro al pie de la letra —"auth, facturación, <strong>notificaciones</strong>"—
+    NotificationLog es justo el ejemplo de subdominio genérico. El propio <code>CLAUDE.md</code> del
+    proyecto lo confirma sin proponérselo:
+</p>
+
+<DddCallout Kind="codigo" Title="notification-log/CLAUDE.md">
+    <p>
+        <em>"Un servicio de notificaciones que consume eventos de Kafka y envía notificaciones (email, SMS,
+        push) según una configuración declarativa. La idea central: los servicios de negocio publican
+        hechos, y el servicio de notificaciones decide qué hacer con ellos sin que el productor sepa nada
+        de plantillas ni canales."</em>
+    </p>
+</DddCallout>
+
+<p>
+    Ese diseño es, a propósito, genérico: cualquier "hecho de negocio" puede engancharse sin que
+    Notifications sepa nada de pólizas, pedidos o lo que sea que produce el evento. Nadie compite en el
+    mercado por tener "el mejor sistema de envío de SMS". Ese es el dominio <em>core</em> real de esta
+    empresa hipotética: sea lo que sea que hace el sistema productor (facturación, gestión de pólizas,
+    logística) — no el servicio que reenvía notificaciones sobre él.
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 700 320" role="img" aria-labelledby="subTitle">
+        <title id="subTitle">Notifications como subdominio genérico, con inversión táctica proporcional</title>
+        <circle cx="350" cy="170" r="140" fill="#eef2ff" stroke="#c7d2fe" />
+        <circle cx="350" cy="170" r="95" fill="#f0fdf4" stroke="#bbf7d0" />
+        <circle cx="350" cy="170" r="50" fill="#fff7ed" stroke="#fed7aa" />
+
+        <text x="350" y="45" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">GENÉRICO</text>
+        <text x="350" y="90" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">SOPORTE</text>
+        <text x="350" y="145" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">CORE</text>
+        <text x="350" y="172" text-anchor="middle" font-size="10" fill="#9a3412">ventaja</text>
+        <text x="350" y="186" text-anchor="middle" font-size="10" fill="#9a3412">competitiva</text>
+
+        <rect x="230" y="255" width="240" height="50" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="350" y="275" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">NotificationLog</text>
+        <text x="350" y="290" text-anchor="middle" font-size="9" fill="#64748b">se compra o se reusa entre productos</text>
+        <line x1="350" y1="255" x2="350" y2="220" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="3,3" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Como capacidad de negocio, "enviar notificaciones" suele ser genérico o de soporte, no core.
+        Eso NO significa "sin reglas": significa "sin inventar aquí lo que el mercado ya resolvió".
+    </p>
+</div>
+
+<h2 class="ddd-h2">Genérico no significa "sin invariantes"</h2>
+<p>
+    Aquí está el matiz que el temario no siempre deja claro y que este proyecto ilustra bien: clasificar
+    un subdominio como genérico decide <strong>dónde no reinventar la rueda</strong> (no vas a construir tu
+    propio proveedor de SMS, tu propio motor de reintentos de entrega, tu propio schema registry), pero no
+    te exime de modelar correctamente las reglas que sí son tuyas. NotificationLog sigue teniendo una
+    invariante de negocio real y no trivial — <em>"no puede haber dos configuraciones activas del mismo
+    canal para un mismo trigger"</em> — y por eso vale la pena un agregado bien diseñado
+    (<a href="/ddd/agregados">sección 7</a>) aunque el subdominio en sí no sea el core de la empresa.
+</p>
+
+<DddCallout Kind="advertencia" Title="El error clásico, en ambas direcciones">
+    <p>
+        Aplicar DDD táctico completo a un subdominio genérico sin invariantes reales es sobreingeniería:
+        un simple catálogo CRUD de zonas horarias no necesita agregados ni value objects. Pero el error
+        opuesto — tratar "es genérico" como sinónimo de "no importa el diseño" — es igual de común y es
+        justo lo que este repositorio evita: el genérico también tiene una invariante (canal único por
+        trigger) y por eso sí tiene un agregado de verdad protegiéndola.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">Si NotificationLog fuera el productor, no el consumidor</h2>
+<p>
+    Vale la pena notar la asimetría: el sistema que <strong>produce</strong> el hecho de negocio (el que
+    dice "el pedido #4471 se confirmó") sí vive, casi siempre, en el core domain de la empresa. Ese sistema
+    merece la inversión más fuerte en DDD táctico y en expertos de negocio dedicados. NotificationLog, como
+    consumidor genérico río abajo, es deliberadamente más ligero en decisiones de negocio propias — su
+    complejidad está en la integración y en la configuración declarativa, no en modelar "qué es un pedido".
+</p>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio (temario 1.3)">
+    <p>
+        Dibuja los subdominios reales de tu producto (no de NotificationLog) en un círculo como el de
+        arriba. Para cada uno, responde: si dejara de existir mañana, ¿el negocio pierde su ventaja
+        competitiva (core), sigue operando pero peor (soporte), o simplemente lo reemplazas por un SaaS en
+        una tarde (genérico)? La lista de "dónde invertir DDD táctico completo" sale directo de esa
+        clasificación.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/lenguaje-ubicuo" PrevLabel="Lenguaje ubicuo" NextHref="/ddd/bounded-context" NextLabel="Bounded Context" />

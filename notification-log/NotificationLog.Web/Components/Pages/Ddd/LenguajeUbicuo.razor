@@ -1,0 +1,156 @@
+@page "/ddd/lenguaje-ubicuo"
+
+<PageTitle>Lenguaje ubicuo · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>1 · Lenguaje ubicuo</h1>
+        <p>Un vocabulario único entre negocio y código. Cero traducción.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Concepto">
+    <p>
+        El lenguaje ubicuo (<em>ubiquitous language</em>) es un vocabulario riguroso y compartido entre
+        quien conoce el negocio y quien escribe el código, que aparece <strong>literalmente</strong> en el
+        código: nombres de clases, de métodos, de mensajes de error. Si negocio dice "el evento
+        <code>transaccion.realizada</code> dispara una notificación por el canal activo", el código debe
+        poder decir exactamente eso, sin traducir a <code>type == 3</code> o <code>flag_a</code>.
+    </p>
+    <p>
+        El coste de no tenerlo no es estético: es un impuesto que se paga en cada bug ("¿qué significa el
+        estado 2?") y en cada reunión ("cuando dices 'trigger', ¿es lo mismo que el <code>Configuration</code>
+        de la base de datos?").
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">El vocabulario ya está en el dominio</h2>
+<p>
+    No hace falta inventar un glosario aparte: el propio código de
+    <code>NotificationLog.NotificationService.Domain</code> ya usa las palabras que usaría alguien de
+    negocio, en español, tal como se hablaría en una reunión sobre el servicio de notificaciones.
+</p>
+
+<CodeBlock Title="Domain/Triggers/EventKey.cs" Code="@EventKeyCreateSnippet" />
+
+<p>
+    Fíjate en algo que suele pasar desapercibido: los mensajes de <code>DomainException</code> no son
+    para el desarrollador, son la voz del propio dominio explicando por qué rechazó algo. "La descripción
+    del trigger es obligatoria", "Ya existe una configuración activa para el canal Email", "La plantilla
+    está desactivada" — cualquiera de esas frases la podría decir alguien de negocio sin saber qué es
+    C#. Esa es la prueba de que el lenguaje ubicuo está funcionando: el error de validación
+    <strong>es</strong> la regla de negocio, dicha en su propio idioma.
+</p>
+
+<h3 class="ddd-h3">Ejemplo: el nombre no se llama "key" en la base de datos</h3>
+<p>
+    El proyecto tiene su propia regla de traducción de nombres, documentada en su
+    <code>CLAUDE.md</code>: <em>"el key nombra un hecho, no una plantilla. <code>transaccion.realizada</code>,
+    no <code>email_transaccion_v2</code>."</em> Eso es lenguaje ubicuo estratégico: el identificador del
+    evento describe qué pasó en el negocio, nunca cómo se va a notificar. Plantilla, canal y condiciones
+    viven en <code>NotificationConfiguration</code>, no en el nombre del evento.
+</p>
+
+<h2 class="ddd-h2">Glosario: término de negocio ↔ nombre en el código</h2>
+<p>Así se vería el ejercicio 1.1 del temario aplicado a este proyecto — la lista ya está casi sin distancia:</p>
+
+<div class="ddd-box ddd-box-codigo">
+    <div class="term-pair">
+        <span class="biz">"Un hecho que ocurrió en otro sistema"</span>
+        <span class="arrow">→</span>
+        <span class="code">EventKey (Domain/Triggers)</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"Reglas que deciden si/cómo notificar ese hecho"</span>
+        <span class="arrow">→</span>
+        <span class="code">NotificationTrigger + NotificationConfiguration</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"El texto que se envía, en su versión vigente"</span>
+        <span class="arrow">→</span>
+        <span class="code">NotificationTemplate.CurrentVersion</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"A quién le llega y por dónde puede recibir"</span>
+        <span class="arrow">→</span>
+        <span class="code">Recipient.CanReceive(channel)</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"El registro de que se envió (o falló) una notificación"</span>
+        <span class="arrow">→</span>
+        <span class="code">Notification.RecordSuccess / RecordFailure</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"Publicar el siguiente texto de una plantilla"</span>
+        <span class="arrow">→</span>
+        <span class="code">NotificationTemplate.PublishVersion(...)</span>
+    </div>
+</div>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 760 200" role="img" aria-labelledby="ubiquitousTitle">
+        <title id="ubiquitousTitle">Coste de traducción con y sin lenguaje ubicuo</title>
+        <defs>
+            <marker id="ulArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <text x="190" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">Sin lenguaje ubicuo</text>
+        <rect x="40" y="40" width="140" height="50" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="110" y="70" text-anchor="middle" font-size="11" fill="#991b1b">"póliza suspendida"</text>
+        <line x1="180" y1="65" x2="230" y2="65" stroke="#dc2626" stroke-width="1.5" marker-end="url(#ulArrow)" />
+        <text x="205" y="55" text-anchor="middle" font-size="9" fill="#dc2626">traduce</text>
+        <rect x="230" y="40" width="140" height="50" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="300" y="65" text-anchor="middle" font-size="11" fill="#991b1b" font-family="monospace">user.status = 3</text>
+        <text x="205" y="110" text-anchor="middle" font-size="10" fill="#991b1b">se paga en cada bug y cada reunión</text>
+
+        <text x="570" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">Con lenguaje ubicuo (este repo)</text>
+        <rect x="440" y="40" width="140" height="50" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="510" y="65" text-anchor="middle" font-size="11" fill="#14532d">"el event key es obligatorio"</text>
+        <line x1="580" y1="65" x2="630" y2="65" stroke="#16a34a" stroke-width="1.5" marker-end="url(#ulArrow)" />
+        <text x="605" y="55" text-anchor="middle" font-size="9" fill="#16a34a">es</text>
+        <rect x="630" y="40" width="140" height="50" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="700" y="60" text-anchor="middle" font-size="9" fill="#14532d" font-family="monospace">throw new</text>
+        <text x="700" y="72" text-anchor="middle" font-size="9" fill="#14532d" font-family="monospace">DomainException(...)</text>
+        <text x="605" y="110" text-anchor="middle" font-size="10" fill="#14532d">el mensaje de error ES la regla</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        El mensaje de <code>DomainException</code> no es un detalle de implementación: es el punto donde
+        el lenguaje de negocio y el código de negocio son, literalmente, la misma frase.
+    </p>
+</div>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio (temario 1.1)">
+    <p>
+        Antes de la próxima sesión de refinamiento, toma un método real de un módulo que <strong>no</strong>
+        tenga lenguaje ubicuo (por ejemplo, algo con <code>status == 2</code> o <code>ProcesarData()</code>)
+        y pregúntale al equipo qué regla de negocio implementa. Si nadie responde con seguridad en menos de
+        30 segundos, ese es el síntoma que esta guía intenta prevenir.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd" PrevLabel="Inicio" NextHref="/ddd/subdominios" NextLabel="Subdominios" />
+
+@code {
+    private const string EventKeyCreateSnippet = """
+public static EventKey Create(string value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        throw new DomainException("El event key es obligatorio.");
+
+    var normalized = value.Trim().ToLowerInvariant();
+
+    if (normalized.Length > MaxLength)
+        throw new DomainException($"El event key no puede superar {MaxLength} caracteres.");
+
+    if (!Format.IsMatch(normalized))
+        throw new DomainException(
+            $"El event key '{value}' debe tener el formato dominio.accion.");
+
+    return new EventKey(normalized);
+}
+""";
+}

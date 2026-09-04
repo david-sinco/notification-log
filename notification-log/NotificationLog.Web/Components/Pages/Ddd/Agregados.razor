@@ -1,0 +1,230 @@
+@page "/ddd/agregados"
+
+<PageTitle>Agregados · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>7 · Agregado y raíz de agregado</h1>
+        <p>El concepto más difícil de DDD táctico — y el que más valor da.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Concepto">
+    <p>
+        Un agregado es un conjunto de entidades y value objects tratado como una unidad de consistencia.
+        Se accede solo a través de la raíz (aggregate root), que garantiza las invariantes. Responde a la
+        pregunta: <em>¿qué debe ser consistente en la misma transacción?</em> Todo lo demás puede ser
+        eventualmente consistente.
+    </p>
+    <p>Las cuatro reglas de diseño de Vernon:</p>
+    <ol>
+        <li>Protege invariantes de negocio verdaderas dentro del límite del agregado.</li>
+        <li>Diseña agregados pequeños. Grande = contención, bloqueos y memoria.</li>
+        <li>Referencia otros agregados <strong>por identidad</strong>, no por objeto.</li>
+        <li>Una transacción modifica <strong>un solo agregado</strong>. Coordina el resto con eventos.</li>
+    </ol>
+</DddCallout>
+
+<h2 class="ddd-h2">El agregado real: NotificationTrigger</h2>
+<p>
+    <code>NotificationTrigger</code> es la raíz; <code>NotificationConfiguration</code> es su entidad hija.
+    Comparten una invariante real: <strong>no puede haber dos configuraciones activas del mismo canal para
+    el mismo trigger</strong> (no tendría sentido tener dos plantillas de email compitiendo por el mismo
+    evento). Esa regla no vive en el handler de la aplicación ni en una validación de base de datos —
+    vive dentro del agregado, que es el único lugar donde se puede verificar sin condiciones de carrera
+    dentro de la misma transacción.
+</p>
+
+<CodeBlock Title="Domain/Triggers/NotificationTrigger.cs (invariante de canal único)" Code="@TriggerSnippet" />
+
+<h2 class="ddd-h2">Regla 1 — Protege invariantes verdaderas</h2>
+<p>
+    <code>AddConfiguration</code> y <code>EnableConfiguration</code> llaman a
+    <code>EnsureChannelIsFree</code> antes de mutar nada. No hay forma de crear el estado inválido "dos
+    configuraciones de Email activas" pasando por la API pública del agregado — y esa es justamente la
+    definición de invariante protegida: no es una validación que <em>podrías</em> olvidar llamar, es
+    imposible de saltarte.
+</p>
+
+<h2 class="ddd-h2">Regla 2 — Agregados pequeños</h2>
+<p>
+    El agregado <code>NotificationTrigger</code> contiene únicamente sus <code>NotificationConfiguration</code>
+    — no arrastra la plantilla completa, ni el destinatario, ni el historial de notificaciones enviadas.
+    Ese es exactamente el motivo por el que este dominio tiene <strong>cuatro</strong> agregados raíz
+    (<code>NotificationTrigger</code>, <code>NotificationTemplate</code>, <code>Recipient</code>,
+    <code>Notification</code>) en vez de uno solo gigante. Cada uno protege su propia invariante y nada
+    más.
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 260" role="img" aria-labelledby="aggTitle">
+        <title id="aggTitle">Cuatro agregados pequeños, referenciados por Id, nunca por objeto</title>
+        <defs>
+            <marker id="aggArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="20" width="180" height="120" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="110" y="42" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">NotificationTrigger</text>
+        <rect x="35" y="55" width="150" height="70" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="110" y="75" text-anchor="middle" font-size="9" fill="#334155">NotificationConfiguration</text>
+        <text x="110" y="90" text-anchor="middle" font-size="8" fill="#64748b">TemplateId: Guid</text>
+        <text x="110" y="102" text-anchor="middle" font-size="8" fill="#64748b">(no NotificationTemplate)</text>
+
+        <rect x="620" y="20" width="180" height="120" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="710" y="42" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">NotificationTemplate</text>
+        <rect x="635" y="55" width="150" height="70" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="710" y="80" text-anchor="middle" font-size="9" fill="#334155">TemplateVersion</text>
+        <text x="710" y="95" text-anchor="middle" font-size="8" fill="#64748b">solo una IsCurrent</text>
+
+        <rect x="20" y="170" width="180" height="80" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="110" y="195" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Recipient</text>
+        <text x="110" y="215" text-anchor="middle" font-size="8.5" fill="#334155">Id, Email, Phone, IsActive</text>
+        <text x="110" y="230" text-anchor="middle" font-size="8.5" fill="#334155">agregado propio</text>
+
+        <rect x="620" y="170" width="180" height="80" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="710" y="195" text-anchor="middle" font-size="10.5" font-weight="700" fill="#334155">Notification</text>
+        <text x="710" y="215" text-anchor="middle" font-size="8.5" fill="#334155">registro append-only</text>
+        <text x="710" y="230" text-anchor="middle" font-size="8.5" fill="#334155">de un envío</text>
+
+        <rect x="280" y="95" width="260" height="70" rx="10" fill="#fff" stroke="#e5e9f2" stroke-dasharray="4,3" />
+        <text x="410" y="120" text-anchor="middle" font-size="9.5" fill="#64748b">Notification.ConfigurationId</text>
+        <text x="410" y="135" text-anchor="middle" font-size="9.5" fill="#64748b">Notification.TemplateId</text>
+        <text x="410" y="150" text-anchor="middle" font-size="9.5" fill="#64748b">Notification.RecipientId</text>
+
+        <line x1="200" y1="80" x2="330" y2="115" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#aggArrow)" />
+        <line x1="620" y1="80" x2="490" y2="115" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#aggArrow)" />
+        <line x1="200" y1="200" x2="330" y2="150" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#aggArrow)" />
+        <line x1="620" y1="200" x2="490" y2="150" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#aggArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Las líneas punteadas son referencias por <code>Guid</code>, nunca por objeto navegable. Ningún
+        agregado carga a otro dentro de su límite transaccional.
+    </p>
+</div>
+
+<h2 class="ddd-h2">Regla 3 — Referencias por identidad</h2>
+<p>
+    <code>NotificationConfiguration.TemplateId</code> es un <code>Guid</code>, no una propiedad
+    <code>NotificationTemplate Template</code>. Y <code>Notification</code> — el registro histórico de un
+    envío — es todavía más estricto: guarda <code>ConfigurationId</code>, <code>TemplateId</code>,
+    <code>TemplateVersionId</code> y <code>RecipientId</code>, los cuatro como <code>Guid</code> sueltos,
+    sin una sola referencia navegable a otro agregado.
+</p>
+
+<CodeBlock Title="Domain/Notifications/Notification.cs (solo Guids, nunca objetos)" Code="@NotificationSnippet" />
+
+<h2 class="ddd-h2">Regla 4 — Una transacción, un agregado</h2>
+<p>
+    Este es el punto más sutil, y el código real lo respeta incluso cuando una operación necesita mirar
+    <em>dos</em> agregados. <code>AddConfigurationHandler</code> lee tanto el <code>NotificationTrigger</code>
+    como el <code>NotificationTemplate</code> — pero solo <strong>escribe</strong> uno. El template se lee
+    para validar una regla de compatibilidad ("¿esta plantilla está activa? ¿es del canal correcto?"), y
+    esa lectura nunca se convierte en una escritura sobre el template. Solo <code>trigger</code> se guarda.
+</p>
+
+<CodeBlock Title="Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs" Code="@HandlerSnippet" />
+
+<DddCallout Kind="advertencia" Title="La lectura de un segundo agregado no rompe la regla">
+    <p>
+        Leer <code>template</code> para decidir no es lo mismo que mutar dos agregados en la misma
+        transacción. La regla de Vernon dice "una transacción <strong>modifica</strong> un solo agregado" —
+        aquí solo <code>_uow.SaveChangesAsync()</code> persiste cambios, y esos cambios están todos dentro
+        de <code>trigger</code>. Si <code>AddConfigurationHandler</code> también hubiera llamado a
+        <code>template.Disable()</code> en el mismo método, ahí sí habría una violación real, y la forma
+        correcta de resolverlo sería con un evento de dominio (ver <a href="/ddd/domain-events">página 10</a>).
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio (temario 2.3)">
+    <p>
+        Toma la entidad más grande de tu propio código y, para cada campo, pregunta: "si esto cambia,
+        ¿qué otro campo del mismo objeto <em>tiene</em> que cambiar en la misma transacción para que el
+        objeto siga siendo válido?". Los campos que nunca aparecen en esa respuesta probablemente
+        pertenecen a otro agregado.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/entidades" PrevLabel="Entidades" NextHref="/ddd/domain-services" NextLabel="Domain Services" />
+
+@code {
+    private const string TriggerSnippet = """
+public class NotificationTrigger : AggregateRoot
+{
+    private readonly List<NotificationConfiguration> _configurations = new();
+
+    public NotificationConfiguration AddConfiguration(Guid templateId, NotificationChannel channel)
+    {
+        EnsureChannelIsFree(channel);
+
+        var configuration = NotificationConfiguration.Create(templateId, channel);
+        _configurations.Add(configuration);
+
+        return configuration;
+    }
+
+    public void EnableConfiguration(Guid configurationId)
+    {
+        var configuration = RequireConfiguration(configurationId);
+        if (configuration.IsEnabled) return;
+
+        EnsureChannelIsFree(configuration.Channel, exceptId: configurationId);
+        configuration.Enable();
+    }
+
+    private void EnsureChannelIsFree(NotificationChannel channel, Guid? exceptId = null)
+    {
+        var occupied = _configurations.Any(c =>
+            c.IsEnabled && c.Channel == channel && c.Id != exceptId);
+
+        if (occupied)
+            throw new DomainException(
+                $"Ya existe una configuración activa para el canal {channel}.");
+    }
+}
+""";
+
+    private const string NotificationSnippet = """
+public sealed class Notification : AggregateRoot
+{
+    public Guid ConfigurationId { get; private set; }
+    public Guid TemplateId { get; private set; }
+    public Guid TemplateVersionId { get; private set; }
+    public Guid RecipientId { get; private set; }
+    // ^ Cuatro Guids. Ni un solo `NotificationTrigger`, `NotificationTemplate` o
+    // `Recipient` navegable: Notification puede reconstruirse y leerse sin cargar
+    // ningún otro agregado en memoria.
+}
+""";
+
+    private const string HandlerSnippet = """
+public sealed class AddConfigurationHandler
+{
+    public async Task<NotificationConfiguration> HandleAsync(AddConfigurationCommand cmd, CancellationToken ct)
+    {
+        var trigger = await _triggers.GetByIdAsync(cmd.TriggerId, ct)
+            ?? throw new NotFoundException(nameof(NotificationTrigger), cmd.TriggerId);
+
+        var template = await _templates.GetByIdAsync(cmd.TemplateId, ct)
+            ?? throw new NotFoundException(nameof(NotificationTemplate), cmd.TemplateId);
+
+        if (!template.IsEnabled)
+            throw new AppValidationException($"La plantilla '{template.Name}' está desactivada.");
+
+        if (template.Channel != cmd.Channel)
+            throw new AppValidationException(
+                $"La plantilla es de canal {template.Channel}, no {cmd.Channel}.");
+
+        // Se LEE template para decidir. Solo se ESCRIBE trigger.
+        var configuration = trigger.AddConfiguration(template.Id, cmd.Channel);
+
+        await _uow.SaveChangesAsync(ct);   // una sola raíz modificada
+
+        return configuration;
+    }
+}
+""";
+}

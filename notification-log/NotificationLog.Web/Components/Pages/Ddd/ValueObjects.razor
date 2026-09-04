@@ -1,0 +1,137 @@
+@page "/ddd/value-objects"
+
+<PageTitle>Value Objects · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>5 · Value Object</h1>
+        <p>El patrón con mejor relación beneficio/esfuerzo. Si solo adoptas uno, que sea este.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Concepto">
+    <p>
+        Un Value Object es un objeto definido por sus atributos, sin identidad propia, inmutable y
+        auto-validado. Dos instancias con el mismo valor son intercambiables: no importa <em>cuál</em> es,
+        importa <em>cuánto</em> vale. Ganancias: elimina validación duplicada (un valor inválido no puede
+        existir), elimina errores de tipo primitivo, y da un sitio natural donde colgar comportamiento.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">Dos Value Objects reales, lado a lado</h2>
+<p>
+    Este dominio tiene dos ejemplos casi gemelos: <code>EventKey</code> (identifica un hecho de negocio,
+    formato <code>dominio.accion</code>) y <code>TemplateName</code> (identifica una plantilla, formato
+    <code>snake_case</code>). Ambos siguen exactamente la misma forma: <code>sealed record</code>,
+    constructor privado, y un método estático <code>Create</code> que es la única puerta de entrada.
+</p>
+
+<CodeBlock Title="Domain/Templates/TemplateName.cs" Code="@TemplateNameSnippet" />
+
+<p>
+    Compara ese constructor privado con la firma pública: no existe manera de obtener un
+    <code>TemplateName</code> sin pasar por <code>Create</code>, y <code>Create</code> no devuelve nunca
+    un valor a medio validar. Una vez que tienes un <code>TemplateName</code> en la mano, sabes con
+    certeza — sin volver a comprobar nada — que está en minúsculas, tiene el formato correcto y no supera
+    los 100 caracteres. Esa garantía es el valor real del patrón.
+</p>
+
+<h2 class="ddd-h2">Por qué "record" y no "class"</h2>
+<p>
+    <code>TemplateName</code> y <code>EventKey</code> son <code>record</code>, no <code>class</code>: los
+    records de C# generan automáticamente igualdad por valor (dos instancias con el mismo <code>Value</code>
+    son iguales) y son inmutables por convención con propiedades <code>{ get; }</code>. Es el tipo de dato
+    del lenguaje que más se parece a la definición de libro de un Value Object, sin escribir
+    <code>Equals</code>/<code>GetHashCode</code> a mano.
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 780 240" role="img" aria-labelledby="voTitle">
+        <title id="voTitle">Primitiva obsesiva contra Value Object</title>
+        <defs>
+            <marker id="voArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <text x="190" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">Primitiva obsesiva</text>
+        <rect x="50" y="42" width="280" height="46" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="190" y="69" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#991b1b">NotificationTrigger.Create(string, string)</text>
+        <text x="190" y="106" text-anchor="middle" font-size="9.5" fill="#991b1b">¿cuál string es cuál? nada impide invertirlos</text>
+        <text x="190" y="122" text-anchor="middle" font-size="9.5" fill="#991b1b">la validación se repite en cada punto de entrada</text>
+
+        <text x="590" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">Value Object (este repo)</text>
+        <rect x="450" y="42" width="280" height="46" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="590" y="69" text-anchor="middle" font-size="10.5" font-family="monospace" fill="#14532d">NotificationTrigger.Create(EventKey, string)</text>
+        <text x="590" y="106" text-anchor="middle" font-size="9.5" fill="#14532d">imposible confundir EventKey con Description</text>
+        <text x="590" y="122" text-anchor="middle" font-size="9.5" fill="#14532d">la validación vive en EventKey.Create, una sola vez</text>
+
+        <rect x="450" y="145" width="280" height="70" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="590" y="165" text-anchor="middle" font-size="9.5" fill="#334155" font-family="monospace">EventKey.Create("Pedido Confirmado")</text>
+        <line x1="590" y1="172" x2="590" y2="182" stroke="#dc2626" stroke-width="1.5" marker-end="url(#voArrow)" />
+        <text x="590" y="200" text-anchor="middle" font-size="9" fill="#991b1b">DomainException: formato dominio.accion</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        El value object convierte un error de formato en un error <em>en el momento de la creación</em>,
+        no tres capas más abajo cuando ya es tarde para saber de dónde vino el dato.
+    </p>
+</div>
+
+<h2 class="ddd-h2">Otros Value Objects candidatos en este dominio</h2>
+<p>
+    No todo lo que podría ser un Value Object lo es todavía — y eso también es información útil. Por
+    ejemplo, <code>NotificationChannel</code> es un <code>enum</code> simple (Email, Sms, Push, WhatsApp):
+    es una forma legítima y más liviana de resolver el mismo problema (evitar strings mágicos) cuando el
+    conjunto de valores es cerrado y no necesita validación de formato. No todo primitivo necesita un
+    Value Object completo — un <code>enum</code> ya resuelve el caso cuando el "valor válido" es
+    simplemente "uno de esta lista fija".
+</p>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio (temario 2.1)">
+    <p>
+        Busca en tu propio código tres parámetros <code>string</code> o <code>decimal</code> consecutivos
+        en la misma firma de método (por ejemplo, <code>Transferir(string origen, string destino, decimal importe)</code>).
+        Esa firma es una bomba: nada impide invertir <code>origen</code> y <code>destino</code> en la
+        llamada, y el compilador no te va a avisar. Conviértelos en Value Objects siguiendo el mismo molde
+        que <code>TemplateName</code>: constructor privado + <code>Create</code> estático que valida.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/context-map" PrevLabel="Context Map" NextHref="/ddd/entidades" NextLabel="Entidades" />
+
+@code {
+    private const string TemplateNameSnippet = """
+public sealed record TemplateName
+{
+    public const int MaxLength = 100;
+
+    private static readonly Regex Format =
+        new(@"^[a-z0-9]+(_[a-z0-9]+)*$", RegexOptions.Compiled);
+
+    public string Value { get; }
+
+    private TemplateName(string value) => Value = value;
+
+    public static TemplateName Create(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new DomainException("El nombre de la plantilla es obligatorio.");
+
+        var normalized = value.Trim().ToLowerInvariant();
+
+        if (normalized.Length > MaxLength)
+            throw new DomainException($"El nombre no puede superar {MaxLength} caracteres.");
+
+        if (!Format.IsMatch(normalized))
+            throw new DomainException(
+                $"El nombre '{value}' solo admite minúsculas, números y guion bajo.");
+
+        return new TemplateName(normalized);
+    }
+
+    public override string ToString() => Value;
+}
+""";
+}

@@ -1,0 +1,21 @@
+<div class="ddd-prevnext">
+    @if (PrevHref is not null)
+    {
+        <a href="@PrevHref"><span class="label">← Anterior</span>@PrevLabel</a>
+    }
+    else
+    {
+        <span></span>
+    }
+    @if (NextHref is not null)
+    {
+        <a href="@NextHref" class="next"><span class="label">Siguiente →</span>@NextLabel</a>
+    }
+</div>
+
+@code {
+    [Parameter] public string? PrevHref { get; set; }
+    [Parameter] public string? PrevLabel { get; set; }
+    [Parameter] public string? NextHref { get; set; }
+    [Parameter] public string? NextLabel { get; set; }
+}

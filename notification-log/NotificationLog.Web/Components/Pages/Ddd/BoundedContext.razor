@@ -1,0 +1,134 @@
+@page "/ddd/bounded-context"
+
+<PageTitle>Bounded Context · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>3 · Bounded Context</h1>
+        <p>El concepto central de DDD: una frontera donde un modelo y su lenguaje son válidos.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Concepto">
+    <p>
+        Un Bounded Context es una frontera explícita dentro de la cual un modelo y su lenguaje son
+        consistentes. El mismo término de negocio puede significar cosas distintas fuera de esa frontera,
+        y eso está bien: el error es construir un único modelo con 60 campos que intente servir a todos los
+        contextos a la vez.
+    </p>
+    <p>
+        Regla práctica: si al añadir un campo a una clase tienes que preguntar "¿pero para qué caso?",
+        probablemente estás mezclando contextos.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">"Usuario" no es lo mismo en todos lados</h2>
+<p>
+    NotificationLog no modela "el usuario". Modela exactamente lo que su propio contexto — notificar —
+    necesita saber de una persona para poder contactarla y respetar sus preferencias. El sistema productor
+    (el que gestiona identidad, autenticación, verificación de email/teléfono) tiene su propio modelo de
+    usuario, mucho más rico, que nunca cruza la frontera completo.
+</p>
+
+<CodeBlock Title="Domain/Recipients/Recipient.cs" Code="@RecipientSnippet" />
+
+<p>
+    Compáralo con lo que el contrato de integración (<code>user_contact_updated.proto</code>, que verás en
+    detalle en la <a href="/ddd/context-map">página 4</a>) trae del lado del productor: nombre, email,
+    teléfono, locale, zona horaria, activo/inactivo y atributos libres. Nada de contraseñas, roles,
+    permisos ni historial — porque a <em>este</em> contexto no le importa. <code>Recipient</code> es un
+    modelo deliberadamente delgado: "alguien a quien se le puede enviar algo, por un canal, si está activo".
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 800 300" role="img" aria-labelledby="bcTitle">
+        <title id="bcTitle">El mismo concepto de negocio, dos modelos distintos según el contexto</title>
+        <defs>
+            <marker id="bcArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="30" y="30" width="330" height="240" rx="12" fill="#f8fafc" stroke="#e5e9f2" stroke-dasharray="5,4" />
+        <text x="195" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Contexto: Identidad / Usuarios (productor)</text>
+        <rect x="60" y="75" width="270" height="170" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="195" y="95" text-anchor="middle" font-size="11" font-weight="600" fill="#4338ca">"Usuario"</text>
+        <text x="80" y="115" font-size="9.5" fill="#334155">• credenciales, hash de contraseña</text>
+        <text x="80" y="132" font-size="9.5" fill="#334155">• email/teléfono pendientes de verificar</text>
+        <text x="80" y="149" font-size="9.5" fill="#334155">• intentos de verificación fallidos</text>
+        <text x="80" y="166" font-size="9.5" fill="#334155">• roles, permisos, sesiones</text>
+        <text x="80" y="183" font-size="9.5" fill="#334155">• preferencias de notificación</text>
+        <text x="80" y="200" font-size="9.5" fill="#334155">• nombre, locale, zona horaria</text>
+        <text x="80" y="217" font-size="9.5" fill="#334155">• activo / inactivo</text>
+
+        <rect x="440" y="30" width="330" height="240" rx="12" fill="#f8fafc" stroke="#e5e9f2" stroke-dasharray="5,4" />
+        <text x="605" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Contexto: Notificaciones (NotificationLog)</text>
+        <rect x="470" y="75" width="270" height="120" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="605" y="95" text-anchor="middle" font-size="11" font-weight="600" fill="#14532d">"Recipient"</text>
+        <text x="490" y="115" font-size="9.5" fill="#334155">• nombre, email, teléfono</text>
+        <text x="490" y="132" font-size="9.5" fill="#334155">• locale, zona horaria</text>
+        <text x="490" y="149" font-size="9.5" fill="#334155">• activo / inactivo</text>
+        <text x="490" y="166" font-size="9.5" fill="#334155">• atributos libres (para plantillas)</text>
+        <text x="605" y="215" text-anchor="middle" font-size="9.5" fill="#64748b" font-style="italic">nada de contraseñas, roles ni sesiones</text>
+
+        <line x1="360" y1="150" x2="435" y2="150" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#bcArrow)" />
+        <text x="398" y="140" text-anchor="middle" font-size="9" fill="#64748b">solo lo</text>
+        <text x="398" y="165" text-anchor="middle" font-size="9" fill="#64748b">necesario</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Dos modelos distintos y correctos del mismo "usuario", cada uno completo para su propia frontera.
+        Ninguno es el modelo "verdadero"; cada uno es el modelo útil para lo que ese contexto decide.
+    </p>
+</div>
+
+<h2 class="ddd-h2">Dentro del mismo servicio también hay fronteras</h2>
+<p>
+    Un Bounded Context no siempre es un microservicio aparte — puede ser un módulo dentro del mismo
+    proceso. Dentro de <code>NotificationLog.NotificationService.Domain</code> ya conviven varias
+    subcarpetas con su propio lenguaje y sus propias reglas, sin mezclarse entre sí:
+    <code>Triggers</code> (cuándo notificar), <code>Templates</code> (con qué texto),
+    <code>Recipients</code> (a quién) y <code>Notifications</code> (qué se envió de hecho). Cada carpeta
+    tiene su propio agregado raíz y su propio repositorio — nadie navega directamente de un agregado a
+    otro por referencia de objeto, solo por <code>Guid</code> (lo verás en la <a href="/ddd/agregados">página 7</a>).
+</p>
+
+<DddCallout Kind="advertencia" Title="La señal de alarma">
+    <p>
+        Si alguna vez sientes la tentación de fusionar <code>Recipient</code> con un futuro modelo de
+        "cliente" de facturación porque "total, es la misma persona", para y pregúntate: ¿el campo nuevo
+        que quiero agregar tiene sentido en <em>ambos</em> casos de uso, o solo en uno? Si solo en uno,
+        el modelo fusionado va a terminar sirviendo mal a los dos.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/subdominios" PrevLabel="Subdominios" NextHref="/ddd/context-map" NextLabel="Context Map" />
+
+@code {
+    private const string RecipientSnippet = """
+public sealed class Recipient : AggregateRoot
+{
+    public string Name { get; private set; } = default!;
+    public string? Email { get; private set; }
+    public string? Phone { get; private set; }
+    public string Locale { get; private set; } = "es-CO";
+    public string TimeZone { get; private set; } = "America/Bogota";
+    public bool IsActive { get; private set; }
+
+    private readonly Dictionary<string, string> _attributes = new();
+    // atributos libres: solo lo que este contexto necesita para renderizar/filtrar,
+    // nunca contraseñas, roles, historial de sesiones, etc.
+
+    public string? AddressFor(NotificationChannel channel) => channel switch
+    {
+        NotificationChannel.Email => Email,
+        NotificationChannel.Sms or NotificationChannel.WhatsApp => Phone,
+        _ => null
+    };
+
+    public bool CanReceive(NotificationChannel channel)
+        => IsActive && !string.IsNullOrWhiteSpace(AddressFor(channel));
+}
+""";
+}
