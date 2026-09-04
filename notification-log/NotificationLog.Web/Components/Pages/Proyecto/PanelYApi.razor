@@ -1,0 +1,89 @@
+@page "/proyecto/panel-y-api"
+
+<PageTitle>Panel y API · Qué hace · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>4 · Panel y API: cómo se administra todo esto</h1>
+        <p>Un tour por las pantallas del panel, y la API HTTP que las sostiene.</p>
+    </div>
+</div>
+
+<ProyectoNav />
+
+<h2 class="ddd-h2">El panel: cinco pantallas, un patrón repetido</h2>
+<p>
+    <code>NotificationLog.Web</code> es el panel de administración. Su navegación tiene cinco destinos, y
+    los cuatro de recursos siguen el mismo patrón: una lista con búsqueda, filtro y paginación, y una vista
+    de detalle donde se edita.
+</p>
+
+<ul>
+    <li>
+        <strong>Panel (<code>/</code>):</strong> resumen con el conteo de triggers, plantillas,
+        destinatarios y notificaciones enviadas, más las seis notificaciones más recientes — la primera
+        pantalla que ve un administrador al entrar.
+    </li>
+    <li>
+        <strong>Triggers (<code>/triggers</code>):</strong> lista con búsqueda por event key/descripción y
+        filtro por estado; cada fila muestra cuántas configuraciones activas tiene. El detalle
+        (<code>/triggers/{id}</code>) permite habilitar/deshabilitar el trigger completo, cambiar su
+        descripción, y agregar, habilitar, deshabilitar o recablear a otra plantilla cada configuración de
+        canal.
+    </li>
+    <li>
+        <strong>Plantillas (<code>/templates</code>):</strong> lista por canal y estado. Crear una plantilla
+        nueva (<code>/templates/new</code>) pide nombre, canal y el contenido de la primera versión — el
+        formulario oculta el campo de asunto automáticamente para SMS/WhatsApp, reflejando la misma regla
+        que ya protege el dominio. El detalle permite publicar una nueva versión (retira la anterior) y
+        ver el historial completo de versiones.
+    </li>
+    <li>
+        <strong>Destinatarios (<code>/recipients</code>):</strong> de solo consulta en la práctica — se
+        alimentan solos por el flujo de sincronización (ver
+        <a href="/proyecto/flujo-recipients">página 2</a>). El detalle muestra sus datos de contacto,
+        atributos libres y si puede recibir por cada canal.
+    </li>
+    <li>
+        <strong>Notificaciones (<code>/notifications</code>):</strong> el log de auditoría — filtrable por
+        canal y estado, con el motivo exacto de cada fallo visible en la fila.
+    </li>
+</ul>
+
+<DddCallout Kind="concepto" Title="Un solo endpoint de desarrollo, marcado como tal">
+    <p>
+        El único punto de entrada que crea un <code>Recipient</code> a mano (<code>POST /api/dev/recipients</code>)
+        solo se registra cuando <code>ApiService</code> corre en modo desarrollo (<code>if (app.Environment.IsDevelopment())</code>
+        en <code>Program.cs</code>) — no existe en producción, precisamente porque en producción esa entidad
+        se alimenta por mensajería, no a mano.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">La API: los mismos cuatro recursos, expuestos por HTTP</h2>
+<p>
+    Cada pantalla del panel tiene su contraparte exacta en la API bajo <code>/api/&lt;recurso&gt;</code>:
+    <code>/api/triggers</code>, <code>/api/templates</code>, <code>/api/recipients</code>,
+    <code>/api/notifications</code>. Todas las operaciones de escritura devuelven el código HTTP que
+    corresponde a lo que pasó — <code>201</code> al crear, <code>204</code> al modificar sin cuerpo de
+    respuesta, <code>404</code> si el recurso no existe, <code>422</code> si se viola una regla de negocio
+    (dos configuraciones activas del mismo canal, por ejemplo), <code>400</code> con el detalle por campo si
+    la validación de forma falla.
+</p>
+
+<p>
+    En desarrollo, <code>ApiService</code> expone su documentación OpenAPI en <code>/openapi</code> y una UI
+    interactiva con <strong>Scalar</strong> para probar cada endpoint sin salir del navegador — útil para
+    explorar la API sin necesidad de tener el panel de Blazor corriendo.
+</p>
+
+<DddCallout Kind="honesto" Title="Nada se elimina, todo se deshabilita">
+    <p>
+        Ni el panel ni la API exponen un solo <code>DELETE</code> para triggers, plantillas o destinatarios
+        — coherente con que <code>Notification</code> guarda referencias por id a configuraciones y
+        plantillas concretas: borrar de verdad rompería ese historial. La única forma de "retirar" algo es
+        deshabilitarlo, lo que además es exactamente lo que ya protege el propio dominio (ver
+        <a href="/arquitectura/dominio">página de Dominio</a>).
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/proyecto/flujo-notificacion" PrevLabel="Se envía una notificación" NextHref="/proyecto/entorno-dev" NextLabel="Entorno de desarrollo" />

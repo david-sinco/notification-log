@@ -1,0 +1,113 @@
+@page "/arquitectura"
+
+<PageTitle>Arquitectura · NotificationLog</PageTitle>
+
+<div class="ddd-hero">
+    <div class="eyebrow">Cómo está construido NotificationLog</div>
+    <h1>La arquitectura, capa por capa, con el código real</h1>
+    <p>
+        Esta guía recorre las cuatro capas del proyecto — <code>Domain</code>, <code>Application</code>,
+        <code>Infrastructure</code> y la pareja <code>API</code>/<code>Web</code> — y explica, con archivos
+        reales de este repositorio, qué vive en cada una, por qué está separada así y qué decisión concreta
+        hay detrás de cada pieza. Donde una decisión documentada (por ejemplo en <code>CLAUDE.md</code>) no
+        coincide exactamente con lo que el código hace hoy, te lo digo explícitamente en vez de maquillarlo.
+    </p>
+</div>
+
+<ArqNav />
+
+<p class="ddd-lede">
+    La regla que sostiene todo el proyecto es una sola: <strong>las dependencias apuntan hacia adentro</strong>.
+    <code>Domain</code> no conoce a nadie. <code>Application</code> solo conoce a <code>Domain</code>.
+    <code>Infrastructure</code> conoce a los dos anteriores e implementa sus interfaces. <code>API</code> y
+    <code>Web</code> son los bordes que hablan con el mundo exterior — HTTP, un navegador — y traducen hacia
+    y desde ese núcleo. Es exactamente la misma regla que ya viste aplicada al modelo de dominio en
+    <a href="/ddd/arquitectura">la página 11 de la guía de DDD</a>; aquí la recorremos capa por capa, con más
+    detalle de infraestructura real: Entity Framework, RabbitMQ, Aspire.
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 260" role="img" aria-labelledby="arqMapTitle">
+        <title id="arqMapTitle">Cuatro capas y sus dependencias hacia adentro</title>
+        <defs>
+            <marker id="arqMapArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#4f46e5" />
+            </marker>
+        </defs>
+
+        <rect x="640" y="20" width="160" height="220" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="720" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">API / Web</text>
+        <text x="720" y="58" text-anchor="middle" font-size="8.5" fill="#9a3412">Minimal API · Blazor</text>
+
+        <rect x="460" y="20" width="160" height="220" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="540" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">Infrastructure</text>
+        <text x="540" y="58" text-anchor="middle" font-size="8.5" fill="#475569">EF Core · RabbitMQ · Wolverine</text>
+
+        <rect x="280" y="20" width="160" height="220" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="360" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">Application</text>
+        <text x="360" y="58" text-anchor="middle" font-size="8.5" fill="#14532d">Commands · Queries · Puertos</text>
+
+        <rect x="100" y="20" width="160" height="220" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="180" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Domain</text>
+        <text x="180" y="58" text-anchor="middle" font-size="8.5" fill="#4338ca">0 PackageReference</text>
+
+        <line x1="640" y1="130" x2="620" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+        <line x1="460" y1="130" x2="440" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+        <line x1="280" y1="130" x2="260" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+
+        <text x="530" y="110" text-anchor="middle" font-size="8" fill="#94a3b8">implementa puertos de</text>
+        <text x="350" y="110" text-anchor="middle" font-size="8" fill="#94a3b8">orquesta contra</text>
+        <text x="720" y="180" text-anchor="middle" font-size="8" fill="#9a3412">llama comandos/queries de</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Las flechas son la única dirección de dependencia de compilación permitida. Nadie a la izquierda
+        conoce a nadie a la derecha.
+    </p>
+</div>
+
+<h2 class="ddd-h2">Recorre la guía</h2>
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/arquitectura/dominio">
+        <span class="ddd-card-num">01</span>
+        <h3>Dominio</h3>
+        <p>Los cuatro agregados — <code>NotificationTrigger</code>, <code>NotificationTemplate</code>,
+        <code>Recipient</code>, <code>Notification</code> — y por qué su <code>.csproj</code> no tiene ni un
+        <code>PackageReference</code>.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/aplicacion">
+        <span class="ddd-card-num">02</span>
+        <h3>Aplicación</h3>
+        <p>Comandos y queries organizados por feature, los puertos que define (<code>IUnitOfWork</code>,
+        remitentes por canal) y la pieza que todavía está a medio conectar.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/infraestructura">
+        <span class="ddd-card-num">03</span>
+        <h3>Infraestructura</h3>
+        <p>EF Core como implementación de los repositorios, y Wolverine + RabbitMQ como implementación
+        actual de la mensajería — con Protobuf de por medio.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/presentacion">
+        <span class="ddd-card-num">04</span>
+        <h3>API + Web</h3>
+        <p>Minimal API con <code>ProblemDetails</code>, y un Blazor Server aparte que le habla por HTTP
+        con descubrimiento de servicios de Aspire — no un monolito de una sola app.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/decisiones">
+        <span class="ddd-card-num">05</span>
+        <h3>Decisiones</h3>
+        <p>Lo que <code>CLAUDE.md</code> documenta, lo que el código realmente hace hoy, y dónde hay una
+        distancia honesta entre ambos.</p>
+    </a>
+</div>
+
+<DddCallout Kind="honesto" Title="Esta guía complementa, no repite, la de DDD">
+    <p>
+        La <a href="/ddd">guía de DDD</a> ya cubre en detalle el modelado táctico (agregados, value objects,
+        invariantes) y tiene su propia página de arquitectura centrada en Clean Architecture y CQRS. Esta
+        guía profundiza en la infraestructura real que sostiene esas capas — Entity Framework, RabbitMQ,
+        Aspire — y en las decisiones de <em>plomería</em> que no entran en una guía de modelado de dominio.
+    </p>
+</DddCallout>
+
+<DddPrevNext NextHref="/arquitectura/dominio" NextLabel="Dominio" />

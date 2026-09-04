@@ -1,0 +1,181 @@
+@page "/arquitectura/infraestructura"
+
+<PageTitle>Infraestructura · Arquitectura · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>3 · Infrastructure: donde viven los detalles técnicos</h1>
+        <p>EF Core implementando los repositorios, y un bus de mensajería implementando el consumo de eventos.</p>
+    </div>
+</div>
+
+<ArqNav />
+
+<h2 class="ddd-h2">Persistencia: EF Core detrás de interfaces de negocio</h2>
+<p>
+    Cada repositorio de <code>Infrastructure/Persistence/Repositories</code> implementa la interfaz que
+    <code>Domain</code> declaró, usando <code>NotificationDbContext</code> por debajo. El dominio nunca ve
+    <code>DbSet</code>, <code>IQueryable</code> ni <code>SaveChanges</code> — solo métodos con nombre de
+    negocio como <code>GetByEventKeyAsync</code> o <code>ExistsAsync</code>.
+</p>
+
+<CodeBlock Title="Infrastructure/Persistence/Repositories/NotificationTriggerRepository.cs (extracto)" Code="@RepoSnippet" />
+
+<h3 class="ddd-h3">IUnitOfWork lo implementa el propio DbContext</h3>
+<p>
+    No hay una clase <code>UnitOfWork</code> separada envolviendo al <code>DbContext</code>. Como
+    <code>NotificationDbContext</code> ya expone <code>SaveChangesAsync</code>, simplemente implementa
+    <code>IUnitOfWork</code> directamente y se registra como esa interfaz vía una factory lambda — un
+    ejemplo económico de adaptador sin capa extra que no aportaría nada:
+</p>
+<CodeBlock Title="Infrastructure/Persistence/Context/NotificationDbContext.cs (completo)" Code="@DbContextSnippet" />
+
+<h3 class="ddd-h3">Las conversiones de value objects viven en la configuración de EF</h3>
+<p>
+    <code>EventKey</code> es un <code>record</code> del dominio, no un tipo que SQL Server entienda. La
+    configuración de Fluent API de EF Core declara la conversión (<code>HasConversion</code>) hacia y desde
+    <code>string</code>, y reutiliza <code>EventKey.MaxLength</code> para el tamaño de columna — otra vez la
+    misma constante, nunca duplicada:
+</p>
+<CodeBlock Title="Infrastructure/Persistence/Configuration/NotificationTriggerConfiguration.cs (extracto)" Code="@ConfigSnippet" />
+
+<DddCallout Kind="concepto" Title="Por qué esto no rompe la regla de dependencia">
+    <p>
+        <code>NotificationTriggerConfiguration</code> vive en <code>Infrastructure</code> y referencia tipos
+        de <code>Domain</code> (<code>NotificationTrigger</code>, <code>EventKey</code>) — eso es exactamente
+        lo permitido: Infrastructure conoce a Domain, nunca al revés. El propio
+        <code>NotificationTrigger.cs</code> no tiene ni una línea de EF Core.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">Mensajería: Wolverine + RabbitMQ, con Protobuf de por medio</h2>
+<p>
+    Cuando llega un cambio de contacto de otro sistema, entra por una cola de RabbitMQ como mensaje
+    Protobuf. <strong>Wolverine</strong> (un framework de mensajería para .NET) lo deserializa, resuelve el
+    handler estático por convención y lo invoca — sin loop de consumo manual, sin
+    <code>IHostedService</code> escrito a mano:
+</p>
+<CodeBlock Title="Infrastructure/Messaging/RabbitMq/RabbitMqMessagingExtensions.cs (extracto)" Code="@RabbitSnippet" />
+
+<CodeBlock Title="Infrastructure/Messaging/Consumers/UserContactUpdatedHandler.cs (completo)" Code="@HandlerSnippet" />
+
+<DddCallout Kind="advertencia" Title="Decisión real: dos serializadores registrados a la vez">
+    <p>
+        <code>UseProtobufSerialization()</code> pone Protobuf como serializador <strong>por defecto</strong>
+        de toda la app — Wolverine no permite registrarlo solo para un listener puntual. Para poder seguir
+        publicando JSON de prueba a mano desde la UI de administración de RabbitMQ (útil en desarrollo, sin
+        tener que fabricar bytes Protobuf), el código registra un segundo serializador JSON con
+        <code>AddSerializer</code>. Wolverine elige entre ambos leyendo la cabecera AMQP
+        <code>content_type</code> del mensaje: sin esa cabecera, cae en Protobuf (el default); con
+        <code>application/json</code>, usa el otro. Es una decisión de ergonomía de desarrollo documentada en
+        el propio comentario del código, no un hallazgo mío.
+    </p>
+</DddCallout>
+
+<h3 class="ddd-h3">RabbitMQ hoy, Kafka como destino declarado</h3>
+<p>
+    Vale la pena leer literalmente lo que dice <code>Infrastructure/DependencyInjection.cs</code>, porque es
+    la fuente más honesta de esta decisión:
+</p>
+<CodeBlock Title="Infrastructure/DependencyInjection.cs (extracto, comentario original)" Code="@DiCommentSnippet" />
+<p>
+    En otras palabras: RabbitMQ es el bus de mensajería <strong>real y funcionando hoy</strong> — no un
+    mock — pero su rol es servir de ejemplo de integración mientras Kafka (el bus que
+    <code>CLAUDE.md</code> documenta como decisión de producto: Kafka + Schema Registry) se conecta de
+    verdad. Ver el detalle completo de esta distancia en la
+    <a href="/arquitectura/decisiones">página de decisiones</a>.
+</p>
+
+<h3 class="ddd-h3">Migraciones: la fuente de verdad del esquema</h3>
+<p>
+    El esquema de base de datos no se mantiene a mano: <code>Persistence/Migrations</code> tiene la
+    migración <code>InitialCreate</code> generada por EF Core a partir de las cuatro configuraciones de
+    entidad. <code>ApiService/Program.cs</code> ejecuta <code>db.Database.MigrateAsync()</code> al arrancar
+    (dentro de un scope), así que el contenedor de SQL Server que levanta Aspire siempre queda al día sin un
+    paso manual — apropiado para un entorno de desarrollo con contenedores efímeros.
+</p>
+
+<DddPrevNext PrevHref="/arquitectura/aplicacion" PrevLabel="Aplicación" NextHref="/arquitectura/presentacion" NextLabel="API + Web" />
+
+@code {
+    private const string RepoSnippet = """
+internal sealed class NotificationTriggerRepository(NotificationDbContext db) : INotificationTriggerRepository
+{
+    public Task<NotificationTrigger?> GetByEventKeyAsync(EventKey eventKey, CancellationToken ct)
+        => _db.Triggers
+            .Include(t => t.Configurations)
+            .SingleOrDefaultAsync(t => t.EventKey == eventKey, ct);
+
+    public Task<bool> ExistsAsync(EventKey eventKey, CancellationToken ct)
+        => _db.Triggers.AnyAsync(t => t.EventKey == eventKey, ct);
+
+    // ListAsync pagina y filtra con EF.Functions.Like — nada de esto se filtra hacia Domain.
+}
+""";
+
+    private const string DbContextSnippet = """
+public sealed class NotificationDbContext(DbContextOptions<NotificationDbContext> options)
+    : DbContext(options), IUnitOfWork
+{
+    public DbSet<NotificationTrigger> Triggers => Set<NotificationTrigger>();
+    public DbSet<NotificationTemplate> Templates => Set<NotificationTemplate>();
+    public DbSet<Recipient> Recipients => Set<Recipient>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+        => modelBuilder.ApplyConfigurationsFromAssembly(typeof(NotificationDbContext).Assembly);
+}
+
+// DependencyInjection.cs:
+services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<NotificationDbContext>());
+""";
+
+    private const string ConfigSnippet = """
+builder.Property(t => t.EventKey)
+    .HasConversion(
+        key => key.Value,
+        value => EventKey.Create(value))
+    .HasColumnName("EventKey")
+    .HasMaxLength(EventKey.MaxLength)     // <- misma constante que usa el validador de Application
+    .IsUnicode(false)
+    .IsRequired();
+
+builder.HasIndex(t => t.EventKey)
+    .IsUnique()
+    .HasDatabaseName("UX_NotificationTriggers_EventKey");
+""";
+
+    private const string RabbitSnippet = """
+services.AddWolverine(opts =>
+{
+    opts.UseRabbitMq(new Uri(connectionString)).AutoProvision();
+
+    opts.UseProtobufSerialization();
+    opts.AddSerializer(new SystemTextJsonSerializer(
+        new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
+    opts.ListenToRabbitQueue("user-changes")
+        .DefaultIncomingMessage<UserContactUpdated>();
+});
+""";
+
+    private const string HandlerSnippet = """
+public static class UserContactUpdatedHandler
+{
+    // Wolverine descubre este método por convención (Handle) y lo invoca por cada mensaje —
+    // no hace falta registrar ni implementar una interfaz de "consumer".
+    public static Task Handle(UserContactUpdated message, RecipientSyncService syncService, CancellationToken ct)
+    {
+        var change = MapToUserChange(message); // Protobuf -> tipo propio de Application
+        return syncService.HandleAsync(change, ct);
+    }
+}
+""";
+
+    private const string DiCommentSnippet = """
+// Ejemplo de mensajería con RabbitMQ (Messaging/RabbitMq): consume UserChange y llama a
+// RecipientSyncService. Cuando se integre Kafka, este llamado se reemplaza por el
+// equivalente en Messaging/Kafka sin tocar Application.
+services.AddRabbitMqMessaging(configuration);
+""";
+}

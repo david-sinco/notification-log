@@ -1,0 +1,138 @@
+@page "/proyecto/entorno-dev"
+
+<PageTitle>Entorno de desarrollo · Qué hace · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>5 · Por qué levantar esto trae media docena de contenedores</h1>
+        <p>.NET Aspire orquesta todo lo que NotificationLog necesita para correr localmente, con un solo comando.</p>
+    </div>
+</div>
+
+<ProyectoNav />
+
+<p>
+    <code>NotificationLog.AppHost</code> es el punto de entrada para desarrollo: un proyecto de
+    <strong>.NET Aspire</strong> que declara, en un único archivo (<code>AppHost.cs</code>), toda la
+    infraestructura que el sistema necesita y cómo se conectan sus piezas entre sí. Ejecutarlo levanta
+    contenedores Docker para cada dependencia y arranca ambos proyectos (<code>ApiService</code> y
+    <code>Web</code>) ya apuntando a ellos — sin instalar SQL Server ni RabbitMQ a mano.
+</p>
+
+<h2 class="ddd-h2">Qué levanta, y para qué sirve cada cosa</h2>
+
+<ul>
+    <li>
+        <strong>SQL Server:</strong> la base de datos real de <code>NotificationDbContext</code> — triggers,
+        plantillas, destinatarios, notificaciones. Con volumen de datos persistente entre reinicios.
+    </li>
+    <li>
+        <strong>Redis:</strong> cache de salida (<em>output cache</em>) para <code>NotificationLog.Web</code>
+        — acelera respuestas del panel que no cambian entre pedidos.
+    </li>
+    <li>
+        <strong>RabbitMQ (con plugin de administración):</strong> el bus de mensajería real (ver
+        <a href="/arquitectura/infraestructura">página de Infraestructura</a>). El plugin de administración
+        expone una UI web, enlazada desde el propio dashboard de Aspire, para publicar mensajes de prueba a
+        mano mientras se prueba la sincronización de destinatarios sin depender de que exista un productor
+        real corriendo.
+    </li>
+    <li>
+        <strong>Mailpit:</strong> atrapa cualquier correo saliente y lo muestra en su propia UI web, en vez
+        de enviarlo de verdad. Está ahí esperando el día en que <code>IEmailNotificationSender</code> tenga
+        una implementación real en <code>Infrastructure</code>.
+    </li>
+    <li>
+        <strong>SmsPit:</strong> el mismo rol que Mailpit, pero para SMS — simula localmente la API HTTP de
+        un proveedor real (el estilo Twilio: <code>to</code>/<code>from</code>/<code>body</code>), con su
+        propia UI para ver los mensajes "enviados". No tiene un paquete de hosting de Aspire dedicado como
+        Mailpit, así que se agrega como contenedor genérico apuntando a la imagen
+        <code>ntechservices/smspitt</code>.
+    </li>
+</ul>
+
+<CodeBlock Title="AppHost.cs (extracto, con los comentarios originales)" Code="@AppHostSnippet" />
+
+<h2 class="ddd-h2">Una herramienta más, fuera de la solución de Aspire: SmsSink</h2>
+<p>
+    <code>Tools/NotificationLog.SmsSink</code> es un servicio HTTP mínimo, separado del AppHost, que hace de
+    "buzón" en memoria para mensajes SMS: recibe un <code>POST /messages</code> con la misma forma que
+    usaría un proveedor real, lo guarda en una pila en memoria (se pierde al reiniciar, a propósito — es una
+    herramienta de desarrollo) y lo muestra en una página HTML que se autorrefresca cada dos segundos. El
+    propio código deja explícito por qué el request tiene esa forma:
+</p>
+<CodeBlock Title="Tools/NotificationLog.SmsSink/Program.cs (extracto)" Code="@SmsSinkSnippet" />
+
+<DddCallout Kind="concepto" Title="Por qué esto no es lo mismo que SmsPit">
+    <p>
+        SmsPit (levantado por el AppHost) simula un <strong>proveedor</strong> de SMS de forma más completa;
+        SmsSink es una herramienta aparte, más simple, pensada como el destino final de
+        <code>ISmsNotificationSender</code> el día que se implemente — cambiando solo la URL base, sin tocar
+        el shape del request. Tener ambos no es redundancia accidental: son dos capas distintas de la misma
+        idea ("no mandes SMS de verdad mientras desarrollas"), y el propio código de SmsSink lo dice en un
+        comentario.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">Lo que Aspire aporta gratis: salud, trazas y descubrimiento</h2>
+<p>
+    Cada proyecto ejecutable llama a <code>AddServiceDefaults()</code> desde
+    <code>NotificationLog.ServiceDefaults</code>, que en una sola línea agrega OpenTelemetry (trazas y
+    métricas), health checks en <code>/health</code> y <code>/alive</code>, descubrimiento de servicios
+    (para que <code>https+http://apiservice</code> se resuelva solo) y reintentos automáticos en llamadas
+    HTTP salientes. El AppHost usa esos health checks para esperar (<code>WaitFor</code>) a que cada
+    dependencia esté realmente lista antes de arrancar lo que depende de ella — evita que
+    <code>ApiService</code> intente migrar la base de datos antes de que SQL Server termine de iniciar.
+</p>
+
+<DddCallout Kind="ejercicio" Title="Verlo correr">
+    <p>
+        El dashboard de Aspire (que se abre solo al ejecutar el AppHost) es el mejor lugar para confirmar
+        todo lo de esta página: lista cada recurso, su estado, sus logs en vivo, y enlaces directos a la UI
+        de administración de RabbitMQ, a Mailpit y a Scalar — sin memorizar un solo puerto.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/proyecto/panel-y-api" PrevLabel="Panel y API" NextHref="/proyecto" NextLabel="Volver al inicio de esta guía" />
+
+@code {
+    private const string AppHostSnippet = """
+var cache = builder.AddRedis("cache");
+
+var sql = builder.AddSqlServer("sql").WithDataVolume();
+var notificationDb = sql.AddDatabase("Default", "NotificationLog");
+
+// Management plugin: UI en el puerto expuesto por Aspire (link visible en el dashboard) para
+// publicar mensajes de prueba a mano mientras se prueba el ejemplo de Recipients sync.
+var rabbitmq = builder.AddRabbitMQ("rabbitmq").WithManagementPlugin();
+
+// Mailpit: atrapa el SMTP saliente y lo muestra en su propia UI — para cuando IEmailNotificationSender
+// tenga implementación real en Infrastructure, en vez de mandar correos de verdad en dev.
+var mailpit = builder.AddMailPit("mailpit");
+
+// SMSPit: el mismo rol que Mailpit pero para SMS — simula localmente las APIs HTTP de proveedores
+// reales (Twilio, Vonage, etc.) para ISmsNotificationSender. No tiene paquete de hosting de Aspire
+// dedicado, así que se agrega como contenedor genérico.
+var smspit = builder.AddContainer("smspit", "ntechservices/smspitt")
+    .WithHttpEndpoint(port: 2875, targetPort: 2875, name: "ui");
+
+var apiService = builder.AddProject<Projects.NotificationLog_ApiService>("apiservice")
+    .WithHttpHealthCheck("/health")
+    .WithReference(notificationDb).WaitFor(notificationDb)
+    .WithReference(rabbitmq).WaitFor(rabbitmq)
+    .WithReference(mailpit).WaitFor(mailpit)
+    .WaitFor(smspit);
+""";
+
+    private const string SmsSinkSnippet = """
+// Forma de request tipo Twilio (to/from/body) para que un futuro ISmsNotificationSender apunte
+// acá con el mismo shape que usaría contra un proveedor real, y solo cambie la base URL.
+app.MapPost("/messages", (SendSmsRequest request) =>
+{
+    var message = new SmsMessage(Guid.NewGuid().ToString("n"), DateTimeOffset.UtcNow,
+        request.To, request.From, request.Body);
+    inbox.Push(message);   // buzón en memoria: herramienta de dev, no sobrevive un reinicio
+    return Results.Created($"/api/messages/{message.Id}", new { sid = message.Id, status = "queued" });
+});
+""";
+}
