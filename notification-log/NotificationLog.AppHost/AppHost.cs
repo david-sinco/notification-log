@@ -7,22 +7,37 @@ var sql = builder.AddSqlServer("sql")
 
 var notificationDb = sql.AddDatabase("Default", "NotificationLog");
 
+// DbGate: cliente SQL en el navegador para inspeccionar la base sin instalar nada — apunta al
+// mismo contenedor de SQL Server, con el usuario/password que ya genera Aspire para "sql". Sin
+// paquete de hosting de Aspire dedicado, se agrega como contenedor genérico.
+builder.AddContainer("sql-client", "dbgate/dbgate")
+    .WithHttpEndpoint(port: 3000, targetPort: 3000)
+    .WithEnvironment("CONNECTIONS", "sql")
+    .WithEnvironment("LABEL_sql", "NotificationLog SQL Server")
+    .WithEnvironment("SERVER_sql", sql.Resource.Name)
+    .WithEnvironment("PORT_sql", "1433")
+    .WithEnvironment("USER_sql", "sa")
+    .WithEnvironment("PASSWORD_sql", sql.Resource.PasswordParameter)
+    .WithEnvironment("ENGINE_sql", "mssql@dbgate-plugin-mssql")
+    .WaitFor(sql);
+
 // Management plugin: UI en el puerto expuesto por Aspire (link visible en el dashboard) para
 // publicar mensajes de prueba a mano mientras se prueba el ejemplo de Recipients sync.
 var rabbitmq = builder.AddRabbitMQ("rabbitmq")
     .WithManagementPlugin();
 
-// Mailpit: atrapa el SMTP saliente y lo muestra en su propia UI — para cuando IEmailNotificationSender
-// tenga implementación real en Infrastructure, en vez de mandar correos de verdad en dev.
-var mailpit = builder.AddMailPit("mailpit");
-
-// SMSPit: el mismo rol que Mailpit pero para SMS — simula localmente las APIs HTTP de proveedores
-// reales (Twilio, Vonage, etc.) para ISmsNotificationSender. No tiene paquete de hosting de Aspire
-// dedicado (a diferencia de Mailpit), así que se agrega como contenedor genérico.
-var smspit = builder.AddContainer("smspit", "ntechservices/smspitt")
-    .WithHttpEndpoint(port: 2875, targetPort: 2875, name: "ui")
-    .WithHttpEndpoint(port: 2876, targetPort: 2876, name: "provider-api")
-    .WithHttpEndpoint(port: 2877, targetPort: 2877, name: "test-api");
+// Buggregator: un único sink de dev para todo lo que sale del servicio — SMTP (IEmailNotificationSender)
+// y el SMS Gateway multi-proveedor, ambos por el mismo puerto 8000 (ISmsNotificationSender).
+// CLIENT_SUPPORTED_EVENTS limita los módulos activos a
+// smtp+sms — el resto (Sentry, Ray, VarDumper, Monolog, Inspector, XHProf, HTTP dumps) no aplica
+// acá, y un módulo deshabilitado ni siquiera abre su puerto TCP
+// (https://docs.buggregator.dev/config/server.html), por eso no se declaran endpoints para
+// var-dump ni monolog. Sin paquete de hosting de Aspire dedicado, se agrega como contenedor
+// genérico con los puertos default de la imagen (https://github.com/buggregator/server).
+var buggregator = builder.AddContainer("buggregator", "ghcr.io/buggregator/server")
+    .WithEnvironment("CLIENT_SUPPORTED_EVENTS", "smtp,sms")
+    .WithHttpEndpoint(port: 8000, targetPort: 8000)
+    .WithEndpoint(port: 1025, targetPort: 1025, name: "smtp", scheme: "tcp");
 
 var apiService = builder.AddProject<Projects.NotificationLog_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
@@ -30,9 +45,14 @@ var apiService = builder.AddProject<Projects.NotificationLog_ApiService>("apiser
     .WaitFor(notificationDb)
     .WithReference(rabbitmq)
     .WaitFor(rabbitmq)
-    .WithReference(mailpit)
-    .WaitFor(mailpit)
-    .WaitFor(smspit);
+    // ContainerResource no implementa IResourceWithServiceDiscovery, así que WithReference(buggregator)
+    // a secas no compila — hay que referenciar el endpoint puntual. Esto inyecta
+    // "services__buggregator__http__0" con la dirección real (localhost:<puerto que Docker le
+    // asignó esta corrida>) — no un nombre de dominio, apiservice sigue siendo un proceso nativo en
+    // esta misma máquina, no otro contenedor. HttpSmsNotificationSender lee esa variable directo
+    // (ver NotificationSendingExtensions) en vez de tener el puerto fijo a mano, que es lo que se
+    // desincronizaba cada vez que Aspire reasignaba el puerto publicado del contenedor.
+    .WaitFor(buggregator);
 
 builder.AddProject<Projects.NotificationLog_Web>("webfrontend")
     .WithExternalHttpEndpoints()

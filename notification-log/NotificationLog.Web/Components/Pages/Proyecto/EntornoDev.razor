@@ -38,39 +38,34 @@
         real corriendo.
     </li>
     <li>
-        <strong>Mailpit:</strong> atrapa cualquier correo saliente y lo muestra en su propia UI web, en vez
-        de enviarlo de verdad. Está ahí esperando el día en que <code>IEmailNotificationSender</code> tenga
-        una implementación real en <code>Infrastructure</code>.
-    </li>
-    <li>
-        <strong>SmsPit:</strong> el mismo rol que Mailpit, pero para SMS — simula localmente la API HTTP de
-        un proveedor real (el estilo Twilio: <code>to</code>/<code>from</code>/<code>body</code>), con su
-        propia UI para ver los mensajes "enviados". No tiene un paquete de hosting de Aspire dedicado como
-        Mailpit, así que se agrega como contenedor genérico apuntando a la imagen
-        <code>ntechservices/smspitt</code>.
+        <strong>Buggregator:</strong> el único sink de dev para todo lo que sale del servicio. Atrapa el
+        SMTP saliente (puerto 1025, UI en el 8000) — lo que consume
+        <code>SmtpEmailNotificationSender</code> — y en el mismo puerto 8000 expone un SMS Gateway que
+        autodetecta el proveedor a partir del payload (<code>from</code>/<code>to</code>/<code>message</code>)
+        sin necesidad de imitar la forma exacta de Twilio ni de ningún otro — lo que consume
+        <code>HttpSmsNotificationSender</code>. La imagen trae más receptores (Sentry, Ray, Symfony
+        VarDumper, Monolog, Inspector, XHProf, HTTP dumps), pero la variable
+        <code>CLIENT_SUPPORTED_EVENTS=smtp,sms</code> los deja apagados — un módulo deshabilitado ni
+        siquiera abre su puerto TCP, así que solo quedan los dos que este servicio usa de verdad. Reemplaza
+        tanto a Mailpit como al antiguo contenedor de SmsPit — un contenedor menos que levantar, y un solo
+        lugar donde validar cualquier notificación saliente. No tiene un paquete de hosting de Aspire
+        dedicado, así que se agrega como contenedor genérico apuntando a
+        <code>ghcr.io/buggregator/server</code>.
     </li>
 </ul>
 
 <CodeBlock Title="AppHost.cs (extracto, con los comentarios originales)" Code="@AppHostSnippet" />
 
-<h2 class="ddd-h2">Una herramienta más, fuera de la solución de Aspire: SmsSink</h2>
-<p>
-    <code>Tools/NotificationLog.SmsSink</code> es un servicio HTTP mínimo, separado del AppHost, que hace de
-    "buzón" en memoria para mensajes SMS: recibe un <code>POST /messages</code> con la misma forma que
-    usaría un proveedor real, lo guarda en una pila en memoria (se pierde al reiniciar, a propósito — es una
-    herramienta de desarrollo) y lo muestra en una página HTML que se autorrefresca cada dos segundos. El
-    propio código deja explícito por qué el request tiene esa forma:
-</p>
-<CodeBlock Title="Tools/NotificationLog.SmsSink/Program.cs (extracto)" Code="@SmsSinkSnippet" />
-
-<DddCallout Kind="concepto" Title="Por qué esto no es lo mismo que SmsPit">
+<DddCallout Kind="honesto" Title="IEmailNotificationSender, ISmsNotificationSender e IPushNotificationSender ya tienen implementación">
     <p>
-        SmsPit (levantado por el AppHost) simula un <strong>proveedor</strong> de SMS de forma más completa;
-        SmsSink es una herramienta aparte, más simple, pensada como el destino final de
-        <code>ISmsNotificationSender</code> el día que se implemente — cambiando solo la URL base, sin tocar
-        el shape del request. Tener ambos no es redundancia accidental: son dos capas distintas de la misma
-        idea ("no mandes SMS de verdad mientras desarrollas"), y el propio código de SmsSink lo dice en un
-        comentario.
+        <code>Infrastructure/Notifications/Sending</code> ya trae <code>SmtpEmailNotificationSender</code> y
+        <code>HttpSmsNotificationSender</code>, ambos contra Buggregator en dev.
+        <code>HttpPushNotificationSender</code> también existe, pero apunta a un placeholder porque todavía
+        no hay un simulador de push en el
+        AppHost — ni un proveedor real elegido. Cada uno se configura desde su propio objeto bajo
+        <code>Notifications</code> en <code>appsettings</code> (<code>Notifications:Email</code>,
+        <code>Notifications:Sms</code>, <code>Notifications:Push</code>). <code>IWhatsAppNotificationSender</code>
+        sigue sin implementación.
     </p>
 </DddCallout>
 
@@ -89,7 +84,7 @@
     <p>
         El dashboard de Aspire (que se abre solo al ejecutar el AppHost) es el mejor lugar para confirmar
         todo lo de esta página: lista cada recurso, su estado, sus logs en vivo, y enlaces directos a la UI
-        de administración de RabbitMQ, a Mailpit y a Scalar — sin memorizar un solo puerto.
+        de administración de RabbitMQ, a Buggregator y a Scalar — sin memorizar un solo puerto.
     </p>
 </DddCallout>
 
@@ -106,33 +101,22 @@ var notificationDb = sql.AddDatabase("Default", "NotificationLog");
 // publicar mensajes de prueba a mano mientras se prueba el ejemplo de Recipients sync.
 var rabbitmq = builder.AddRabbitMQ("rabbitmq").WithManagementPlugin();
 
-// Mailpit: atrapa el SMTP saliente y lo muestra en su propia UI — para cuando IEmailNotificationSender
-// tenga implementación real en Infrastructure, en vez de mandar correos de verdad en dev.
-var mailpit = builder.AddMailPit("mailpit");
-
-// SMSPit: el mismo rol que Mailpit pero para SMS — simula localmente las APIs HTTP de proveedores
-// reales (Twilio, Vonage, etc.) para ISmsNotificationSender. No tiene paquete de hosting de Aspire
-// dedicado, así que se agrega como contenedor genérico.
-var smspit = builder.AddContainer("smspit", "ntechservices/smspitt")
-    .WithHttpEndpoint(port: 2875, targetPort: 2875, name: "ui");
+// Buggregator: un único sink de dev para todo lo que sale del servicio — SMTP
+// (IEmailNotificationSender) y el SMS Gateway multi-proveedor, ambos por el mismo puerto 8000
+// (ISmsNotificationSender). Reemplaza a Mailpit y a smspit. CLIENT_SUPPORTED_EVENTS limita los
+// módulos activos a smtp+sms — un módulo deshabilitado ni siquiera abre su puerto TCP, por eso no
+// se declaran endpoints para var-dump ni monolog (los demás módulos de la imagen: Sentry, Ray,
+// VarDumper, Monolog, Inspector, XHProf, HTTP dumps). Sin paquete de hosting de Aspire dedicado,
+// se agrega como contenedor genérico con los puertos default de la imagen.
+var buggregator = builder.AddContainer("buggregator", "ghcr.io/buggregator/server")
+    .WithEnvironment("CLIENT_SUPPORTED_EVENTS", "smtp,sms")
+    .WithHttpEndpoint(port: 8000, targetPort: 8000, name: "ui")
+    .WithEndpoint(port: 1025, targetPort: 1025, name: "smtp", scheme: "tcp");
 
 var apiService = builder.AddProject<Projects.NotificationLog_ApiService>("apiservice")
     .WithHttpHealthCheck("/health")
     .WithReference(notificationDb).WaitFor(notificationDb)
     .WithReference(rabbitmq).WaitFor(rabbitmq)
-    .WithReference(mailpit).WaitFor(mailpit)
-    .WaitFor(smspit);
-""";
-
-    private const string SmsSinkSnippet = """
-// Forma de request tipo Twilio (to/from/body) para que un futuro ISmsNotificationSender apunte
-// acá con el mismo shape que usaría contra un proveedor real, y solo cambie la base URL.
-app.MapPost("/messages", (SendSmsRequest request) =>
-{
-    var message = new SmsMessage(Guid.NewGuid().ToString("n"), DateTimeOffset.UtcNow,
-        request.To, request.From, request.Body);
-    inbox.Push(message);   // buzón en memoria: herramienta de dev, no sobrevive un reinicio
-    return Results.Created($"/api/messages/{message.Id}", new { sid = message.Id, status = "queued" });
-});
+    .WaitFor(buggregator);
 """;
 }

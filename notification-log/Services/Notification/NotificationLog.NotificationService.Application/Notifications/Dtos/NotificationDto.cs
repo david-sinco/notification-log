@@ -2,6 +2,7 @@ namespace NotificationLog.NotificationService.Application.Notifications.Dtos;
 
 public sealed record NotificationDto(
     Guid Id,
+    Guid EventId,
     string EventKey,
     Guid ConfigurationId,
     Guid TemplateId,
@@ -12,4 +13,5 @@ public sealed record NotificationDto(
     string Status,
     string? ProviderMessageId,
     string? Error,
-    DateTime OccurredAt);
+    DateTime OccurredAt,
+    IReadOnlyDictionary<string, string> Payload);

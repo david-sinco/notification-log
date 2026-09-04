@@ -107,7 +107,7 @@ public sealed class NotificationDispatchService
         RenderedMessage message;
         try
         {
-            var data = NotificationRenderDataBuilder.Build(businessEvent, recipient);
+            var data = _renderer.BuildData(businessEvent, recipient);
             message = _renderer.Render(version.Subject, version.Body, data);
         }
         catch (Exception ex)
@@ -118,7 +118,7 @@ public sealed class NotificationDispatchService
 
             await _recordFailure.HandleAsync(
                 new RecordNotificationFailureCommand(
-                    eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
+                    businessEvent.EventId, eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
                     configuration.Channel, destination, ex.Message, DateTime.UtcNow, businessEvent.Data),
                 ct);
             return;
@@ -132,7 +132,7 @@ public sealed class NotificationDispatchService
             {
                 await _recordSuccess.HandleAsync(
                     new RecordNotificationSuccessCommand(
-                        eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
+                        businessEvent.EventId, eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
                         configuration.Channel, destination, result.ProviderMessageId, DateTime.UtcNow,
                         businessEvent.Data),
                     ct);
@@ -141,7 +141,7 @@ public sealed class NotificationDispatchService
             {
                 await _recordFailure.HandleAsync(
                     new RecordNotificationFailureCommand(
-                        eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
+                        businessEvent.EventId, eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
                         configuration.Channel, destination, result.Error ?? "Error desconocido", DateTime.UtcNow,
                         businessEvent.Data),
                     ct);
@@ -155,7 +155,7 @@ public sealed class NotificationDispatchService
 
             await _recordFailure.HandleAsync(
                 new RecordNotificationFailureCommand(
-                    eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
+                    businessEvent.EventId, eventKey, configuration.Id, template.Id, version.Id, recipient.Id,
                     configuration.Channel, destination, ex.Message, DateTime.UtcNow, businessEvent.Data),
                 ct);
         }

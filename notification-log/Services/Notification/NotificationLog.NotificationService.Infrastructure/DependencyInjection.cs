@@ -7,6 +7,9 @@ using NotificationLog.NotificationService.Domain.Recipients;
 using NotificationLog.NotificationService.Domain.Templates;
 using NotificationLog.NotificationService.Domain.Triggers;
 using NotificationLog.NotificationService.Infrastructure.Messaging.RabbitMq;
+using NotificationLog.NotificationService.Application.Notifications.Services.Rendering;
+using NotificationLog.NotificationService.Infrastructure.Notifications.Rendering;
+using NotificationLog.NotificationService.Infrastructure.Notifications.Sending;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Repositories;
 
@@ -42,6 +45,15 @@ public static class DependencyInjection
         // RecipientSyncService. Cuando se integre Kafka, este llamado se reemplaza por el
         // equivalente en Messaging/Kafka sin tocar Application.
         services.AddRabbitMqMessaging(configuration);
+
+        // Remitentes por canal (Notifications/Sending): Email, SMS y Push, cada uno configurado
+        // desde su propio objeto bajo "Notifications" en appsettings. WhatsApp queda sin
+        // implementación — IWhatsAppNotificationSender sigue sin registrar.
+        services.AddNotificationSending(configuration);
+
+        // Sin estado ni configuración externa (a diferencia de los senders): Scriban parsea y
+        // renderiza en memoria, así que un singleton alcanza.
+        services.AddSingleton<ITemplateRenderer, ScribanTemplateRenderer>();
 
         return services;
     }

@@ -22,6 +22,7 @@ public sealed class RecordNotificationSuccessHandler
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var notification = Notification.RecordSuccess(
+            cmd.EventId,
             cmd.EventKey,
             cmd.ConfigurationId,
             cmd.TemplateId,

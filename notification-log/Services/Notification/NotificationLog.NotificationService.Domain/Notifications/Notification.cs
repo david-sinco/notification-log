@@ -12,6 +12,7 @@ public sealed class Notification : AggregateRoot
 
     private readonly Dictionary<string, string> _payload = [];
 
+    public Guid EventId { get; private set; }
     public string EventKey { get; private set; } = default!;
     public Guid ConfigurationId { get; private set; }
     public Guid TemplateId { get; private set; }
@@ -29,6 +30,7 @@ public sealed class Notification : AggregateRoot
     private Notification() { }   // EF Core
 
     public static Notification RecordSuccess(
+        Guid eventId,
         string eventKey,
         Guid configurationId,
         Guid templateId,
@@ -41,7 +43,7 @@ public sealed class Notification : AggregateRoot
         IReadOnlyDictionary<string, string>? payload = null)
     {
         var notification = Create(
-            eventKey, configurationId, templateId, templateVersionId,
+            eventId, eventKey, configurationId, templateId, templateVersionId,
             recipientId, channel, destination, payload);
 
         notification.Status = DeliveryStatus.Sent;
@@ -54,6 +56,7 @@ public sealed class Notification : AggregateRoot
     }
 
     public static Notification RecordFailure(
+        Guid eventId,
         string eventKey,
         Guid configurationId,
         Guid templateId,
@@ -69,7 +72,7 @@ public sealed class Notification : AggregateRoot
             throw new DomainException("El motivo del fallo es obligatorio.");
 
         var notification = Create(
-            eventKey, configurationId, templateId, templateVersionId,
+            eventId, eventKey, configurationId, templateId, templateVersionId,
             recipientId, channel, destination, payload);
 
         notification.Status = DeliveryStatus.Failed;
@@ -80,6 +83,7 @@ public sealed class Notification : AggregateRoot
     }
 
     private static Notification Create(
+        Guid eventId,
         string eventKey,
         Guid configurationId,
         Guid templateId,
@@ -89,6 +93,12 @@ public sealed class Notification : AggregateRoot
         string destination,
         IReadOnlyDictionary<string, string>? payload)
     {
+        // La referencia al evento de negocio que disparó este envío — permite correlacionar (o
+        // deduplicar) una notificación con el mensaje puntual que la originó, algo que EventKey por
+        // sí solo no puede: un mismo EventKey se repite en cada evento de ese tipo.
+        if (eventId == Guid.Empty)
+            throw new DomainException("El identificador del evento de origen es obligatorio.");
+
         if (string.IsNullOrWhiteSpace(eventKey))
             throw new DomainException("El event key es obligatorio.");
 
@@ -110,6 +120,7 @@ public sealed class Notification : AggregateRoot
         var notification = new Notification
         {
             Id = Guid.NewGuid(),
+            EventId = eventId,
             EventKey = Truncate(eventKey.Trim(), EventKeyMaxLength),
             ConfigurationId = configurationId,
             TemplateId = templateId,

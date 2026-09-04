@@ -38,14 +38,15 @@
 
 <CodeBlock Title="Application/Abstractions/IUnitOfWork.cs (completo)" Code="@UowSnippet" />
 
-<DddCallout Kind="honesto" Title="Cuatro puertos declarados, cero adaptadores todavía">
+<DddCallout Kind="honesto" Title="Tres adaptadores de envío ya existen; el renderer y WhatsApp, no">
     <p>
-        <code>ITemplateRenderer</code> y los cuatro <code>I*NotificationSender</code> no tienen ninguna
-        clase que los implemente en <code>Infrastructure</code> hoy. Es el mismo punto pendiente que ya
-        marca la <a href="/ddd/cierre">página de cierre de la guía de DDD</a>: el AppHost ya levanta
-        <strong>Mailpit</strong> y <strong>SmsPit</strong> (ver <a href="/arquitectura/presentacion">página de
-        API + Web</a>) precisamente para cuando esos adaptadores se escriban — la infraestructura de soporte
-        llegó antes que el código que la va a usar.
+        <code>IEmailNotificationSender</code>, <code>ISmsNotificationSender</code> e
+        <code>IPushNotificationSender</code> ya tienen implementación en
+        <code>Infrastructure/Notifications/Sending</code>. Lo que sigue sin adaptador es
+        <code>ITemplateRenderer</code> y <code>IWhatsAppNotificationSender</code>. El AppHost ya levanta
+        <strong>Buggregator</strong> (ver <a href="/arquitectura/presentacion">página de API + Web</a>) — un
+        único contenedor que centraliza SMTP y el SMS Gateway — exactamente para lo que ya usan esos
+        remitentes en dev.
     </p>
 </DddCallout>
 

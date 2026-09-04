@@ -22,6 +22,7 @@ public sealed class RecordNotificationFailureHandler
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var notification = Notification.RecordFailure(
+            cmd.EventId,
             cmd.EventKey,
             cmd.ConfigurationId,
             cmd.TemplateId,

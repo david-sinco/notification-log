@@ -16,6 +16,7 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                 columns: table => new
                 {
                     Id = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
+                    EventId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     EventKey = table.Column<string>(type: "nvarchar(200)", maxLength: 200, nullable: false),
                     ConfigurationId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     TemplateId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
@@ -139,6 +140,11 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                 name: "IX_NotificationConfigurations_Trigger_Channel",
                 table: "NotificationConfigurations",
                 columns: new[] { "NotificationTriggerId", "Channel" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Notifications_EventId",
+                table: "Notifications",
+                column: "EventId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Notifications_EventKey",

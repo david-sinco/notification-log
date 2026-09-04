@@ -7,6 +7,7 @@ internal sealed class RecordNotificationFailureValidator : AbstractValidator<Rec
 {
     public RecordNotificationFailureValidator()
     {
+        RuleFor(x => x.EventId).NotEmpty();
         RuleFor(x => x.EventKey).NotEmpty().MaximumLength(Notification.EventKeyMaxLength);
         RuleFor(x => x.ConfigurationId).NotEmpty();
         RuleFor(x => x.TemplateId).NotEmpty();

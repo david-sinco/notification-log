@@ -18,6 +18,8 @@ internal sealed class NotificationEntityConfiguration : IEntityTypeConfiguration
         builder.HasKey(n => n.Id);
         builder.Property(n => n.Id).ValueGeneratedNever();
 
+        builder.Property(n => n.EventId).IsRequired();
+
         builder.Property(n => n.EventKey)
             .HasMaxLength(Notification.EventKeyMaxLength)
             .IsRequired();
@@ -41,6 +43,9 @@ internal sealed class NotificationEntityConfiguration : IEntityTypeConfiguration
             .HasMaxLength(Notification.ErrorMaxLength);
 
         builder.Property(n => n.OccurredAt).IsRequired();
+
+        builder.HasIndex(n => n.EventId)
+            .HasDatabaseName("IX_Notifications_EventId");
 
         builder.HasIndex(n => n.RecipientId)
             .HasDatabaseName("IX_Notifications_RecipientId");

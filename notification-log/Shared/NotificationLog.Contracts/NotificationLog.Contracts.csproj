@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Protobuf Include="Users/user_contact_updated.proto" GrpcServices="None" />
+    <Protobuf Include="Notifications/notification_dispatch_requested.proto" GrpcServices="None" />
   </ItemGroup>
 
 </Project>

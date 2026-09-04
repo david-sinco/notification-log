@@ -2,6 +2,7 @@ using System.Text.Json;
 using JasperFx.CodeGeneration.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NotificationLog.Contracts.Notifications;
 using NotificationLog.Contracts.Users;
 using Wolverine;
 using Wolverine.Protobuf;
@@ -45,6 +46,14 @@ public static class RabbitMqMessagingExtensions
 
             opts.ListenToRabbitQueue("user-changes")
                 .DefaultIncomingMessage<UserContactUpdated>();
+
+            // notification-dispatch: cola donde cualquier servicio publica "esto pasó"
+            // (NotificationDispatchRequested) — la publicación todavía se hace a mano (UI de
+            // administración de RabbitMQ) mientras no exista un productor real. La consume
+            // NotificationDispatchHandler (Messaging/Consumers), que llama a
+            // NotificationDispatchService.
+            opts.ListenToRabbitQueue("notification-dispatch")
+                .DefaultIncomingMessage<NotificationDispatchRequested>();
         });
 
         return services;

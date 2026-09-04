@@ -23,6 +23,7 @@ public sealed class ListNotificationsHandler
         var dtos = items
             .Select(n => new NotificationDto(
                 n.Id,
+                n.EventId,
                 n.EventKey,
                 n.ConfigurationId,
                 n.TemplateId,
@@ -33,7 +34,8 @@ public sealed class ListNotificationsHandler
                 n.Status.ToString(),
                 n.ProviderMessageId,
                 n.Error,
-                n.OccurredAt))
+                n.OccurredAt,
+                n.Payload))
             .ToList();
 
         return new PagedResult<NotificationDto>(dtos, page, pageSize, total);

@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package Notifications.notifications;
+
+option csharp_namespace = "NotificationLog.Contracts.Notifications";
+
+import "google/protobuf/timestamp.proto";
+
+// Envelope genérico de "hecho de negocio" que dispara una notificación. Vive bajo Notifications
+// (no bajo un "Events" genérico) porque es un contrato propio de este bounded context: lo definimos
+// nosotros, lo consume NotificationDispatchHandler (Infrastructure/Messaging/Consumers), y
+// cualquier servicio productor lo referencia para avisar "esto pasó" — no describe nada del
+// dominio del productor, solo lo mínimo que Notifications necesita para resolver trigger +
+// configuración por event_key. A diferencia de UserContactUpdated (event-carried state transfer de
+// un solo dominio), este contrato es compartido por TODOS los productores — el consumer nunca sabe
+// de antemano qué campos trae "datos", solo que la plantilla configurada para ese event_key sabe
+// interpretarlos.
+message NotificationDispatchRequested {
+  // Metadata del mensaje en sí (identidad y momento del hecho), no del negocio.
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  int32 schema_version = 3;
+
+  // event_key nombra un HECHO, no una plantilla ni un canal — "transaccion.realizada", nunca
+  // "email_transaccion_v2". Formato dominio.accion, el mismo que ya impone EventKey.Create con su
+  // regex en el dominio; si este mensaje no lo respeta, se descarta en la ingesta, no en el proto.
+  string event_key = 10;
+
+  // A quién le pasó. string y no algún tipo Guid nativo de protobuf (no existe) — mismo criterio
+  // que user_id en UserContactUpdated: se parsea a Guid del lado del consumer.
+  string recipient_id = 11;
+
+  // Datos propios del hecho, libres a propósito: el productor no sabe qué plantilla los va a usar
+  // ni con qué placeholders. "order_number" para un pedido, "amount" para una transacción, etc.
+  // Ausencia de clave = el productor no tiene ese dato para este hecho puntual (no es un snapshot
+  // completo como UserContactUpdated, así que aquí sí puede faltar sin significar "se lo borraron").
+  map<string, string> data = 12;
+}

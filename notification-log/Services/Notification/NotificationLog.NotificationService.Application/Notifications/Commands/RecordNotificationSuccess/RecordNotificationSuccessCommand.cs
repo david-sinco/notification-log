@@ -3,6 +3,7 @@ using NotificationLog.NotificationService.Domain.Shared;
 namespace NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationSuccess;
 
 public sealed record RecordNotificationSuccessCommand(
+    Guid EventId,
     string EventKey,
     Guid ConfigurationId,
     Guid TemplateId,

@@ -12,7 +12,7 @@ using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
 namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(NotificationDbContext))]
-    [Migration("20260902151758_InitialCreate")]
+    [Migration("20260904223406_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -45,6 +45,9 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                         .HasMaxLength(2000)
                         .HasColumnType("nvarchar(2000)");
 
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("EventKey")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -75,6 +78,9 @@ namespace NotificationLog.NotificationService.Infrastructure.Persistence.Migrati
                         .HasColumnName("Payload");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .HasDatabaseName("IX_Notifications_EventId");
 
                     b.HasIndex("EventKey")
                         .HasDatabaseName("IX_Notifications_EventKey");
