@@ -11,29 +11,38 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>
-        Un Value Object es un objeto definido por sus atributos, sin identidad propia, inmutable y
-        auto-validado. Dos instancias con el mismo valor son intercambiables: no importa <em>cuál</em> es,
-        importa <em>cuánto</em> vale. Ganancias: elimina validación duplicada (un valor inválido no puede
-        existir), elimina errores de tipo primitivo, y da un sitio natural donde colgar comportamiento.
-    </p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Definir un Value Object y las tres ganancias que produce.</li>
+        <li>Leer dos implementaciones reales, casi gemelas, del mismo molde.</li>
+        <li>Saber cuándo un <code>enum</code> ya resuelve el problema sin necesitar un VO completo.</li>
+    </ul>
 </DddCallout>
+
+<h2 class="ddd-h2">Concepto</h2>
+<p>
+    Un Value Object es un objeto definido por sus atributos, sin identidad propia, inmutable y
+    auto-validado. Dos instancias con el mismo valor son intercambiables: no importa <em>cuál</em> es,
+    importa <em>cuánto</em> vale. Sus tres ganancias prácticas: elimina la validación duplicada (un valor
+    inválido no puede llegar a existir), elimina errores de confundir dos primitivos del mismo tipo, y da
+    un sitio natural donde colgar comportamiento relacionado con ese valor.
+</p>
 
 <h2 class="ddd-h2">Dos Value Objects reales, lado a lado</h2>
 <p>
     Este dominio tiene dos ejemplos casi gemelos: <code>EventKey</code> (identifica un hecho de negocio,
-    formato <code>dominio.accion</code>) y <code>TemplateName</code> (identifica una plantilla, formato
-    <code>snake_case</code>). Ambos siguen exactamente la misma forma: <code>sealed record</code>,
-    constructor privado, y un método estático <code>Create</code> que es la única puerta de entrada.
+    formato <code>dominio.accion</code>, ya lo viste en el <a href="/ddd/lenguaje-ubicuo">módulo 1</a>) y
+    <code>TemplateName</code> (identifica una plantilla, formato <code>snake_case</code>). Ambos siguen
+    exactamente la misma forma: <code>sealed record</code>, constructor privado, y un método estático
+    <code>Create</code> que es la única puerta de entrada.
 </p>
 
 <CodeBlock Title="Domain/Templates/TemplateName.cs" Code="@TemplateNameSnippet" />
 
 <p>
     Compara ese constructor privado con la firma pública: no existe manera de obtener un
-    <code>TemplateName</code> sin pasar por <code>Create</code>, y <code>Create</code> no devuelve nunca
-    un valor a medio validar. Una vez que tienes un <code>TemplateName</code> en la mano, sabes con
+    <code>TemplateName</code> sin pasar por <code>Create</code>, y <code>Create</code> nunca devuelve un
+    valor a medio validar. Una vez que tienes un <code>TemplateName</code> en la mano, sabes con
     certeza — sin volver a comprobar nada — que está en minúsculas, tiene el formato correcto y no supera
     los 100 caracteres. Esa garantía es el valor real del patrón.
 </p>
@@ -79,23 +88,27 @@
     </p>
 </div>
 
-<h2 class="ddd-h2">Otros Value Objects candidatos en este dominio</h2>
+<h2 class="ddd-h2">Otros candidatos en este dominio, y uno que ya resolvió el problema de otra forma</h2>
 <p>
-    No todo lo que podría ser un Value Object lo es todavía — y eso también es información útil. Por
-    ejemplo, <code>NotificationChannel</code> es un <code>enum</code> simple (Email, Sms, Push, WhatsApp):
-    es una forma legítima y más liviana de resolver el mismo problema (evitar strings mágicos) cuando el
-    conjunto de valores es cerrado y no necesita validación de formato. No todo primitivo necesita un
-    Value Object completo — un <code>enum</code> ya resuelve el caso cuando el "valor válido" es
-    simplemente "uno de esta lista fija".
+    No todo lo que podría ser un Value Object lo es todavía — y eso también es información útil.
+    <code>NotificationChannel</code> es un <code>enum</code> simple (<code>Email</code>, <code>Sms</code>,
+    <code>Push</code>, <code>WhatsApp</code>): una forma legítima y más liviana de resolver el mismo
+    problema (evitar strings mágicos) cuando el conjunto de valores es cerrado y no necesita validación de
+    formato. Un mejor candidato pendiente es el teléfono de <code>Recipient</code>: hoy es un
+    <code>string?</code> normalizado a mano con <code>NormalizePhone</code> (quita espacios y guiones)
+    dentro de la propia entidad — funciona, pero esa normalización solo vive ahí, no reutilizable ni
+    reforzada por el compilador si mañana aparece otro punto de entrada para un teléfono. Volverás sobre
+    este caso concreto en el <a href="/ddd/tareas">módulo de tareas</a>.
 </p>
 
-<DddCallout Kind="ejercicio" Title="Ejercicio (temario 2.1)">
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
     <p>
         Busca en tu propio código tres parámetros <code>string</code> o <code>decimal</code> consecutivos
         en la misma firma de método (por ejemplo, <code>Transferir(string origen, string destino, decimal importe)</code>).
         Esa firma es una bomba: nada impide invertir <code>origen</code> y <code>destino</code> en la
-        llamada, y el compilador no te va a avisar. Conviértelos en Value Objects siguiendo el mismo molde
-        que <code>TemplateName</code>: constructor privado + <code>Create</code> estático que valida.
+        llamada, y el compilador no te va a avisar. Diseña, aunque sea en papel, los Value Objects que la
+        reemplazarían siguiendo el mismo molde que <code>TemplateName</code>: constructor privado + `Create`
+        estático que valida.
     </p>
 </DddCallout>
 

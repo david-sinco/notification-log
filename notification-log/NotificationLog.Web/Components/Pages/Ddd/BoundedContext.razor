@@ -11,35 +11,40 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>
-        Un Bounded Context es una frontera explícita dentro de la cual un modelo y su lenguaje son
-        consistentes. El mismo término de negocio puede significar cosas distintas fuera de esa frontera,
-        y eso está bien: el error es construir un único modelo con 60 campos que intente servir a todos los
-        contextos a la vez.
-    </p>
-    <p>
-        Regla práctica: si al añadir un campo a una clase tienes que preguntar "¿pero para qué caso?",
-        probablemente estás mezclando contextos.
-    </p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Definir un Bounded Context y la regla práctica para detectar cuándo se está violando.</li>
+        <li>Comparar dos modelos legítimos y distintos del mismo concepto de negocio ("usuario").</li>
+        <li>Ubicar las fronteras internas que ya existen dentro de este mismo servicio.</li>
+    </ul>
 </DddCallout>
+
+<h2 class="ddd-h2">Concepto</h2>
+<p>
+    Un Bounded Context es una frontera explícita dentro de la cual un modelo y su lenguaje son
+    consistentes. El mismo término de negocio puede significar cosas distintas fuera de esa frontera, y
+    eso está bien: el error es construir un único modelo con sesenta campos que intente servir a todos los
+    contextos a la vez. Regla práctica: si al añadir un campo a una clase tienes que preguntar "¿pero para
+    qué caso se usa?", probablemente estás mezclando contextos.
+</p>
 
 <h2 class="ddd-h2">"Usuario" no es lo mismo en todos lados</h2>
 <p>
     NotificationLog no modela "el usuario". Modela exactamente lo que su propio contexto — notificar —
     necesita saber de una persona para poder contactarla y respetar sus preferencias. El sistema productor
-    (el que gestiona identidad, autenticación, verificación de email/teléfono) tiene su propio modelo de
-    usuario, mucho más rico, que nunca cruza la frontera completo.
+    (el que gestiona identidad, autenticación, verificación de email o teléfono) tiene su propio modelo de
+    usuario, mucho más rico, que nunca cruza la frontera completo:
 </p>
 
 <CodeBlock Title="Domain/Recipients/Recipient.cs" Code="@RecipientSnippet" />
 
 <p>
-    Compáralo con lo que el contrato de integración (<code>user_contact_updated.proto</code>, que verás en
-    detalle en la <a href="/ddd/context-map">página 4</a>) trae del lado del productor: nombre, email,
-    teléfono, locale, zona horaria, activo/inactivo y atributos libres. Nada de contraseñas, roles,
-    permisos ni historial — porque a <em>este</em> contexto no le importa. <code>Recipient</code> es un
-    modelo deliberadamente delgado: "alguien a quien se le puede enviar algo, por un canal, si está activo".
+    Compáralo con lo que el contrato de integración entre servicios (<code>user_contact_updated.proto</code>,
+    que verás en detalle en el <a href="/ddd/context-map">módulo 4</a>) trae del lado del productor:
+    nombre, email, teléfono, locale, zona horaria, activo/inactivo y atributos libres. Nada de
+    contraseñas, roles, permisos ni historial de sesiones — porque a <em>este</em> contexto no le importa.
+    <code>Recipient</code> es un modelo deliberadamente delgado: "alguien a quien se le puede enviar algo,
+    por un canal, si está activo".
 </p>
 
 <div class="ddd-diagram">
@@ -87,19 +92,28 @@
 <p>
     Un Bounded Context no siempre es un microservicio aparte — puede ser un módulo dentro del mismo
     proceso. Dentro de <code>NotificationLog.NotificationService.Domain</code> ya conviven varias
-    subcarpetas con su propio lenguaje y sus propias reglas, sin mezclarse entre sí:
-    <code>Triggers</code> (cuándo notificar), <code>Templates</code> (con qué texto),
-    <code>Recipients</code> (a quién) y <code>Notifications</code> (qué se envió de hecho). Cada carpeta
-    tiene su propio agregado raíz y su propio repositorio — nadie navega directamente de un agregado a
-    otro por referencia de objeto, solo por <code>Guid</code> (lo verás en la <a href="/ddd/agregados">página 7</a>).
+    subcarpetas con su propio lenguaje y sus propias reglas, sin mezclarse entre sí: <code>Triggers</code>
+    (cuándo notificar), <code>Templates</code> (con qué texto), <code>Recipients</code> (a quién) y
+    <code>Notifications</code> (qué se envió de hecho). Cada carpeta tiene su propio agregado raíz y su
+    propio repositorio — nadie navega directamente de un agregado a otro por referencia de objeto, solo
+    por <code>Guid</code> (lo verás con detalle en el <a href="/ddd/agregados">módulo 7</a>).
 </p>
 
 <DddCallout Kind="advertencia" Title="La señal de alarma">
     <p>
         Si alguna vez sientes la tentación de fusionar <code>Recipient</code> con un futuro modelo de
-        "cliente" de facturación porque "total, es la misma persona", para y pregúntate: ¿el campo nuevo
-        que quiero agregar tiene sentido en <em>ambos</em> casos de uso, o solo en uno? Si solo en uno,
-        el modelo fusionado va a terminar sirviendo mal a los dos.
+        "cliente" de facturación porque "total, es la misma persona", detente y pregúntate: ¿el campo nuevo
+        que quiero agregar tiene sentido en <em>ambos</em> casos de uso, o solo en uno? Si solo en uno, el
+        modelo fusionado va a terminar sirviendo mal a los dos.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
+    <p>
+        Toma un término que uses a diario en tu equipo (por ejemplo, "cliente", "producto" o "cuenta") y
+        pregunta a dos personas de áreas distintas qué campos esperarían encontrar en ese objeto. Si las
+        listas no coinciden, probablemente ya tienes dos Bounded Contexts sin nombrar formalmente — y un
+        modelo único que, sin saberlo, ya está sirviendo mal a uno de los dos.
     </p>
 </DddCallout>
 

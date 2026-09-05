@@ -11,15 +11,22 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>
-        Una entidad es un objeto con identidad propia que persiste a lo largo del tiempo, aunque cambien
-        todos sus atributos. Un pedido sigue siendo el mismo pedido tras cambiar de estado, dirección e
-        importe. La identidad no es "tiene un id en base de datos": es que el negocio distingue a
-        <em>ese</em> individuo de cualquier otro con los mismos datos. La entidad protege sus propias
-        reglas; no expone setters públicos, expone comportamiento con nombre de negocio.
-    </p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Distinguir igualdad por identidad de igualdad por valores.</li>
+        <li>Leer <code>Entity.Equals</code> y explicar cada línea.</li>
+        <li>Identificar una entidad que no es raíz de agregado, y qué la protege.</li>
+    </ul>
 </DddCallout>
+
+<h2 class="ddd-h2">Concepto</h2>
+<p>
+    Una entidad es un objeto con identidad propia que persiste a lo largo del tiempo, aunque cambien todos
+    sus atributos. Un pedido sigue siendo el mismo pedido tras cambiar de estado, dirección e importe. La
+    identidad no es "tiene un id en base de datos": es que el negocio distingue a <em>ese</em> individuo de
+    cualquier otro con los mismos datos. La entidad protege sus propias reglas; no expone setters
+    públicos, expone comportamiento con nombre de negocio.
+</p>
 
 <h2 class="ddd-h2">Igualdad por identidad, no por valores</h2>
 <p>
@@ -31,7 +38,7 @@
 <CodeBlock Title="Domain/Common/Entity.cs" Code="@EntitySnippet" />
 
 <p>
-    Fíjate en el comentario del código: <em>"dos entidades sin persistir nunca son iguales entre sí"</em>.
+    Repara en el comentario del código: <em>"dos entidades sin persistir nunca son iguales entre sí"</em>.
     Es una decisión deliberada — si dos <code>Recipient</code> todavía no tienen <code>Id</code> asignado
     (<code>Guid.Empty</code>), tratarlos como iguales solo porque tienen el mismo nombre sería mezclar
     identidad con valores, exactamente lo que una entidad existe para evitar.
@@ -39,7 +46,7 @@
 
 <h2 class="ddd-h2">Recipient: mismo Id, atributos que cambian</h2>
 <p>
-    <code>Recipient</code> (que ya viste en la <a href="/ddd/bounded-context">página 3</a>) es el ejemplo
+    <code>Recipient</code> (que ya viste en el <a href="/ddd/bounded-context">módulo 3</a>) es el ejemplo
     más claro de entidad-como-raíz: su <code>Id</code> es el mismo <code>userId</code> que llega del
     contexto de Usuarios, y a lo largo de su vida cambia de nombre, de email, de teléfono, de zona horaria,
     se activa y se desactiva — pero sigue siendo el mismo <code>Recipient</code> para el negocio. Ningún
@@ -55,7 +62,11 @@
     — tiene su propio <code>Id</code>, distinto en cada versión — pero solo se puede crear y retirar
     <em>a través de</em> <code>NotificationTemplate</code>, nunca de forma independiente. El modificador
     <code>internal</code> en sus métodos de fábrica y de mutación no es un detalle estilístico: es el
-    compilador de C# imponiendo, en tiempo de compilación, que solo el agregado raíz puede tocarla.
+    compilador de C# impidiendo que código de <code>Application</code> o <code>Infrastructure</code> cree o
+    mute una versión suelta. Dentro del propio ensamblado <code>Domain</code> la garantía es de convención,
+    no del compilador — hoy solo <code>NotificationTemplate</code> la invoca, pero nada impediría que otra
+    clase del mismo ensamblado lo hiciera. Esa es, de hecho, la frontera real que protege
+    <code>internal</code>: entre capas, no dentro de una misma capa.
 </p>
 
 <CodeBlock Title="Domain/Templates/TemplateVersion.cs (fábrica y mutación)" Code="@TemplateVersionSnippet" />
@@ -100,12 +111,22 @@
 
 <DddCallout Kind="advertencia" Title="Entidad no es sinónimo de 'tabla con Id'">
     <p>
-        El error clásico (temario, antipatrón "Entidad = tabla") es pensar que cualquier fila con clave
-        primaria es una entidad de dominio. La prueba real es otra: ¿el negocio distingue este individuo de
-        otro con los mismos valores, y le importa su ciclo de vida? Un <code>TemplateVersion</code> lo
-        cumple (versión 2 no es lo mismo que versión 3, aunque tuvieran el mismo texto). Una fila de una
-        tabla de configuración estática de códigos de país, probablemente no — ahí un value object o un
-        simple <code>enum</code> alcanza.
+        El error clásico (antipatrón "Entidad = tabla") es pensar que cualquier fila con clave primaria es
+        una entidad de dominio. La prueba real es otra: ¿el negocio distingue este individuo de otro con
+        los mismos valores, y le importa su ciclo de vida? Un <code>TemplateVersion</code> lo cumple
+        (versión 2 no es lo mismo que versión 3, aunque tuvieran el mismo texto). Una fila de una tabla de
+        configuración estática de códigos de país, probablemente no — ahí un value object o un simple
+        <code>enum</code> alcanza.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
+    <p>
+        Para cada clase de tu propio dominio que hoy tenga un <code>Id</code>, pregúntate: si dos
+        instancias tuvieran exactamente los mismos valores en todos los demás campos, ¿el negocio las
+        trataría como la misma cosa o como dos cosas distintas? Si la respuesta es "dos cosas distintas",
+        es una entidad y necesita <code>Equals</code> por identidad, no por valores — igual que
+        <code>Entity</code> en este repositorio.
     </p>
 </DddCallout>
 

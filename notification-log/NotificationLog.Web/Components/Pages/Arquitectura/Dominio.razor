@@ -105,16 +105,15 @@
 </p>
 <CodeBlock Title="Domain/Common/Entity.cs (completo)" Code="@EntitySnippet" />
 
-<h3 class="ddd-h3">Domain events: el andamiaje ya existe, nadie lo usa todavía</h3>
+<h3 class="ddd-h3">Domain events: el mecanismo ya existe, nadie lo usa todavía</h3>
 <DddCallout Kind="honesto" Title="AggregateRoot expone Raise(), pero ningún agregado lo llama">
     <p>
         <code>AggregateRoot</code> ya tiene <code>DomainEvents</code>, <code>Raise(IDomainEvent)</code> y
-        <code>ClearDomainEvents()</code> listos. Es exactamente el mismo hallazgo que la
-        <a href="/ddd/domain-events">página 10 de la guía de DDD</a> documenta en detalle: el mecanismo está
-        construido, pero ningún agregado de este repositorio llama a <code>Raise</code> todavía. Cuando
-        <code>NotificationDispatchService</code> se conecte de verdad (ver
-        <a href="/arquitectura/aplicacion">página de Aplicación</a>), sería el primer candidato natural para
-        publicar un evento del tipo <code>NotificationSentEvent</code>.
+        <code>ClearDomainEvents()</code> listos. Es exactamente el mismo hallazgo que el
+        <a href="/ddd/domain-events">módulo 10 del tutorial de DDD</a> documenta en detalle: el mecanismo
+        está construido, pero ningún agregado de este repositorio llama a <code>Raise</code> todavía. Un
+        candidato natural para el primer evento real sería <code>NotificationTrigger.AddConfiguration</code>
+        — verás exactamente cómo se vería en la <a href="/ddd/tareas">página de tareas guiadas</a>.
     </p>
 </DddCallout>
 <CodeBlock Title="Domain/Common/AggregateRoot.cs (completo)" Code="@AggregateRootSnippet" />

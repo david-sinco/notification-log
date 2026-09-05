@@ -11,50 +11,61 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>
-        El lenguaje ubicuo (<em>ubiquitous language</em>) es un vocabulario riguroso y compartido entre
-        quien conoce el negocio y quien escribe el código, que aparece <strong>literalmente</strong> en el
-        código: nombres de clases, de métodos, de mensajes de error. Si negocio dice "el evento
-        <code>transaccion.realizada</code> dispara una notificación por el canal activo", el código debe
-        poder decir exactamente eso, sin traducir a <code>type == 3</code> o <code>flag_a</code>.
-    </p>
-    <p>
-        El coste de no tenerlo no es estético: es un impuesto que se paga en cada bug ("¿qué significa el
-        estado 2?") y en cada reunión ("cuando dices 'trigger', ¿es lo mismo que el <code>Configuration</code>
-        de la base de datos?").
-    </p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Explicar qué es el lenguaje ubicuo y por qué su coste de no tenerlo no es estético.</li>
+        <li>Reconocerlo en el código real de este servicio, incluidos los mensajes de error.</li>
+        <li>Practicar el ejercicio de mapear vocabulario de negocio contra nombres del código.</li>
+    </ul>
 </DddCallout>
 
-<h2 class="ddd-h2">El vocabulario ya está en el dominio</h2>
+<h2 class="ddd-h2">Concepto</h2>
 <p>
-    No hace falta inventar un glosario aparte: el propio código de
+    El lenguaje ubicuo (<em>ubiquitous language</em>) es un vocabulario riguroso, compartido entre quien
+    conoce el negocio y quien escribe el código, que aparece <strong>literalmente</strong> en el código:
+    nombres de clases, de métodos, de mensajes de error. Si negocio dice "el evento
+    <code>transaccion.realizada</code> dispara una notificación por el canal activo", el código debería
+    poder decir exactamente eso — sin traducir a <code>type == 3</code> o a un booleano llamado
+    <code>flagA</code>. El coste de no tenerlo se paga en cada bug ("¿qué significa el estado 2?") y en
+    cada reunión ("cuando dices 'trigger', ¿es lo mismo que la fila de <code>Configuration</code> en la
+    base de datos?").
+</p>
+
+<h2 class="ddd-h2">El vocabulario ya vive en el dominio</h2>
+<p>
+    No hace falta un glosario aparte para empezar: el propio código de
     <code>NotificationLog.NotificationService.Domain</code> ya usa las palabras que usaría alguien de
-    negocio, en español, tal como se hablaría en una reunión sobre el servicio de notificaciones.
+    negocio en una reunión sobre este servicio. Mira cómo se valida el identificador de un hecho de
+    negocio:
 </p>
 
 <CodeBlock Title="Domain/Triggers/EventKey.cs" Code="@EventKeyCreateSnippet" />
 
 <p>
-    Fíjate en algo que suele pasar desapercibido: los mensajes de <code>DomainException</code> no son
-    para el desarrollador, son la voz del propio dominio explicando por qué rechazó algo. "La descripción
-    del trigger es obligatoria", "Ya existe una configuración activa para el canal Email", "La plantilla
-    está desactivada" — cualquiera de esas frases la podría decir alguien de negocio sin saber qué es
-    C#. Esa es la prueba de que el lenguaje ubicuo está funcionando: el error de validación
-    <strong>es</strong> la regla de negocio, dicha en su propio idioma.
+    Fíjate en un detalle que suele pasar desapercibido: los mensajes de <code>DomainException</code> no
+    están escritos para quien programa, son la voz del propio dominio explicando por qué rechazó algo.
+    "El event key es obligatorio", "Ya existe una configuración activa para el canal Email", "La plantilla
+    está desactivada" — cualquiera de esas frases la podría decir alguien de negocio sin saber qué es C#.
+    Esa es la prueba de que el lenguaje ubicuo funciona aquí: el error de validación <strong>es</strong> la
+    regla de negocio, dicha en su propio idioma, no una traducción de ella.
 </p>
 
-<h3 class="ddd-h3">Ejemplo: el nombre no se llama "key" en la base de datos</h3>
+<h3 class="ddd-h3">El nombre del evento describe un hecho, no una plantilla</h3>
 <p>
-    El proyecto tiene su propia regla de traducción de nombres, documentada en su
-    <code>CLAUDE.md</code>: <em>"el key nombra un hecho, no una plantilla. <code>transaccion.realizada</code>,
-    no <code>email_transaccion_v2</code>."</em> Eso es lenguaje ubicuo estratégico: el identificador del
-    evento describe qué pasó en el negocio, nunca cómo se va a notificar. Plantilla, canal y condiciones
-    viven en <code>NotificationConfiguration</code>, no en el nombre del evento.
+    Compara <code>EventKey</code> con lo que <em>no</em> hace: no describe un canal, ni una plantilla, ni
+    una prioridad. Su formato exigido — <code>dominio.accion</code>, como <code>pedido.confirmado</code> o
+    <code>usuario.email_verificado</code> — obliga a que el identificador nombre algo que ya ocurrió en el
+    negocio, nunca cómo se va a notificar sobre eso. Esa separación es lenguaje ubicuo aplicado a una
+    decisión estratégica: el "qué pasó" y el "qué se hace con eso" no comparten un mismo nombre, porque
+    tampoco son la misma decisión. Plantilla, canal y condiciones de envío viven aparte, en
+    <code>NotificationConfiguration</code> — la verás en el <a href="/ddd/agregados">módulo de agregados</a>.
 </p>
 
 <h2 class="ddd-h2">Glosario: término de negocio ↔ nombre en el código</h2>
-<p>Así se vería el ejercicio 1.1 del temario aplicado a este proyecto — la lista ya está casi sin distancia:</p>
+<p>
+    Este es exactamente el ejercicio de traducción que pide el lenguaje ubicuo, ya resuelto para este
+    dominio — la distancia entre columna izquierda y derecha debería ser mínima:
+</p>
 
 <div class="ddd-box ddd-box-codigo">
     <div class="term-pair">
@@ -100,11 +111,11 @@
 
         <text x="190" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">Sin lenguaje ubicuo</text>
         <rect x="40" y="40" width="140" height="50" rx="8" fill="#fee2e2" stroke="#fecaca" />
-        <text x="110" y="70" text-anchor="middle" font-size="11" fill="#991b1b">"póliza suspendida"</text>
+        <text x="110" y="70" text-anchor="middle" font-size="11" fill="#991b1b">"el usuario está inactivo"</text>
         <line x1="180" y1="65" x2="230" y2="65" stroke="#dc2626" stroke-width="1.5" marker-end="url(#ulArrow)" />
         <text x="205" y="55" text-anchor="middle" font-size="9" fill="#dc2626">traduce</text>
         <rect x="230" y="40" width="140" height="50" rx="8" fill="#fee2e2" stroke="#fecaca" />
-        <text x="300" y="65" text-anchor="middle" font-size="11" fill="#991b1b" font-family="monospace">user.status = 3</text>
+        <text x="300" y="65" text-anchor="middle" font-size="11" fill="#991b1b" font-family="monospace">status == 3</text>
         <text x="205" y="110" text-anchor="middle" font-size="10" fill="#991b1b">se paga en cada bug y cada reunión</text>
 
         <text x="570" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">Con lenguaje ubicuo (este repo)</text>
@@ -123,12 +134,14 @@
     </p>
 </div>
 
-<DddCallout Kind="ejercicio" Title="Ejercicio (temario 1.1)">
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
     <p>
-        Antes de la próxima sesión de refinamiento, toma un método real de un módulo que <strong>no</strong>
-        tenga lenguaje ubicuo (por ejemplo, algo con <code>status == 2</code> o <code>ProcesarData()</code>)
-        y pregúntale al equipo qué regla de negocio implementa. Si nadie responde con seguridad en menos de
-        30 segundos, ese es el síntoma que esta guía intenta prevenir.
+        Abre cualquier método de <code>Recipient.cs</code> o <code>NotificationTrigger.cs</code> y tapa el
+        cuerpo con la mano. Solo con el nombre del método y sus parámetros, intenta adivinar qué regla de
+        negocio implementa. Si aciertas casi siempre sin leer el cuerpo, el lenguaje ubicuo está haciendo
+        su trabajo. Repite el ejercicio con un proyecto propio que tenga métodos como
+        <code>ProcesarData()</code> o <code>Update(int status)</code> — la diferencia de esfuerzo es la
+        medida real del lenguaje ubicuo.
     </p>
 </DddCallout>
 

@@ -11,30 +11,37 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>
-        Un agregado es un conjunto de entidades y value objects tratado como una unidad de consistencia.
-        Se accede solo a través de la raíz (aggregate root), que garantiza las invariantes. Responde a la
-        pregunta: <em>¿qué debe ser consistente en la misma transacción?</em> Todo lo demás puede ser
-        eventualmente consistente.
-    </p>
-    <p>Las cuatro reglas de diseño de Vernon:</p>
-    <ol>
-        <li>Protege invariantes de negocio verdaderas dentro del límite del agregado.</li>
-        <li>Diseña agregados pequeños. Grande = contención, bloqueos y memoria.</li>
-        <li>Referencia otros agregados <strong>por identidad</strong>, no por objeto.</li>
-        <li>Una transacción modifica <strong>un solo agregado</strong>. Coordina el resto con eventos.</li>
-    </ol>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Aplicar las cuatro reglas de diseño de Vernon a un agregado real.</li>
+        <li>Ver una invariante de negocio protegida en el punto exacto del código.</li>
+        <li>Distinguir "leer un segundo agregado" de "modificar dos agregados en una transacción".</li>
+    </ul>
 </DddCallout>
+
+<h2 class="ddd-h2">Concepto</h2>
+<p>
+    Un agregado es un conjunto de entidades y value objects tratado como una unidad de consistencia. Se
+    accede solo a través de la raíz (aggregate root), que garantiza las invariantes. Responde a la
+    pregunta: <em>¿qué debe ser consistente en la misma transacción?</em> Todo lo demás puede ser
+    eventualmente consistente.
+</p>
+<p>Las cuatro reglas de diseño de Vernon:</p>
+<ol>
+    <li>Protege invariantes de negocio verdaderas dentro del límite del agregado.</li>
+    <li>Diseña agregados pequeños. Grande = contención, bloqueos y memoria.</li>
+    <li>Referencia otros agregados <strong>por identidad</strong>, no por objeto.</li>
+    <li>Una transacción modifica <strong>un solo agregado</strong>. Coordina el resto con eventos.</li>
+</ol>
 
 <h2 class="ddd-h2">El agregado real: NotificationTrigger</h2>
 <p>
     <code>NotificationTrigger</code> es la raíz; <code>NotificationConfiguration</code> es su entidad hija.
     Comparten una invariante real: <strong>no puede haber dos configuraciones activas del mismo canal para
     el mismo trigger</strong> (no tendría sentido tener dos plantillas de email compitiendo por el mismo
-    evento). Esa regla no vive en el handler de la aplicación ni en una validación de base de datos —
-    vive dentro del agregado, que es el único lugar donde se puede verificar sin condiciones de carrera
-    dentro de la misma transacción.
+    evento). Esa regla no vive en el handler de la aplicación ni en una restricción de base de datos — vive
+    dentro del agregado, que es el único lugar donde se puede verificar sin condiciones de carrera dentro
+    de la misma transacción.
 </p>
 
 <CodeBlock Title="Domain/Triggers/NotificationTrigger.cs (invariante de canal único)" Code="@TriggerSnippet" />
@@ -47,6 +54,20 @@
     definición de invariante protegida: no es una validación que <em>podrías</em> olvidar llamar, es
     imposible de saltarte.
 </p>
+
+<DddCallout Kind="honesto" Title="Una grieta real que este código ya cerró">
+    <p>
+        Hasta hace poco, <code>EventKey</code>, <code>Description</code> e <code>IsEnabled</code> de
+        <code>NotificationTrigger</code> tenían setter público — el único de los cuatro agregados con esa
+        grieta. Con setter público, la Regla 1 no se cumplía del todo: <code>trigger.IsEnabled = true</code>
+        saltaba <code>Enable()</code> sin pasar por ninguna comprobación, y nada impedía reasignar
+        <code>trigger.EventKey</code> después de creado, rompiendo en silencio la unicidad que
+        <code>CreateTriggerHandler</code> solo verifica una vez, al crear. El arreglo fue mínimo — los tres a
+        <code>{ get; private set; }</code> — precisamente porque ningún código fuera de la clase dependía del
+        setter público. Es el mismo tipo de auditoría que puedes hacerle a tu propio código: un setter
+        público en un agregado no es un detalle menor, es una invariante que dejó de estar protegida.
+    </p>
+</DddCallout>
 
 <h2 class="ddd-h2">Regla 2 — Agregados pequeños</h2>
 <p>
@@ -135,16 +156,16 @@
         aquí solo <code>_uow.SaveChangesAsync()</code> persiste cambios, y esos cambios están todos dentro
         de <code>trigger</code>. Si <code>AddConfigurationHandler</code> también hubiera llamado a
         <code>template.Disable()</code> en el mismo método, ahí sí habría una violación real, y la forma
-        correcta de resolverlo sería con un evento de dominio (ver <a href="/ddd/domain-events">página 10</a>).
+        correcta de resolverlo sería con un evento de dominio (ver <a href="/ddd/domain-events">módulo 10</a>).
     </p>
 </DddCallout>
 
-<DddCallout Kind="ejercicio" Title="Ejercicio (temario 2.3)">
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
     <p>
-        Toma la entidad más grande de tu propio código y, para cada campo, pregunta: "si esto cambia,
-        ¿qué otro campo del mismo objeto <em>tiene</em> que cambiar en la misma transacción para que el
-        objeto siga siendo válido?". Los campos que nunca aparecen en esa respuesta probablemente
-        pertenecen a otro agregado.
+        Toma la entidad más grande de tu propio código y, para cada campo, pregunta: "si esto cambia, ¿qué
+        otro campo del mismo objeto <em>tiene</em> que cambiar en la misma transacción para que el objeto
+        siga siendo válido?". Los campos que nunca aparecen en esa respuesta probablemente pertenecen a
+        otro agregado.
     </p>
 </DddCallout>
 

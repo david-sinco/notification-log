@@ -11,6 +11,14 @@
 
 <DddNav />
 
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Explicar por qué la interfaz de un repositorio vive en el dominio y no en infraestructura.</li>
+        <li>Leer una implementación real de EF Core y ver por qué es <code>internal</code>.</li>
+        <li>Reconocer una factory como método estático, sin necesitar una clase aparte.</li>
+    </ul>
+</DddCallout>
+
 <DddCallout Kind="concepto" Title="Concepto: Repositorio">
     <p>
         Un repositorio es una abstracción con semántica de colección para obtener y persistir agregados.
@@ -36,7 +44,7 @@
 <p>
     <code>NotificationTriggerRepository</code> usa Entity Framework Core directamente — <code>Include</code>,
     <code>AsNoTracking</code>, <code>EF.Functions.Like</code> — todo el vocabulario de un ORM que jamás
-    debería aparecer en el dominio. Y aparece marcada <code>internal</code>: fuera de
+    debería aparecer en el dominio. Y está marcada <code>internal</code>: fuera de
     <code>Infrastructure</code>, nadie puede siquiera nombrar esa clase. La capa de aplicación solo conoce
     <code>INotificationTriggerRepository</code>.
 </p>
@@ -48,7 +56,7 @@
     <code>.Include(t =&gt; t.Configurations)</code>. El repositorio nunca devuelve un
     <code>NotificationTrigger</code> a medias — siempre carga el agregado completo, con sus
     configuraciones, porque cargar solo la raíz sin sus hijos rompería la posibilidad de validar la
-    invariante de canal único (<a href="/ddd/agregados">página 7</a>) la próxima vez que alguien llame a
+    invariante de canal único (<a href="/ddd/agregados">módulo 7</a>) la próxima vez que alguien llame a
     <code>AddConfiguration</code>.
 </p>
 
@@ -96,7 +104,7 @@
     <p>
         Encapsula la creación compleja de agregados garantizando que nazcan en estado válido. Cuando el
         constructor requeriría demasiados pasos o conocimiento, se usa un método factoría estático
-        (<code>Pedido.crearDesdeCarrito(...)</code>) o una clase factoría dedicada.
+        (<code>Pedido.CrearDesdeCarrito(...)</code>) o una clase factoría dedicada.
     </p>
 </DddCallout>
 
@@ -118,7 +126,7 @@
     (<code>Create</code> para negocio, constructor vacío para el ORM) que nunca se cruzan.
 </p>
 
-<DddCallout Kind="ejercicio" Title="Ejercicio (temario 3.1-3.2)">
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
     <p>
         Busca en tu código un repositorio con métodos genéricos (<code>GetAll</code>,
         <code>FindById</code>, <code>Update</code>) que sirva a más de un tipo de agregado. Divídelo en un

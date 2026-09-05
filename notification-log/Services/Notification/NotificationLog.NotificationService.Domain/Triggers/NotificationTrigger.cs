@@ -10,9 +10,9 @@ public class NotificationTrigger : AggregateRoot
 
     private readonly List<NotificationConfiguration> _configurations = new();
 
-    public EventKey EventKey { get; set; } = default!;
-    public string Description { get; set; } = default!;
-    public bool IsEnabled { get; set; }
+    public EventKey EventKey { get; private set; } = default!;
+    public string Description { get; private set; } = default!;
+    public bool IsEnabled { get; private set; }
 
     public IReadOnlyCollection<NotificationConfiguration> Configurations => _configurations.AsReadOnly();
 

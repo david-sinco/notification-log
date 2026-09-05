@@ -1,6 +1,6 @@
 @page "/proyecto/entorno-dev"
 
-<PageTitle>Entorno de desarrollo · Qué hace · NotificationLog</PageTitle>
+<PageTitle>Entorno de desarrollo · Cómo funciona · NotificationLog</PageTitle>
 
 <div class="page-header">
     <div>
@@ -65,7 +65,8 @@
         AppHost — ni un proveedor real elegido. Cada uno se configura desde su propio objeto bajo
         <code>Notifications</code> en <code>appsettings</code> (<code>Notifications:Email</code>,
         <code>Notifications:Sms</code>, <code>Notifications:Push</code>). <code>IWhatsAppNotificationSender</code>
-        sigue sin implementación.
+        sí está registrado, pero con un stub que siempre falla a propósito — no hay proveedor de WhatsApp
+        elegido todavía.
     </p>
 </DddCallout>
 

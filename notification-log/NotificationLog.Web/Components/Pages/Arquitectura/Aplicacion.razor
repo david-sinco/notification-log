@@ -5,7 +5,7 @@
 <div class="page-header">
     <div>
         <h1>2 · Application: orquesta, no decide</h1>
-        <p>Comandos y queries por feature, los puertos hacia el exterior, y la pieza que todavía no está enchufada.</p>
+        <p>Comandos y queries por feature, los puertos hacia el exterior, y la pieza que todavía espera un productor real.</p>
     </div>
 </div>
 
@@ -38,15 +38,16 @@
 
 <CodeBlock Title="Application/Abstractions/IUnitOfWork.cs (completo)" Code="@UowSnippet" />
 
-<DddCallout Kind="honesto" Title="Tres adaptadores de envío ya existen; el renderer y WhatsApp, no">
+<DddCallout Kind="honesto" Title="Los cuatro puertos de envío ya tienen adaptador — uno de ellos, a propósito, siempre falla">
     <p>
         <code>IEmailNotificationSender</code>, <code>ISmsNotificationSender</code> e
-        <code>IPushNotificationSender</code> ya tienen implementación en
-        <code>Infrastructure/Notifications/Sending</code>. Lo que sigue sin adaptador es
-        <code>ITemplateRenderer</code> y <code>IWhatsAppNotificationSender</code>. El AppHost ya levanta
-        <strong>Buggregator</strong> (ver <a href="/arquitectura/presentacion">página de API + Web</a>) — un
-        único contenedor que centraliza SMTP y el SMS Gateway — exactamente para lo que ya usan esos
-        remitentes en dev.
+        <code>IPushNotificationSender</code> tienen implementación real en
+        <code>Infrastructure/Notifications/Sending</code>, y <code>ITemplateRenderer</code> también —
+        <code>ScribanTemplateRenderer</code>, registrado como singleton. <code>IWhatsAppNotificationSender</code>
+        también está registrado, pero con un stub que siempre lanza <code>NotSupportedException</code>: no
+        hay proveedor de WhatsApp elegido todavía, y un envío que "funcionara" en silencio sería peor que
+        uno que queda registrado como notificación fallida con el motivo exacto. Verás el detalle de cada
+        adaptador en la <a href="/arquitectura/infraestructura">página de Infraestructura</a>.
     </p>
 </DddCallout>
 
@@ -54,9 +55,9 @@
 <p>
     <code>CreateTriggerHandler</code> es el ejemplo canónico: valida la forma del comando, construye el
     value object, comprueba una regla <em>entre</em> agregados (unicidad, que requiere consultar el
-    repositorio) y delega todo lo demás al agregado. Ese es el reparto exacto que documenta
-    <code>CLAUDE.md</code>: <em>"Reglas dentro de un agregado → dominio. Reglas entre agregados o que
-    requieren consultar la base → Application. Forma del mensaje → FluentValidation."</em>
+    repositorio) y delega todo lo demás al agregado. El reparto es siempre el mismo, y se puede leer
+    directamente en el orden de las líneas: forma del mensaje → FluentValidation; regla dentro de un
+    agregado → el propio agregado; regla entre agregados o que necesita consultar la base → el handler.
 </p>
 
 <CodeBlock Title="Application/Triggers/Commands/CreateTrigger/CreateTriggerHandler.cs" Code="@HandlerSnippet" />
@@ -75,16 +76,20 @@
     handler de comando: recibe un <code>BusinessEvent</code> ya traducido, busca el trigger por
     <code>EventKey</code>, recorre sus configuraciones activas, renderiza la plantilla por destinatario y
     llama al remitente del canal correspondiente — registrando éxito o fallo como una
-    <code>Notification</code> en cada paso.
+    <code>Notification</code> en cada paso. Está registrada en el contenedor de dependencias como cualquier
+    otro handler; no necesita ningún cableado especial.
 </p>
 <CodeBlock Title="Application/Notifications/Services/Dispatch/NotificationDispatchService.cs (extracto)" Code="@DispatchSnippet" />
 
-<DddCallout Kind="honesto" Title="Todavía no está registrada en el contenedor de DI">
+<DddCallout Kind="honesto" Title="La lógica está completa. Lo que falta es quién la dispare de verdad">
     <p>
-        <code>DependencyInjection.cs</code> de Application deja el comentario explícito: no se registra
-        <code>NotificationDispatchService</code> porque sus cuatro remitentes y su renderer aún no tienen
-        implementación. En cuanto existan, la línea a descomentar ya está escrita ahí mismo. Verás el resto
-        de este flujo, con quién la invocaría, en
+        <code>NotificationDispatchService</code> está registrada, sus cuatro puertos de envío tienen
+        adaptador y el consumer de infraestructura que la invoca
+        (<code>NotificationDispatchHandler</code>, escuchando la cola <code>notification-dispatch</code>)
+        también existe. Lo único que falta en todo este flujo es un <strong>productor</strong>: ningún
+        sistema de negocio publica hoy un <code>BusinessEvent</code> real hacia esa cola. La única forma de
+        ejercitar el flujo completo hoy es publicar un mensaje a mano desde la UI de administración de
+        RabbitMQ. Verás el resto de este flujo, y ese vacío exacto, en
         <a href="/proyecto/flujo-notificacion">la página funcional correspondiente</a>.
     </p>
 </DddCallout>

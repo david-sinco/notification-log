@@ -11,17 +11,24 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>El Context Map documenta cómo se relacionan los bounded contexts. Los patrones más útiles en la práctica:</p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
     <ul>
-        <li><strong>Anti-Corruption Layer (ACL):</strong> traduce el modelo ajeno para que no contamine el tuyo.</li>
-        <li><strong>Open Host Service / Published Language:</strong> un contrato estable que varios consumidores comparten.</li>
-        <li><strong>Customer–Supplier:</strong> el contexto río arriba considera las necesidades del de río abajo.</li>
-        <li><strong>Conformist:</strong> te adaptas al modelo ajeno sin traducir, sin poder de negociación.</li>
-        <li><strong>Shared Kernel:</strong> código de dominio compartido entre dos contextos — potente y peligroso.</li>
-        <li><strong>Separate Ways:</strong> integrar cuesta más de lo que aporta; duplicar es la respuesta correcta.</li>
+        <li>Nombrar los patrones de integración más usados entre bounded contexts.</li>
+        <li>Identificar un Anti-Corruption Layer real, línea por línea, en este repositorio.</li>
+        <li>Entender por qué un mensaje "snapshot completo" no es lo mismo que Conformist.</li>
     </ul>
 </DddCallout>
+
+<h2 class="ddd-h2">Concepto</h2>
+<p>El Context Map documenta cómo se relacionan los bounded contexts. Los patrones más útiles en la práctica:</p>
+<ul>
+    <li><strong>Anti-Corruption Layer (ACL):</strong> traduce el modelo ajeno para que no contamine el tuyo.</li>
+    <li><strong>Open Host Service / Published Language:</strong> un contrato estable que varios consumidores comparten.</li>
+    <li><strong>Customer–Supplier:</strong> el contexto río arriba considera las necesidades del de río abajo.</li>
+    <li><strong>Conformist:</strong> te adaptas al modelo ajeno sin traducir, sin poder de negociación.</li>
+    <li><strong>Shared Kernel:</strong> código de dominio compartido entre dos contextos — potente y peligroso.</li>
+    <li><strong>Separate Ways:</strong> integrar cuesta más de lo que aporta; duplicar es la respuesta correcta.</li>
+</ul>
 
 <h2 class="ddd-h2">El contrato: Published Language</h2>
 <p>
@@ -35,22 +42,22 @@
 <CodeBlock Title="Shared/NotificationLog.Contracts/Users/user_contact_updated.proto" Code="@ProtoSnippet" />
 
 <p>
-    Fíjate en tres decisiones de diseño de Published Language que evitan acoplar a los consumidores a los
-    detalles internos del productor:
+    Tres decisiones de diseño de este contrato evitan acoplar a los consumidores a los detalles internos
+    del productor:
 </p>
 <ul>
     <li><strong><code>schema_version</code>:</strong> permite evolucionar el contrato sin romper consumidores viejos.</li>
     <li><strong>Snapshot completo, no delta:</strong> "event-carried state transfer" — si se pierde un mensaje, el siguiente trae todo de nuevo. Ningún consumidor queda permanentemente desincronizado por un mensaje perdido.</li>
-    <li><strong>Sin <code>optional</code>:</strong> un campo vacío es un valor real ("sin dato confirmado"), no "no sé". La ausencia de significado ambiguo es, otra vez, lenguaje ubicuo — pero del contrato, no del dominio interno.</li>
+    <li><strong>Sin campos <code>optional</code>:</strong> un valor vacío es un dato real ("sin confirmar"), no "no sé". La ausencia de significado ambiguo es, otra vez, lenguaje ubicuo — pero aplicado al contrato de integración, no al dominio interno.</li>
 </ul>
 
 <h2 class="ddd-h2">El Anti-Corruption Layer, en un archivo real</h2>
 <p>
-    El patrón más valioso del temario tiene una implementación exacta en este repositorio:
-    <code>UserContactUpdatedHandler</code>. Recibe el mensaje ajeno (Protobuf, generado desde el .proto
-    del productor) y lo traduce a un tipo <strong>propio</strong> de Notifications
-    (<code>UserChange</code>) antes de que ninguna regla de negocio lo toque. El modelo del productor
-    nunca cruza esa línea.
+    El patrón más valioso de este módulo tiene una implementación exacta en el repositorio:
+    <code>UserContactUpdatedHandler</code>. Recibe el mensaje ajeno (el tipo Protobuf generado a partir del
+    <code>.proto</code> del productor) y lo traduce a un tipo <strong>propio</strong> de Notifications
+    (<code>UserChange</code>) antes de que ninguna regla de negocio lo toque. El modelo del productor nunca
+    cruza esa línea.
 </p>
 
 <CodeBlock Title="Infrastructure/Messaging/Consumers/UserContactUpdatedHandler.cs" Code="@AclSnippet" />
@@ -81,7 +88,7 @@
         <rect x="490" y="30" width="200" height="170" rx="10" fill="#fff7ed" stroke="#fed7aa" />
         <text x="590" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">Anti-Corruption Layer</text>
         <rect x="510" y="65" width="160" height="42" rx="6" fill="#fff" stroke="#fed7aa" />
-        <text x="590" y="83" text-anchor="middle" font-size="9.5" fill="#334155">UsersContactConsumer</text>
+        <text x="590" y="83" text-anchor="middle" font-size="9.5" fill="#334155">consumer de mensajería</text>
         <text x="590" y="97" text-anchor="middle" font-size="8.5" fill="#64748b">deserializa + valida versión</text>
         <rect x="510" y="115" width="160" height="42" rx="6" fill="#fff" stroke="#fed7aa" />
         <text x="590" y="133" text-anchor="middle" font-size="9.5" fill="#334155">UserContactUpdatedHandler</text>
@@ -98,17 +105,18 @@
     </svg>
     <p class="ddd-diagram-caption">
         El mensaje cruza tres traducciones antes de tocar una regla de negocio: Protobuf → tipo propio
-        (<code>UserChange</code>) → comando de aplicación. El dominio (<code>Recipient</code>) nunca ve Kafka ni Protobuf.
+        (<code>UserChange</code>) → comando de aplicación. El dominio (<code>Recipient</code>) nunca ve la
+        cola de mensajería ni Protobuf.
     </p>
 </div>
 
 <h2 class="ddd-h2">Un solo comando, no uno por campo</h2>
 <p>
-    Vale la pena leer el comentario que dejó el propio equipo en <code>RecipientSyncService</code>,
-    porque explica una decisión de Customer–Supplier real: como el mensaje ya llega como snapshot completo,
-    descomponerlo en varios comandos (uno por campo cambiado) habría roto la atomicidad — si el tercer
-    comando fallaba, los dos anteriores ya habían hecho commit. Con un único comando que aplica todos los
-    campos sobre la misma instancia, la atomicidad sale gratis: un solo <code>SaveChangesAsync</code>.
+    Vale la pena leer el razonamiento detrás de <code>RecipientSyncService</code>, porque explica una
+    decisión de Customer–Supplier real: como el mensaje ya llega como snapshot completo, descomponerlo en
+    varios comandos (uno por campo cambiado) habría roto la atomicidad — si el tercer comando fallaba, los
+    dos anteriores ya habrían hecho commit. Con un único comando que aplica todos los campos sobre la misma
+    instancia, la atomicidad sale gratis: un solo <code>SaveChangesAsync</code>.
 </p>
 
 <CodeBlock Title="Application/Recipients/Services/Sync/RecipientSyncService.cs" Code="@SyncSnippet" />
@@ -118,9 +126,19 @@
         Sería fácil confundir esto con el patrón <em>Conformist</em> ("me adapto al modelo ajeno sin
         traducir"). No lo es: <code>Recipient</code> tiene su propia forma, sus propias reglas
         (<code>CanReceive</code>, normalización de teléfono/email) y su propio ciclo de vida — el mensaje
-        de Kafka solo lo <em>alimenta</em>. Si Notifications simplemente guardara el mensaje tal cual sin
-        una capa de traducción ni reglas propias, ahí sí sería Conformist. La línea que separa ambos
+        de integración solo lo <em>alimenta</em>. Si Notifications simplemente guardara el mensaje tal cual
+        sin una capa de traducción ni reglas propias, ahí sí sería Conformist. La línea que separa ambos
         patrones es exactamente el ACL de arriba.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
+    <p>
+        Busca en tu propio código un punto donde un mensaje externo (un webhook, un evento de otro
+        servicio, la respuesta de una API de terceros) se deserializa directamente en un tipo que luego
+        viaja hasta tu capa de dominio. Si lo encuentras, esa es la ausencia de un ACL: el modelo ajeno ya
+        cruzó la frontera. Diseña el tipo propio que debería interceptarlo, siguiendo el molde de
+        <code>UserChange</code>.
     </p>
 </DddCallout>
 

@@ -11,22 +11,30 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>
-        Un Domain Service es una operación de dominio significativa que no pertenece naturalmente a
-        ninguna entidad ni value object — típicamente porque involucra varios agregados o requiere una
-        política externa, como un servicio de transferencia entre dos cuentas. Su abuso produce el
-        antipatrón de modelo anémico: toda la lógica en servicios, entidades como bolsas de datos.
-    </p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Definir cuándo una operación merece salir de un agregado hacia un Domain Service.</li>
+        <li>Distinguir Domain Service de Application Service con un ejemplo real de cada lado.</li>
+        <li>Entender por qué este dominio, hoy, no necesita ninguno.</li>
+    </ul>
 </DddCallout>
 
-<DddCallout Kind="honesto" Title="Esta guía no puede mostrarte un Domain Service de este proyecto — porque no hay ninguno">
+<h2 class="ddd-h2">Concepto</h2>
+<p>
+    Un Domain Service es una operación de dominio significativa que no pertenece naturalmente a ninguna
+    entidad ni value object — típicamente porque involucra varios agregados o requiere una política
+    externa, como un servicio de transferencia entre dos cuentas. Su abuso produce el antipatrón de
+    modelo anémico: toda la lógica en servicios, entidades reducidas a bolsas de datos con getters y
+    setters.
+</p>
+
+<DddCallout Kind="honesto" Title="Este dominio no tiene ni un solo Domain Service — y eso es información útil">
     <p>
-        Y eso, en sí mismo, es una lección: <code>NotificationLog.NotificationService.Domain</code> no
-        tiene ni una sola clase de servicio. Todo el comportamiento de negocio de este dominio cabe dentro
-        de sus cuatro agregados (<code>NotificationTrigger</code>, <code>NotificationTemplate</code>,
-        <code>Recipient</code>, <code>Notification</code>). Ninguna regla necesitó todavía "salirse" de un
-        agregado — y por eso no se creó ningún servicio de dominio para forzarla a existir.
+        <code>NotificationLog.NotificationService.Domain</code> no tiene ninguna clase de servicio. Todo
+        el comportamiento de negocio cabe dentro de sus cuatro agregados
+        (<code>NotificationTrigger</code>, <code>NotificationTemplate</code>, <code>Recipient</code>,
+        <code>Notification</code>). Ninguna regla necesitó todavía "salirse" de un agregado — y por eso no
+        se creó ningún servicio de dominio para forzarla a existir.
     </p>
 </DddCallout>
 
@@ -96,8 +104,8 @@
 
 <h2 class="ddd-h2">¿Cuándo aparecería un Domain Service real aquí?</h2>
 <p>
-    Hay un candidato latente en <code>AddConfigurationHandler</code> (que viste en la
-    <a href="/ddd/agregados">página anterior</a>): la comprobación "¿el canal de la plantilla coincide con
+    Hay un candidato latente en <code>AddConfigurationHandler</code> (que viste en el
+    <a href="/ddd/agregados">módulo anterior</a>): la comprobación "¿el canal de la plantilla coincide con
     el canal de la configuración?" cruza dos agregados (<code>NotificationTrigger</code> y
     <code>NotificationTemplate</code>) y hoy vive como código suelto dentro del handler de aplicación. Si
     esa política de compatibilidad creciera — por ejemplo, si empezaran a existir reglas más elaboradas
@@ -111,10 +119,19 @@
     <p>
         Con solo dos condiciones simples ("¿está habilitada?", "¿coincide el canal?"), envolverlas en una
         clase de servicio de dominio sería sobreingeniería: una interfaz, una implementación, un registro
-        en el contenedor de DI — para dos <code>if</code>. Esa es exactamente la advertencia del temario:
-        el abuso de Domain Services produce entidades anémicas y una capa de servicios inflada. La regla
+        en el contenedor de DI — para dos <code>if</code>. Esa es exactamente la advertencia clásica sobre
+        el abuso de Domain Services: produce entidades anémicas y una capa de servicios inflada. La regla
         práctica es dejar la lógica donde vive hasta que el dolor de tenerla ahí sea mayor que el coste de
         extraerla.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
+    <p>
+        Busca en tu propio código una clase que termine en "Service" o "Manager" y lista sus métodos
+        públicos. Para cada uno, pregúntate: ¿esta lógica podría vivir dentro de una sola entidad, o
+        necesita datos y agregados que ninguna entidad individual conoce? Los que caen en el primer grupo
+        probablemente deberían moverse dentro del agregado correspondiente.
     </p>
 </DddCallout>
 

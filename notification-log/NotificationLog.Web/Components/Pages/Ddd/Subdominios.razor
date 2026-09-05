@@ -11,39 +11,45 @@
 
 <DddNav />
 
-<DddCallout Kind="concepto" Title="Concepto">
-    <p>El dominio es el problema de negocio completo. Se divide en subdominios de tres tipos:</p>
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
     <ul>
-        <li><strong>Core:</strong> donde está la ventaja competitiva. Ahí se invierte a la mejor gente y se aplica DDD táctico completo.</li>
-        <li><strong>Soporte:</strong> necesario pero no diferenciador. Código pragmático, sin sobreingeniería.</li>
-        <li><strong>Genérico:</strong> problema ya resuelto por el mercado. Se compra, no se construye (auth, facturación, notificaciones).</li>
+        <li>Distinguir subdominio core, de soporte y genérico.</li>
+        <li>Clasificar honestamente dónde cae este servicio, y por qué la respuesta tiene matices.</li>
+        <li>Entender que "genérico" no significa "sin invariantes que proteger".</li>
     </ul>
-    <p>El error clásico es aplicar DDD completo al subdominio genérico y CRUD al core.</p>
 </DddCallout>
+
+<h2 class="ddd-h2">Concepto</h2>
+<p>El dominio es el problema de negocio completo. Se divide en subdominios de tres tipos:</p>
+<ul>
+    <li><strong>Core:</strong> donde está la ventaja competitiva. Ahí se invierte a la mejor gente y se aplica DDD táctico completo.</li>
+    <li><strong>Soporte:</strong> necesario pero no diferenciador. Código pragmático, sin sobreingeniería.</li>
+    <li><strong>Genérico:</strong> un problema ya resuelto por el mercado. Se compra o se reutiliza, no se reinventa (auth, facturación, envío de notificaciones).</li>
+</ul>
+<p>El error clásico es aplicar DDD completo al subdominio genérico y tratar el core como un simple CRUD.</p>
 
 <h2 class="ddd-h2">¿Dónde cae NotificationLog?</h2>
 <p>
-    Esta es la pregunta incómoda que el temario pide hacer, y la respuesta honesta tiene matices. Si
-    tomas la lista de ejemplos del libro al pie de la letra —"auth, facturación, <strong>notificaciones</strong>"—
-    NotificationLog es justo el ejemplo de subdominio genérico. El propio <code>CLAUDE.md</code> del
-    proyecto lo confirma sin proponérselo:
+    Esta es la pregunta incómoda que conviene hacerse de entrada, y la respuesta honesta tiene matices —
+    y un cuidado metodológico primero: clasificar un subdominio <strong>no es una propiedad de la
+    capacidad en sí</strong> ("enviar notificaciones" en abstracto), es una propiedad de su relación con la
+    estrategia de <em>esta</em> empresa concreta. Caer en el catálogo de capacidades genéricas ("todo el
+    mundo hace login, todo el mundo envía emails, luego es genérico") es el mismo error que criticar el
+    caso opuesto: la pregunta correcta nunca es "¿es esto común en el mercado?" sino "¿es esto lo que hace
+    que <em>esta</em> empresa gane frente a la competencia?". Dicho eso, para la empresa que consume este
+    servicio río abajo (la que vende pólizas, pedidos o lo que sea su negocio), "recibir un hecho y decidir
+    si notificarlo" cae del lado genérico: no es ahí donde compite. El diseño del propio servicio refuerza
+    esa lectura a propósito — mira cómo <code>NotificationDispatchService</code> recibe el hecho de
+    negocio:
 </p>
 
-<DddCallout Kind="codigo" Title="notification-log/CLAUDE.md">
-    <p>
-        <em>"Un servicio de notificaciones que consume eventos de Kafka y envía notificaciones (email, SMS,
-        push) según una configuración declarativa. La idea central: los servicios de negocio publican
-        hechos, y el servicio de notificaciones decide qué hacer con ellos sin que el productor sepa nada
-        de plantillas ni canales."</em>
-    </p>
-</DddCallout>
+<CodeBlock Title="Application/Notifications/Services/Dispatch/BusinessEvent.cs" Code="@BusinessEventSnippet" />
 
 <p>
-    Ese diseño es, a propósito, genérico: cualquier "hecho de negocio" puede engancharse sin que
-    Notifications sepa nada de pólizas, pedidos o lo que sea que produce el evento. Nadie compite en el
-    mercado por tener "el mejor sistema de envío de SMS". Ese es el dominio <em>core</em> real de esta
-    empresa hipotética: sea lo que sea que hace el sistema productor (facturación, gestión de pólizas,
-    logística) — no el servicio que reenvía notificaciones sobre él.
+    <code>BusinessEvent</code> es deliberadamente genérico: un <code>EventKey</code>, un destinatario, y un
+    diccionario libre de datos. El servicio de notificaciones no sabe —ni necesita saber— si ese evento
+    vino de un sistema de pedidos, de pólizas o de logística. Esa ignorancia intencional es la marca de un
+    subdominio genérico bien diseñado: sirve a cualquier productor sin acoplarse a ninguno.
 </p>
 
 <div class="ddd-diagram">
@@ -72,42 +78,66 @@
 
 <h2 class="ddd-h2">Genérico no significa "sin invariantes"</h2>
 <p>
-    Aquí está el matiz que el temario no siempre deja claro y que este proyecto ilustra bien: clasificar
-    un subdominio como genérico decide <strong>dónde no reinventar la rueda</strong> (no vas a construir tu
-    propio proveedor de SMS, tu propio motor de reintentos de entrega, tu propio schema registry), pero no
-    te exime de modelar correctamente las reglas que sí son tuyas. NotificationLog sigue teniendo una
-    invariante de negocio real y no trivial — <em>"no puede haber dos configuraciones activas del mismo
-    canal para un mismo trigger"</em> — y por eso vale la pena un agregado bien diseñado
-    (<a href="/ddd/agregados">sección 7</a>) aunque el subdominio en sí no sea el core de la empresa.
+    Aquí está el matiz que este servicio ilustra bien: clasificar un subdominio como genérico decide
+    <strong>dónde no reinventar la rueda</strong> — no vas a construir tu propio proveedor de SMS, tu
+    propio motor de reintentos de entrega, tu propio schema registry de mensajería — pero no te exime de
+    modelar correctamente las reglas que sí son tuyas. <code>NotificationTrigger</code> sigue teniendo una
+    invariante de negocio real y no trivial: <em>no puede haber dos configuraciones activas del mismo
+    canal para un mismo trigger</em>. Por eso vale la pena un agregado bien diseñado (lo verás en el
+    <a href="/ddd/agregados">módulo 7</a>) aunque el subdominio en sí no sea el core de la empresa.
 </p>
 
 <DddCallout Kind="advertencia" Title="El error clásico, en ambas direcciones">
     <p>
         Aplicar DDD táctico completo a un subdominio genérico sin invariantes reales es sobreingeniería:
-        un simple catálogo CRUD de zonas horarias no necesita agregados ni value objects. Pero el error
-        opuesto — tratar "es genérico" como sinónimo de "no importa el diseño" — es igual de común y es
-        justo lo que este repositorio evita: el genérico también tiene una invariante (canal único por
-        trigger) y por eso sí tiene un agregado de verdad protegiéndola.
+        un simple catálogo CRUD de zonas horarias soportadas no necesita agregados ni value objects. Pero
+        el error opuesto — tratar "es genérico" como sinónimo de "no importa el diseño" — es igual de
+        común, y es justo lo que este repositorio evita: el subdominio genérico también tiene una
+        invariante (canal único por trigger), y por eso sí tiene un agregado de verdad protegiéndola.
     </p>
 </DddCallout>
 
 <h2 class="ddd-h2">Si NotificationLog fuera el productor, no el consumidor</h2>
 <p>
     Vale la pena notar la asimetría: el sistema que <strong>produce</strong> el hecho de negocio (el que
-    dice "el pedido #4471 se confirmó") sí vive, casi siempre, en el core domain de la empresa. Ese sistema
-    merece la inversión más fuerte en DDD táctico y en expertos de negocio dedicados. NotificationLog, como
+    decide "el pedido #4471 se confirmó") sí suele vivir en el core domain de la empresa, y merece la
+    inversión más fuerte en DDD táctico y en expertos de negocio dedicados. NotificationLog, como
     consumidor genérico río abajo, es deliberadamente más ligero en decisiones de negocio propias — su
-    complejidad está en la integración y en la configuración declarativa, no en modelar "qué es un pedido".
+    complejidad está en la integración y en la configuración declarativa (qué trigger, qué canal, qué
+    plantilla), no en modelar "qué es un pedido".
 </p>
 
-<DddCallout Kind="ejercicio" Title="Ejercicio (temario 1.3)">
+<p>
+    Y hay una tercera lectura, la que cierra el argumento metodológico de arriba: si la empresa dueña de
+    este código no consumiera notificaciones sino que <strong>vendiera</strong> este mismo servicio como
+    producto — un competidor de un proveedor de mensajería transaccional —, entonces
+    <code>NotificationTrigger</code>, <code>NotificationTemplate</code> y compañía dejarían de ser
+    genéricos y pasarían a ser, exactamente, su core domain: ahí es donde esa empresa competiría. El código
+    no cambiaría una línea; lo que cambia es la estrategia de quien lo posee. Por eso la clasificación nunca
+    se decide mirando el código o la capacidad en abstracto — se decide mirando el negocio que lo rodea.
+</p>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
     <p>
-        Dibuja los subdominios reales de tu producto (no de NotificationLog) en un círculo como el de
-        arriba. Para cada uno, responde: si dejara de existir mañana, ¿el negocio pierde su ventaja
-        competitiva (core), sigue operando pero peor (soporte), o simplemente lo reemplazas por un SaaS en
-        una tarde (genérico)? La lista de "dónde invertir DDD táctico completo" sale directo de esa
-        clasificación.
+        Dibuja los subdominios reales de tu propio producto en un círculo como el de arriba. Para cada uno,
+        responde: si dejara de existir mañana, ¿el negocio pierde su ventaja competitiva (core), sigue
+        operando pero peor (soporte), o simplemente lo reemplazas por un SaaS en una tarde (genérico)? La
+        lista de "dónde invertir DDD táctico completo" sale directo de esa clasificación.
     </p>
 </DddCallout>
 
 <DddPrevNext PrevHref="/ddd/lenguaje-ubicuo" PrevLabel="Lenguaje ubicuo" NextHref="/ddd/bounded-context" NextLabel="Bounded Context" />
+
+@code {
+    private const string BusinessEventSnippet = """
+public sealed record BusinessEvent(
+    Guid EventId,
+    string EventKey,
+    DateTime OccurredAt,
+    Guid RecipientId,
+    IReadOnlyDictionary<string, string> Data);
+
+// El servicio de notificaciones no modela "qué es un pedido" ni "qué es una póliza".
+// Solo conoce EventKey + un diccionario de datos libres para la plantilla.
+""";
+}

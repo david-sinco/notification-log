@@ -9,8 +9,10 @@
         Esta guía recorre las cuatro capas del proyecto — <code>Domain</code>, <code>Application</code>,
         <code>Infrastructure</code> y la pareja <code>API</code>/<code>Web</code> — y explica, con archivos
         reales de este repositorio, qué vive en cada una, por qué está separada así y qué decisión concreta
-        hay detrás de cada pieza. Donde una decisión documentada (por ejemplo en <code>CLAUDE.md</code>) no
-        coincide exactamente con lo que el código hace hoy, te lo digo explícitamente en vez de maquillarlo.
+        hay detrás de cada pieza. Nada de lo que leas aquí depende de confiar en esta guía: cada afirmación
+        señala un archivo que puedes abrir tú mismo, y donde una pieza todavía está a medio construir —un
+        canal sin proveedor real, un productor de eventos que todavía no existe— te lo digo explícitamente
+        en vez de maquillarlo.
     </p>
 </div>
 
@@ -22,7 +24,7 @@
     <code>Infrastructure</code> conoce a los dos anteriores e implementa sus interfaces. <code>API</code> y
     <code>Web</code> son los bordes que hablan con el mundo exterior — HTTP, un navegador — y traducen hacia
     y desde ese núcleo. Es exactamente la misma regla que ya viste aplicada al modelo de dominio en
-    <a href="/ddd/arquitectura">la página 11 de la guía de DDD</a>; aquí la recorremos capa por capa, con más
+    <a href="/ddd/arquitectura">el módulo 11 del tutorial de DDD</a>; aquí la recorremos capa por capa, con más
     detalle de infraestructura real: Entity Framework, RabbitMQ, Aspire.
 </p>
 
@@ -78,8 +80,8 @@
     <a class="ddd-card" href="/arquitectura/aplicacion">
         <span class="ddd-card-num">02</span>
         <h3>Aplicación</h3>
-        <p>Comandos y queries organizados por feature, los puertos que define (<code>IUnitOfWork</code>,
-        remitentes por canal) y la pieza que todavía está a medio conectar.</p>
+        <p>Comandos y queries organizados por feature, los puertos que define y cuál de esas piezas ya
+        está enchufada de punta a punta y cuál todavía espera un productor real.</p>
     </a>
     <a class="ddd-card" href="/arquitectura/infraestructura">
         <span class="ddd-card-num">03</span>
@@ -96,17 +98,18 @@
     <a class="ddd-card" href="/arquitectura/decisiones">
         <span class="ddd-card-num">05</span>
         <h3>Decisiones</h3>
-        <p>Lo que <code>CLAUDE.md</code> documenta, lo que el código realmente hace hoy, y dónde hay una
-        distancia honesta entre ambos.</p>
+        <p>Seis decisiones de arquitectura reales, verificadas archivo por archivo — con las piezas que
+        todavía están a medio camino marcadas sin adornos.</p>
     </a>
 </div>
 
 <DddCallout Kind="honesto" Title="Esta guía complementa, no repite, la de DDD">
     <p>
-        La <a href="/ddd">guía de DDD</a> ya cubre en detalle el modelado táctico (agregados, value objects,
-        invariantes) y tiene su propia página de arquitectura centrada en Clean Architecture y CQRS. Esta
-        guía profundiza en la infraestructura real que sostiene esas capas — Entity Framework, RabbitMQ,
-        Aspire — y en las decisiones de <em>plomería</em> que no entran en una guía de modelado de dominio.
+        El <a href="/ddd">tutorial de DDD</a> ya cubre en detalle el modelado táctico (agregados, value
+        objects, invariantes) y tiene su propio módulo de arquitectura centrado en Clean Architecture y
+        CQRS. Esta guía profundiza en la infraestructura real que sostiene esas capas — Entity Framework,
+        RabbitMQ, Aspire — y en las decisiones de <em>plomería</em> que no entran en una guía de modelado
+        de dominio.
     </p>
 </DddCallout>
 

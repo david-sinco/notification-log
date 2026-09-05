@@ -67,24 +67,44 @@
         tener que fabricar bytes Protobuf), el código registra un segundo serializador JSON con
         <code>AddSerializer</code>. Wolverine elige entre ambos leyendo la cabecera AMQP
         <code>content_type</code> del mensaje: sin esa cabecera, cae en Protobuf (el default); con
-        <code>application/json</code>, usa el otro. Es una decisión de ergonomía de desarrollo documentada en
-        el propio comentario del código, no un hallazgo mío.
+        <code>application/json</code>, usa el otro. Es una decisión de ergonomía de desarrollo, visible
+        entera en el comentario del propio archivo.
     </p>
 </DddCallout>
 
-<h3 class="ddd-h3">RabbitMQ hoy, Kafka como destino declarado</h3>
+<h3 class="ddd-h3">Dos colas hoy: sincronización de contactos y despacho de notificaciones</h3>
 <p>
-    Vale la pena leer literalmente lo que dice <code>Infrastructure/DependencyInjection.cs</code>, porque es
-    la fuente más honesta de esta decisión:
+    <code>RabbitMqMessagingExtensions</code> conecta dos colas a sus respectivos handlers:
+    <code>user-changes</code> (mensajes <code>UserContactUpdated</code>, que alimentan a
+    <code>RecipientSyncService</code>) y <code>notification-dispatch</code> (mensajes
+    <code>NotificationDispatchRequested</code>, que alimentan a
+    <code>NotificationDispatchService</code> a través de <code>NotificationDispatchHandler</code>). La
+    segunda cola está completamente cableada — consumer, mapeo a tipo propio y servicio de aplicación — pero
+    hoy nadie más que la UI de administración de RabbitMQ publica en ella a mano; ver el detalle de ese
+    vacío en la <a href="/arquitectura/aplicacion">página de Aplicación</a>.
+</p>
+
+<h3 class="ddd-h3">RabbitMQ hoy, Kafka como destino declarado en el propio código</h3>
+<p>
+    Vale la pena leer literalmente el comentario que deja el equipo justo encima del registro de
+    mensajería, porque es la fuente más honesta de esta decisión:
 </p>
 <CodeBlock Title="Infrastructure/DependencyInjection.cs (extracto, comentario original)" Code="@DiCommentSnippet" />
 <p>
     En otras palabras: RabbitMQ es el bus de mensajería <strong>real y funcionando hoy</strong> — no un
-    mock — pero su rol es servir de ejemplo de integración mientras Kafka (el bus que
-    <code>CLAUDE.md</code> documenta como decisión de producto: Kafka + Schema Registry) se conecta de
-    verdad. Ver el detalle completo de esta distancia en la
-    <a href="/arquitectura/decisiones">página de decisiones</a>.
+    mock — pero el propio código dice que su rol es servir de ejemplo de integración mientras se conecta un
+    bus definitivo (Kafka, según ese comentario). Es un cambio de bus de mensajería consciente y ya
+    documentado donde vive: en el código, no en un documento aparte.
 </p>
+<DddCallout Kind="concepto" Title="Por qué ese cambio, si llega, no obligaría a tocar Application ni Domain">
+    <p>
+        Es la prueba práctica de que los puertos funcionan: <code>RecipientSyncService</code> (Application)
+        no sabe si el mensaje vino de Kafka o RabbitMQ — solo recibe un <code>UserChange</code> ya traducido.
+        El día que se agregue un consumer de Kafka, el cambio entero quedaría contenido en un nuevo
+        <code>Messaging/Kafka/</code> dentro de <code>Infrastructure</code>, sin tocar una sola línea de
+        <code>Application</code> o <code>Domain</code>.
+    </p>
+</DddCallout>
 
 <h3 class="ddd-h3">Migraciones: la fuente de verdad del esquema</h3>
 <p>
@@ -156,6 +176,9 @@ services.AddWolverine(opts =>
 
     opts.ListenToRabbitQueue("user-changes")
         .DefaultIncomingMessage<UserContactUpdated>();
+
+    opts.ListenToRabbitQueue("notification-dispatch")
+        .DefaultIncomingMessage<NotificationDispatchRequested>();
 });
 """;
 

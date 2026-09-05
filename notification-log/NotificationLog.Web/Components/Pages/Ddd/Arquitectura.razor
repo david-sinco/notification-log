@@ -11,6 +11,14 @@
 
 <DddNav />
 
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Verificar la regla de dependencia leyendo un <code>.csproj</code>, no confiando en un diagrama.</li>
+        <li>Seguir un mensaje de mensajería desde su entrada hasta el dominio, capa por capa.</li>
+        <li>Entender por qué este proyecto separa comandos de consultas sin usar un mediador.</li>
+    </ul>
+</DddCallout>
+
 <DddCallout Kind="concepto" Title="Concepto: dos nombres para la misma familia">
     <p>
         El dominio ocupa el centro y no depende de nada. Todo lo externo (HTTP, base de datos, colas)
@@ -32,19 +40,19 @@
     </p>
 </DddCallout>
 
-<h2 class="ddd-h2">Cuatro capas, documentadas por el propio equipo</h2>
+<h2 class="ddd-h2">Cuatro capas, verificables en segundos</h2>
 <p>
-    No hace falta inferir la arquitectura de este proyecto — está escrita explícitamente en su
-    <code>CLAUDE.md</code>: <em>"Cuatro capas con dependencias hacia adentro: Domain ← Application ←
-    Infrastructure ← API. El dominio no tiene ni un <code>PackageReference</code>."</em> Esa última frase
-    se puede verificar en segundos:
+    No hace falta confiar en un diagrama para saber si un proyecto realmente respeta la regla de
+    dependencia: se abre el <code>.csproj</code> del dominio y se cuentan sus referencias.
 </p>
 
 <CodeBlock Title="NotificationLog.NotificationService.Domain.csproj (completo)" Code="@CsprojSnippet" />
 
 <p>
     Sin Entity Framework, sin FluentValidation, sin ASP.NET, sin Protobuf. Solo el SDK base de .NET. Esa
-    es la regla de dependencia hecha archivo de proyecto, no solo convención de carpetas.
+    es la regla de dependencia hecha archivo de proyecto, no solo convención de carpetas: el propio
+    compilador impediría que <code>Domain</code> referenciara <code>Infrastructure</code> aunque alguien
+    lo intentara por error.
 </p>
 
 <div class="ddd-diagram">
@@ -62,7 +70,7 @@
         <circle cx="390" cy="165" r="38" fill="#eef2ff" stroke="#c7d2fe" />
 
         <text x="390" y="30" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">API (Endpoints Minimal API)</text>
-        <text x="390" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Infrastructure (EF Core, Kafka, DI)</text>
+        <text x="390" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Infrastructure (EF Core, mensajería, DI)</text>
         <text x="390" y="106" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Application (Commands/Queries)</text>
         <text x="390" y="163" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Domain</text>
         <text x="390" y="177" text-anchor="middle" font-size="8.5" fill="#4338ca">0 PackageReference</text>
@@ -77,14 +85,14 @@
     </p>
 </div>
 
-<h2 class="ddd-h2">Kafka no existe en el dominio</h2>
+<h2 class="ddd-h2">La mensajería no existe en el dominio</h2>
 <p>
-    La prueba más contundente de la regla de dependencia está en cómo entra un mensaje de Kafka al
-    sistema. No hay ningún <code>using Kafka</code> ni ningún tipo Protobuf dentro de
-    <code>Domain</code>. El consumer vive en <code>Infrastructure</code>, traduce el mensaje a un comando
-    de <code>Application</code>, y <strong>solo entonces</strong> se llama al dominio — con tipos propios
-    (<code>UserChange</code>), no con el mensaje crudo. Ya viste el detalle completo en la
-    <a href="/ddd/context-map">página de Context Map</a>; aquí es la misma historia contada desde el
+    La prueba más contundente de la regla de dependencia está en cómo entra un mensaje del bus de
+    mensajería al sistema. No hay ningún tipo Protobuf ni ninguna referencia al cliente de mensajería
+    dentro de <code>Domain</code>. El consumer vive en <code>Infrastructure</code>, traduce el mensaje a
+    un comando de <code>Application</code>, y <strong>solo entonces</strong> se llama al dominio — con
+    tipos propios (<code>UserChange</code>), no con el mensaje crudo. Ya viste el detalle completo en el
+    <a href="/ddd/context-map">módulo de Context Map</a>; aquí es la misma historia contada desde el
     ángulo de la arquitectura, no de la integración.
 </p>
 
@@ -98,7 +106,7 @@
 
 <CodeBlock Title="ApiService/Exceptions/GlobalExceptionHandler.cs (extracto)" Code="@ExceptionHandlerSnippet" />
 
-<h2 class="ddd-h2">CQRS: comandos y consultas, sin MediatR</h2>
+<h2 class="ddd-h2">CQRS: comandos y consultas, sin mediador</h2>
 <DddCallout Kind="concepto" Title="Concepto: CQRS">
     <p>
         Separar el modelo de escritura (agregados, invariantes) del modelo de lectura (proyecciones
@@ -109,11 +117,8 @@
 
 <p>
     Cada operación de <code>Triggers</code> vive en su propia carpeta con su propio comando y su propio
-    handler — no hay una clase <code>TriggerService</code> con quince métodos. Y, otra decisión documentada
-    explícitamente en <code>CLAUDE.md</code>: <em>"Sin MediatR. Handlers como clases normales inyectadas
-    directo en los endpoints. Se descartó por la licencia comercial y porque el beneficio real (los
-    behaviors) no compensaba con quince casos de uso."</em> — un ejemplo honesto de "cuándo NO añadir una
-    librería" aunque sea la opción popular.
+    handler — no hay una clase <code>TriggerService</code> con quince métodos. Tampoco hay un mediador de
+    por medio: cada endpoint inyecta directamente el handler que necesita.
 </p>
 
 <CodeBlock Title="Endpoints/TriggerEndpoints.cs (comando inyectado directo)" Code="@EndpointSnippet" />
@@ -171,7 +176,16 @@
 
 <CodeBlock Title="Application/Triggers/Commands/CreateTrigger/CreateTriggerHandler.cs" Code="@HandlerSnippet" />
 
-<DddPrevNext PrevHref="/ddd/domain-events" PrevLabel="Domain Events" NextHref="/ddd/cierre" NextLabel="Cierre" />
+<DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
+    <p>
+        Cuenta las líneas de <code>CreateTriggerHandler.HandleAsync</code> sin contar llaves ni líneas en
+        blanco. Después haz lo mismo con el método más largo de tu propia capa de aplicación. Si el tuyo
+        supera ampliamente esa cifra, casi seguro hay una regla de negocio escondida ahí que debería vivir
+        dentro de un agregado.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/domain-events" PrevLabel="Domain Events" NextHref="/ddd/tareas" NextLabel="Tareas guiadas" />
 
 @code {
     private const string CsprojSnippet = """

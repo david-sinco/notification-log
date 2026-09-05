@@ -1,16 +1,16 @@
 @page "/proyecto"
 
-<PageTitle>Qué hace NotificationLog · NotificationLog</PageTitle>
+<PageTitle>Cómo funciona · NotificationLog</PageTitle>
 
 <div class="ddd-hero">
     <div class="eyebrow">NotificationLog explicado sin código</div>
-    <h1>Qué hace este proyecto, y por qué está armado así</h1>
+    <h1>Cómo funciona este proyecto, y por qué está armado así</h1>
     <p>
-        Esta guía explica el proyecto desde el ángulo funcional: qué problema resuelve, qué conceptos maneja
-        un administrador del sistema (no un desarrollador leyendo clases), y cómo se ve, de punta a punta,
-        que un hecho de negocio termine convertido en un email o un SMS. Si buscas el detalle técnico de
-        capas y decisiones de código, esa es <a href="/arquitectura">la guía de arquitectura</a>; si buscas
-        el modelado de dominio, <a href="/ddd">la guía de DDD</a>.
+        Esta guía explica NotificationLog desde el ángulo funcional: qué problema resuelve, qué conceptos
+        maneja un administrador del sistema (no un desarrollador leyendo clases), y cómo se ve, de punta a
+        punta, que un hecho de negocio termine convertido en un email o un SMS. Si buscas el detalle técnico
+        de capas y decisiones de código, esa es <a href="/arquitectura">la guía de arquitectura</a>; si
+        buscas el modelado de dominio, <a href="/ddd">el tutorial de DDD</a>.
     </p>
 </div>
 
@@ -102,13 +102,16 @@
     </a>
 </div>
 
-<DddCallout Kind="honesto" Title="Un proyecto de aprendizaje, con partes deliberadamente incompletas">
+<DddCallout Kind="honesto" Title="Un proyecto de aprendizaje, con una pieza deliberadamente incompleta">
     <p>
         NotificationLog es, ante todo, un ejercicio para practicar DDD y arquitectura limpia con un caso
-        real y acotado. Eso significa que algunas piezas —los remitentes reales de email/SMS/push, el
-        consumer de eventos de negocio genéricos— están declaradas como contrato pero no implementadas
-        todavía. Esta guía las señala cada vez que aparecen, en vez de dar a entender que el sistema envía
-        notificaciones de verdad hoy.
+        real y acotado. Los remitentes de email, SMS y push ya están construidos y funcionan de verdad
+        contra un entorno de pruebas local; el canal de WhatsApp es, a propósito, un stub que siempre
+        falla, porque no hay proveedor elegido todavía. Y aunque toda la lógica de despacho de
+        notificaciones existe y está conectada a una cola de mensajería, ningún sistema de negocio publica
+        hoy un evento real en ella — hay que simularlo a mano. Esta guía señala esa pieza exacta cada vez
+        que aparece, en vez de dar a entender que el sistema envía notificaciones de punta a punta sin
+        intervención hoy.
     </p>
 </DddCallout>
 

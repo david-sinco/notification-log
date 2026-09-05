@@ -1,11 +1,11 @@
 @page "/proyecto/flujo-notificacion"
 
-<PageTitle>Se envía una notificación · Qué hace · NotificationLog</PageTitle>
+<PageTitle>Se envía una notificación · Cómo funciona · NotificationLog</PageTitle>
 
 <div class="page-header">
     <div>
-        <h1>3 · Cómo se envía una notificación (y qué falta para que suceda de verdad)</h1>
-        <p>El recorrido completo, diseñado y codificado — con la pieza que todavía no está enchufada marcada con claridad.</p>
+        <h1>3 · Cómo se envía una notificación (y qué falta para que ocurra sola)</h1>
+        <p>El recorrido completo, diseñado y codificado — con la pieza que todavía no está conectada marcada con claridad.</p>
     </div>
 </div>
 
@@ -14,8 +14,9 @@
 <p>
     Este es el flujo que le da sentido a todo lo demás: un hecho de negocio ocurre en algún sistema, y
     NotificationLog decide si eso se convierte en un mensaje real para alguien. La lógica completa está
-    escrita en <code>NotificationDispatchService</code>. Lo que falta no es lógica — son los adaptadores
-    finales que conectan esa lógica con un proveedor de email/SMS real.
+    escrita en <code>NotificationDispatchService</code>, y todas sus piezas —renderizado, envío, registro—
+    ya están conectadas entre sí. Lo que falta no es lógica ni cableado: es que algún sistema de negocio
+    empiece a avisar de verdad.
 </p>
 
 <h2 class="ddd-h2">Los siete pasos</h2>
@@ -84,15 +85,14 @@
 
         <rect x="465" y="70" width="110" height="60" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
         <text x="520" y="95" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">Render</text>
-        <text x="520" y="112" text-anchor="middle" font-size="7.5" fill="#64748b">ITemplateRenderer</text>
+        <text x="520" y="112" text-anchor="middle" font-size="7.5" fill="#64748b">Scriban</text>
 
         <line x1="575" y1="100" x2="615" y2="100" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#dispatchArrow)" />
 
         <rect x="615" y="30" width="190" height="60" rx="8" fill="#fff7ed" stroke="#fed7aa" stroke-dasharray="4,3" />
         <text x="710" y="53" text-anchor="middle" font-size="9" font-weight="700" fill="#9a3412">I*NotificationSender</text>
-        <text x="710" y="70" text-anchor="middle" font-size="7.5" fill="#9a3412">Email/SMS/Push listos, WhatsApp no</text>
+        <text x="710" y="70" text-anchor="middle" font-size="7.5" fill="#9a3412">Email/SMS/Push listos, WhatsApp falla a propósito</text>
 
-        <line x1="615" y1="140" x2="805" y2="140" stroke="#bbf7d0" stroke-width="0" />
         <rect x="615" y="110" width="190" height="60" rx="8" fill="#f8fafc" stroke="#e5e9f2" />
         <text x="710" y="133" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">Notification</text>
         <text x="710" y="150" text-anchor="middle" font-size="7.5" fill="#64748b">Sent / Failed, siempre se registra</text>
@@ -108,24 +108,27 @@
 
 <h2 class="ddd-h2">Qué está construido y qué no, con precisión</h2>
 
-<DddCallout Kind="honesto" Title="La orquesta está escrita; falta el renderer y el instrumento de WhatsApp">
+<DddCallout Kind="honesto" Title="Toda la orquesta está escrita y conectada. Lo que falta es quien la dirija de verdad">
     <p>
-        Toda la lógica de los siete pasos existe y está probada por lectura de código en
-        <code>NotificationDispatchService</code>. <code>IEmailNotificationSender</code>,
-        <code>ISmsNotificationSender</code> e <code>IPushNotificationSender</code> ya tienen implementación
-        en <code>Infrastructure/Notifications/Sending</code>. Lo que sigue faltando es
-        <code>ITemplateRenderer</code> (cómo se combina la plantilla con los datos — hoy no hay ningún motor
-        de plantillas conectado) e <code>IWhatsAppNotificationSender</code>. Sin el renderer, el servicio ni
-        siquiera está registrado en el contenedor de dependencias — <code>Application/DependencyInjection.cs</code>
-        lo deja comentado a propósito, con la línea exacta lista para descomentar el día que exista.
+        Los siete pasos existen tal cual en <code>NotificationDispatchService</code>, y ya están registrados
+        y cableados: <code>IEmailNotificationSender</code>, <code>ISmsNotificationSender</code> e
+        <code>IPushNotificationSender</code> tienen implementación real contra un entorno de pruebas local,
+        y el renderizador de plantillas también —<strong>Scriban</strong> combina la plantilla con los datos
+        del destinatario y del evento sin que nadie tenga que conectarlo a mano. Solo
+        <code>IWhatsAppNotificationSender</code> es, a propósito, un remitente que siempre falla: no hay
+        proveedor de WhatsApp elegido todavía, y un envío "silencioso" sería peor que uno que queda
+        registrado como fallido con el motivo exacto.
     </p>
 </DddCallout>
 
 <p>
-    Tampoco existe hoy quién llame a <code>DispatchAsync</code> — no hay un consumer de RabbitMQ ni de
-    Kafka escuchando eventos de negocio genéricos como <code>pedido.confirmado</code>. El único consumer que
-    corre es el de sincronización de destinatarios (ver
-    <a href="/proyecto/flujo-recipients">página anterior</a>), que alimenta datos pero no dispara envíos.
+    Hay un consumer de mensajería escuchando la cola donde llegaría este tipo de evento
+    (<code>notification-dispatch</code>), listo para invocar <code>NotificationDispatchService</code> en
+    cuanto llegue algo. Lo que no existe todavía es quién publique ahí: ningún sistema de negocio real (uno
+    de pedidos, de pólizas, de lo que sea) está conectado a esa cola. Hoy, la única forma de disparar este
+    flujo completo es publicar un mensaje de prueba a mano desde la UI de administración de RabbitMQ — el
+    mismo mecanismo que ya usa el flujo de destinatarios (ver <a href="/proyecto/flujo-recipients">página
+    anterior</a>), solo que ahí sí hay un productor real (el sistema de usuarios) del otro lado.
 </p>
 
 <p>

@@ -4,180 +4,179 @@
 
 <div class="page-header">
     <div>
-        <h1>5 · Decisiones de arquitectura, documentadas y verificadas</h1>
-        <p>Lo que el equipo decidió, contrastado con lo que el código hace hoy — sin maquillar la distancia.</p>
+        <h1>5 · Decisiones de arquitectura, verificadas archivo por archivo</h1>
+        <p>Seis decisiones reales de este proyecto, cada una con el archivo que la prueba — y las piezas que todavía están a medio camino, marcadas sin adornos.</p>
     </div>
 </div>
 
 <ArqNav />
 
 <p>
-    <code>CLAUDE.md</code>, en la raíz del repositorio, documenta las decisiones de producto y arquitectura
-    tomadas para NotificationLog. Esta página toma cada una, la contrasta con el código real y marca
-    honestamente dónde coinciden y dónde el código todavía no ha llegado a la decisión documentada — el
-    mismo criterio de honestidad que ya sigue <a href="/ddd">la guía de DDD</a>.
+    Esta página no resume una conversación de diseño que tuvo el equipo — resume lo que el código dice hoy,
+    con el mismo criterio de honestidad que ya sigue <a href="/ddd">el tutorial de DDD</a>: si algo todavía
+    no está construido, se marca como tal en vez de darlo por hecho.
 </p>
 
-<h2 class="ddd-h2">Contrato de eventos: topic dedicado, no los logs de otros servicios</h2>
-<DddCallout Kind="concepto" Title="La decisión documentada">
-    <p>
-        Se descartó consumir los logs de event sourcing de otros servicios (demasiado acoplamiento a
-        agregados ajenos) a favor de un topic dedicado. El productor manda un envelope mínimo:
-        <code>evento_id</code>, <code>evento</code>, <code>ocurrido_en</code>, <code>destinatario</code>,
-        <code>datos</code> libre.
-    </p>
-</DddCallout>
+<h2 class="ddd-h2">1 · Mensajería: Wolverine + RabbitMQ hoy, con una migración prevista en el propio código</h2>
 <p>
-    El único contrato real que existe hoy —<code>UserContactUpdated</code>— sigue ese espíritu pero no ese
-    envelope exacto: es un snapshot completo de contacto, no un evento de negocio genérico con
-    <code>datos</code> libre. La forma <code>evento_id</code>/<code>evento</code>/<code>ocurrido_en</code>/
-    <code>destinatario</code>/<code>datos</code> sí aparece, en cambio, en <code>BusinessEvent</code> — el
-    tipo que <code>NotificationDispatchService</code> espera recibir de un futuro consumer de eventos de
-    negocio (ver <a href="/arquitectura/aplicacion">página de Aplicación</a>):
+    El bus de mensajería real y funcionando en este proyecto es RabbitMQ, orquestado por Wolverine — no un
+    mock, no un simulador. Pero el propio comentario que acompaña su registro en
+    <code>Infrastructure/DependencyInjection.cs</code> deja escrita la intención de reemplazarlo:
 </p>
-<CodeBlock Title="Application/Notifications/Services/Dispatch/BusinessEvent.cs (completo)" Code="@BusinessEventSnippet" />
-<DddCallout Kind="honesto" Title="El envelope genérico está definido, pero nadie lo publica todavía">
-    <p>
-        <code>BusinessEvent</code> es exactamente el envelope que describe <code>CLAUDE.md</code>. Pero hoy
-        no hay ningún productor real publicando eventos de negocio genéricos (<code>transaccion.realizada</code>,
-        etc.) hacia RabbitMQ ni Kafka — el único flujo de mensajería con extremo a extremo funcionando es la
-        sincronización de destinatarios (<code>UserContactUpdated</code>), que es un mensaje de estado, no un
-        hecho de negocio con <code>EventKey</code>. El "productor manda un evento, el consumidor decide
-        canal y plantilla" es el diseño objetivo; hoy solo existe la mitad de consumo (triggers, plantillas,
-        el propio <code>NotificationDispatchService</code>), sin nadie todavía empujando eventos reales por
-        ese camino.
-    </p>
-</DddCallout>
-
-<h2 class="ddd-h2">El key nombra un hecho, no una plantilla — y la tabla de alias</h2>
-<DddCallout Kind="concepto" Title="La decisión documentada">
-    <p>
-        <code>transaccion.realizada</code>, no <code>email_transaccion_v2</code>. Si un key cambia, una
-        tabla de alias lo traduce en la ingesta y ningún productor se redespliega.
-    </p>
-</DddCallout>
+<CodeBlock Title="Infrastructure/DependencyInjection.cs (comentario original)" Code="@DiCommentSnippet" />
 <p>
-    La primera mitad está construida y verificable: el formato <code>dominio.accion</code> lo impone
-    <code>EventKey.Create</code> con una expresión regular (ver
-    <a href="/arquitectura/dominio">página de Dominio</a>), así que ningún trigger puede llamarse
-    <code>email_transaccion_v2</code> aunque quisiera.
+    Es un dato interesante precisamente porque no depende de que confíes en esta guía: puedes abrir ese
+    archivo tú mismo y leer la misma frase. Verás el resto de la implementación en la
+    <a href="/arquitectura/infraestructura">página de Infraestructura</a>.
 </p>
-<DddCallout Kind="honesto" Title="La tabla de alias no existe todavía">
-    <p>
-        No hay ninguna tabla, entidad ni configuración de alias en el modelo actual —
-        <code>NotificationDbContext</code> tiene cuatro <code>DbSet</code>: Triggers, Templates, Recipients,
-        Notifications. Nada más. Si hoy un evento cambiara de nombre en el productor, habría que crear un
-        nuevo <code>NotificationTrigger</code> a mano; la traducción automática en la ingesta sigue siendo
-        una decisión de diseño, no una función implementada.
-    </p>
-</DddCallout>
 
-<h2 class="ddd-h2">Protobuf + Schema Registry</h2>
-<DddCallout Kind="concepto" Title="La decisión documentada">
-    <p>
-        El número de campo es la identidad, no el nombre. Contratos en un NuGet compartido con una sola
-        dependencia (<code>Google.Protobuf</code>), nunca <code>Confluent.Kafka</code>.
-    </p>
-</DddCallout>
+<h2 class="ddd-h2">2 · Contratos: Protobuf compartido, sin acoplar a un cliente de mensajería</h2>
 <p>
-    Esto sí está construido tal cual se documentó. <code>NotificationLog.Contracts.csproj</code> solo
-    referencia <code>Google.Protobuf</code> y <code>Grpc.Tools</code> (para compilar el <code>.proto</code>
-    en build-time) — nada de <code>Confluent.Kafka</code>, nada de un cliente de mensajería concreto:
+    <code>NotificationLog.Contracts</code> —el proyecto que define los mensajes que cruzan entre
+    servicios— solo referencia <code>Google.Protobuf</code> y <code>Grpc.Tools</code> (para compilar el
+    <code>.proto</code> en tiempo de build). Nada de <code>Confluent.Kafka</code>, nada de un cliente de
+    RabbitMQ: el contrato del mensaje es independiente de por dónde viaja.
 </p>
 <CodeBlock Title="Shared/NotificationLog.Contracts.csproj (completo)" Code="@ContractsCsprojSnippet" />
-<DddCallout Kind="honesto" Title="Sin Schema Registry todavía">
-    <p>
-        No hay ningún Schema Registry (Confluent o de otro tipo) desplegado ni referenciado en
-        <code>AppHost.cs</code>. La compatibilidad de esquema hoy depende enteramente de la disciplina de
-        <code>schema_version</code> dentro del propio mensaje Protobuf (ver
-        <a href="/ddd/context-map">página de Context Map</a> de la guía de DDD) y de que productor y
-        consumidor compilen contra el mismo paquete NuGet compartido — no de un registro centralizado que
-        valide compatibilidad en el broker.
-    </p>
-</DddCallout>
-
-<h2 class="ddd-h2">Kafka era el plan; RabbitMQ es lo que corre hoy</h2>
 <p>
-    Esta es la distancia más visible entre documento y código. <code>CLAUDE.md</code> describe un "servicio
-    que consume eventos de Kafka". El <code>AppHost</code> real levanta RabbitMQ (con su plugin de
-    administración), y <code>Infrastructure</code> usa <strong>Wolverine + RabbitMQ</strong>, no un cliente
-    Kafka. El propio código dice por qué, en el comentario que ya viste en
-    <a href="/arquitectura/infraestructura">Infraestructura</a>: RabbitMQ es el ejemplo funcionando mientras
-    Kafka llega. Es un cambio de bus de mensajería consciente y documentado en el código, aunque no se haya
-    actualizado <code>CLAUDE.md</code> todavía.
-</p>
-<DddCallout Kind="concepto" Title="Por qué este cambio no obligó a tocar Application ni Domain">
-    <p>
-        Es la prueba práctica de que los puertos funcionan: <code>RecipientSyncService</code> (Application)
-        no sabe si el mensaje vino de Kafka o RabbitMQ — solo recibe un <code>UserChange</code> ya traducido.
-        El día que se agregue un consumer de Kafka, el cambio entero queda contenido en un nuevo
-        <code>Messaging/Kafka/</code> dentro de <code>Infrastructure</code>, sin tocar una sola línea de
-        <code>Application</code> o <code>Domain</code>.
-    </p>
-</DddCallout>
-
-<h2 class="ddd-h2">Modelo de datos: cuatro tablas, no once</h2>
-<DddCallout Kind="concepto" Title="La decisión documentada">
-    <p>
-        Se descartó un modelo de once tablas por sobredimensionado. El modelo real son cuatro tablas más la
-        de configuración que ya se planeaba.
-    </p>
-</DddCallout>
-<p>
-    Coincide con el código: <code>NotificationDbContext</code> expone exactamente cuatro
-    <code>DbSet</code> — <code>Triggers</code> (que incluye <code>NotificationConfiguration</code> como
-    tabla hija, no como <code>DbSet</code> propio), <code>Templates</code> (con <code>TemplateVersion</code>
-    igual de anidada), <code>Recipients</code> y <code>Notifications</code>. Ninguna tabla adicional de
-    catálogos, logs o auditoría por separado.
+    Esa independencia es lo que hace posible el punto anterior: cambiar de bus de mensajería no obligaría a
+    tocar un solo <code>.proto</code>.
 </p>
 
-<h2 class="ddd-h2">Event-driven, no event sourced</h2>
-<DddCallout Kind="concepto" Title="La aclaración documentada">
+<h2 class="ddd-h2">3 · El event key nombra un hecho — y ese formato se aplica en tiempo de creación</h2>
+<p>
+    <code>EventKey.Create</code> impone el formato <code>dominio.accion</code> con una expresión regular
+    (ver <a href="/arquitectura/dominio">página de Dominio</a>), así que ningún trigger puede llamarse
+    <code>email_transaccion_v2</code> aunque quisiera — el propio value object lo rechaza antes de que
+    exista.
+</p>
+<DddCallout Kind="honesto" Title="Lo que no existe todavía: renombrar un event key sin perder el historial">
     <p>
-        El sistema se comunica por eventos pero no es event sourced: guarda estado actual en tablas, no un
-        log de eventos como fuente de verdad. Son cosas distintas.
+        <code>NotificationDbContext</code> tiene cuatro <code>DbSet</code>: <code>Triggers</code>,
+        <code>Templates</code>, <code>Recipients</code>, <code>Notifications</code>. Nada más. Si un evento
+        cambiara de nombre en el sistema productor, hoy habría que crear un <code>NotificationTrigger</code>
+        nuevo a mano — no hay ninguna tabla ni mecanismo de alias que traduzca automáticamente un
+        <code>EventKey</code> viejo a uno nuevo en la ingesta. Es una extensión razonable, simplemente
+        todavía no construida.
     </p>
 </DddCallout>
+
+<h2 class="ddd-h2">4 · Sin Schema Registry: la compatibilidad depende del NuGet compartido</h2>
 <p>
-    Se confirma en el propio modelo: <code>Notification</code> es el registro más cercano a un "evento" que
-    existe, pero es un <strong>resultado</strong> inmutable de un envío (éxito o fallo), no la fuente de
-    verdad de la que se reconstruye el estado de un trigger o un destinatario. <code>NotificationTrigger</code>,
+    No hay ningún Schema Registry (Confluent o de otro tipo) desplegado ni referenciado en
+    <code>AppHost.cs</code>. La compatibilidad de esquema hoy depende de dos cosas: que productor y
+    consumidor compilen contra el mismo paquete <code>NotificationLog.Contracts</code>, y de la disciplina
+    del campo <code>schema_version</code> dentro de cada mensaje Protobuf (ver
+    <a href="/ddd/context-map">módulo de Context Map</a> del tutorial de DDD).
+</p>
+<DddCallout Kind="honesto" Title="El campo existe; nada lo valida todavía">
+    <p>
+        <code>schema_version</code> está definido en ambos <code>.proto</code>, pero ningún handler de
+        <code>Infrastructure/Messaging/Consumers</code> lo lee hoy. Un mensaje con una versión de esquema
+        más nueva de la que este servicio entiende se procesaría igual, sin ningún aviso. Endurecer esa
+        validación es exactamente la <a href="/ddd/tareas">tarea 8 del tutorial de DDD</a>.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">5 · Modelo de datos: cuatro tablas raíz, jerarquías anidadas en vez de tablas sueltas</h2>
+<p>
+    <code>NotificationDbContext</code> expone exactamente cuatro <code>DbSet</code> —
+    <code>Triggers</code> (que incluye <code>NotificationConfiguration</code> como tabla hija, no como
+    <code>DbSet</code> propio), <code>Templates</code> (con <code>TemplateVersion</code> igual de anidada),
+    <code>Recipients</code> y <code>Notifications</code>. Ninguna tabla adicional de catálogos, logs o
+    auditoría por separado: el propio <code>Notification</code> ya cumple el rol de auditoría de envíos.
+</p>
+
+<h2 class="ddd-h2">6 · Event-driven, no event sourced</h2>
+<p>
+    El sistema se comunica por eventos (mensajes que cruzan la mensajería), pero no es event sourced: guarda
+    estado actual en tablas, no un log de eventos como fuente de verdad. Se confirma en el propio modelo:
+    <code>Notification</code> es el registro más cercano a un "evento" que existe, pero es un
+    <strong>resultado</strong> inmutable de un envío (éxito o fallo), no la fuente de la que se reconstruye
+    el estado de un trigger o un destinatario. <code>NotificationTrigger</code>,
     <code>NotificationTemplate</code> y <code>Recipient</code> guardan su estado actual directamente en sus
     columnas, mutado por sus propios métodos — el patrón clásico de un dominio persistido por estado, no por
     eventos.
 </p>
 
-<h2 class="ddd-h2">Sin MediatR: handlers inyectados directo</h2>
+<h2 class="ddd-h2">7 · Sin mediador: handlers inyectados directo</h2>
 <p>
-    Ya la vimos en detalle en la <a href="/ddd/arquitectura">página 11 de la guía de DDD</a>: se descartó por
-    la licencia comercial y porque el beneficio real (los <em>behaviors</em>) no compensaba con quince casos
-    de uso. Se mantiene igual hoy — ni un <code>using MediatR</code> en todo el repositorio, y cada endpoint
-    recibe su handler como parámetro inyectado.
+    Ni un <code>using MediatR</code> en todo el repositorio. Cada endpoint recibe su handler como parámetro
+    inyectado (ver <a href="/ddd/arquitectura">módulo 11 del tutorial de DDD</a> para el razonamiento
+    completo: con quince casos de uso, el beneficio real de un mediador —los <em>behaviors</em>— no
+    compensaba el coste de la indirección adicional).
 </p>
+
+<h2 class="ddd-h2">El estado real del proyecto, en una sola tabla</h2>
+<p>Juntando las piezas honestas que aparecen a lo largo de esta guía y la de DDD:</p>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Pieza</th>
+                    <th>Estado</th>
+                    <th>Dónde verificarlo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Remitentes Email / SMS / Push</td>
+                    <td>Construido</td>
+                    <td><code>Infrastructure/Notifications/Sending/{Email,Sms,Push}</code></td>
+                </tr>
+                <tr>
+                    <td>Renderizador de plantillas (Scriban)</td>
+                    <td>Construido</td>
+                    <td><code>ScribanTemplateRenderer.cs</code>, registrado como singleton</td>
+                </tr>
+                <tr>
+                    <td>Remitente de WhatsApp</td>
+                    <td>Stub deliberado (siempre falla)</td>
+                    <td><code>NotImplementedWhatsAppNotificationSender.cs</code></td>
+                </tr>
+                <tr>
+                    <td>Consumer de despacho de notificaciones</td>
+                    <td>Construido, sin productor real</td>
+                    <td>cola <code>notification-dispatch</code> en <code>RabbitMqMessagingExtensions.cs</code></td>
+                </tr>
+                <tr>
+                    <td>Validación de <code>schema_version</code></td>
+                    <td>No construida</td>
+                    <td><a href="/ddd/tareas">tarea 8 del tutorial de DDD</a></td>
+                </tr>
+                <tr>
+                    <td>Eventos de dominio (<code>Raise</code>)</td>
+                    <td>Mecanismo listo, sin usar</td>
+                    <td><a href="/ddd/domain-events">módulo 10 del tutorial de DDD</a></td>
+                </tr>
+                <tr>
+                    <td>Tabla de alias de <code>EventKey</code></td>
+                    <td>No construida</td>
+                    <td>— (cuatro <code>DbSet</code> en <code>NotificationDbContext</code>, nada más)</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
 
 <DddCallout Kind="ejercicio" Title="Cómo verificar cualquier afirmación de esta página tú mismo">
     <p>
-        Cada decisión de esta página se puede confirmar o refutar en segundos: <code>grep -r "Kafka"</code>
-        en <code>*.cs</code> (un solo resultado, un comentario), abrir
-        <code>NotificationLog.Contracts.csproj</code>, o contar los <code>DbSet</code> de
-        <code>NotificationDbContext</code>. Ese es el mismo criterio que sigue toda esta guía: nada se
-        afirma sin un archivo real detrás.
+        Cada fila de esa tabla se puede confirmar o refutar en minutos: abrir el archivo señalado, o buscar
+        el nombre de la clase en todo el repositorio. Ese es el mismo criterio que sigue toda esta guía y la
+        de DDD: nada se afirma sin un archivo real detrás.
     </p>
 </DddCallout>
 
-<DddPrevNext PrevHref="/arquitectura/presentacion" PrevLabel="API + Web" NextHref="/proyecto" NextLabel="Qué hace el proyecto" />
+<DddPrevNext PrevHref="/arquitectura/presentacion" PrevLabel="API + Web" NextHref="/arquitectura" NextLabel="Volver al inicio de esta guía" />
 
 @code {
-    private const string BusinessEventSnippet = """
-public sealed record BusinessEvent(
-    Guid EventId,
-    string EventKey,
-    DateTime OccurredAt,
-    Guid RecipientId,
-    IReadOnlyDictionary<string, string> Data);
-
-// evento_id, evento, ocurrido_en, destinatario, datos — el envelope de CLAUDE.md, en C#.
-// Nadie lo publica todavía: es el contrato de entrada que espera NotificationDispatchService.
+    private const string DiCommentSnippet = """
+// Ejemplo de mensajería con RabbitMQ (Messaging/RabbitMq): consume UserChange y llama a
+// RecipientSyncService. Cuando se integre Kafka, este llamado se reemplaza por el
+// equivalente en Messaging/Kafka sin tocar Application.
+services.AddRabbitMqMessaging(configuration);
 """;
 
     private const string ContractsCsprojSnippet = """
@@ -190,6 +189,7 @@ public sealed record BusinessEvent(
 
 <ItemGroup>
   <Protobuf Include="Users/user_contact_updated.proto" GrpcServices="None" />
+  <Protobuf Include="Notifications/notification_dispatch_requested.proto" GrpcServices="None" />
 </ItemGroup>
 """;
 }
