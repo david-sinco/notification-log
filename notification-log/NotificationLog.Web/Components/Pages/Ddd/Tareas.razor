@@ -13,7 +13,7 @@
 
 <DddCallout Kind="concepto" Title="Cómo usar esta página">
     <p>
-        Diez ejercicios reales, agrupados por dificultad, todos sobre <code>NotificationLog.NotificationService</code>
+        Once ejercicios reales, agrupados por dificultad, todos sobre <code>NotificationLog.NotificationService</code>
         tal como está hoy en este repositorio — no sobre un proyecto de juguete aparte. Cada tarea indica
         el objetivo, qué archivos vas a tocar o crear, una pista para arrancar y cómo saber que terminaste.
         No hay solución publicada a propósito: la forma de verificar que hiciste bien la tarea es la misma
@@ -58,6 +58,19 @@
         <strong>Un candidato a Value Object sin extraer todavía:</strong> el teléfono de
         <code>Recipient</code> se normaliza a mano con un método privado, en vez de con un tipo propio
         (módulo 5).
+    </li>
+    <li>
+        <strong>Una regla de negocio escrita dos veces.</strong> "La configuración y la plantilla deben ser
+        del mismo canal" vive en <code>NotificationTrigger.ChangeConfigurationTemplate</code> como
+        <code>DomainException</code> y otra vez en <code>AddConfigurationHandler</code> como
+        <code>AppValidationException</code> — dos códigos HTTP para el mismo error de negocio
+        (<a href="/ddd/domain-services">módulo 8</a>).
+    </li>
+    <li>
+        <strong>Obsesión primitiva dentro de un agregado.</strong> <code>Notification.EventKey</code> es un
+        <code>string</code> con su propia constante <code>EventKeyMaxLength</code>, que duplica
+        <code>EventKey.MaxLength</code> en lugar de reutilizar el value object
+        (<a href="/ddd/value-objects">módulo 5</a>).
     </li>
 </ul>
 <p>
@@ -175,25 +188,39 @@
 
 <DddCallout Kind="ejercicio" Title="Tarea 5 · Extraer la política de compatibilidad plantilla-canal a un Domain Service real">
     <p>
-        <strong>Objetivo:</strong> convertir en código real el Domain Service hipotético del
-        <a href="/ddd/domain-services">módulo 8</a>. Hoy, la comprobación "¿el canal de la plantilla
-        coincide con el de la configuración?" vive como dos <code>if</code> sueltos dentro de
-        <code>AddConfigurationHandler</code>. Vas a extraerla — y de paso, a decidir tú mismo si valía la
-        pena hacerlo.
+        <strong>Objetivo:</strong> unificar una regla de negocio que hoy está escrita <em>dos veces</em>, y
+        solo entonces decidir si lo que queda merece un Domain Service. Como muestra el
+        <a href="/ddd/domain-services">módulo 8</a>, la regla "la configuración y la plantilla deben ser del
+        mismo canal" ya vive en <code>NotificationTrigger.ChangeConfigurationTemplate</code> lanzando
+        <code>DomainException</code> — y otra vez en <code>AddConfigurationHandler</code> lanzando
+        <code>AppValidationException</code>. Misma regla, dos tipos de excepción, dos códigos HTTP según
+        por dónde entres.
     </p>
     <p>
-        <strong>Archivos a tocar:</strong> nuevo <code>Domain/Triggers/ITemplateCompatibilityPolicy.cs</code>
-        y su implementación; <code>Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs</code>
-        (inyectar la política en vez de los dos <code>if</code>); registrar la implementación en
-        <code>Infrastructure/DependencyInjection.cs</code> si decides que la implementación vive ahí, o en
-        <code>Application/DependencyInjection.cs</code> si decides que es puro dominio sin dependencias
-        externas.
+        <strong>Paso 1 (el que importa):</strong> mover la comprobación al agregado, dándole a
+        <code>AddConfiguration</code> la misma firma que ya tiene <code>ChangeConfigurationTemplate</code>
+        (<code>templateChannel</code> como parámetro). El handler pasa el dato y deja de juzgar; la
+        comprobación <code>!template.IsEnabled</code> se queda en el handler, porque es estado de otro
+        agregado.
     </p>
     <p>
-        <strong>Cómo saber que terminaste:</strong> escribe, en un comentario o en la descripción de tu
-        commit, tu propia respuesta honesta a la pregunta que ya planteaba el módulo 8: ¿esta extracción
-        valió la pena con solo dos condiciones, o confirmaste que era sobreingeniería? Ambas respuestas son
-        válidas — lo que importa es que la decidas con criterio, no por costumbre.
+        <strong>Archivos a tocar:</strong> <code>Domain/Triggers/NotificationTrigger.cs</code>;
+        <code>Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs</code>. Y los tests
+        de la Tarea 1, que deberían seguir pasando salvo por el cambio de firma — si alguno cambia de
+        significado, es que la regla no era la misma en los dos sitios.
+    </p>
+    <p>
+        <strong>Paso 2 (la decisión):</strong> con la regla ya unificada, pregúntate si extraerla a un
+        <code>TemplateCompatibilityPolicy</code> aporta algo. Si decides que sí, recuerda lo que dice el
+        módulo 8: un servicio de dominio sin dependencias externas <strong>no necesita interfaz ni registro
+        en DI</strong>, y desde luego no se registra en <code>Infrastructure</code>.
+    </p>
+    <p>
+        <strong>Cómo saber que terminaste:</strong> la regla del canal aparece una sola vez en todo el
+        repositorio, y un mismo error de negocio devuelve un mismo código HTTP entre por donde entre.
+        Escribe además, en el mensaje del commit, tu respuesta honesta al paso 2 — "no lo extraje, era
+        sobreingeniería" es una respuesta tan válida como la contraria, siempre que sea una decisión y no
+        una costumbre.
     </p>
 </DddCallout>
 
@@ -330,6 +357,41 @@
     </p>
 </DddCallout>
 
+<h2 class="ddd-h2">Bonus: deuda de modelado ya localizada</h2>
+
+<DddCallout Kind="ejercicio" Title="Tarea 11 · Unificar Notification.EventKey con su Value Object">
+    <p>
+        <strong>Objetivo:</strong> eliminar la última obsesión primitiva que queda dentro del dominio.
+        <code>Notification</code> guarda el event key como <code>string</code> y define
+        <code>EventKeyMaxLength = 200</code>, duplicando <code>EventKey.MaxLength</code>. Dos constantes
+        independientes para la misma regla es exactamente el problema que el
+        <a href="/ddd/value-objects">módulo 5</a> existe para evitar.
+    </p>
+    <p>
+        <strong>Archivos a tocar:</strong> <code>Domain/Notifications/Notification.cs</code> (cambiar el
+        tipo y borrar la constante duplicada); las fábricas <code>RecordSuccess</code> /
+        <code>RecordFailure</code> y sus dos comandos en <code>Application/Notifications/Commands/</code>;
+        <code>Infrastructure/Persistence/Configuration/NotificationEntityConfiguration.cs</code> (añadir el
+        <code>HasConversion</code>, igual que hace <code>NotificationTriggerConfiguration</code>);
+        <code>NotificationDto</code>.
+    </p>
+    <p>
+        <strong>La decisión interesante:</strong> <code>NotificationDispatchService</code> ya tiene un
+        <code>EventKey</code> válido en la mano (<code>trigger.EventKey</code>) y hoy lo degrada a
+        <code>string</code> con <code>.Value</code> antes de pasarlo. ¿Hasta dónde haces subir el value
+        object — hasta el comando, o hasta el propio <code>BusinessEvent</code> que entra por mensajería?
+        Fíjate en que <code>BusinessEvent</code> viene de fuera y su event key puede ser inválido: ese es
+        justamente el borde donde <code>EventKey.Create</code> debe ejecutarse, y no antes.
+    </p>
+    <p>
+        <strong>Cómo saber que terminaste:</strong> la cadena <code>EventKeyMaxLength</code> ya no existe en
+        el repositorio, y el único sitio que valida el formato de un event key es
+        <code>EventKey.Create</code>. Si además <code>ListNotificationsHandler</code> te obliga a tocar la
+        proyección, acabas de comprobar en carne propia el coste de borde que describe el
+        <a href="/ddd/persistencia">módulo 12</a>.
+    </p>
+</DddCallout>
+
 <h2 class="ddd-h2">Cuándo NO usar DDD</h2>
 <DddCallout Kind="concepto" Title="Concepto">
     <p>
@@ -349,7 +411,7 @@
 
 <DddCallout Kind="ejercicio" Title="El criterio de éxito real">
     <p>
-        No es que sepas definir "agregado". Es que, terminadas estas diez tareas, en el siguiente
+        No es que sepas definir "agregado". Es que, terminadas estas tareas, en el siguiente
         refinamiento sobre un proyecto real puedas decir <em>"eso no debería estar en este contexto"</em> o
         <em>"¿cómo llama negocio a ese estado?"</em> — y el resto del equipo entienda a qué te refieres, sin
         necesitar una reunión aparte para traducirlo.

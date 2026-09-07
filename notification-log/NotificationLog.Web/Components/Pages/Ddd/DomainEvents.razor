@@ -61,6 +61,27 @@
 
 <CodeBlock Title="Hipotético: cómo se vería usando el mecanismo existente" Code="@HypotheticalSnippet" />
 
+<DddCallout Kind="advertencia" Title="Dos trampas del ejemplo de arriba, puestas a propósito">
+    <p>
+        <strong>El nombre.</strong> <code>ConfigurationAdded</code> es el nombre del método en pasado, no
+        un hecho de negocio: nadie de negocio dice "se añadió una configuración". Compáralo con
+        <code>PedidoConfirmado</code> o <code>PagoRechazado</code> del inicio del módulo. Es el vicio más
+        común al adoptar este patrón — eventos CRUD disfrazados de eventos de dominio, que nombran la
+        operación técnica en vez del hecho que le importa a alguien. En este dominio el candidato con
+        lenguaje ubicuo de verdad está en la ruta de envío: <code>NotificacionFallida</code> es un hecho
+        que negocio querría conocer y sobre el que querría reaccionar; "se añadió una configuración", no.
+    </p>
+    <p>
+        <strong>El momento del despacho.</strong> Despachar después de <code>SaveChangesAsync</code>
+        significa que el efecto secundario ocurre <em>fuera</em> de la transacción: si el proceso muere
+        entre el commit y el despacho, el evento se pierde sin rastro. Y despacharlo dentro te devuelve el
+        problema de consistencia que intentabas evitar. La salida real es un <strong>outbox</strong> —
+        persistir el evento en la misma transacción que el cambio, y publicarlo después desde un proceso
+        aparte — y es justo la conversación que abre
+        <code>notification_dispatch_requested.proto</code>.
+    </p>
+</DddCallout>
+
 <div class="ddd-diagram">
     <svg viewBox="0 0 800 240" role="img" aria-labelledby="deTitle">
         <title id="deTitle">Domain event interno (hipotético) frente a integration event real (mensajería)</title>

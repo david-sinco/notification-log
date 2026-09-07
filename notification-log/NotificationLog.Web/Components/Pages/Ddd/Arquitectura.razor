@@ -167,11 +167,20 @@
     </p>
 </DddCallout>
 <p>
-    <code>CreateTriggerHandler</code> cumple esa métrica casi al pie de la letra: valida el comando,
-    construye el value object <code>EventKey</code>, comprueba unicidad contra el repositorio, delega la
-    creación real al agregado (<code>NotificationTrigger.Create</code>) y guarda. Ni un <code>if</code> de
-    negocio propio — todos ya están dentro de <code>EventKey.Create</code> o de
-    <code>NotificationTrigger.Create</code>.
+    <code>CreateTriggerHandler</code> cumple esa métrica casi al pie de la letra: valida la forma del
+    comando, construye el value object <code>EventKey</code>, comprueba unicidad contra el repositorio,
+    delega la creación real al agregado (<code>NotificationTrigger.Create</code>) y guarda. Casi ningún
+    <code>if</code> propio: el formato del event key lo impone <code>EventKey.Create</code> y la
+    descripción, <code>NotificationTrigger.Create</code>.
+</p>
+<p>
+    Queda uno, y conviene no barrerlo bajo la alfombra: la comprobación de unicidad
+    (<code>ExistsAsync</code>) <strong>sí es una regla de negocio</strong>, y vive en el handler. No puede
+    vivir en el agregado, porque ningún <code>NotificationTrigger</code> conoce a los demás triggers — y
+    esa imposibilidad es exactamente la señal que identifica una regla que cruza agregados. El
+    <a href="/ddd/pruebas">módulo 13</a> la retoma como el caso claro de test de capa de aplicación, y el
+    <a href="/ddd/persistencia">módulo 12</a> muestra por qué, además, necesita un índice único detrás para
+    sobrevivir a dos peticiones simultáneas.
 </p>
 
 <CodeBlock Title="Application/Triggers/Commands/CreateTrigger/CreateTriggerHandler.cs" Code="@HandlerSnippet" />

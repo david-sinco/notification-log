@@ -40,8 +40,14 @@
     Comparten una invariante real: <strong>no puede haber dos configuraciones activas del mismo canal para
     el mismo trigger</strong> (no tendría sentido tener dos plantillas de email compitiendo por el mismo
     evento). Esa regla no vive en el handler de la aplicación ni en una restricción de base de datos — vive
-    dentro del agregado, que es el único lugar donde se puede verificar sin condiciones de carrera dentro
-    de la misma transacción.
+    dentro del agregado, que es el único lugar donde queda <strong>expresada una sola vez</strong> y donde
+    ningún camino de la API pública puede esquivarla.
+</p>
+<p>
+    Ojo con distinguir lo que eso garantiza de lo que no, porque es la confusión más cara de este patrón:
+    el agregado <em>define</em> el límite de consistencia, pero <em>hacerlo cumplir</em> bajo concurrencia
+    necesita además una defensa en la persistencia. El <a href="/ddd/persistencia">módulo 12</a> muestra el
+    escenario exacto en que esta misma invariante se rompe hoy con dos peticiones simultáneas.
 </p>
 
 <CodeBlock Title="Domain/Triggers/NotificationTrigger.cs (invariante de canal único)" Code="@TriggerSnippet" />
@@ -77,6 +83,16 @@
     (<code>NotificationTrigger</code>, <code>NotificationTemplate</code>, <code>Recipient</code>,
     <code>Notification</code>) en vez de uno solo gigante. Cada uno protege su propia invariante y nada
     más.
+</p>
+<p>
+    Ahora bien, "pequeño" no es una intuición: es una pregunta concreta que conviene hacerse siempre —
+    <strong>¿la colección de hijos está acotada?</strong> Un agregado cuya lista de hijos crece sin techo
+    se convierte, tarde o temprano, en un problema de memoria y de bloqueos, porque hay que cargarla entera
+    para validar cualquier invariante. Aplícalo a este código: <code>_configurations</code> está acotada de
+    hecho (hay cuatro canales), pero nada en el modelo lo impone, y
+    <code>GetByIdAsync</code> carga la colección completa con <code>Include</code> para comprobar un solo
+    canal. Aquí el techo real hace que la decisión sea correcta; en un agregado "Pedido" con una colección
+    de "Eventos de auditoría" sin límite, exactamente el mismo diseño sería un error.
 </p>
 
 <div class="ddd-diagram">

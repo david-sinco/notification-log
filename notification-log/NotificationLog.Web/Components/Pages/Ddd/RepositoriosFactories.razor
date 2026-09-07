@@ -40,6 +40,31 @@
 
 <CodeBlock Title="Domain/Triggers/INotificationTriggerRepository.cs" Code="@InterfaceSnippet" />
 
+<DddCallout Kind="honesto" Title="Los tres primeros métodos son un repositorio. El cuarto es otra cosa.">
+    <p>
+        <code>GetByIdAsync</code>, <code>GetByEventKeyAsync</code> y <code>ExistsAsync(EventKey)</code>
+        tienen semántica de colección y hablan el lenguaje del negocio.
+        <code>ListAsync(string? search, bool? isEnabled, int page, int pageSize)</code> no:
+        <code>search</code>, <code>page</code> y <code>pageSize</code> no son vocabulario de este dominio —
+        son la paginación de una pantalla. Es un método de consulta viviendo en una interfaz del dominio.
+    </p>
+    <p>
+        Y no es un detalle estético: es la <strong>causa directa</strong> del coste que señala el
+        <a href="/ddd/persistencia">módulo 12</a> en las lecturas. Como el contrato obliga a devolver
+        <code>NotificationTrigger</code> completos, la capa de consulta no tiene más remedio que
+        materializar agregados enteros —con sus configuraciones incluidas— para pintar una tabla de veinte
+        filas.
+    </p>
+    <p>
+        La separación limpia sería sacar las consultas a su propia abstracción — un
+        <code>ITriggerQueries</code> en <code>Application</code> que devuelva DTOs directamente — y dejar
+        en el dominio solo los métodos que cargan agregados <em>para modificarlos</em>. Es el CQRS del
+        <a href="/ddd/arquitectura">módulo 11</a> llevado hasta la capa de datos. Este repositorio se queda
+        a medio camino, con un coste razonable a esta escala; lo que no conviene es no saber dónde está la
+        línea.
+    </p>
+</DddCallout>
+
 <h2 class="ddd-h2">La implementación vive en infraestructura, y es invisible fuera de ella</h2>
 <p>
     <code>NotificationTriggerRepository</code> usa Entity Framework Core directamente — <code>Include</code>,

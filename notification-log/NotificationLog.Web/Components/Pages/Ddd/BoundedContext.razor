@@ -88,16 +88,45 @@
     </p>
 </div>
 
-<h2 class="ddd-h2">Dentro del mismo servicio también hay fronteras</h2>
+<h2 class="ddd-h2">Dentro del mismo contexto hay Módulos, no más contextos</h2>
 <p>
-    Un Bounded Context no siempre es un microservicio aparte — puede ser un módulo dentro del mismo
-    proceso. Dentro de <code>NotificationLog.NotificationService.Domain</code> ya conviven varias
-    subcarpetas con su propio lenguaje y sus propias reglas, sin mezclarse entre sí: <code>Triggers</code>
-    (cuándo notificar), <code>Templates</code> (con qué texto), <code>Recipients</code> (a quién) y
-    <code>Notifications</code> (qué se envió de hecho). Cada carpeta tiene su propio agregado raíz y su
-    propio repositorio — nadie navega directamente de un agregado a otro por referencia de objeto, solo
-    por <code>Guid</code> (lo verás con detalle en el <a href="/ddd/agregados">módulo 7</a>).
+    Es cierto que un Bounded Context no siempre es un microservicio aparte: puede ser un módulo dentro del
+    mismo proceso. Pero cuidado con la conclusión fácil, porque aquí está el error más común al aprender
+    este patrón. Las carpetas <code>Triggers</code>, <code>Templates</code>, <code>Recipients</code> y
+    <code>Notifications</code> de <code>NotificationLog.NotificationService.Domain</code>
+    <strong>no son cuatro bounded contexts</strong>. Son cuatro agregados dentro de uno solo.
 </p>
+<p>
+    La prueba está en un archivo concreto: <code>Domain/Shared/NotificationChannel.cs</code>. Las cuatro
+    carpetas comparten ese enum con el mismo significado exacto — "canal Email" quiere decir lo mismo en
+    <code>Templates</code> que en <code>Triggers</code> que en <code>Notification</code>. Cuando el mismo
+    término significa lo mismo a ambos lados de una línea, esa línea no es una frontera de contexto: es un
+    <strong>Módulo</strong> (el patrón que Evans llama <em>Modules</em>), una división para organizar el
+    modelo y controlar el acoplamiento, no para cambiar de lenguaje.
+</p>
+<p>
+    La frontera de contexto real de este repositorio es la del diagrama de arriba: entre Identidad y
+    Notificaciones. Ahí sí "usuario" y <code>Recipient</code> son modelos distintos del mismo concepto,
+    ahí sí hay que traducir — y por eso ahí, y solo ahí, existe un Anti-Corruption Layer
+    (<a href="/ddd/context-map">módulo 4</a>). Entre <code>Triggers</code> y <code>Templates</code> no hay
+    ningún ACL, precisamente porque no hay nada que traducir.
+</p>
+<p>
+    Lo que sí comparten esas cuatro carpetas es la disciplina táctica que verás en el
+    <a href="/ddd/agregados">módulo 7</a>: cada una tiene su propio agregado raíz y su propio repositorio,
+    y nadie navega de un agregado a otro por referencia de objeto, solo por <code>Guid</code>. Eso es la
+    Regla 3 de Vernon sobre agregados, que aplica <em>dentro</em> de un mismo contexto — no es evidencia de
+    fronteras de contexto, y conviene no confundir una cosa con la otra.
+</p>
+
+<DddCallout Kind="advertencia" Title="Cómo distinguirlos en dos segundos">
+    <p>
+        Si puedes mover un tipo de una carpeta a otra y lo único que se rompe son los <code>using</code>,
+        es un <strong>Módulo</strong>. Si además tendrías que decidir qué significa cada campo al otro
+        lado, es un <strong>Bounded Context</strong>. Confundirlos tiene un coste real y caro: lleva a
+        partir en microservicios lo que solo necesitaba carpetas.
+    </p>
+</DddCallout>
 
 <DddCallout Kind="advertencia" Title="La señal de alarma">
     <p>

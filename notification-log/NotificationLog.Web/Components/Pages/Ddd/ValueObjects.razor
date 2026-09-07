@@ -107,6 +107,24 @@
     este caso concreto en el <a href="/ddd/tareas">módulo de tareas</a>.
 </p>
 
+<DddCallout Kind="honesto" Title="Y un caso peor, dentro de un agregado que este tutorial presenta como ejemplar">
+    <p>
+        Abre <code>Domain/Notifications/Notification.cs</code>. El agregado guarda
+        <code>public string EventKey { get; private set; }</code> — un <code>string</code>, no el value
+        object <code>EventKey</code> que acabas de ver — y declara su propia constante
+        <code>public const int EventKeyMaxLength = 200;</code>, que <strong>duplica</strong>
+        <code>EventKey.MaxLength</code>. Dos constantes independientes para el mismo concepto, libres de
+        divergir el día que alguien cambie una sola de las dos.
+    </p>
+    <p>
+        Es obsesión primitiva de manual, y está dentro del dominio, no en el borde. Merece la pena verlo
+        porque enseña algo incómodo: adoptar el patrón no es una decisión que se toma una vez, es una
+        disciplina que se sostiene archivo por archivo. El <a href="/ddd/persistencia">módulo 12</a>
+        celebra —con razón— que <code>EventKey.MaxLength</code> mande sobre el esquema en la tabla de
+        triggers; en la tabla de notificaciones, esa misma regla se escribió a mano por segunda vez.
+    </p>
+</DddCallout>
+
 <DddCallout Kind="ejercicio" Title="Ejercicio para pensar">
     <p>
         Busca en tu propio código tres parámetros <code>string</code> o <code>decimal</code> consecutivos

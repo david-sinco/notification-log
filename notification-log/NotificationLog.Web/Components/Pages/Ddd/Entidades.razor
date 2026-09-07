@@ -39,10 +39,27 @@
 
 <p>
     Repara en el comentario del código: <em>"dos entidades sin persistir nunca son iguales entre sí"</em>.
-    Es una decisión deliberada — si dos <code>Recipient</code> todavía no tienen <code>Id</code> asignado
-    (<code>Guid.Empty</code>), tratarlos como iguales solo porque tienen el mismo nombre sería mezclar
-    identidad con valores, exactamente lo que una entidad existe para evitar.
+    Es una decisión deliberada: tratar como iguales a dos objetos sin identidad asignada, solo porque
+    coinciden sus atributos, sería mezclar identidad con valores — exactamente lo que una entidad existe
+    para evitar.
 </p>
+
+<DddCallout Kind="honesto" Title="Esa guarda, hoy, no llega a dispararse en este dominio">
+    <p>
+        Si intentas provocar el caso, no podrás: ningún agregado de este repositorio llega nunca a existir
+        con <code>Id == Guid.Empty</code>. <code>Recipient.Create</code> exige el <code>userId</code> y lo
+        rechaza si viene vacío; <code>NotificationTrigger.Create</code>,
+        <code>NotificationTemplate.Create</code> y <code>Notification</code> asignan
+        <code>Guid.NewGuid()</code> en la propia fábrica. La identidad se decide <em>en el dominio</em>, no
+        la genera la base de datos.
+    </p>
+    <p>
+        La guarda existe para el caso general —entidades cuyo id lo asigna el motor al insertar, donde sí
+        hay una ventana con <code>Id</code> vacío— y aquí funciona como red de seguridad, no como caso
+        vivo. Vale la pena saberlo: es un buen ejemplo de código defensivo heredado de una clase base
+        genérica, correcto pero no ejercitado por este modelo concreto.
+    </p>
+</DddCallout>
 
 <h2 class="ddd-h2">Recipient: mismo Id, atributos que cambian</h2>
 <p>
