@@ -3,29 +3,81 @@
 <PageTitle>Arquitectura · NotificationLog</PageTitle>
 
 <div class="ddd-hero">
-    <div class="eyebrow">Cómo está construido NotificationLog</div>
-    <h1>La arquitectura, capa por capa, con el código real</h1>
+    <div class="eyebrow">Arquitectura de software, aprendida sobre un sistema real</div>
+    <h1>Los conceptos, y el sistema donde comprobarlos</h1>
     <p>
-        Esta guía recorre las cuatro capas del proyecto — <code>Domain</code>, <code>Application</code>,
-        <code>Infrastructure</code> y la pareja <code>API</code>/<code>Web</code> — y explica, con archivos
-        reales de este repositorio, qué vive en cada una, por qué está separada así y qué decisión concreta
-        hay detrás de cada pieza. Nada de lo que leas aquí depende de confiar en esta guía: cada afirmación
-        señala un archivo que puedes abrir tú mismo, y donde una pieza todavía está a medio construir —un
-        canal sin proveedor real, un productor de eventos que todavía no existe— te lo digo explícitamente
-        en vez de maquillarlo.
+        Esta guía tiene dos mitades que se necesitan. La primera enseña arquitectura de software —qué
+        decisiones son arquitectura, cómo se eligen, qué duele al distribuir, cómo se evita que todo se
+        degrade con el tiempo— y la segunda recorre las capas de este proyecto con archivos reales:
+        <code>Domain</code>, <code>Application</code>, <code>Infrastructure</code> y la pareja
+        <code>API</code>/<code>Web</code>. Ningún concepto se explica con la tienda online imaginaria de
+        siempre: se explica señalando un archivo de este repositorio que puedes abrir y comprobar.
+    </p>
+    <p>
+        Y donde este sistema no hace lo que el concepto recomienda —no hay ADRs, no hay outbox, no hay
+        autenticación, no hay tests de arquitectura— la guía lo dice de frente y explica qué costaría
+        arreglarlo. Un sistema real nunca se parece a la foto del libro; aprender a leer esa diferencia es
+        buena parte del trabajo.
     </p>
 </div>
 
 <ArqNav />
 
 <p class="ddd-lede">
+    Hay una pregunta que atraviesa las once páginas y que conviene repetir en cada decisión que discutas con
+    tu equipo: <strong>"¿qué atributo de calidad estamos comprando, y cuál estamos pagando?"</strong>. No
+    existen arquitecturas buenas; existen compromisos adecuados a un contexto. Si una propuesta solo enumera
+    ventajas, el análisis todavía no está terminado.
+</p>
+
+<h2 class="ddd-h2">Bloque A · Los conceptos (sesiones 1 a 5)</h2>
+<p>
+    Cinco módulos pensados como cinco sesiones de unos 90 minutos: concepto, aplicación inmediata a este
+    sistema y discusión del trade-off. Cada uno termina con ejercicios que producen algo commiteable.
+</p>
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/arquitectura/fundamentos">
+        <span class="ddd-card-num">01</span>
+        <h3>Fundamentos</h3>
+        <p>Qué es arquitectura (lo caro de revertir), atributos de calidad con número, trade-offs, ADRs y
+        el modelo C4 — con el diagrama de contenedores real de este sistema.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/estructura">
+        <span class="ddd-card-num">02</span>
+        <h3>Estructura</h3>
+        <p>Acoplamiento y cohesión medidos con un número, la regla de dependencia, capas frente a
+        hexagonal, monolito modular y los tests de arquitectura que aquí faltan.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/estilos">
+        <span class="ddd-card-num">03</span>
+        <h3>Estilos</h3>
+        <p>Monolito, microservicios y eventos — coreografía frente a orquestación, y por qué este sistema
+        usa las dos en tramos distintos.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/distribuido">
+        <span class="ddd-card-num">04</span>
+        <h3>Distribuido</h3>
+        <p>Falacias de la red, CAP y consistencia eventual, outbox e idempotencia, contratos, resiliencia
+        y observabilidad. La sesión donde más huecos reales aparecen.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/evolucion">
+        <span class="ddd-card-num">05</span>
+        <h3>Evolución</h3>
+        <p>Fitness functions, ley de Conway, deuda técnica, modernización de legacy, seguridad y coste
+        como atributos, y el catálogo de antipatrones con veredicto.</p>
+    </a>
+</div>
+
+<h2 class="ddd-h2">Bloque B · Este sistema, capa por capa</h2>
+<p>
     La regla que sostiene todo el proyecto es una sola: <strong>las dependencias apuntan hacia adentro</strong>.
     <code>Domain</code> no conoce a nadie. <code>Application</code> solo conoce a <code>Domain</code>.
     <code>Infrastructure</code> conoce a los dos anteriores e implementa sus interfaces. <code>API</code> y
     <code>Web</code> son los bordes que hablan con el mundo exterior — HTTP, un navegador — y traducen hacia
-    y desde ese núcleo. Es exactamente la misma regla que ya viste aplicada al modelo de dominio en
-    <a href="/ddd/arquitectura">el módulo 11 del tutorial de DDD</a>; aquí la recorremos capa por capa, con más
-    detalle de infraestructura real: Entity Framework, RabbitMQ, Aspire.
+    y desde ese núcleo. Es la misma regla que ya viste aplicada al modelo de dominio en
+    <a href="/ddd/arquitectura">el módulo 11 del tutorial de DDD</a>; aquí la recorremos capa por capa, con
+    más detalle de infraestructura real: Entity Framework, RabbitMQ, Aspire.
 </p>
 
 <div class="ddd-diagram">
@@ -67,50 +119,81 @@
     </p>
 </div>
 
-<h2 class="ddd-h2">Recorre la guía</h2>
-
 <div class="ddd-card-grid">
     <a class="ddd-card" href="/arquitectura/dominio">
-        <span class="ddd-card-num">01</span>
+        <span class="ddd-card-num">06</span>
         <h3>Dominio</h3>
         <p>Los cuatro agregados — <code>NotificationTrigger</code>, <code>NotificationTemplate</code>,
         <code>Recipient</code>, <code>Notification</code> — y por qué su <code>.csproj</code> no tiene ni un
         <code>PackageReference</code>.</p>
     </a>
     <a class="ddd-card" href="/arquitectura/aplicacion">
-        <span class="ddd-card-num">02</span>
+        <span class="ddd-card-num">07</span>
         <h3>Aplicación</h3>
         <p>Comandos y queries organizados por feature, los puertos que define y cuál de esas piezas ya
         está enchufada de punta a punta y cuál todavía espera un productor real.</p>
     </a>
     <a class="ddd-card" href="/arquitectura/infraestructura">
-        <span class="ddd-card-num">03</span>
+        <span class="ddd-card-num">08</span>
         <h3>Infraestructura</h3>
         <p>EF Core como implementación de los repositorios, y Wolverine + RabbitMQ como implementación
         actual de la mensajería — con Protobuf de por medio.</p>
     </a>
     <a class="ddd-card" href="/arquitectura/presentacion">
-        <span class="ddd-card-num">04</span>
+        <span class="ddd-card-num">09</span>
         <h3>API + Web</h3>
         <p>Minimal API con <code>ProblemDetails</code>, y un Blazor Server aparte que le habla por HTTP
         con descubrimiento de servicios de Aspire — no un monolito de una sola app.</p>
     </a>
     <a class="ddd-card" href="/arquitectura/decisiones">
-        <span class="ddd-card-num">05</span>
+        <span class="ddd-card-num">10</span>
         <h3>Decisiones</h3>
-        <p>Seis decisiones de arquitectura reales, verificadas archivo por archivo — con las piezas que
+        <p>Siete decisiones de arquitectura reales, verificadas archivo por archivo — con las piezas que
         todavía están a medio camino marcadas sin adornos.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/ejercicios">
+        <span class="ddd-card-num">11</span>
+        <h3>Ejercicios</h3>
+        <p>Siete ejercicios sobre este repositorio, uno o dos por sesión, cada uno con un entregable
+        concreto: un ADR, un diagrama, un test que se pone rojo cuando debe.</p>
     </a>
 </div>
 
-<DddCallout Kind="honesto" Title="Esta guía complementa, no repite, la de DDD">
+<h2 class="ddd-h2">Si vas a impartir esto</h2>
+<p>
+    Tres errores hunden cualquier formación de arquitectura, y los tres son fáciles de cometer:
+</p>
+<ol class="ddd-steps">
+    <li>
+        <strong>Enseñar un catálogo de estilos.</strong> El equipo memoriza "microservicios frente a
+        monolito" y sale creyendo que arquitectura es elegir una caja. Arquitectura es elegir qué se
+        sacrifica.
+    </li>
+    <li>
+        <strong>Presentarla como algo del arquitecto.</strong> Si el mensaje es "esto lo decide otro", nadie
+        aplica nada. El mensaje correcto es que todos toman decisiones arquitectónicas cada semana; la
+        diferencia está en si son conscientes y quedan registradas.
+    </li>
+    <li>
+        <strong>Omitir el coste.</strong> Cada patrón de esta guía tiene un precio en complejidad operativa.
+        Preséntalo siempre junto al beneficio, o acabarás con un equipo con síndrome de arquitectura de CV.
+    </li>
+</ol>
+<p>
+    El formato que funciona en cada bloque es el mismo: <strong>concepto (10 min) → aplicarlo a nuestro
+    sistema (10 min) → discusión del trade-off (10 min)</strong>. La segunda parte es la que hace que se
+    recuerde, y es la razón de que esta guía use este repositorio como material de práctica en lugar de un
+    ejemplo inventado.
+</p>
+
+<DddCallout Kind="honesto" Title="Cómo se relaciona con el tutorial de DDD">
     <p>
-        El <a href="/ddd">tutorial de DDD</a> ya cubre en detalle el modelado táctico (agregados, value
-        objects, invariantes) y tiene su propio módulo de arquitectura centrado en Clean Architecture y
-        CQRS. Esta guía profundiza en la infraestructura real que sostiene esas capas — Entity Framework,
-        RabbitMQ, Aspire — y en las decisiones de <em>plomería</em> que no entran en una guía de modelado
-        de dominio.
+        El <a href="/ddd">tutorial de DDD</a> cubre el modelado táctico —agregados, value objects,
+        invariantes— y tiene su propio módulo de arquitectura centrado en Clean Architecture y CQRS. Esta
+        guía trabaja el nivel de encima: qué decisiones son arquitectura, cómo se eligen entre alternativas,
+        qué pasa cuando el sistema se distribuye y cómo se evita que se degrade. Se solapan poco y a
+        propósito; donde lo hacen, cada página enlaza a la otra en vez de repetirla.
     </p>
 </DddCallout>
 
-<DddPrevNext NextHref="/arquitectura/dominio" NextLabel="Dominio" />
+<DddPrevNext NextHref="/arquitectura/fundamentos" NextLabel="Fundamentos" />

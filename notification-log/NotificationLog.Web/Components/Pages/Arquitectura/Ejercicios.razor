@@ -1,0 +1,211 @@
+@page "/arquitectura/ejercicios"
+
+<PageTitle>Ejercicios · Arquitectura · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>11 · Ejercicios sobre este sistema</h1>
+        <p>Siete ejercicios, uno o dos por sesión. El material de práctica no es una tienda online imaginaria: es este repositorio.</p>
+    </div>
+</div>
+
+<ArqNav />
+
+<p class="ddd-lede">
+    Cada ejercicio termina en un artefacto concreto —un ADR, un diagrama, un test que falla cuando debe— y
+    todos se pueden hacer sin permiso de nadie, porque el sistema sobre el que se practica está en tu disco.
+    Esa es la diferencia entre una formación que se recuerda y una que se olvida: al final de la sesión hay
+    algo commiteable.
+</p>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Sesión</th>
+                    <th>Ejercicio</th>
+                    <th>Duración</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td>1</td><td>1 · Fundamentos</td><td>Atributos de calidad con número</td><td>30 min</td></tr>
+                <tr><td>2</td><td>1 · Fundamentos</td><td>ADR retroactivo de una decisión ya tomada</td><td>30 min</td></tr>
+                <tr><td>3</td><td>2 · Estructura</td><td>C4 de Contexto y Contenedores</td><td>30 min</td></tr>
+                <tr><td>4</td><td>2 · Estructura</td><td>Los tres puntos de mayor acoplamiento</td><td>30 min</td></tr>
+                <tr><td>5</td><td>3 · Estilos</td><td>Evaluar dos estilos candidatos</td><td>30 min</td></tr>
+                <tr><td>6</td><td>4 · Distribuido</td><td>Análisis de fallo de una dependencia</td><td>30 min</td></tr>
+                <tr><td>7</td><td>5 · Evolución</td><td>Tres fitness functions, una implementada</td><td>45 min</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h2 class="ddd-h2">1 · Atributos de calidad con número (30 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> escribir los tres atributos de calidad prioritarios de este sistema, cada uno
+    con una cifra y una condición de carga, y ordenarlos. No vale "alta disponibilidad": vale "el despacho de
+    un evento termina en menos de 5 s en el p95, con 200 eventos por minuto".
+</p>
+<p>
+    <strong>Por dónde empezar:</strong> el <a href="/arquitectura/fundamentos">módulo 1</a> tiene una tabla
+    de deseos traducidos a atributos. Cópiala y discútela: el objetivo no es acertar los números a la
+    primera, es que el equipo descubra que no los tiene.
+</p>
+<p><strong>Entregable:</strong> tres líneas en el repositorio. El desacuerdo sobre el orden es el hallazgo, no el fracaso.</p>
+
+<h2 class="ddd-h2">2 · ADR retroactivo (30 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> elegir una decisión ya tomada y escribir su ADR como si se estuviera tomando
+    hoy — con las opciones que se descartaron, que es la parte que el código nunca conserva.
+</p>
+<p><strong>Candidatos, de más fácil a más valioso:</strong></p>
+<ol class="ddd-steps">
+    <li>RabbitMQ + Wolverine como bus provisional. El comentario de <code>Infrastructure/DependencyInjection.cs</code> ya te da el contexto; falta lo descartado. Hay una plantilla completa en el <a href="/arquitectura/fundamentos">módulo 1</a>.</li>
+    <li>Registrar dos serializadores a la vez. El comentario de <code>RabbitMqMessagingExtensions.cs</code> explica el cómo con detalle; el ADR debe explicar el porqué y qué se pierde.</li>
+    <li><strong>El más valioso:</strong> por qué <code>NotificationLog.Web</code> habla con la API por HTTP en vez de referenciar <code>Application</code>. No hay ningún comentario que lo justifique, y es una de las decisiones más caras de revertir del sistema.</li>
+</ol>
+<p><strong>Entregable:</strong> <code>docs/adr/0001-....md</code>. Si es el primero, has creado la carpeta que le faltaba al repositorio.</p>
+
+<h2 class="ddd-h2">3 · C4 de Contexto y Contenedores (30 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> el de Contenedores ya está dibujado en el
+    <a href="/arquitectura/fundamentos">módulo 1</a> — verifícalo contra <code>AppHost.cs</code> y corrige lo
+    que haya cambiado. Después dibuja el de <strong>Contexto</strong>, que es el que falta y el más
+    revelador: obliga a nombrar a los sistemas externos.
+</p>
+<p><strong>Las preguntas incómodas que provoca:</strong></p>
+<ul>
+    <li>¿Quién publica <code>UserContactUpdated</code>? ¿Existe hoy ese sistema o es una caja aspiracional?</li>
+    <li>¿Quién publicaría <code>NotificationDispatchRequested</code>? (Hoy: la UI de administración de RabbitMQ, a mano.)</li>
+    <li>¿Los proveedores de correo, SMS y push son un solo actor externo o tres?</li>
+    <li>¿Buggregator aparece? Es un sistema externo real en desarrollo, y omitirlo haría el diagrama más bonito y menos cierto.</li>
+</ul>
+<p><strong>Entregable:</strong> un diagrama de Contexto donde toda caja aspiracional esté marcada como tal.</p>
+
+<h2 class="ddd-h2">4 · Los tres puntos de mayor acoplamiento (30 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> aplicar el test del <a href="/arquitectura/estructura">módulo 2</a> —cuántos
+    módulos hay que tocar para un cambio típico— a tres cambios distintos, y proponer un límite para el peor.
+</p>
+<p><strong>Cambios sugeridos, todos realistas:</strong></p>
+<ol class="ddd-steps">
+    <li>Añadir un campo a <code>NotificationTrigger</code> y mostrarlo en el panel. (Respuesta esperada: cinco proyectos y una migración.)</li>
+    <li>Añadir un quinto canal de notificación — por ejemplo, Slack.</li>
+    <li>Cambiar el proveedor de SMS por otro con una API distinta.</li>
+</ol>
+<p>
+    <strong>Lo que hay que discutir:</strong> el tercero toca un archivo y el primero toca cinco proyectos.
+    Esa asimetría no es casual: mide dónde invirtió esta arquitectura. Y la pregunta que cierra el ejercicio
+    es si esa inversión sigue estando donde el negocio la necesita.
+</p>
+<p><strong>Entregable:</strong> tres cifras y una propuesta de límite escrita.</p>
+
+<h2 class="ddd-h2">5 · Evaluar dos estilos candidatos (30 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> puntuar dos estilos contra los atributos del ejercicio 1 y escribir el ADR
+    resultante. La tabla del <a href="/arquitectura/estilos">módulo 3</a> compara "monolito modular actual"
+    contra "servicio de notificaciones separado": rehazla con vuestros números en vez de con los del ejemplo.
+</p>
+<p>
+    <strong>Regla del ejercicio:</strong> el ADR no está terminado hasta que diga qué se sacrifica. Si la
+    sección de consecuencias solo tiene ventajas, el análisis está incompleto — y esa es la corrección más
+    útil que puedes hacer como instructor.
+</p>
+<p><strong>Entregable:</strong> un ADR con consecuencias negativas explícitas.</p>
+
+<h2 class="ddd-h2">6 · Análisis de fallo (30 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> elegir una dependencia y trazar dos escenarios distintos: qué pasa si se
+    <em>cae</em>, y qué pasa si se vuelve <em>muy lenta</em>. Las respuestas casi nunca coinciden y la segunda
+    suele ser peor.
+</p>
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Dependencia</th>
+                    <th>Preguntas a responder con el código delante</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>SQL Server</td>
+                    <td>¿Qué hace <code>EnableRetryOnFailure(5)</code> con una caída de 30 s? ¿Y con una latencia de 8 s por consulta? ¿Qué ve el usuario del panel?</td>
+                </tr>
+                <tr>
+                    <td>RabbitMQ</td>
+                    <td>¿Se pierden mensajes? ¿Qué pasa cuando vuelve: se procesan todos de golpe? ¿Hay cola de errores configurada? (Pista: no.)</td>
+                </tr>
+                <tr>
+                    <td>Proveedor de SMS</td>
+                    <td>¿Cuántas veces reintenta el pipeline de <code>AddStandardResilienceHandler</code>? ¿Cuántos SMS recibe el usuario si el proveedor acepta pero no responde?</td>
+                </tr>
+                <tr>
+                    <td><code>apiservice</code></td>
+                    <td>¿Qué muestra el panel Blazor si la API tarda 30 s? ¿Y si devuelve 500?</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<p>
+    <strong>Entregable:</strong> una tabla de dos columnas (caído / lento) y, al menos, una acción concreta
+    apuntada. El candidato más obvio sale en el <a href="/arquitectura/distribuido">módulo 4</a>: la
+    comprobación de idempotencia por <code>EventId</code>, que hoy no existe pese a que la clave ya viaja en
+    el mensaje y ya se persiste.
+</p>
+
+<h2 class="ddd-h2">7 · Tres fitness functions, una implementada (45 min)</h2>
+<p>
+    <strong>Qué hacer:</strong> elegir tres características arquitectónicas que quieras preservar,
+    escribirlas como comprobaciones automatizadas e implementar una de verdad, en el proyecto de pruebas.
+</p>
+<p>
+    <strong>Aviso práctico antes de empezar:</strong> <code>NotificationLog.Tests.csproj</code> tiene un solo
+    <code>ProjectReference</code>, a <code>NotificationLog.AppHost</code>. Hoy el proyecto de pruebas ni
+    siquiera puede nombrar a <code>NotificationTrigger</code>, así que el primer paso —en cualquiera de las
+    tres— es añadir la referencia a <code>Domain</code> y <code>Application</code>. Ese descubrimiento vale
+    tanto como el test.
+</p>
+<ol class="ddd-steps">
+    <li><strong>La más urgente:</strong> un test de la invariante de canal único de <code>NotificationTrigger</code>. Sin base de datos, sin mocks, sin arrancar nada — el dominio no tiene dependencias, así que es literalmente instanciar y afirmar.</li>
+    <li><strong>La estructural:</strong> <code>Application</code> no depende de <code>Infrastructure</code>, con NetArchTest. El <a href="/arquitectura/estructura">módulo 2</a> trae el código listo para pegar.</li>
+    <li><strong>La sutil:</strong> <code>NotificationConfiguration.Create</code> sigue siendo <code>internal</code>. Si alguien lo hace público, la encapsulación del agregado se rompe sin que ningún test actual se entere.</li>
+</ol>
+<p>
+    <strong>Entregable:</strong> un test en verde, y la comprobación de que se pone rojo cuando violas la
+    regla a propósito. Un test de arquitectura que nunca has visto fallar no es una fitness function: es
+    decoración.
+</p>
+
+<h2 class="ddd-h2">Criterio de éxito de la formación</h2>
+<p>
+    No es que el equipo sepa dibujar microservicios. Es que en la siguiente propuesta técnica alguien
+    pregunte <strong>"¿qué atributo de calidad estamos comprando y cuál estamos pagando?"</strong> — y que la
+    respuesta acabe escrita en un ADR.
+</p>
+
+<h2 class="ddd-h2">Recursos recomendados</h2>
+<ul>
+    <li>Mark Richards y Neal Ford, <em>Fundamentals of Software Architecture</em> — el mejor libro de entrada; estilos y atributos de calidad con criterio.</li>
+    <li>Mark Richards y Neal Ford, <em>Software Architecture: The Hard Parts</em> — trade-offs en sistemas distribuidos; ideal para la sesión 4.</li>
+    <li>Martin Kleppmann, <em>Designing Data-Intensive Applications</em> — referencia obligada sobre datos y sistemas distribuidos.</li>
+    <li>Sam Newman, <em>Building Microservices</em> y <em>Monolith to Microservices</em> — honesto sobre los costes.</li>
+    <li>Neal Ford et al., <em>Building Evolutionary Architectures</em> — el origen de las fitness functions.</li>
+    <li>Simon Brown, modelo C4 (c4model.com) — documentación de diagramas por niveles.</li>
+    <li>Matthew Skelton y Manuel Pais, <em>Team Topologies</em> — la parte organizativa, la que más se subestima.</li>
+</ul>
+
+<DddCallout Kind="concepto" Title="Si quieres seguir practicando sobre este mismo código">
+    <p>
+        El <a href="/ddd/tareas">módulo 14 del tutorial de DDD</a> tiene ocho tareas guiadas de modelado
+        táctico sobre este repositorio — eventos de dominio, validación de <code>schema_version</code>,
+        pruebas de agregados. Se complementan con estos siete ejercicios: aquellos trabajan el modelo por
+        dentro, estos la estructura por fuera.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/arquitectura/decisiones" PrevLabel="Decisiones" NextHref="/arquitectura" NextLabel="Volver al inicio de esta guía" />

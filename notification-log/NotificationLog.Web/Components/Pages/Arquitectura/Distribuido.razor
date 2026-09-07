@@ -1,0 +1,377 @@
+@page "/arquitectura/distribuido"
+
+<PageTitle>Distribuido · Arquitectura · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>4 · Sistemas distribuidos: lo que realmente duele</h1>
+        <p>Falacias, consistencia, contratos, resiliencia y observabilidad — con lo que este sistema ya hace y lo que todavía no.</p>
+    </div>
+</div>
+
+<ArqNav />
+
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Convertir "es que falló la red" en un requisito de diseño.</li>
+        <li>Localizar las ventanas de inconsistencia reales de este sistema y decidir si son aceptables.</li>
+        <li>Entender por qué la base de datos compartida anula el beneficio de separar servicios.</li>
+        <li>Reconocer que un reintento sin idempotencia duplica envíos — aquí, hoy, de verdad.</li>
+        <li>Tratar la observabilidad como decisión arquitectónica, no como tarea de operaciones.</li>
+    </ul>
+</DddCallout>
+
+<h2 class="ddd-h2">4.1 · Las falacias de la computación distribuida</h2>
+<p>
+    Ocho supuestos falsos que todo equipo asume la primera vez que distribuye algo: la red es fiable, la
+    latencia es cero, el ancho de banda es infinito, la red es segura, la topología no cambia, hay un solo
+    administrador, el transporte no tiene coste, la red es homogénea.
+</p>
+<p>
+    Es el mejor sitio para abrir esta sesión porque cada falacia explica un incidente que el equipo ya ha
+    vivido. Y este repositorio tiene defensas concretas contra tres de ellas, escritas en archivos que
+    puedes abrir:
+</p>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Falacia</th>
+                    <th>Defensa en este código</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>La red es fiable</td>
+                    <td><code>EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: 10s)</code> en el registro del <code>DbContext</code></td>
+                </tr>
+                <tr>
+                    <td>La red es fiable (HTTP)</td>
+                    <td><code>AddStandardResilienceHandler()</code> en <code>ServiceDefaults</code>, aplicado a todos los <code>HttpClient</code></td>
+                </tr>
+                <tr>
+                    <td>La topología no cambia</td>
+                    <td>Descubrimiento de servicios: <code>https+http://apiservice</code> en vez de un puerto fijo</td>
+                </tr>
+                <tr>
+                    <td>Todo arranca a la vez</td>
+                    <td><code>WaitFor(notificationDb)</code>, <code>WaitFor(rabbitmq)</code>, <code>WaitFor(buggregator)</code> en <code>AppHost.cs</code></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<DddCallout Kind="honesto" Title="Un caso real de 'la topología no cambia', con la cicatriz documentada">
+    <p>
+        El comentario más largo de <code>AppHost.cs</code> cuenta exactamente este problema: el remitente de
+        SMS apuntaba a un puerto fijo del contenedor de Buggregator, y se desincronizaba cada vez que Aspire
+        reasignaba el puerto publicado. La solución fue inyectar el endpoint real como variable de entorno
+        (<code>services__buggregator__http__0</code>) y que <code>HttpSmsNotificationSender</code> la lea, en
+        vez de tener la dirección a mano.
+    </p>
+    <p>
+        Es la falacia número cinco en su forma más doméstica, y merece contarse en la formación porque
+        demuestra que estas cosas no pasan solo en producción con veinte servicios: pasan el martes por la
+        tarde, en tu portátil, con dos contenedores.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">4.2 · CAP, PACELC y consistencia eventual</h2>
+<p>
+    Ante una partición de red, un sistema distribuido elige entre consistencia y disponibilidad. Y en
+    operación normal —que es el 99,9 % del tiempo— el compromiso real es entre latencia y consistencia; eso
+    es PACELC, y es la parte que importa a diario.
+</p>
+<p>
+    Lo relevante para el equipo no es el teorema, es la consecuencia: <strong>en cuanto los datos viven en
+    más de un sitio, hay ventanas de inconsistencia, y quien debe decidir si son aceptables es el
+    negocio</strong>. Muchas veces lo son y nadie lo había preguntado.
+</p>
+
+<h3 class="ddd-h3">Dónde están las ventanas en este sistema</h3>
+<ul>
+    <li>
+        <strong>Ninguna dentro de la base de datos.</strong> Hay una sola instancia de SQL Server y un solo
+        proceso que la abre. Las lecturas ven lo que la última transacción escribió. Es la razón por la que
+        casi ningún debate de consistencia aplica aquí todavía — y conviene decirlo antes de que alguien
+        proponga una solución para un problema que no tiene.
+    </li>
+    <li>
+        <strong>Sí la hay en la sincronización de destinatarios.</strong> Cuando otro sistema publica
+        <code>UserContactUpdated</code>, el nuevo teléfono o correo tarda en llegar: lo que haya en la cola
+        más lo que tarde el consumo. Si un evento de negocio se despacha en ese intervalo, la notificación
+        sale a la dirección antigua. Es consistencia eventual pura, y la pregunta para el negocio es
+        concreta: <em>¿cuántos segundos de desfase son aceptables entre que un usuario cambia su correo y
+        que dejemos de escribirle al anterior?</em>
+    </li>
+    <li>
+        <strong>Y hay una tercera que hoy no existe pero está cableada.</strong> <code>NotificationLog.Web</code>
+        registra una caché de salida en Redis (<code>AddRedisOutputCache</code> y <code>UseOutputCache</code>),
+        pero ninguna página ni endpoint la usa todavía. Es decir: el contenedor de Redis se levanta, se paga
+        su coste, y no hay ni beneficio de latencia ni ventana de inconsistencia. El día que alguien marque
+        el listado de triggers como cacheable, aparecerán las dos cosas a la vez.
+    </li>
+</ul>
+
+<h2 class="ddd-h2">4.3 · Datos: propiedad, transacciones y outbox</h2>
+<p>
+    La regla es corta: <strong>cada servicio es dueño de sus datos y nadie más los toca directamente</strong>.
+    La base de datos compartida entre servicios es el antipatrón que anula todo el beneficio de separarlos —
+    quedan acoplados por el esquema y ya no pueden desplegarse ni evolucionar de forma independiente.
+</p>
+<p>
+    Aquí la regla se cumple, y de una forma que se ve en los <code>.csproj</code>:
+    <code>NotificationLog.Web</code> no referencia <code>Infrastructure</code> ni <code>Domain</code>, así
+    que <em>no puede</em> abrir la base aunque quisiera. Su única vía es HTTP. La excepción consciente es el
+    contenedor <code>sql-client</code>, que existe para inspeccionar datos en desarrollo.
+</p>
+
+<h3 class="ddd-h3">Sin transacción distribuida: sagas, compensaciones y el patrón outbox</h3>
+<p>
+    Cuando una operación cruza servicios no hay transacción que la cubra: la consistencia se consigue con
+    sagas y compensaciones. Y hay un patrón que se vuelve imprescindible en cuanto publicas eventos: el
+    <strong>outbox transaccional</strong> — escribir el evento en una tabla dentro de la misma transacción
+    que el cambio de estado, y publicarlo después desde ahí, para no perderlo cuando la escritura y la
+    publicación no comparten transacción.
+</p>
+
+<DddCallout Kind="honesto" Title="Aquí no hay outbox, y el hueco es concreto y localizable">
+    <p>
+        <code>NotificationDispatchService</code> <strong>envía primero y registra después</strong>: llama al
+        remitente del canal y, según el resultado, ejecuta <code>RecordNotificationSuccess</code> o
+        <code>RecordNotificationFailure</code>. Si el proceso muere entre esas dos líneas, el SMS ya salió y
+        no queda constancia de que salió. Wolverine reentregará el mensaje de la cola —entrega al menos una
+        vez— y el usuario recibirá el mismo aviso dos veces.
+    </p>
+    <p>
+        Lo llamativo es que la pieza para arreglarlo ya está en el modelo:
+        <code>BusinessEvent.EventId</code> viaja en el mensaje y se guarda en cada <code>Notification</code>.
+        Nadie lo consulta. No hay ninguna comprobación de "¿ya procesé este <code>EventId</code>?" en todo el
+        repositorio: la clave de idempotencia existe, se persiste y no se usa.
+    </p>
+</DddCallout>
+<CodeBlock Title="El hueco exacto, y la comprobación que lo cerraría" Code="@OutboxSnippet" />
+
+<h2 class="ddd-h2">4.4 · Contratos e integración</h2>
+<p>
+    Una API expuesta es un compromiso a largo plazo con consumidores que no controlas. Es la parte más cara
+    de cambiar de todo el sistema, así que hay que diseñarla con más cuidado que el código que hay detrás.
+</p>
+<p>Este sistema tiene dos contratos, con madurez muy distinta:</p>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>HTTP + JSON (Web → API)</th>
+                    <th>Protobuf (otros sistemas → colas)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Definición</td>
+                    <td>Endpoints con <code>Produces</code> y OpenAPI publicado en desarrollo</td>
+                    <td>Dos <code>.proto</code> versionados en <code>NotificationLog.Contracts</code></td>
+                </tr>
+                <tr>
+                    <td>Consumidores</td>
+                    <td>Uno conocido, del mismo repositorio</td>
+                    <td>Desconocidos por diseño — ese es el objetivo</td>
+                </tr>
+                <tr>
+                    <td>Versionado</td>
+                    <td>Ninguno: no hay <code>/v1</code> ni cabecera de versión</td>
+                    <td>Campo <code>schema_version</code> en cada mensaje</td>
+                </tr>
+                <tr>
+                    <td>Verificación</td>
+                    <td>Compilación conjunta; ningún test de contrato</td>
+                    <td>El paquete compartido; <code>schema_version</code> no lo lee nadie</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<DddCallout Kind="advertencia" Title="El contrato asíncrono es el caro, y es el que está a medias">
+    <p>
+        Que la API HTTP no esté versionada es asumible mientras su único consumidor viva en el mismo
+        repositorio y se despliegue a la vez. Lo que no escala igual es el otro: los <code>.proto</code> los
+        consumen sistemas que no controlas, y ahí la compatibilidad depende hoy de dos cosas frágiles —que
+        productor y consumidor compilen contra el mismo paquete <code>NotificationLog.Contracts</code>, y de
+        la disciplina de un campo <code>schema_version</code> que <strong>ningún handler lee</strong>. Un
+        mensaje con una versión de esquema más nueva de la que este servicio entiende se procesaría igual,
+        en silencio.
+    </p>
+    <p>
+        No hay Schema Registry desplegado ni <em>consumer-driven contract testing</em>. La primera mejora, y
+        la más barata, es leer <code>schema_version</code> en los handlers y rechazar lo que no se entienda
+        con un error explícito en vez de con un procesamiento a medias.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">4.5 · Resiliencia</h2>
+<p>
+    Patrones para que el fallo parcial no se convierta en caída total: timeouts, reintentos con backoff
+    exponencial y jitter, circuit breaker, bulkhead, degradación elegante e idempotencia.
+</p>
+<p>Dos ideas que suelen faltar en la conversación:</p>
+<ul>
+    <li>
+        <strong>Sin timeout agresivo, un servicio lento tumba a todos sus llamantes</strong> por agotamiento
+        de hilos o de conexiones. Un servicio caído hace menos daño que uno lento.
+    </li>
+    <li>
+        <strong>Sin idempotencia, los reintentos duplican pedidos y cobros.</strong> El reintento ingenuo es
+        una de las causas más comunes de caídas en cascada, y de facturas dobles.
+    </li>
+</ul>
+
+<h3 class="ddd-h3">Lo que este sistema ya tiene — más de lo que parece</h3>
+<p>
+    <code>AddServiceDefaults()</code> aplica <code>AddStandardResilienceHandler()</code> a
+    <strong>todos</strong> los <code>HttpClient</code> del proceso. Y los remitentes de SMS y Push se
+    registran con <code>AddHttpClient</code>, así que heredan ese pipeline sin que nadie lo pidiera
+    explícitamente: timeout total y por intento, reintentos con backoff exponencial y jitter, y circuit
+    breaker. Es resiliencia real, verificable en tres archivos.
+</p>
+<CodeBlock Title="Cómo llega la resiliencia a los remitentes, sin que su código la mencione" Code="@ResilienceSnippet" />
+
+<DddCallout Kind="advertencia" Title="Y por qué eso, hoy, es también un riesgo">
+    <p>
+        Ese mismo pipeline reintenta automáticamente un <code>POST</code> de SMS que devolvió 500 o expiró
+        por timeout. Si el proveedor ya había aceptado el mensaje y solo se perdió la respuesta, el usuario
+        recibe dos SMS. Sumado a la reentrega de la cola descrita en 4.3, este sistema tiene
+        <strong>dos</strong> fuentes independientes de duplicados y ninguna comprobación de idempotencia.
+    </p>
+    <p>
+        La lección para la sesión no es "quiten los reintentos": es que los reintentos y la idempotencia son
+        una sola decisión, y aquí se tomó media. Cerrarla es barato — la clave ya viaja en el mensaje.
+    </p>
+</DddCallout>
+
+<h3 class="ddd-h3">Degradación elegante: un caso bien resuelto</h3>
+<p>
+    <code>DispatchConfigurationAsync</code> procesa cada canal por separado y captura sus excepciones: si el
+    render de la plantilla falla, o si el envío revienta, registra una <code>Notification</code> fallida con
+    el motivo y <strong>continúa con el siguiente canal</strong>. Un proveedor de push caído no impide que
+    salga el correo. Y el stub de WhatsApp, que siempre lanza <code>NotSupportedException</code>, aterriza en
+    ese mismo camino: queda registrado como fallo explicado, no como silencio.
+</p>
+
+<h2 class="ddd-h2">4.6 · Observabilidad</h2>
+<p>
+    Observabilidad es la capacidad de responder <em>preguntas nuevas</em> sobre el sistema sin desplegar
+    código. Se apoya en logs estructurados, métricas y trazas distribuidas correlacionadas. Preséntala como
+    requisito arquitectónico, no como tarea de operaciones: una arquitectura distribuida sin trazas
+    correlacionadas es indepurable, y eso es una decisión arquitectónica tomada por omisión.
+</p>
+<p>
+    Aquí la base está puesta y no es decorativa. <code>ServiceDefaults/Extensions.cs</code> configura
+    OpenTelemetry para los tres pilares: logs con mensaje formateado y scopes, métricas de ASP.NET Core,
+    <code>HttpClient</code> y runtime, y trazas de ASP.NET Core y <code>HttpClient</code> — excluyendo las
+    peticiones a <code>/health</code> para no llenar el sistema de ruido.
+</p>
+<CodeBlock Title="ServiceDefaults/Extensions.cs (extracto real)" Code="@OtelSnippet" />
+
+<DddCallout Kind="honesto" Title="Tres huecos que conviene conocer antes de fiarse de las trazas">
+    <ol>
+        <li>
+            <strong>La traza se corta en la cola.</strong> Solo hay instrumentación de ASP.NET Core y
+            <code>HttpClient</code>. El consumo de RabbitMQ vía Wolverine no aporta spans, así que el camino
+            <em>mensaje recibido → despacho → envío de SMS</em> no se ve como una traza continua: se ve como
+            una llamada HTTP saliente sin padre. Es justo el tramo más difícil de depurar.
+        </li>
+        <li>
+            <strong>No hay exportador sin variable de entorno.</strong> La telemetría se exporta solo si
+            <code>OTEL_EXPORTER_OTLP_ENDPOINT</code> está definida — que es lo que hace el dashboard de
+            Aspire en desarrollo. Fuera de ese contexto, la telemetría se genera y se tira.
+        </li>
+        <li>
+            <strong>Los health checks solo se publican en Development.</strong>
+            <code>MapDefaultEndpoints</code> registra <code>/health</code> y <code>/alive</code> dentro de un
+            <code>if (app.Environment.IsDevelopment())</code>. Es la plantilla por defecto de Aspire y es una
+            decisión de seguridad razonable, pero significa que <code>WithHttpHealthCheck("/health")</code>
+            de <code>AppHost.cs</code> no tendría a quién preguntar en producción.
+        </li>
+    </ol>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio de la sesión 4">
+    <p>
+        Análisis de fallo: elige una dependencia —SQL Server, RabbitMQ, el proveedor de SMS— y traza qué
+        pasa exactamente si se cae, y qué pasa si en vez de caerse se vuelve muy lenta. Las dos respuestas
+        casi nunca coinciden, y la segunda suele ser peor. Versión guiada en la
+        <a href="/arquitectura/ejercicios">página de ejercicios</a>.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/arquitectura/estilos" PrevLabel="Estilos" NextHref="/arquitectura/evolucion" NextLabel="Evolución" />
+
+@code {
+    private const string OutboxSnippet = """
+// NotificationDispatchService.DispatchConfigurationAsync (real, resumido):
+var result = await SendAsync(configuration.Channel, destination, message, ct);   // (1) efecto externo
+
+if (result.Succeeded)
+    await _recordSuccess.HandleAsync(new RecordNotificationSuccessCommand(
+        businessEvent.EventId, /* ... */), ct);                                   // (2) persistencia
+else
+    await _recordFailure.HandleAsync(new RecordNotificationFailureCommand(
+        businessEvent.EventId, /* ... */), ct);
+
+// Si el proceso muere entre (1) y (2): el envio ocurrio y no quedo registrado. La cola
+// reentrega el mensaje y se vuelve a enviar.
+//
+// La comprobacion que falta, antes de enviar, usando una clave que YA viaja y YA se guarda:
+//
+//   if (await _notifications.ExistsAsync(businessEvent.EventId, configuration.Id, ct))
+//       return;   // este evento ya se despacho por este canal
+//
+// Requiere anadir ExistsAsync a INotificationRepository y un indice unico
+// (EventId, ConfigurationId) que de la garantia real bajo concurrencia.
+""";
+
+    private const string ResilienceSnippet = """
+// 1) ServiceDefaults/Extensions.cs  -> se aplica a TODOS los HttpClient del proceso
+builder.Services.ConfigureHttpClientDefaults(http =>
+{
+    http.AddStandardResilienceHandler();   // timeout + retry con backoff y jitter + circuit breaker
+    http.AddServiceDiscovery();
+});
+
+// 2) ApiService/Program.cs
+builder.AddServiceDefaults();
+
+// 3) NotificationSendingExtensions.cs  -> el remitente hereda el pipeline sin mencionarlo
+services.AddHttpClient<ISmsNotificationSender, HttpSmsNotificationSender>((sp, client) =>
+{
+    var options = sp.GetRequiredService<IOptions<SmsNotificationOptions>>().Value;
+    client.BaseAddress = new Uri(options.BaseUrl);
+});
+""";
+
+    private const string OtelSnippet = """
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddRuntimeInstrumentation())
+    .WithTracing(tracing => tracing
+        .AddSource(builder.Environment.ApplicationName)
+        .AddAspNetCoreInstrumentation(t =>
+            t.Filter = context =>
+                !context.Request.Path.StartsWithSegments("/health")
+                && !context.Request.Path.StartsWithSegments("/alive"))
+        .AddHttpClientInstrumentation());
+
+// Nada de esto se exporta si falta OTEL_EXPORTER_OTLP_ENDPOINT:
+var useOtlpExporter = !string.IsNullOrWhiteSpace(builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"]);
+if (useOtlpExporter) builder.Services.AddOpenTelemetry().UseOtlpExporter();
+""";
+}

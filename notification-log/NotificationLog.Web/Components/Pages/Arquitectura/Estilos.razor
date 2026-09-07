@@ -1,0 +1,291 @@
+@page "/arquitectura/estilos"
+
+<PageTitle>Estilos · Arquitectura · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>3 · Estilos arquitectónicos</h1>
+        <p>Monolito, microservicios y eventos. Se eligen por atributos de calidad, nunca por moda ni por lo que hizo Netflix.</p>
+    </div>
+</div>
+
+<ArqNav />
+
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Defender un monolito con argumentos técnicos, no con vergüenza.</li>
+        <li>Enumerar el coste completo de los microservicios antes que sus beneficios.</li>
+        <li>Distinguir coreografía de orquestación y reconocer cuál usa este sistema en cada tramo.</li>
+        <li>Elegir un estilo con un método reproducible que termine en un ADR.</li>
+    </ul>
+</DddCallout>
+
+<h2 class="ddd-h2">3.1 · Monolito</h2>
+<p>
+    Todo el sistema en un único artefacto desplegable. Sus ventajas se olvidan por costumbre, así que
+    conviene enumerarlas: transacciones ACID sencillas, refactor global con el IDE, depuración de un flujo
+    completo con un solo <em>step into</em>, un solo pipeline, un solo sitio donde mirar los logs.
+</p>
+<p>
+    Este sistema las usa todas. <code>CreateTriggerHandler</code> comprueba unicidad y guarda en la misma
+    transacción implícita de <code>SaveChangesAsync</code>: no hay compensación, ni saga, ni ventana de
+    inconsistencia. Si <code>apiservice</code> fueran tres servicios, esa comprobación de unicidad sería un
+    problema distribuido con respuesta mucho más larga.
+</p>
+<CodeBlock Title="Lo que un monolito te regala y un sistema distribuido te cobra" Code="@MonolithSnippet" />
+<p>
+    El monolito solo es un problema cuando es un <em>big ball of mud</em> — y eso es un fallo de
+    modularidad, no de despliegue. La respuesta correcta a "nuestro monolito es un desastre" casi nunca es
+    "repartámoslo en servicios": es "pongámosle límites y tests que los defiendan".
+</p>
+
+<h2 class="ddd-h2">3.2 · Microservicios</h2>
+<p>
+    Servicios pequeños, desplegables de forma independiente, con datos propios y alineados a capacidades de
+    negocio. El beneficio central <strong>no es técnico, es organizativo</strong>: despliegue y evolución
+    independientes por equipo. Si no tienes varios equipos pisándose en el mismo release, probablemente no
+    los necesitas.
+</p>
+<p>Y el coste, sin edulcorar:</p>
+<ul>
+    <li>Consistencia eventual donde antes había una transacción.</li>
+    <li>Depuración distribuida: sin trazas correlacionadas, un fallo es indepurable.</li>
+    <li>Latencia de red en cada salto y modos de fallo parciales nuevos.</li>
+    <li>Versionado de contratos con consumidores que no controlas.</li>
+    <li>Entornos locales complicados de levantar.</li>
+    <li>CI/CD y observabilidad dejan de ser opcionales.</li>
+    <li>El coste en personas de operarlo, que es el que nadie presupuesta.</li>
+</ul>
+<p>
+    <strong>Regla práctica:</strong> el tamaño correcto de un servicio lo marca el límite de negocio
+    (<em>bounded context</em>), no el número de líneas.
+</p>
+
+<DddCallout Kind="honesto" Title="Este sistema no es microservicios, aunque los nombres lo sugieran">
+    <p>
+        Hay dos procesos desplegables — <code>apiservice</code> y <code>webfrontend</code> — y la separación
+        no responde a límites de negocio, sino a la frontera entre UI y API. Todo el negocio vive en uno
+        solo. Los nombres (<code>NotificationService.Domain</code>, la carpeta <code>Services/Notification/</code>,
+        el proyecto <code>Contracts</code> con sus <code>.proto</code>) delatan que el diseño está
+        <em>preparado</em> para que aparezcan más servicios alrededor, y eso está bien: preparar el
+        vocabulario y los contratos es barato, partir el despliegue antes de necesitarlo no.
+    </p>
+    <p>
+        Dicho eso, el proyecto ya paga <strong>parte</strong> del coste distribuido sin cobrar el beneficio:
+        un salto HTTP entre Web y API, una cola de mensajería con entrega al menos una vez y dos formatos de
+        serialización. Es una elección defendible —la mensajería es el punto de integración real con otros
+        sistemas— pero hay que verla como lo que es: un precio ya pagado.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">3.3 · Arquitectura orientada a eventos</h2>
+<p>
+    Los componentes se comunican publicando y consumiendo eventos a través de un broker, sin conocerse entre
+    sí. Hay dos modelos, y no son intercambiables:
+</p>
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Modelo</th>
+                    <th>Cómo funciona</th>
+                    <th>Coste</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>Coreografía</strong></td>
+                    <td>Cada servicio reacciona a los eventos que le interesan</td>
+                    <td>Máximo desacoplamiento, pero nadie conoce el flujo completo: difícil de razonar y de depurar</td>
+                </tr>
+                <tr>
+                    <td><strong>Orquestación</strong></td>
+                    <td>Un coordinador dirige el proceso paso a paso</td>
+                    <td>Flujo explícito y observable, a cambio de un punto central de acoplamiento</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<p>
+    Ninguno es superior: se eligen por proceso. Los procesos de negocio críticos y con compensaciones suelen
+    pedir orquestación.
+</p>
+
+<h3 class="ddd-h3">Este sistema usa los dos, y en el sitio correcto</h3>
+<p>
+    Vale la pena mirarlo porque es un ejemplo limpio de la distinción:
+</p>
+<ul>
+    <li>
+        <strong>Coreografía en la frontera.</strong> Quien publica <code>UserContactUpdated</code> en la cola
+        <code>user-changes</code> no sabe que existe NotificationLog. Solo anuncia un hecho. Ese
+        desacoplamiento es el que permite que mañana haya tres consumidores más sin tocar al productor.
+    </li>
+    <li>
+        <strong>Orquestación dentro.</strong> <code>NotificationDispatchService</code> es un orquestador de
+        libro: busca el trigger, resuelve las configuraciones activas, comprueba el destinatario, renderiza,
+        envía y registra el resultado — en un orden explícito que se lee de arriba abajo en un solo archivo.
+        Nadie tiene que reconstruir el flujo saltando entre siete consumidores.
+    </li>
+</ul>
+<CodeBlock Title="El flujo orquestado, leído del propio NotificationDispatchService" Code="@DispatchFlowSnippet" />
+
+<DddCallout Kind="concepto" Title="Por qué la mezcla es la decisión correcta aquí">
+    <p>
+        La ingesta necesita desacoplamiento máximo: los sistemas que publican hechos de negocio no deben
+        saber nada de plantillas ni de canales. El despacho necesita lo contrario: es un proceso con pasos,
+        con fallos parciales por canal y con un registro auditable de qué pasó — justo lo que la coreografía
+        vuelve opaco. Cada tramo eligió el modelo que su problema pedía.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">3.4 · Otros estilos que conviene conocer</h2>
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Estilo</th>
+                    <th>Qué es</th>
+                    <th>Cuándo</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Pipes and filters</td>
+                    <td>Transformaciones encadenadas, cada una ignorante de la anterior</td>
+                    <td>Pipelines de datos y procesamiento por lotes</td>
+                </tr>
+                <tr>
+                    <td>Streaming</td>
+                    <td>Procesamiento continuo sobre flujos con ventanas temporales</td>
+                    <td>Métricas, detección de patrones, agregaciones en vivo</td>
+                </tr>
+                <tr>
+                    <td>Serverless / FaaS</td>
+                    <td>Unidades efímeras gestionadas por el proveedor</td>
+                    <td>Cargas irregulares y trabajo por eventos; sufre con arranques en frío, límites de tiempo y acoplamiento al proveedor</td>
+                </tr>
+                <tr>
+                    <td>Space-based</td>
+                    <td>Replicación en memoria para picos extremos</td>
+                    <td>Nicho, pero ilustra bien el trade-off memoria/consistencia</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<p>
+    El primero aparece dentro de este sistema aunque nadie lo llame así: <em>evento → resolver trigger →
+    renderizar → enviar → registrar</em> es una tubería de transformaciones donde cada paso solo conoce su
+    entrada. Reconocer el patrón importa porque sugiere dónde cortar si algún día ese flujo tuviera que
+    partirse en piezas desplegables por separado.
+</p>
+
+<h2 class="ddd-h2">3.5 · Cómo elegir un estilo</h2>
+<p>
+    Se elige por atributos de calidad priorizados. Método simple y suficiente para un equipo:
+</p>
+<ol class="ddd-steps">
+    <li>Lista los tres atributos de calidad prioritarios del sistema, con número (módulo 1).</li>
+    <li>Puntúa dos o tres estilos candidatos contra ellos — una tabla basta, no hace falta ponderación fina.</li>
+    <li>Escribe un ADR con el resultado <strong>y con lo que se sacrifica</strong>.</li>
+</ol>
+<p>
+    Si el ADR no dice qué se sacrifica, el análisis está incompleto. Ese es el filtro más útil que puedes
+    aplicar a cualquier propuesta, incluida la tuya.
+</p>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Atributo priorizado</th>
+                    <th>Monolito modular (actual)</th>
+                    <th>Servicio de notificaciones separado</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Time-to-market con un equipo pequeño</td>
+                    <td>Alto: un pipeline, un despliegue</td>
+                    <td>Bajo: dos pipelines y un contrato que mantener</td>
+                </tr>
+                <tr>
+                    <td>Aislamiento de fallo del envío</td>
+                    <td>Medio: un envío lento consume hilos del mismo proceso que sirve la API</td>
+                    <td>Alto: el panel sigue respondiendo aunque el despacho se atasque</td>
+                </tr>
+                <tr>
+                    <td>Escalado independiente del consumo de colas</td>
+                    <td>Bajo: escalas la API entera para escalar el consumo</td>
+                    <td>Alto: escalas solo el consumidor</td>
+                </tr>
+                <tr>
+                    <td>Coste operativo</td>
+                    <td>Alto (a favor): un proceso, una base de datos</td>
+                    <td>Bajo: otro despliegue, otra observabilidad, otro on-call</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<p>
+    Con los atributos que este proyecto tiene hoy —ninguno de disponibilidad escrito, un equipo, sin tráfico
+    real— la columna izquierda gana sin discusión. La conversación cambiaría el día que exista un número en
+    la fila "aislamiento de fallo": ahí es donde este sistema se partiría primero, y el corte natural ya está
+    dibujado en el código, porque el consumo de colas está aislado en
+    <code>Infrastructure/Messaging</code>.
+</p>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio de la sesión 3">
+    <p>
+        Evalúa dos estilos candidatos contra los atributos que escribiste en la sesión 1 y redacta el ADR
+        resultante. La versión guiada está en la <a href="/arquitectura/ejercicios">página de ejercicios</a>.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/arquitectura/estructura" PrevLabel="Estructura" NextHref="/arquitectura/distribuido" NextLabel="Distribuido" />
+
+@code {
+    private const string MonolithSnippet = """
+// CreateTriggerHandler: unicidad y escritura en la misma transaccion implicita.
+if (await _triggers.ExistsAsync(eventKey, ct))
+    throw new AppValidationException($"Ya existe un trigger para '{eventKey}'.");
+
+var trigger = NotificationTrigger.Create(eventKey, cmd.Description);
+
+await _triggers.AddAsync(trigger, ct);
+await _uow.SaveChangesAsync(ct);      // <- ACID. Sin saga, sin compensacion, sin ventana.
+
+// Ademas, la base lo respalda con un indice unico (NotificationTriggerConfiguration):
+//   builder.HasIndex(t => t.EventKey).IsUnique()
+// La comprobacion en codigo da un buen mensaje de error; el indice da la garantia real
+// cuando dos peticiones entran a la vez. En un sistema distribuido, esa segunda red de
+// seguridad no existiria: haria falta una saga o una clave de idempotencia.
+""";
+
+    private const string DispatchFlowSnippet = """
+public async Task DispatchAsync(BusinessEvent businessEvent, CancellationToken ct)
+{
+    var trigger = await _triggers.GetByEventKeyAsync(EventKey.Create(businessEvent.EventKey), ct);
+    if (trigger is null || !trigger.IsEnabled) return;                    // 1. resolver trigger
+
+    var recipient = await _recipients.GetByIdAsync(businessEvent.RecipientId, ct);
+    if (recipient is null) return;                                        // 2. resolver destinatario
+
+    foreach (var configuration in trigger.ResolveActiveConfigurations())  // 3. por cada canal activo
+        await DispatchConfigurationAsync(businessEvent, trigger.EventKey.Value,
+            configuration, recipient, ct);
+}
+
+// Y dentro de DispatchConfigurationAsync, el resto de la tuberia:
+//   4. puede el destinatario recibir por este canal?
+//   5. cargar plantilla y version actual
+//   6. renderizar  -> si falla: RecordNotificationFailure y seguir con el siguiente canal
+//   7. enviar      -> si falla: RecordNotificationFailure; si va: RecordNotificationSuccess
+""";
+}
