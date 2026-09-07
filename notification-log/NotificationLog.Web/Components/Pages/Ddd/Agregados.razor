@@ -147,6 +147,19 @@
     esa lectura nunca se convierte en una escritura sobre el template. Solo <code>trigger</code> se guarda.
 </p>
 
+<DddCallout Kind="honesto" Title="Una precisión sobre 'sin condiciones de carrera'">
+    <p>
+        Todo lo anterior es cierto <em>dentro</em> de una transacción: mientras
+        <code>AddConfiguration</code> se ejecuta, ningún otro código de ese hilo puede colar una
+        configuración a espaldas de <code>EnsureChannelIsFree</code>. Lo que el agregado por sí solo no
+        puede garantizar es qué pasa cuando <strong>dos transacciones</strong> hacen exactamente lo mismo a
+        la vez: ambas leen el mismo estado, ambas concluyen que el canal está libre, y ambas guardan. Ese
+        escenario, y las tres formas de cerrarlo con sus costes, es el segundo tema del
+        <a href="/ddd/persistencia">módulo 12</a>. Vale la pena leerlo antes de dar por protegida cualquier
+        invariante de este tipo en un sistema real.
+    </p>
+</DddCallout>
+
 <CodeBlock Title="Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs" Code="@HandlerSnippet" />
 
 <DddCallout Kind="advertencia" Title="La lectura de un segundo agregado no rompe la regla">

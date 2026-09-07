@@ -55,6 +55,12 @@
     del lenguaje que más se parece a la definición de libro de un Value Object, sin escribir
     <code>Equals</code>/<code>GetHashCode</code> a mano.
 </p>
+<p>
+    Queda una pregunta natural: SQL Server no sabe qué es un <code>TemplateName</code>, así que ¿cómo se
+    guarda? La respuesta —una conversión declarada fuera del dominio, que además <em>revalida</em> el valor
+    al leerlo de la base de datos— está en el <a href="/ddd/persistencia">módulo 12</a>, junto con el coste
+    que esa conversión tiene sobre las consultas.
+</p>
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 780 240" role="img" aria-labelledby="voTitle">

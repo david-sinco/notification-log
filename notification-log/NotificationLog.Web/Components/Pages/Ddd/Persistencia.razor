@@ -1,0 +1,640 @@
+@page "/ddd/persistencia"
+
+<PageTitle>Persistencia y consistencia · DDD · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>12 · Persistir un modelo rico sin corromperlo</h1>
+        <p>El ORM quiere justo lo que el agregado prohíbe. Quién gana esa pelea define si tu dominio sigue siendo dominio.</p>
+    </div>
+</div>
+
+<DddNav />
+
+<DddCallout Kind="concepto" Title="Objetivos de este módulo">
+    <ul>
+        <li>Reconocer las cuatro técnicas con las que este repositorio mapea agregados encapsulados a tablas SQL.</li>
+        <li>Explicar por qué <code>IUnitOfWork</code> tiene un solo método y quién lo implementa.</li>
+        <li>Distinguir consistencia fuerte (dentro del agregado) de eventual (entre agregados) señalando el código de cada una.</li>
+        <li>Encontrar, con un escenario concreto, la invariante que hoy <em>no</em> está protegida bajo concurrencia — y decidir qué costaría cerrarla.</li>
+    </ul>
+</DddCallout>
+
+<p class="ddd-lede">
+    <strong>Para quién es:</strong> ya leíste los módulos <a href="/ddd/agregados">7 (Agregados)</a> y
+    <a href="/ddd/repositorios-y-factories">9 (Repositorios)</a>, y sabes que <code>NotificationTrigger</code>
+    protege su invariante de canal único con campos privados y setters privados. Este módulo responde la
+    pregunta que queda abierta al final de aquellos dos: <em>si nada de eso es público, ¿cómo demonios lo
+    guarda y lo reconstruye Entity Framework Core?</em> — y, sobre todo, qué pasa cuando dos peticiones
+    hacen eso a la vez.
+</p>
+
+<h2 class="ddd-h2">El problema: el ORM y el agregado quieren cosas opuestas</h2>
+<p>
+    Un ORM, en su forma más cómoda, quiere una clase con constructor público sin argumentos, propiedades
+    con <code>get; set;</code> públicos y colecciones <code>List&lt;T&gt;</code> también públicas y
+    reasignables. Necesita poder crear la instancia vacía y rellenarla campo por campo. Un agregado quiere
+    exactamente lo contrario: nacer solo a través de una fábrica que valida, no dejar mutar nada salvo por
+    métodos con nombre de negocio, y no dejar que nadie agregue elementos a su colección de hijos saltándose
+    <code>AddConfiguration</code>.
+</p>
+<p>
+    Esa tensión tiene tres desenlaces posibles, y solo uno es aceptable. El primero es rendirse y abrir el
+    modelo (setters públicos "porque EF los necesita"): así nace el <strong>modelo anémico causado por el
+    ORM</strong>, el más común de todos, porque llega disfrazado de restricción técnica. El segundo es
+    mantener el modelo cerrado y construir a mano una capa de traducción entre entidades de dominio y
+    entidades de persistencia: correcto, pero caro — el doble de clases y un mapeo que mantener. El tercero,
+    el que usa este repositorio, es <strong>enseñarle al ORM a entrar por la puerta de atrás</strong>:
+    dejarle acceder a campos privados y a constructores privados mediante configuración externa, sin abrir
+    un solo miembro público que el negocio no necesite.
+</p>
+
+<DddCallout Kind="antipatron" Title="El antipatrón, dicho con el ejemplo de este dominio">
+    <p>
+        Imagina que <code>NotificationTrigger</code> tuviera
+        <code>public List&lt;NotificationConfiguration&gt; Configurations { get; set; }</code> "porque EF lo
+        pide". La invariante del módulo 7 desaparece en el acto: cualquier handler podría hacer
+        <code>trigger.Configurations.Add(...)</code> sin pasar por <code>EnsureChannelIsFree</code>, y el
+        sistema aceptaría dos configuraciones de Email activas para el mismo evento. El agregado seguiría
+        <em>pareciendo</em> un agregado — misma clase, mismos métodos — pero ya no protegería nada. Por eso
+        la propiedad real es <code>IReadOnlyCollection&lt;NotificationConfiguration&gt; Configurations =&gt;
+        _configurations.AsReadOnly();</code> sobre un campo privado.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">Las cuatro técnicas, en archivos reales</h2>
+<p>
+    Todo el trabajo de traducción vive en <code>Infrastructure/Persistence/Configuration/</code>: seis
+    clases <code>IEntityTypeConfiguration&lt;T&gt;</code>, todas <code>internal</code>, que
+    <code>NotificationDbContext</code> recoge con
+    <code>ApplyConfigurationsFromAssembly</code>. El dominio no se entera de que existen.
+</p>
+
+<h3 class="ddd-h3">1 · Constructor privado para el ORM, fábrica pública para el negocio</h3>
+<p>
+    Los cuatro agregados y las dos entidades hijas declaran un constructor sin argumentos privado o
+    protegido, con un comentario que dice para qué está. EF Core lo usa por reflexión al materializar una
+    fila; ningún código de negocio puede invocarlo. Es la misma idea que viste en el
+    <a href="/ddd/repositorios-y-factories">módulo 9</a> como "dos caminos de creación que nunca se cruzan",
+    ahora vista desde el lado de la persistencia.
+</p>
+
+<CodeBlock Title="Domain/Recipients/Recipient.cs y Domain/Triggers/NotificationConfiguration.cs" Code="@CtorSnippet" />
+
+<h3 class="ddd-h3">2 · Colecciones: EF escribe en el campo, no en la propiedad</h3>
+<p>
+    Aquí está la línea clave de todo el módulo. <code>NotificationTriggerConfiguration</code> declara la
+    relación uno-a-muchos y después le ordena a EF Core que acceda a la navegación
+    <strong>por campo</strong>, no por propiedad. Como el campo es <code>_configurations</code> (un
+    <code>List&lt;T&gt;</code> privado) y la propiedad pública es un <code>IReadOnlyCollection</code> de solo
+    lectura, EF puede rellenar la lista al cargar sin que exista jamás un setter público.
+</p>
+
+<CodeBlock Title="Infrastructure/Persistence/Configuration/NotificationTriggerConfiguration.cs" Code="@CollectionSnippet" />
+
+<p>
+    Nota también <code>.HasForeignKey("NotificationTriggerId")</code> con la clave foránea escrita como
+    <em>string</em>: es una <strong>shadow property</strong>. La columna existe en la tabla
+    <code>NotificationConfigurations</code>, pero no existe ninguna propiedad
+    <code>NotificationTriggerId</code> en la clase <code>NotificationConfiguration</code>. Eso no es un
+    truco: es la Regla 3 de Vernon aplicada hacia arriba. Un hijo no necesita saber el id de su padre para
+    cumplir su función, y si no lo necesita, no se le pone. La base de datos sí lo necesita, y ese es
+    problema de la base de datos.
+</p>
+
+<h3 class="ddd-h3">3 · Value objects: una conversión declarada fuera del dominio</h3>
+<p>
+    SQL Server no sabe qué es un <code>EventKey</code>. La conversión de ida y vuelta se declara en la
+    configuración de EF, y la vuelta pasa por <code>EventKey.Create(value)</code> — es decir, el valor que
+    sale de la base de datos <strong>se revalida</strong> con la misma regla de negocio que se aplicó al
+    entrar. Y el tamaño de columna reutiliza <code>EventKey.MaxLength</code>, la misma constante que usa el
+    dominio: el esquema se deriva del modelo, nunca al revés.
+</p>
+
+<CodeBlock Title="Infrastructure/Persistence/Configuration/NotificationTriggerConfiguration.cs (conversión)" Code="@ConversionSnippet" />
+
+<DddCallout Kind="advertencia" Title="El coste real de un value converter, visible en este repositorio">
+    <p>
+        Un valor convertido deja de ser transparente para el proveedor de consultas. La comparación por
+        igualdad sigue traduciéndose sin problema — <code>ExistsAsync</code> hace
+        <code>_db.Triggers.AnyAsync(t =&gt; t.EventKey == eventKey, ct)</code> y eso se convierte en un
+        <code>WHERE EventKey = @@p0</code> que aprovecha el índice único. Pero en cuanto quieres tratar el
+        valor <em>como el string que es en la base de datos</em>, EF ya no puede mirar dentro del tipo
+        convertido. Y este repositorio tiene la prueba en un archivo real: el <code>ListAsync</code> de
+        triggers no puede escribir <code>EF.Functions.Like(t.EventKey.Value, pattern)</code>, así que baja un
+        nivel y accede a la columna por nombre.
+    </p>
+</DddCallout>
+
+<CodeBlock Title="Infrastructure/Persistence/Repositories/NotificationTriggerRepository.cs (la vía de escape)" Code="@EscapeHatchSnippet" />
+
+<p>
+    <code>EF.Property&lt;string&gt;(t, "EventKey")</code> le dice al traductor de consultas "olvídate del
+    tipo del modelo y usa la columna". Funciona, y aquí es la decisión correcta — pero fíjate en lo que se
+    perdió: el nombre de la columna pasó a ser una cadena mágica que ningún compilador verifica, y ese
+    mismo truco aparece dos veces, también en el <code>OrderBy</code>. Ese es el precio concreto del patrón,
+    y conviene conocerlo antes de convertir todo lo que se mueve. Un value object gana seguridad en el
+    dominio y la paga en el borde de las consultas.
+</p>
+
+<h3 class="ddd-h3">4 · Lo que es parte del agregado pero no es una entidad: JSON</h3>
+<p>
+    <code>Recipient.Attributes</code> y <code>Notification.Payload</code> son diccionarios libres. No son
+    entidades — no tienen identidad ni ciclo de vida propio — así que no merecen una tabla hija con su
+    repositorio y su tabla de unión. Son <em>valor</em> perteneciente al agregado, y se guardan como valor:
+    una columna <code>nvarchar(max)</code> con JSON dentro. Otra vez, EF accede al campo privado
+    <code>_attributes</code> e ignora la propiedad pública de solo lectura.
+</p>
+
+<CodeBlock Title="Infrastructure/Persistence/Configuration/RecipientConfiguration.cs (diccionario como JSON)" Code="@JsonSnippet" />
+
+<p>
+    El <code>ValueComparer</code> no es decorativo. Sin él, EF compara diccionarios por referencia y nunca
+    detecta que <code>SetAttribute("plan", "premium")</code> cambió algo: el objeto sigue siendo el mismo
+    objeto en memoria, así que <code>SaveChangesAsync</code> no generaría ningún <code>UPDATE</code> y el
+    cambio se perdería en silencio. El comparador le enseña a EF a comparar el contenido y a clonar el
+    diccionario para guardar el snapshot original. Es el tipo de detalle que solo aparece cuando decides
+    guardar valor en vez de entidades, y hay que pagarlo entero.
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 840 320" role="img" aria-labelledby="mapTitle">
+        <title id="mapTitle">Las cuatro traducciones entre el agregado encapsulado y las tablas</title>
+        <defs>
+            <marker id="perArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="30" width="230" height="260" rx="12" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="135" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Domain (en memoria)</text>
+        <text x="135" y="76" text-anchor="middle" font-size="9" fill="#4338ca">cero PackageReference</text>
+
+        <rect x="38" y="90" width="194" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="135" y="109" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#334155">private Recipient() { }</text>
+
+        <rect x="38" y="126" width="194" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="135" y="145" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#334155">_configurations (privado)</text>
+
+        <rect x="38" y="162" width="194" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="135" y="181" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#334155">EventKey (record)</text>
+
+        <rect x="38" y="198" width="194" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="135" y="217" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#334155">_attributes (Dictionary)</text>
+
+        <text x="135" y="256" text-anchor="middle" font-size="9" fill="#4338ca" font-style="italic">nada aquí sabe que EF existe</text>
+
+        <rect x="300" y="30" width="240" height="260" rx="12" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="420" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">Infrastructure/Persistence</text>
+        <text x="420" y="70" text-anchor="middle" font-size="8.5" fill="#475569">Configuration/*.cs — internal</text>
+
+        <rect x="315" y="90" width="210" height="30" rx="6" fill="#fff" stroke="#e5e9f2" />
+        <text x="420" y="109" text-anchor="middle" font-size="8" fill="#334155">EF materializa por reflexión</text>
+
+        <rect x="315" y="126" width="210" height="30" rx="6" fill="#fff" stroke="#e5e9f2" />
+        <text x="420" y="145" text-anchor="middle" font-size="8" fill="#334155">PropertyAccessMode.Field</text>
+
+        <rect x="315" y="162" width="210" height="30" rx="6" fill="#fff" stroke="#e5e9f2" />
+        <text x="420" y="181" text-anchor="middle" font-size="8" fill="#334155">HasConversion + MaxLength</text>
+
+        <rect x="315" y="198" width="210" height="30" rx="6" fill="#fff" stroke="#e5e9f2" />
+        <text x="420" y="217" text-anchor="middle" font-size="8" fill="#334155">JSON + ValueComparer</text>
+
+        <text x="420" y="256" text-anchor="middle" font-size="9" fill="#475569" font-style="italic">toda la traducción vive aquí</text>
+
+        <rect x="590" y="30" width="230" height="260" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="705" y="54" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">SQL Server</text>
+        <text x="705" y="70" text-anchor="middle" font-size="8.5" fill="#9a3412">InitialCreate.cs</text>
+
+        <rect x="606" y="90" width="198" height="30" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="705" y="109" text-anchor="middle" font-size="8" fill="#334155">Recipients (fila)</text>
+
+        <rect x="606" y="126" width="198" height="30" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="705" y="140" text-anchor="middle" font-size="8" fill="#334155">NotificationConfigurations</text>
+        <text x="705" y="151" text-anchor="middle" font-size="7.5" fill="#64748b">FK NotificationTriggerId (shadow)</text>
+
+        <rect x="606" y="162" width="198" height="30" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="705" y="181" text-anchor="middle" font-size="8" fill="#334155">varchar(200) + índice único</text>
+
+        <rect x="606" y="198" width="198" height="30" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="705" y="217" text-anchor="middle" font-size="8" fill="#334155">nvarchar(max) con JSON</text>
+
+        <text x="705" y="256" text-anchor="middle" font-size="9" fill="#9a3412" font-style="italic">el esquema se deriva del modelo</text>
+
+        <line x1="252" y1="160" x2="296" y2="160" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#perArrow)" />
+        <line x1="542" y1="160" x2="586" y2="160" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#perArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Ninguna flecha vuelve hacia la izquierda: la persistencia conoce al dominio, el dominio nunca conoce
+        a la persistencia. Las cuatro filas centrales son las únicas cuatro técnicas que hacen falta.
+    </p>
+</div>
+
+<h2 class="ddd-h2">Unidad de trabajo: una interfaz de un solo método</h2>
+<DddCallout Kind="concepto" Title="Concepto: Unit of Work">
+    <p>
+        Agrupa un conjunto de cambios sobre uno o más objetos y los confirma como una sola transacción. En
+        DDD, su valor no es "poder guardar varias cosas": es marcar con precisión <em>dónde termina la
+        operación de negocio</em>, para que el límite transaccional coincida con el límite del agregado.
+    </p>
+</DddCallout>
+<p>
+    La abstracción real de este proyecto es deliberadamente mínima: vive en
+    <code>Application/Abstractions/IUnitOfWork.cs</code> y tiene un método. La implementación no es una
+    clase envolvente sino el propio <code>NotificationDbContext</code>, que ya expone
+    <code>SaveChangesAsync</code>; el registro en el contenedor lo resuelve una lambda.
+</p>
+
+<CodeBlock Title="Application/Abstractions/IUnitOfWork.cs + Infrastructure/DependencyInjection.cs" Code="@UowSnippet" />
+
+<p>
+    La consecuencia de diseño importante es la que ya viste en el
+    <a href="/ddd/agregados">módulo 7</a>, ahora con el mecanismo a la vista: cada handler de comando llama
+    a <code>_uow.SaveChangesAsync(ct)</code> <strong>una sola vez, al final</strong>. Ese único punto es la
+    transacción, y todo lo que se modificó antes de él pertenece a un solo agregado. Cuando
+    <code>AddConfigurationHandler</code> lee un <code>NotificationTemplate</code> para validar, ese template
+    entra al <em>change tracker</em> pero nadie lo muta, así que el <code>SaveChanges</code> no genera
+    ningún <code>UPDATE</code> sobre él. La regla "una transacción, un agregado" no está escrita en ninguna
+    parte: emerge de que solo un agregado cambió antes del único guardado.
+</p>
+
+<h2 class="ddd-h2">Consistencia fuerte dentro, eventual fuera</h2>
+<p>
+    El límite del agregado es también el límite de lo que se garantiza consistente en el mismo instante. En
+    este dominio eso se ve en dos lugares opuestos:
+</p>
+<ul>
+    <li>
+        <strong>Fuerte, dentro:</strong> <code>GetByIdAsync</code> y <code>GetByEventKeyAsync</code> del
+        repositorio de triggers siempre hacen <code>.Include(t =&gt; t.Configurations)</code>. Nunca
+        devuelven una raíz sin sus hijos, porque <code>EnsureChannelIsFree</code> necesita ver
+        <em>todas</em> las configuraciones para decidir. Un agregado cargado a medias es un agregado que no
+        puede defender su invariante.
+    </li>
+    <li>
+        <strong>Eventual, fuera:</strong> <code>Notification</code> guarda <code>TemplateVersionId</code>
+        como un <code>Guid</code> suelto. Nada impide que esa versión sea retirada
+        (<code>TemplateVersion.Retire()</code>) cinco minutos después de haber enviado la notificación. Y
+        está bien: el registro histórico apunta a la versión que se usó <em>entonces</em>, y su corrección
+        no depende del estado actual del agregado <code>NotificationTemplate</code>. Ese desfase es
+        consistencia eventual, y aquí es la respuesta correcta, no un defecto.
+    </li>
+</ul>
+
+<h2 class="ddd-h2">La grieta: concurrencia sobre la raíz</h2>
+<DddCallout Kind="honesto" Title="Este repositorio no tiene bloqueo optimista. Ni uno.">
+    <p>
+        Búscalo tú mismo: no hay ninguna propiedad <code>RowVersion</code>, ninguna llamada a
+        <code>IsConcurrencyToken()</code>, ningún <code>[Timestamp]</code> en las seis configuraciones de
+        entidad ni en la migración <code>InitialCreate</code>. Todas las escrituras siguen el patrón
+        "leer, decidir en memoria, guardar" sin ninguna comprobación de que el estado leído siga siendo el
+        estado actual al momento de guardar. Eso significa que hay al menos una invariante de negocio que el
+        sistema protege perfectamente contra un solo usuario y no protege en absoluto contra dos a la vez.
+    </p>
+</DddCallout>
+
+<p>
+    El escenario concreto, con las clases de este dominio: dos peticiones simultáneas agregan una
+    configuración de canal <code>Email</code> al mismo trigger.
+</p>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 300" role="img" aria-labelledby="raceTitle">
+        <title id="raceTitle">Dos transacciones concurrentes rompen la invariante de canal único</title>
+        <defs>
+            <marker id="raceArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <line x1="70" y1="40" x2="70" y2="270" stroke="#e5e9f2" stroke-width="1" />
+        <line x1="410" y1="40" x2="410" y2="270" stroke="#e5e9f2" stroke-width="1" />
+        <line x1="750" y1="40" x2="750" y2="270" stroke="#e5e9f2" stroke-width="1" />
+
+        <text x="70" y="30" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Petición A</text>
+        <text x="410" y="30" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Base de datos</text>
+        <text x="750" y="30" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Petición B</text>
+
+        <rect x="10" y="52" width="130" height="34" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="75" y="66" text-anchor="middle" font-size="8" fill="#334155">GetByIdAsync</text>
+        <text x="75" y="78" text-anchor="middle" font-size="7.5" fill="#64748b">0 configs de Email</text>
+        <line x1="140" y1="69" x2="400" y2="69" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#raceArrow)" />
+
+        <rect x="680" y="92" width="130" height="34" rx="6" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="745" y="106" text-anchor="middle" font-size="8" fill="#334155">GetByIdAsync</text>
+        <text x="745" y="118" text-anchor="middle" font-size="7.5" fill="#64748b">0 configs de Email</text>
+        <line x1="680" y1="109" x2="420" y2="109" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#raceArrow)" />
+
+        <rect x="10" y="140" width="150" height="34" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="85" y="154" text-anchor="middle" font-size="8" fill="#334155">EnsureChannelIsFree</text>
+        <text x="85" y="166" text-anchor="middle" font-size="7.5" fill="#16a34a">pasa</text>
+
+        <rect x="660" y="140" width="150" height="34" rx="6" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="735" y="154" text-anchor="middle" font-size="8" fill="#334155">EnsureChannelIsFree</text>
+        <text x="735" y="166" text-anchor="middle" font-size="7.5" fill="#16a34a">pasa (leyó lo mismo)</text>
+
+        <rect x="10" y="188" width="130" height="30" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="75" y="207" text-anchor="middle" font-size="8" fill="#334155">SaveChangesAsync</text>
+        <line x1="140" y1="203" x2="400" y2="203" stroke="#4f46e5" stroke-width="1.5" marker-end="url(#raceArrow)" />
+
+        <rect x="680" y="224" width="130" height="30" rx="6" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="745" y="243" text-anchor="middle" font-size="8" fill="#334155">SaveChangesAsync</text>
+        <line x1="680" y1="239" x2="420" y2="239" stroke="#ea580c" stroke-width="1.5" marker-end="url(#raceArrow)" />
+
+        <rect x="300" y="188" width="220" height="66" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="410" y="210" text-anchor="middle" font-size="9" font-weight="700" fill="#991b1b">2 filas INSERT aceptadas</text>
+        <text x="410" y="226" text-anchor="middle" font-size="8" fill="#991b1b">IX_..._Trigger_Channel NO es único</text>
+        <text x="410" y="242" text-anchor="middle" font-size="8" fill="#991b1b">dos Email activos en el mismo trigger</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        La invariante se verifica sobre una foto del pasado. Entre la lectura y el guardado, el mundo
+        cambió, y nada obliga a volver a mirar.
+    </p>
+</div>
+
+<p>
+    Y aquí viene el contraste que hace útil este ejemplo: el <strong>mismo repositorio protege bien la otra
+    regla de unicidad</strong>. <code>CreateTriggerHandler</code> comprueba
+    <code>ExistsAsync(eventKey)</code> antes de crear, y esa comprobación tiene exactamente el mismo agujero
+    lógico entre lectura y escritura — pero la migración crea
+    <code>UX_NotificationTriggers_EventKey</code> como índice <strong>único</strong>. Si dos peticiones
+    ganan la carrera a la vez, la base de datos rechaza la segunda. El índice de configuraciones,
+    <code>IX_NotificationConfigurations_Trigger_Channel</code>, es un índice de consulta corriente, no
+    único. Misma forma de código, dos niveles de protección distintos, y la diferencia está en una línea de
+    una migración.
+</p>
+
+<CodeBlock Title="Persistence/Migrations/20260904223406_InitialCreate.cs (dos índices, dos garantías)" Code="@IndexSnippet" />
+
+<h3 class="ddd-h3">Las tres formas de cerrarla, con su coste</h3>
+<ol class="ddd-steps">
+    <li>
+        <strong>Índice único filtrado en la base de datos.</strong> Un
+        <code>CREATE UNIQUE INDEX ... WHERE IsEnabled = 1</code> sobre
+        <code>(NotificationTriggerId, Channel)</code> haría imposible el estado inválido, pase lo que pase.
+        Coste: la violación llega como una excepción de SQL Server que hay que traducir a un error de
+        dominio comprensible, y la regla queda escrita en dos sitios (el agregado y el esquema) que pueden
+        divergir. Beneficio: es la única defensa que no se puede saltar.
+    </li>
+    <li>
+        <strong>Token de concurrencia en la raíz.</strong> Añadir una propiedad de versión a
+        <code>NotificationTrigger</code> marcada como <code>IsRowVersion()</code>: al guardar, EF incluye la
+        versión leída en el <code>WHERE</code> del <code>UPDATE</code> y lanza
+        <code>DbUpdateConcurrencyException</code> si alguien la cambió antes. Coste: el token vive en el
+        agregado (una propiedad técnica dentro del dominio, que es justo lo que este proyecto ha evitado
+        hasta ahora) y hay que decidir una política de reintento. Beneficio: protege <em>todas</em> las
+        invariantes de la raíz de una vez, no solo la del canal — incluida cualquiera que se agregue
+        mañana.
+    </li>
+    <li>
+        <strong>No hacer nada, conscientemente.</strong> Si en el uso real dos administradores nunca
+        configuran el mismo trigger en el mismo segundo, el riesgo puede ser aceptable. Lo que no es
+        aceptable es no saberlo. La diferencia entre una decisión y un descuido es que la decisión está
+        escrita en alguna parte.
+    </li>
+</ol>
+
+<DddCallout Kind="advertencia" Title="Un segundo escenario, ya presente en la ruta de mensajería">
+    <p>
+        <code>RecipientSyncService</code> (<a href="/ddd/context-map">módulo 4</a>) hace
+        <code>ExistsAsync</code> y, si no existe, crea. Si dos mensajes <code>UserContactUpdated</code> del
+        mismo usuario se procesan en paralelo, ambos pueden ver "no existe" y ambos intentar insertar el
+        mismo <code>Id</code>. Ahí la clave primaria sí frena el desastre, pero el resultado es una
+        excepción de base de datos subiendo por el consumer, no un caso de negocio manejado. Es el mismo
+        problema con distinto final: <em>toda</em> secuencia "consulto y luego decido escribir" es una
+        carrera si no hay una restricción o un token que la cierre.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">Lecturas: por qué el repositorio de agregados no alcanza</h2>
+<p>
+    El <a href="/ddd/arquitectura">módulo 11</a> mostró la separación entre comandos y consultas. La parte
+    que la persistencia hace visible es el coste de esa separación cuando <em>no</em> se lleva hasta el
+    final. Hoy, las consultas de este proyecto pasan por los mismos repositorios de agregados que las
+    escrituras: <code>ListNotificationsHandler</code> pide al repositorio una página de
+    <code>Notification</code> completos y después los proyecta a <code>NotificationDto</code> en memoria.
+</p>
+
+<CodeBlock Title="Application/Notifications/Queries/ListNotifications/ListNotificationsHandler.cs" Code="@QuerySnippet" />
+
+<p>
+    Eso funciona y es perfectamente razonable a esta escala, pero tiene un precio concreto: para pintar una
+    tabla de 20 filas, SQL Server devuelve todas las columnas de cada notificación — incluido el
+    <code>Payload</code> en <code>nvarchar(max)</code> — y EF construye 20 agregados completos que se
+    descartan de inmediato. Un <em>read model</em> de verdad haría el <code>Select</code> a la forma del DTO
+    dentro de la consulta, y el motor solo leería las columnas que la pantalla muestra.
+</p>
+<p>
+    Lo que el código sí hace bien, y conviene notar, es <code>AsNoTracking()</code> en los métodos
+    <code>ListAsync</code> de los repositorios. Es la mitad barata del argumento: dice explícitamente "estos
+    objetos son para leer, no vuelven a la unidad de trabajo", y evita que el change tracker gaste memoria
+    y tiempo vigilando entidades que nadie va a modificar. Los métodos <code>GetByIdAsync</code>, en
+    cambio, no lo llevan — precisamente porque esos sí devuelven agregados destinados a ser mutados y
+    guardados.
+</p>
+
+<DddCallout Kind="antipatron" Title="Errores que vas a cometer al mapear un modelo rico">
+    <ul>
+        <li>
+            <strong>Abrir un setter "solo para EF".</strong> Nunca es solo para EF: en tres meses hay
+            código de aplicación usándolo. Si EF necesita entrar, se le abre la puerta en la configuración,
+            no en la clase.
+        </li>
+        <li>
+            <strong>Olvidar el <code>ValueComparer</code> de un tipo mutable convertido.</strong> Los
+            cambios simplemente no se guardan, sin error ni aviso. Es el bug más difícil de esta lista.
+        </li>
+        <li>
+            <strong>Cargar la raíz sin sus hijos para "optimizar".</strong> El agregado deja de poder
+            validar su invariante, y el fallo aparece meses después como datos inconsistentes.
+        </li>
+        <li>
+            <strong>Dejar que la migración mande.</strong> Si alguien agrega una columna a mano y luego la
+            propiedad al agregado para que "cuadre", el modelo pasó a ser un reflejo del esquema. La
+            dirección correcta es: cambia el agregado, genera la migración, revisa el <code>Up()</code>.
+        </li>
+        <li>
+            <strong>Suponer que una comprobación en memoria es una garantía.</strong> Es la lección
+            completa de este módulo.
+        </li>
+    </ul>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio 1 · Encuentra la tercera carrera">
+    <p>
+        Este módulo describió dos secuencias "leer, decidir, escribir" vulnerables:
+        <code>AddConfiguration</code> sobre un canal, y el alta de <code>Recipient</code> en
+        <code>RecipientSyncService</code>. Hay al menos una tercera en
+        <code>NotificationTemplate.PublishVersion</code>. Encuéntrala: ¿qué invariante de ese agregado se
+        rompe si dos peticiones publican una versión nueva de la misma plantilla a la vez, y cuál de los
+        índices de <code>InitialCreate</code> decide si el desastre llega a la tabla o no? Pista: mira qué
+        garantiza <code>UX_TemplateVersions_Template_Number</code> y qué <em>no</em> garantiza sobre
+        <code>IsCurrent</code>.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio 2 · Autoevaluación">
+    <p>Responde sin volver a mirar el código. Si dudas en alguna, esa es la sección que conviene releer.</p>
+    <ol>
+        <li>¿Por qué <code>NotificationConfiguration</code> no tiene una propiedad <code>TriggerId</code>, si la columna existe en la tabla?</li>
+        <li>Un compañero propone borrar el <code>ValueComparer</code> de <code>_attributes</code> "porque no hace nada visible". ¿Qué le respondes, y qué síntoma exacto aparecería?</li>
+        <li>¿Qué diferencia práctica hay entre <code>UX_NotificationTriggers_EventKey</code> y <code>IX_NotificationConfigurations_Trigger_Channel</code> para las invariantes del dominio?</li>
+        <li>¿Por qué <code>ListAsync</code> usa <code>AsNoTracking()</code> y <code>GetByIdAsync</code> no?</li>
+    </ol>
+</DddCallout>
+
+<DddCallout Kind="honesto" Title="Qué queda fuera de este módulo, a propósito">
+    <p>
+        Este módulo cubre la persistencia <em>del modelo</em>: encapsulación, unidad de trabajo,
+        consistencia y concurrencia. La plomería de infraestructura alrededor — cómo se registra el
+        <code>DbContext</code>, cómo se aplican las migraciones al arrancar, cómo se conecta SQL Server
+        desde Aspire — está en <a href="/arquitectura/infraestructura">la guía de Arquitectura</a>, que la
+        cuenta desde el ángulo técnico en vez del ángulo de modelado.
+    </p>
+</DddCallout>
+
+<DddPrevNext PrevHref="/ddd/arquitectura" PrevLabel="Arquitectura" NextHref="/ddd/pruebas" NextLabel="Probar el dominio" />
+
+@code {
+    private const string CtorSnippet = """
+// Domain/Recipients/Recipient.cs
+public sealed class Recipient : AggregateRoot
+{
+    private readonly Dictionary<string, string> _attributes = new();
+
+    public string Name { get; private set; } = default!;   // setter privado
+    public bool IsActive { get; private set; }
+
+    public IReadOnlyDictionary<string, string> Attributes => _attributes;   // solo lectura
+
+    private Recipient() { }   // EF Core
+
+    public static Recipient Create(Guid userId, string name, string? email, string? phone) { /* valida */ }
+}
+
+// Domain/Triggers/NotificationConfiguration.cs
+protected NotificationConfiguration() { }
+
+internal static NotificationConfiguration Create(Guid templateId, NotificationChannel channel)
+// ^ 'internal': ni siquiera Application puede crear una configuración suelta.
+//   Solo NotificationTrigger.AddConfiguration, que antes llama a EnsureChannelIsFree.
+""";
+
+    private const string CollectionSnippet = """
+builder.HasMany(t => t.Configurations)
+    .WithOne()                                       // el hijo no tiene navegación de vuelta al padre
+    .HasForeignKey("NotificationTriggerId")          // shadow property: no existe en la clase
+    .OnDelete(DeleteBehavior.Cascade);
+
+builder.Metadata
+    .FindNavigation(nameof(NotificationTrigger.Configurations))!
+    .SetPropertyAccessMode(PropertyAccessMode.Field);
+// ^ La línea que lo hace posible: EF escribe en el campo _configurations,
+//   no en la propiedad IReadOnlyCollection. El encapsulamiento queda intacto.
+""";
+
+    private const string ConversionSnippet = """
+builder.Property(t => t.EventKey)
+    .HasConversion(
+        key => key.Value,                // al guardar: EventKey -> string
+        value => EventKey.Create(value)) // al leer: string -> EventKey, revalidado
+    .HasColumnName("EventKey")
+    .HasMaxLength(EventKey.MaxLength)    // la constante del dominio manda sobre el esquema
+    .IsUnicode(false)
+    .IsRequired();
+
+builder.HasIndex(t => t.EventKey)
+    .IsUnique()
+    .HasDatabaseName("UX_NotificationTriggers_EventKey");
+""";
+
+    private const string EscapeHatchSnippet = """
+public async Task<(IReadOnlyList<NotificationTrigger> Items, int TotalCount)> ListAsync(
+    string? search, bool? isEnabled, int page, int pageSize, CancellationToken ct)
+{
+    var query = _db.Triggers
+        .Include(t => t.Configurations)
+        .AsNoTracking();
+
+    if (!string.IsNullOrWhiteSpace(search))
+    {
+        var pattern = $"%{search.Trim()}%";
+        query = query.Where(t =>
+            EF.Functions.Like(EF.Property<string>(t, "EventKey"), pattern) ||   // <- por columna
+            EF.Functions.Like(t.Description, pattern));                         // <- string normal
+    }
+
+    // ...y otra vez al ordenar, por el mismo motivo:
+    var items = await query
+        .OrderBy(t => EF.Property<string>(t, "EventKey"))
+        .Skip((page - 1) * pageSize)
+        .Take(pageSize)
+        .ToListAsync(ct);
+}
+""";
+
+    private const string JsonSnippet = """
+builder.Ignore(r => r.Attributes);   // la propiedad pública de solo lectura no es una columna
+
+var attributesComparer = new ValueComparer<Dictionary<string, string>>(
+    (a, b) => (a ?? new()).SequenceEqual(b ?? new()),                       // ¿cambió?
+    d => d.Aggregate(0, (hash, kv) => HashCode.Combine(hash, kv.Key, kv.Value)),
+    d => new Dictionary<string, string>(d));                                // snapshot
+
+builder.Property<Dictionary<string, string>>("_attributes")
+    .HasField("_attributes")
+    .UsePropertyAccessMode(PropertyAccessMode.Field)
+    .HasColumnName("Attributes")
+    .HasConversion(
+        dict => JsonSerializer.Serialize(dict, (JsonSerializerOptions?)null),
+        json => string.IsNullOrEmpty(json)
+            ? new Dictionary<string, string>()
+            : JsonSerializer.Deserialize<Dictionary<string, string>>(json, (JsonSerializerOptions?)null)!,
+        attributesComparer)
+    .IsRequired();
+""";
+
+    private const string UowSnippet = """
+// Application/Abstractions/IUnitOfWork.cs — la abstracción entera
+public interface IUnitOfWork
+{
+    Task<int> SaveChangesAsync(CancellationToken ct);
+}
+
+// Infrastructure/Persistence/Context/NotificationDbContext.cs
+public sealed class NotificationDbContext(DbContextOptions<NotificationDbContext> options)
+    : DbContext(options), IUnitOfWork { /* ... */ }
+
+// Infrastructure/DependencyInjection.cs — sin clase envolvente, solo una lambda
+services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<NotificationDbContext>());
+""";
+
+    private const string IndexSnippet = """
+migrationBuilder.CreateIndex(
+    name: "UX_NotificationTriggers_EventKey",
+    table: "NotificationTriggers",
+    column: "EventKey",
+    unique: true);            // <- la base de datos SÍ protege esta regla
+
+migrationBuilder.CreateIndex(
+    name: "IX_NotificationConfigurations_Trigger_Channel",
+    table: "NotificationConfigurations",
+    columns: new[] { "NotificationTriggerId", "Channel" });
+    // ^ sin 'unique': solo acelera consultas. La invariante de canal único
+    //   vive únicamente en la memoria del agregado, durante la transacción.
+""";
+
+    private const string QuerySnippet = """
+var (items, total) = await _notifications.ListAsync(
+    query.RecipientId, query.EventKey, query.Status, page, pageSize, ct);
+
+var dtos = items
+    .Select(n => new NotificationDto(
+        n.Id, n.EventId, n.EventKey, n.ConfigurationId, n.TemplateId,
+        n.TemplateVersionId, n.RecipientId, n.Channel.ToString(), n.Destination,
+        n.Status.ToString(), n.ProviderMessageId, n.Error, n.OccurredAt, n.Payload))
+    .ToList();
+// ^ La proyección ocurre EN MEMORIA, después de materializar agregados completos.
+//   Un read model haría el Select dentro de la consulta y leería menos columnas.
+""";
+}

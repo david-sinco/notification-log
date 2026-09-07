@@ -83,23 +83,26 @@
         <rect x="320" y="202" width="200" height="34" rx="8" fill="#fff" stroke="#bbf7d0" />
         <text x="420" y="223" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">8-10 · Domain Services, Repos, Events</text>
 
-        <rect x="580" y="20" width="260" height="120" rx="12" fill="#fff7ed" stroke="#fed7aa" />
-        <text x="710" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#9a3412">3 · ARQUITECTURA</text>
-        <text x="710" y="66" text-anchor="middle" font-size="10" fill="#9a3412">¿cómo se sostiene todo?</text>
-        <rect x="600" y="82" width="220" height="42" rx="8" fill="#fff" stroke="#fed7aa" />
-        <text x="710" y="99" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">11 · Clean Architecture + CQRS</text>
-        <text x="710" y="114" text-anchor="middle" font-size="9" fill="#64748b">Domain ← App ← Infra ← API</text>
+        <rect x="580" y="20" width="260" height="152" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="710" y="44" text-anchor="middle" font-size="12" font-weight="700" fill="#9a3412">3 · ARQUITECTURA</text>
+        <text x="710" y="60" text-anchor="middle" font-size="10" fill="#9a3412">¿cómo se sostiene todo?</text>
+        <rect x="600" y="72" width="220" height="38" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="710" y="87" text-anchor="middle" font-size="10.5" fill="#1e293b" font-weight="600">11 · Clean Architecture + CQRS</text>
+        <text x="710" y="101" text-anchor="middle" font-size="9" fill="#64748b">Domain ← App ← Infra ← API</text>
+        <rect x="600" y="116" width="220" height="42" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="710" y="131" text-anchor="middle" font-size="10.5" fill="#1e293b" font-weight="600">12-13 · Persistencia y pruebas</text>
+        <text x="710" y="145" text-anchor="middle" font-size="9" fill="#64748b">que el modelo sobreviva al mundo real</text>
 
-        <rect x="580" y="160" width="260" height="120" rx="12" fill="#fdf2f8" stroke="#fbcfe8" />
-        <text x="710" y="188" text-anchor="middle" font-size="12" font-weight="700" fill="#9d174d">4 · PRÁCTICA</text>
-        <text x="710" y="206" text-anchor="middle" font-size="10" fill="#9d174d">¿puedes hacerlo tú?</text>
-        <rect x="600" y="222" width="220" height="42" rx="8" fill="#fff" stroke="#fbcfe8" />
-        <text x="710" y="239" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">12 · Tareas guiadas</text>
-        <text x="710" y="254" text-anchor="middle" font-size="9" fill="#64748b">ejercicios sobre este repositorio</text>
+        <rect x="580" y="182" width="260" height="98" rx="12" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="710" y="206" text-anchor="middle" font-size="12" font-weight="700" fill="#9d174d">4 · PRÁCTICA</text>
+        <text x="710" y="222" text-anchor="middle" font-size="10" fill="#9d174d">¿puedes hacerlo tú?</text>
+        <rect x="600" y="232" width="220" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
+        <text x="710" y="247" text-anchor="middle" font-size="10.5" fill="#1e293b" font-weight="600">14 · Tareas guiadas</text>
+        <text x="710" y="261" text-anchor="middle" font-size="9" fill="#64748b">ejercicios sobre este repositorio</text>
 
         <line x1="262" y1="150" x2="298" y2="150" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
         <line x1="542" y1="150" x2="578" y2="150" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
-        <line x1="710" y1="140" x2="710" y2="156" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
+        <line x1="710" y1="172" x2="710" y2="178" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
     </svg>
     <p class="ddd-diagram-caption">
         El temario sigue este orden: vocabulario y fronteras del negocio, modelado táctico dentro de esas
@@ -109,7 +112,7 @@
 
 <h2 class="ddd-h2">Temario completo</h2>
 <p>
-    Doce módulos, cada uno con un objetivo de aprendizaje concreto y al menos un archivo real que lo
+    Catorce módulos, cada uno con un objetivo de aprendizaje concreto y al menos un archivo real que lo
     demuestra. Puedes seguirlo en orden con los botones "Siguiente" al final de cada página, o saltar
     directo al tema que te interese desde la barra de arriba.
 </p>
@@ -194,6 +197,18 @@
                 </tr>
                 <tr>
                     <td>12</td>
+                    <td><a href="/ddd/persistencia">Persistencia y consistencia</a></td>
+                    <td>Mapear un agregado encapsulado a tablas SQL sin abrirle un solo setter — y ver qué invariante se rompe bajo concurrencia.</td>
+                    <td><code>Persistence/Configuration/*.cs</code></td>
+                </tr>
+                <tr>
+                    <td>13</td>
+                    <td><a href="/ddd/pruebas">Probar el dominio</a></td>
+                    <td>Escribir tests de invariantes sin base de datos, sin framework y sin mocks.</td>
+                    <td><code>NotificationLog.Tests/WebTests.cs</code></td>
+                </tr>
+                <tr>
+                    <td>14</td>
                     <td><a href="/ddd/tareas">Tareas guiadas</a></td>
                     <td>Aplicar todo lo anterior escribiendo código nuevo en este mismo repositorio.</td>
                     <td>— (es tu turno de escribir el archivo)</td>
@@ -261,8 +276,18 @@
         <h3>Arquitectura y CQRS</h3>
         <p>Clean Architecture por capas, puertos y adaptadores por dentro, comandos y consultas separados sin MediatR.</p>
     </a>
-    <a class="ddd-card" href="/ddd/tareas">
+    <a class="ddd-card" href="/ddd/persistencia">
         <span class="ddd-card-num">12</span>
+        <h3>Persistencia y consistencia</h3>
+        <p>Cómo EF Core entra por la puerta de atrás sin abrir el agregado — y la carrera de concurrencia que hoy nadie frena.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/pruebas">
+        <span class="ddd-card-num">13</span>
+        <h3>Probar el dominio</h3>
+        <p>Un solo test existe hoy, y no verifica ninguna regla de negocio. Aquí está qué probar y por qué.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/tareas">
+        <span class="ddd-card-num">14</span>
         <h3>Tareas guiadas</h3>
         <p>Ejercicios reales para escribir en este repositorio: desde un Value Object nuevo hasta un canal de envío completo.</p>
     </a>

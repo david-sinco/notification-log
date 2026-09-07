@@ -68,6 +68,13 @@
     clase del mismo ensamblado lo hiciera. Esa es, de hecho, la frontera real que protege
     <code>internal</code>: entre capas, no dentro de una misma capa.
 </p>
+<p>
+    Ese modificador tiene una consecuencia práctica que se siente al escribir el primer test: un proyecto de
+    pruebas externo tampoco puede llamar a <code>TemplateVersion.Create</code>, así que está obligado a
+    llegar a cualquier estado por la misma API pública que usa el código de producción. Es una restricción
+    incómoda al principio y una ventaja después — el <a href="/ddd/pruebas">módulo 13</a> explica por qué,
+    y por qué la salida fácil (<code>InternalsVisibleTo</code>) suele costar más de lo que ahorra.
+</p>
 
 <CodeBlock Title="Domain/Templates/TemplateVersion.cs (fábrica y mutación)" Code="@TemplateVersionSnippet" />
 

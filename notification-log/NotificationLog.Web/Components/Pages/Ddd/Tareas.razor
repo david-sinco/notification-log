@@ -4,7 +4,7 @@
 
 <div class="page-header">
     <div>
-        <h1>12 · Tareas guiadas sobre este código</h1>
+        <h1>14 · Tareas guiadas sobre este código</h1>
         <p>El criterio de éxito no es saber definir "agregado". Es poder escribir el siguiente archivo.</p>
     </div>
 </div>
@@ -13,7 +13,7 @@
 
 <DddCallout Kind="concepto" Title="Cómo usar esta página">
     <p>
-        Once ejercicios reales, agrupados por dificultad, todos sobre <code>NotificationLog.NotificationService</code>
+        Diez ejercicios reales, agrupados por dificultad, todos sobre <code>NotificationLog.NotificationService</code>
         tal como está hoy en este repositorio — no sobre un proyecto de juguete aparte. Cada tarea indica
         el objetivo, qué archivos vas a tocar o crear, una pista para arrancar y cómo saber que terminaste.
         No hay solución publicada a propósito: la forma de verificar que hiciste bien la tarea es la misma
@@ -33,7 +33,13 @@
         es <code>WebTests.GetWebResourceRootReturnsOkStatusCode</code>: levanta toda la aplicación
         distribuida con Aspire y comprueba que la home responde <code>200 OK</code>. Es un test de humo de
         extremo a extremo — útil para saber que el sistema arranca, pero no verifica ni una sola regla de
-        negocio del dominio.
+        negocio del dominio (<a href="/ddd/pruebas">módulo 13</a>).
+    </li>
+    <li>
+        <strong>Ninguna invariante protegida contra concurrencia.</strong> No hay un solo token de
+        concurrencia en el proyecto, y el índice de configuraciones por canal no es único: dos peticiones
+        simultáneas pueden dejar dos configuraciones de Email activas en el mismo trigger
+        (<a href="/ddd/persistencia">módulo 12</a>).
     </li>
     <li>
         <strong>Un canal sin implementación real, a propósito.</strong>
@@ -63,7 +69,10 @@
 <DddCallout Kind="ejercicio" Title="Tarea 1 · Tests unitarios para el dominio, sin mocks">
     <p>
         <strong>Objetivo:</strong> escribir tests MSTest para al menos tres reglas de negocio reales, sin
-        levantar base de datos ni Aspire.
+        levantar base de datos ni Aspire. El <a href="/ddd/pruebas">módulo 13</a> es el material de apoyo
+        completo de esta tarea: qué probar en cada capa, cómo sortear que
+        <code>NotificationConfiguration.Create</code> sea <code>internal</code>, y por qué los dobles
+        escritos a mano ganan a los mocks aquí.
     </p>
     <p><strong>Reglas candidatas:</strong></p>
     <ul>
@@ -264,7 +273,49 @@
     </p>
 </DddCallout>
 
-<DddCallout Kind="ejercicio" Title="Tarea 9 · Escribir el Context Map de este proyecto como documento">
+<DddCallout Kind="ejercicio" Title="Tarea 9 · Cerrar la grieta de concurrencia del canal único">
+    <p>
+        <strong>Objetivo:</strong> hacer que la invariante "un solo canal activo por trigger" sobreviva a dos
+        peticiones simultáneas, no solo a una. Hoy no lo hace, por las razones que detalla el
+        <a href="/ddd/persistencia">módulo 12</a>: la comprobación ocurre en memoria sobre un estado leído
+        antes, y ni el índice ni un token de concurrencia impiden que dos transacciones ganen la carrera a
+        la vez.
+    </p>
+    <p>
+        <strong>Elige una de las dos estrategias</strong> — y esa elección es la mitad del ejercicio:
+    </p>
+    <ul>
+        <li>
+            <em>Índice único filtrado:</em> una migración nueva con
+            <code>CREATE UNIQUE INDEX ... ON NotificationConfigurations (NotificationTriggerId, Channel) WHERE IsEnabled = 1</code>,
+            escrito con <code>migrationBuilder.Sql(...)</code> o con
+            <code>.HasFilter(...)</code> en <code>NotificationConfigurationConfiguration</code>. Tendrás que
+            decidir dónde traducir la excepción de SQL Server a un error de dominio comprensible — mira cómo
+            lo hace <code>GlobalExceptionHandler</code> con <code>DomainException</code>.
+        </li>
+        <li>
+            <em>Token de concurrencia:</em> una propiedad de versión en <code>NotificationTrigger</code>
+            marcada con <code>IsRowVersion()</code> en su configuración de EF, y una decisión explícita sobre
+            qué hacer con <code>DbUpdateConcurrencyException</code> en
+            <code>AddConfigurationHandler</code> (¿reintentar?, ¿devolver un 409?).
+        </li>
+    </ul>
+    <p>
+        <strong>Archivos a tocar:</strong> <code>Infrastructure/Persistence/Configuration/NotificationConfigurationConfiguration.cs</code>
+        o <code>NotificationTriggerConfiguration.cs</code>; una migración nueva; posiblemente
+        <code>Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs</code> y
+        <code>ApiService/Exceptions/GlobalExceptionHandler.cs</code>.
+    </p>
+    <p>
+        <strong>Cómo saber que terminaste:</strong> escribe un test de integración que lance dos
+        <code>AddConfigurationHandler.HandleAsync</code> en paralelo, con dos <code>DbContext</code>
+        distintos, sobre el mismo trigger y el mismo canal. Antes de tu cambio, ambos terminan bien y quedan
+        dos filas activas; después, uno de los dos falla de forma controlada. Ese test es la prueba de que
+        el problema existía — consérvalo.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Tarea 10 · Escribir el Context Map de este proyecto como documento">
     <p>
         <strong>Objetivo:</strong> después de haber tocado código real en las tareas anteriores, produce un
         único diagrama (a mano, en una herramienta de diagramas, o incluso en ASCII) que muestre los
@@ -298,7 +349,7 @@
 
 <DddCallout Kind="ejercicio" Title="El criterio de éxito real">
     <p>
-        No es que sepas definir "agregado". Es que, terminadas estas nueve tareas, en el siguiente
+        No es que sepas definir "agregado". Es que, terminadas estas diez tareas, en el siguiente
         refinamiento sobre un proyecto real puedas decir <em>"eso no debería estar en este contexto"</em> o
         <em>"¿cómo llama negocio a ese estado?"</em> — y el resto del equipo entienda a qué te refieres, sin
         necesitar una reunión aparte para traducirlo.
@@ -314,4 +365,4 @@
     <li>Scott Wlaschin, <em>Domain Modeling Made Functional</em> — excelente aunque no uses lenguajes funcionales.</li>
 </ul>
 
-<DddPrevNext PrevHref="/ddd/arquitectura" PrevLabel="Arquitectura" NextHref="/ddd" NextLabel="Volver al inicio del tutorial" />
+<DddPrevNext PrevHref="/ddd/pruebas" PrevLabel="Probar el dominio" NextHref="/ddd" NextLabel="Volver al inicio del tutorial" />

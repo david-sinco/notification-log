@@ -57,7 +57,9 @@
     <code>NotificationTrigger</code> a medias — siempre carga el agregado completo, con sus
     configuraciones, porque cargar solo la raíz sin sus hijos rompería la posibilidad de validar la
     invariante de canal único (<a href="/ddd/agregados">módulo 7</a>) la próxima vez que alguien llame a
-    <code>AddConfiguration</code>.
+    <code>AddConfiguration</code>. Cómo consigue EF Core rellenar esa colección si
+    <code>Configurations</code> es de solo lectura y el campo real es privado se explica en el
+    <a href="/ddd/persistencia">módulo 12</a>.
 </p>
 
 <div class="ddd-diagram">
