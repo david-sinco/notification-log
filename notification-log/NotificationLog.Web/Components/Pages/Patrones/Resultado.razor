@@ -1,0 +1,460 @@
+@page "/patrones/resultado"
+
+<PageTitle>Result object · Patrones · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>4 · Result object</h1>
+        <p>Cuándo un fallo es un valor de retorno y cuándo es una excepción. Este código tiene una regla, y se la salta una vez.</p>
+    </div>
+</div>
+
+<PatronesNav />
+
+<DddCallout Kind="concepto" Title="Ficha rápida">
+    <ul>
+        <li><strong>Tipo:</strong> idiom / patrón de comportamiento. No está en el GoF; viene del mundo funcional (<code>Either</code>, <code>Result</code>).</li>
+        <li><strong>Origen:</strong> deliberado, y limitado a un sitio muy concreto: el borde de salida hacia proveedores externos.</li>
+        <li><strong>Dónde:</strong> <code>NotificationSendResult</code>, devuelto por las cuatro interfaces de envío y consumido en <code>NotificationDispatchService</code>.</li>
+    </ul>
+</DddCallout>
+
+<h2 class="ddd-h2">4.1 · El problema</h2>
+<p>
+    Enviar una notificación falla de dos maneras que <em>parecen</em> la misma y no lo son:
+</p>
+<ul>
+    <li>
+        <strong>El proveedor contestó y dijo que no.</strong> El servidor SMTP rechaza la dirección, el
+        gateway de SMS devuelve un 422 porque el número no existe. Esto no es un error del sistema: es un
+        resultado de negocio, tan esperable como el éxito, y hay que <em>registrarlo</em> — con su motivo —
+        y seguir con el siguiente canal.
+    </li>
+    <li>
+        <strong>El proveedor no contestó.</strong> Conexión rechazada, DNS caído, timeout. Aquí no hay
+        resultado: hay una avería.
+    </li>
+</ul>
+<p>
+    Si las dos se modelan como excepción, el llamante tiene que hacer arqueología sobre tipos de excepción
+    ajenos para distinguirlas, y el camino "esperable" del código pasa por un <code>catch</code>. Si las dos
+    se modelan como valor, hay que envolver medio mundo en <code>try/catch</code> dentro de cada sender solo
+    para convertir cualquier avería en un objeto — y se pierde el <em>stack trace</em>, que para una avería
+    es justo lo que hace falta.
+</p>
+
+<h2 class="ddd-h2">4.2 · La idea del patrón</h2>
+<p>
+    El fallo <em>esperado</em> deja de ser una excepción y pasa a ser parte del tipo de retorno. La
+    operación devuelve un objeto que dice si salió bien y, si no, por qué. El llamante no puede ignorarlo:
+    para llegar al dato tiene que mirar el resultado.
+</p>
+<p>
+    La clave está en la palabra "esperado". El patrón no sustituye a las excepciones, reparte el trabajo con
+    ellas: <strong>valor para lo que forma parte del dominio del problema, excepción para lo que no debería
+    estar pasando</strong>. Aplicar Result a todo termina en un código lleno de comprobaciones y de fallos
+    propagados a mano; no aplicarlo nunca convierte los casos normales en excepciones.
+</p>
+
+<h2 class="ddd-h2">4.3 · Cómo se ve aquí</h2>
+
+<CodeBlock Title="Application/Notifications/Services/Sending/NotificationSendResult.cs:3-8 (completo)" Code="@ResultSnippet" />
+
+<p>Ocho líneas. Las piezas:</p>
+<ul>
+    <li>
+        <strong><code>Succeeded</code></strong> es el discriminante, y los otros dos campos son mutuamente
+        excluyentes por convención (no por tipo — ver las señales de alarma).
+    </li>
+    <li>
+        <strong><code>Success</code> y <code>Failure</code></strong> son fábricas con nombre, el mismo patrón
+        de <a href="/patrones/factory">la ficha 1</a>: hacen imposible construir un fracaso sin motivo o un
+        éxito con error, sin escribir ni una validación.
+    </li>
+    <li>
+        <strong>Vive en <code>Application</code></strong>, no en <code>Domain</code>, porque no es un
+        concepto de negocio: es el contrato de un puerto de salida.
+    </li>
+</ul>
+
+<p>La regla se ve entera en el sender de correo, con su justificación escrita al lado:</p>
+
+<CodeBlock Title="Infrastructure/Notifications/Sending/Email/SmtpEmailNotificationSender.cs:36-47" Code="@SmtpSnippet" />
+
+<p>
+    <code>catch (SmtpException)</code>, no <code>catch (Exception)</code>. Ese tipo concreto <em>es</em> la
+    regla: un <code>SmtpException</code> significa que un servidor contestó y rechazó el mensaje. Cualquier
+    otra cosa —<code>SocketException</code>, un timeout— no se captura y sube.
+</p>
+
+<p>El sender de SMS aplica el mismo criterio sin necesitar un <code>catch</code>:</p>
+
+<CodeBlock Title="Infrastructure/Notifications/Sending/Sms/HttpSmsNotificationSender.cs:27-41" Code="@SmsSnippet" />
+
+<p>
+    Un código HTTP fuera de 2xx es la versión REST de "el proveedor contestó que no" → <code>Failure</code>.
+    Un <code>HttpRequestException</code> —que <code>PostAsJsonAsync</code> lanza cuando no hay a quién
+    conectarse— no se captura → sube. La correspondencia con el sender de SMTP es exacta.
+</p>
+
+<h3 class="ddd-h3">Y el que decide, decide una sola vez</h3>
+
+<CodeBlock Title="Application/…/Dispatch/NotificationDispatchService.cs:127-161 (extracto)" Code="@DispatchSnippet" />
+
+<p>
+    Aquí está lo que hace que el diseño funcione: <strong>los dos caminos terminan en el mismo sitio</strong>.
+    El <code>else</code> del resultado y el <code>catch</code> de la excepción construyen el mismo
+    <code>RecordNotificationFailureCommand</code>. La diferencia no está en lo que se persiste, sino en
+    <em>qué se considera digno de un <code>LogError</code></em>: la avería sí (línea 152), el rechazo no.
+</p>
+
+<h2 class="ddd-h2">4.4 · Recorrido de una ejecución</h2>
+<p>
+    Un evento <code>pedido.creado</code> para un destinatario cuyo correo el servidor SMTP rechaza
+    (<code>550 Mailbox unavailable</code>).
+</p>
+
+<ol class="ddd-steps">
+    <li>
+        <strong><code>NotificationDispatchService.cs:129</code></strong> —
+        <code>SendAsync(configuration.Channel, destination, message, ct)</code>. El <code>switch</code>
+        interno (línea 166) elige <code>_emailSender</code>.
+    </li>
+    <li>
+        <strong><code>SmtpEmailNotificationSender.cs:38</code></strong> —
+        <code>await client.SendMailAsync(mail, ct)</code>. El servidor responde 550 y
+        <code>System.Net.Mail</code> lanza <code>SmtpException</code>.
+    </li>
+    <li>
+        <strong><code>SmtpEmailNotificationSender.cs:41-46</code></strong> — el <code>catch</code> lo
+        atrapa y devuelve <code>NotificationSendResult.Failure(ex.Message)</code>. <strong>Desde aquí ya no
+        hay excepción viva</strong>: el fallo viaja como dato.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:131</code></strong> — <code>if (result.Succeeded)</code>
+        es falso, así que entra el <code>else</code> de la línea 140.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:142-147</code></strong> — se construye el comando de
+        fallo con <code>result.Error ?? "Error desconocido"</code>. Ese <code>??</code> es una red de
+        seguridad para un <code>Failure(null)</code> que las fábricas no permiten construir; es defensivo,
+        no necesario.
+    </li>
+    <li>
+        <strong><code>RecordNotificationFailureHandler</code></strong> → <code>Notification.RecordFailure</code>
+        (<code>Domain/Notifications/Notification.cs:58</code>) → <code>AddAsync</code> →
+        <code>SaveChangesAsync</code>. Queda una fila con <code>Status = Failed</code> y el texto del 550.
+    </li>
+    <li>
+        <strong>Sigue el bucle.</strong> <code>DispatchConfigurationAsync</code> retorna normalmente y
+        <code>DispatchAsync</code> (línea 69) pasa a la siguiente configuración del trigger. El SMS del
+        mismo evento se envía igual.
+    </li>
+</ol>
+
+<DddCallout Kind="honesto" Title="Compara con el camino de la avería">
+    <p>
+        Si en el paso 2 el servidor SMTP estuviera apagado, el <code>catch (SmtpException)</code> no
+        atraparía el <code>SocketException</code>, y este subiría hasta el <code>catch (Exception ex)</code>
+        de <code>NotificationDispatchService.cs:150</code>. El resultado <em>persistido</em> sería idéntico:
+        una notificación fallida con el mensaje de la excepción. Lo único que cambia es que además se emite
+        un <code>LogError</code> con el stack trace.
+    </p>
+    <p>
+        Esa simetría es intencionada y es el gran acierto del diseño: <strong>ninguna notificación se pierde
+        en silencio</strong>, venga el fallo por donde venga. El patrón Result no está aquí para evitar
+        excepciones, sino para separar lo que hay que investigar de lo que solo hay que registrar.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">4.5 · Qué pasaría sin el patrón</h2>
+<p>Contraejemplo <strong>hipotético</strong>: todo por excepciones.</p>
+
+<CodeBlock Title="Hipotético — el rechazo como excepción" Code="@HypotheticalSnippet" />
+
+<p>Lo que se rompe:</p>
+<ul>
+    <li>
+        <strong>El camino normal pasa por un <code>catch</code>.</strong> Rechazar un correo por dirección
+        inválida es un desenlace previsto y frecuente; tratarlo como excepción confunde a quien lee y a
+        quien monitoriza.
+    </li>
+    <li>
+        <strong>El llamante no puede distinguir.</strong> Con un solo <code>catch (Exception)</code>, un
+        buzón lleno y un cortafuegos mal configurado producen exactamente la misma traza. Distinguirlos
+        exigiría capturar tipos de excepción de cada librería de proveedor <em>en la capa de aplicación</em>,
+        que es justo lo que las interfaces de envío existen para evitar.
+    </li>
+    <li>
+        <strong>Se pierde el <code>ProviderMessageId</code>.</strong> El camino de éxito también necesita
+        devolver algo: hoy el identificador que da el proveedor viaja en el mismo objeto
+        (<code>NotificationSendResult.cs:3</code>) y acaba en la columna homónima de la tabla.
+    </li>
+</ul>
+<p>
+    <strong>Qué se paga:</strong> el compilador no obliga a mirar <code>Succeeded</code>. Un
+    <code>await sender.SendAsync(...)</code> que descarte el resultado compila sin una advertencia, y el
+    fallo desaparece. Un <code>Result</code> de verdad —un tipo suma con dos casos— lo impediría; este es un
+    <code>record</code> de tres campos donde <code>Succeeded == true</code> y <code>Error != null</code> es
+    representable aunque las fábricas no lo construyan.
+</p>
+
+<h2 class="ddd-h2">4.6 · Otras apariciones en el repositorio</h2>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead><tr><th>Sitio</th><th>Variación</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><code>Infrastructure/…/Push/HttpPushNotificationSender.cs:38-47</code></td>
+                    <td>Mismo criterio que el de SMS. Además, un <code>payload?.Id</code> nulo no se
+                    considera fallo: el envío fue aceptado aunque no se pueda correlacionar.</td>
+                </tr>
+                <tr>
+                    <td><code>Infrastructure/…/Sms/HttpSmsNotificationSender.cs:46-64</code></td>
+                    <td>Un <code>catch (JsonException)</code> vacío que devuelve <code>null</code> en vez de
+                    fallar: <strong>degradación</strong>, no Result. El comentario de las líneas 43-45 explica
+                    la regla — un envío ya aceptado no se convierte en fallo porque la respuesta tenga una
+                    forma inesperada.</td>
+                </tr>
+                <tr>
+                    <td><code>NotificationLog.Web/Api/ApiResponseExtensions.cs:10-25</code></td>
+                    <td><strong>El movimiento contrario</strong>, y también correcto. En el cliente web, un
+                    <code>HttpResponseMessage</code> con código de error se convierte en
+                    <code>ApiException</code>, porque ahí el fallo <em>sí</em> es excepcional: las páginas
+                    Blazor tienen un único sitio donde mostrarlo (<code>ErrorAlert</code>) y no ganan nada
+                    comprobando un resultado en cada llamada.</td>
+                </tr>
+                <tr>
+                    <td><code>Application/Common/AppValidationException.cs:3</code> y <code>NotFoundException.cs:3</code></td>
+                    <td>La capa de aplicación usa excepciones para los fallos de negocio, no Result — y es
+                    coherente: existe un traductor único
+                    (<code>ApiService/Exceptions/GlobalExceptionHandler.cs:18-37</code>) que las convierte en
+                    404, 400 y 422. La regla del proyecto es clara: <strong>Result en el borde de salida,
+                    excepciones hacia dentro</strong>.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h2 class="ddd-h2">4.7 · Señales de alarma</h2>
+<ul>
+    <li>
+        <strong>Un resultado que se descarta.</strong> Es el fallo característico del patrón. Busca en
+        revisión cualquier <code>SendAsync</code> cuyo retorno no se asigne.
+    </li>
+    <li>
+        <strong><code>catch (Exception)</code> dentro de un sender.</strong> Convierte una avería en un
+        resultado de negocio y hace desaparecer el stack trace. El <code>catch</code> tipado de
+        <code>SmtpEmailNotificationSender.cs:41</code> es la forma correcta.
+    </li>
+    <li>
+        <strong>Un <code>Error</code> que solo es texto.</strong> Hoy <code>NotificationSendResult</code> no
+        distingue "número inválido" (nunca funcionará) de "límite de tasa superado" (funcionará en un
+        minuto). El día que se quiera reintentar, hará falta un código de error o un
+        <code>bool IsTransient</code>; parsear el mensaje sería el antipatrón clásico.
+    </li>
+    <li>
+        <strong>Estados imposibles representables.</strong> <code>new NotificationSendResult(true, null, "algo falló")</code>
+        compila. Las fábricas lo evitan por convención, no por tipo; si el <code>record</code> deja de ser el
+        único punto de construcción, la garantía se cae.
+    </li>
+    <li>
+        <strong>Result colonizando la capa de aplicación.</strong> Si un handler empieza a devolver
+        <code>Result&lt;Guid&gt;</code>, el contrato de errores de la API —el mapeo de
+        <code>GlobalExceptionHandler</code>— deja de aplicarse y cada endpoint tiene que traducir a mano.
+        Mezclar los dos estilos en la misma capa es peor que elegir cualquiera de ellos.
+    </li>
+</ul>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio">
+    <p>
+        <code>SmtpEmailNotificationSender</code> tiene un <code>try/catch</code>.
+        <code>HttpSmsNotificationSender</code> <strong>no tiene ninguno</strong> alrededor de la llamada HTTP.
+    </p>
+    <p><strong>(a)</strong> Describe qué ocurre, paso a paso y citando líneas, cuando el gateway de SMS está
+    caído y <code>PostAsJsonAsync</code> lanza <code>HttpRequestException</code>. ¿Se pierde la notificación?</p>
+    <p><strong>(b)</strong> Explica por qué las dos clases, pese a ser tan distintas, aplican <em>la misma
+    regla</em>. Empareja el caso de SMTP con su equivalente exacto en el de SMS.</p>
+    <p><strong>(c)</strong> Hay una diferencia observable entre el camino del rechazo y el de la avería que
+    no está en la base de datos. Encuéntrala y di por qué importa a quien opera el sistema.</p>
+    <p><strong>Verificación:</strong> (a) debe citar una línea de <code>NotificationDispatchService</code>
+    que no esté en <code>HttpSmsNotificationSender</code>.</p>
+</DddCallout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p><strong>(a)</strong> No se pierde nada. La secuencia:</p>
+    <ol class="ddd-steps">
+        <li>
+            <code>HttpSmsNotificationSender.cs:27</code> — <code>PostAsJsonAsync</code> no encuentra el
+            gateway y lanza <code>HttpRequestException</code>. La clase no la captura, así que sube.
+        </li>
+        <li>
+            <code>NotificationDispatchService.cs:129</code> — la excepción atraviesa
+            <code>SendAsync</code> (el <code>switch</code> es solo una expresión, no captura nada) y llega al
+            <code>try</code> abierto en la línea 127.
+        </li>
+        <li>
+            <code>NotificationDispatchService.cs:150-160</code> — el <code>catch (Exception ex)</code> emite
+            un <code>LogError</code> con el stack trace (línea 152) y construye el mismo
+            <code>RecordNotificationFailureCommand</code> que el camino del rechazo, con
+            <code>ex.Message</code> como motivo.
+        </li>
+        <li>
+            El método termina <em>normalmente</em> —el <code>catch</code> no relanza—, así que
+            <code>DispatchAsync</code> sigue con la siguiente configuración. El correo del mismo evento se
+            envía igual.
+        </li>
+    </ol>
+    <p>
+        (Ojo con el nivel de arriba: <code>DispatchAsync</code> sí tiene un <code>catch</code> que
+        <strong>relanza</strong>, en <code>NotificationDispatchService.cs:72-78</code>. Ese cubre fallos
+        anteriores al bucle —resolver el trigger, cargar el destinatario— y sí devuelve el mensaje a
+        Wolverine.)
+    </p>
+    <p><strong>(b)</strong> Las dos aplican: <em>"si el proveedor contestó y dijo que no, es un
+    <code>Failure</code>; si no contestó, es una excepción"</em>. El emparejamiento:</p>
+    <div class="table-responsive-wrap">
+        <div class="table-card">
+            <table class="table">
+                <thead><tr><th>Situación</th><th>SMTP</th><th>SMS (HTTP)</th></tr></thead>
+                <tbody>
+                    <tr>
+                        <td>El proveedor rechaza el mensaje</td>
+                        <td><code>SmtpException</code> capturada → <code>Failure</code> (líneas 41-46)</td>
+                        <td><code>!IsSuccessStatusCode</code> → <code>Failure</code> (líneas 33-37)</td>
+                    </tr>
+                    <tr>
+                        <td>El proveedor no responde</td>
+                        <td><code>SocketException</code> — no capturada, sube</td>
+                        <td><code>HttpRequestException</code> — no capturada, sube</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <p>
+        La asimetría aparente es de las librerías, no del diseño: <code>HttpClient</code> ya
+        <em>devuelve</em> los rechazos como respuesta con código de estado, mientras que
+        <code>SmtpClient</code> los lanza. Por eso uno necesita <code>catch</code> y el otro un
+        <code>if</code>. La regla es idéntica; lo que cambia es lo que hay que hacer para aplicarla. El
+        comentario de <code>SmtpEmailNotificationSender.cs:43-45</code> la enuncia palabra por palabra.
+    </p>
+    <p>
+        <strong>(c)</strong> La diferencia es <strong>el log</strong>. El camino de la avería pasa por
+        <code>_log.LogError(ex, ...)</code> (<code>NotificationDispatchService.cs:152</code>); el del rechazo
+        —el <code>else</code> de la línea 140— <strong>no registra absolutamente nada</strong>. En la base de
+        datos las dos filas son indistinguibles salvo por el texto de <code>Error</code>.
+    </p>
+    <p>
+        Importa porque es exactamente el reparto que quieres: una alerta sobre errores no debe dispararse
+        porque cien clientes tengan el correo mal escrito, pero sí debe hacerlo cuando el gateway lleva diez
+        minutos sin responder. Y tiene una consecuencia práctica: <strong>los rechazos solo se ven
+        consultando la tabla <code>Notifications</code></strong>, no en el registro de la aplicación. Si
+        mañana hiciera falta un panel de tasa de rechazo por canal, el dato está en la base de datos —hay un
+        índice por <code>Status</code> en <code>NotificationEntityConfiguration.cs:56</code>— y no en los
+        logs.
+    </p>
+</details>
+
+<DddPrevNext PrevHref="/patrones/comandos" PrevLabel="Command / Handler"
+             NextHref="/patrones/adaptador" NextLabel="Adapter + ACL" />
+
+@code {
+    private const string ResultSnippet = """
+public sealed record NotificationSendResult(bool Succeeded, string? ProviderMessageId, string? Error)
+{
+    public static NotificationSendResult Success(string? providerMessageId) => new(true, providerMessageId, null);
+
+    public static NotificationSendResult Failure(string error) => new(false, null, error);
+}
+""";
+
+    private const string SmtpSnippet = """
+        try
+        {
+            await client.SendMailAsync(mail, ct);
+            return NotificationSendResult.Success(null);
+        }
+        catch (SmtpException ex)
+        {
+            // Rechazo del servidor SMTP (destinatario inválido, etc.) — es un resultado de negocio,
+            // no un error inesperado; fallas de transporte (conexión caída) sí se dejan propagar
+            // para que NotificationDispatchService las registre como falla con su propio try/catch.
+            return NotificationSendResult.Failure(ex.Message);
+        }
+""";
+
+    private const string SmsSnippet = """
+        var response = await _client.PostAsJsonAsync(
+            _options.Path,
+            new SendSmsRequest(_options.From, destination, message.Body),
+            JsonOptions,
+            ct);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorBody = await response.Content.ReadAsStringAsync(ct);
+            return NotificationSendResult.Failure($"HTTP {(int)response.StatusCode}: {errorBody}");
+        }
+
+        var body = await response.Content.ReadAsStringAsync(ct);
+        return NotificationSendResult.Success(TryReadMessageId(body));
+""";
+
+    private const string DispatchSnippet = """
+        try
+        {
+            var result = await SendAsync(configuration.Channel, destination, message, ct);
+
+            if (result.Succeeded)
+            {
+                await _recordSuccess.HandleAsync(
+                    new RecordNotificationSuccessCommand(
+                        /* ... */ result.ProviderMessageId, DateTime.UtcNow, businessEvent.Data),
+                    ct);
+            }
+            else
+            {
+                await _recordFailure.HandleAsync(
+                    new RecordNotificationFailureCommand(
+                        /* ... */ result.Error ?? "Error desconocido", DateTime.UtcNow, businessEvent.Data),
+                    ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.LogError(ex,
+                "Fallo al enviar la notificación del evento {EventKey} al destinatario {RecipientId} por {Channel}",
+                eventKey, recipient.Id, configuration.Channel);
+
+            await _recordFailure.HandleAsync(
+                new RecordNotificationFailureCommand(
+                    /* ... */ ex.Message, DateTime.UtcNow, businessEvent.Data),
+                ct);
+        }
+""";
+
+    private const string HypotheticalSnippet = """
+// HIPOTÉTICO — así NO está el código
+public interface IEmailNotificationSender
+{
+    // lanza SmtpException si el servidor rechaza, o lo que sea si no hay conexión
+    Task<string?> SendAsync(string destination, RenderedMessage message, CancellationToken ct);
+}
+
+// y en el servicio de dispatch, un único catch que ya no distingue nada:
+try
+{
+    var providerMessageId = await _emailSender.SendAsync(destination, message, ct);
+    await _recordSuccess.HandleAsync(/* ... */);
+}
+catch (Exception ex)   // ¿buzón lleno o cortafuegos? Imposible saberlo aquí.
+{
+    await _recordFailure.HandleAsync(/* ... */);
+}
+""";
+}

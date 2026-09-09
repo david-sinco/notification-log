@@ -1,0 +1,444 @@
+@page "/patrones/gateway"
+
+<PageTitle>Gateway · Patrones · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>7 · Gateway (cliente tipado)</h1>
+        <p>Una capa entera cuyo único trabajo es que ninguna página Blazor vea nunca un <code>HttpClient</code>.</p>
+    </div>
+</div>
+
+<PatronesNav />
+
+<DddCallout Kind="concepto" Title="Ficha rápida">
+    <ul>
+        <li><strong>Tipo:</strong> arquitectónico (Fowler: <em>Gateway</em> / <em>Remote Facade</em>). Es un Adapter con un propósito concreto: encapsular el acceso a un sistema externo.</li>
+        <li><strong>Origen:</strong> deliberado en el diseño, aunque el mecanismo —<em>typed clients</em> de <code>IHttpClientFactory</code>— lo facilita el framework.</li>
+        <li><strong>Dónde:</strong> los cuatro <code>NotificationLog.Web/Api/*/…ApiClient.cs</code>, más el trío de apoyo <code>ApiResponseExtensions</code>, <code>ApiException</code> y <code>QueryString</code>.</li>
+    </ul>
+</DddCallout>
+
+<h2 class="ddd-h2">7.1 · El problema</h2>
+<p>
+    <code>NotificationLog.Web</code> y <code>NotificationLog.ApiService</code> son <strong>dos procesos
+    distintos</strong>. El panel no comparte base de datos ni memoria con la API: le habla por HTTP. Eso
+    significa que cada listado, cada formulario y cada botón de la interfaz implica construir una URL,
+    montar una cadena de consulta, serializar un cuerpo, mirar el código de estado y deserializar la
+    respuesta.
+</p>
+<p>
+    Si eso vive en las páginas, cada componente <code>.razor</code> acaba con seis líneas de fontanería HTTP
+    antes de poder pintar una tabla. Peor: cada uno decide a su manera qué hacer con un 404 o un 422, y las
+    opciones de JSON se repiten en veinte sitios hasta que uno se desvía.
+</p>
+<p>
+    Y hay un problema añadido y específico de este proyecto: el panel <strong>no puede</strong> reutilizar
+    los DTO del servidor. <code>NotificationLog.Web.csproj</code> tiene una sola
+    <code>ProjectReference</code>, a <code>ServiceDefaults</code>; no referencia ni <code>Application</code>
+    ni <code>Domain</code>. Así que alguien tiene que decidir dónde viven los tipos de la conversación.
+</p>
+
+<h2 class="ddd-h2">7.2 · La idea del patrón</h2>
+<p>
+    Se crea un objeto por cada sistema externo con el que se habla, y se le da <strong>métodos en el
+    vocabulario del que llama</strong>, no en el del protocolo. El cliente pide
+    <code>ListAsync(search, isEnabled, page, pageSize)</code> y recibe objetos; lo que hay debajo —HTTP,
+    JSON, códigos de estado— queda dentro.
+</p>
+<p>
+    Un Gateway aporta dos cosas más que un simple envoltorio: es el sitio donde el modelo de errores del
+    sistema externo se traduce al propio, y es el sitio donde se puede sustituir el sistema entero por un
+    doble en los tests, porque los llamantes dependen de una clase que se puede reemplazar.
+</p>
+
+<h2 class="ddd-h2">7.3 · Cómo se ve aquí</h2>
+
+<CodeBlock Title="NotificationLog.Web/Program.cs:17-22" Code="@RegistrationSnippet" />
+
+<p>
+    <code>AddHttpClient&lt;T&gt;</code> es el mecanismo de <em>typed client</em>: registra la clase y le
+    inyecta un <code>HttpClient</code> ya configurado, con su gestión de conexiones resuelta por
+    <code>IHttpClientFactory</code>. La dirección <code>https+http://apiservice</code> no es una URL real:
+    es un nombre lógico que el descubrimiento de servicios de Aspire resuelve en ejecución.
+    <strong>Ninguna página conoce un puerto ni un host.</strong>
+</p>
+
+<CodeBlock Title="NotificationLog.Web/Api/Triggers/TriggersApiClient.cs:5-34 (extracto)" Code="@ClientSnippet" />
+
+<p>Los papeles:</p>
+<ul>
+    <li>
+        <strong>El cliente</strong> es la página <code>.razor</code>, que solo ve
+        <code>TriggersApiClient</code>.
+    </li>
+    <li>
+        <strong>El Gateway</strong> es la clase: nueve métodos que son casi la única superficie de la API que
+        el panel conoce.
+    </li>
+    <li>
+        <strong>El sistema externo</strong> es <code>ApiService</code>, y el detalle de cómo se le habla
+        —rutas, verbos, forma del cuerpo— está encerrado aquí.
+    </li>
+    <li>
+        <strong>El patrón de tres líneas</strong> se repite en los treinta y tantos métodos de los cuatro
+        clientes: llamar, <code>EnsureSuccessAsync</code>, deserializar. Es repetición deliberada y legible;
+        intentar abstraerla en un método genérico <code>SendAsync&lt;TReq,TRes&gt;</code> costaría más
+        claridad de la que ahorraría.
+    </li>
+</ul>
+
+<h3 class="ddd-h3">La pieza que hace de traductor de errores</h3>
+
+<CodeBlock Title="Web/Api/ApiResponseExtensions.cs:6-27 (completo) y Web/Api/ApiException.cs:5-15" Code="@ErrorSnippet" />
+
+<p>
+    Este es el corazón del Gateway. La API responde con <code>ProblemDetails</code> según el mapeo de
+    <code>ApiService/Exceptions/GlobalExceptionHandler.cs:18-37</code> —404, 400 con
+    <code>ValidationProblemDetails</code>, 422—, y aquí ese cuerpo se convierte en <strong>una sola</strong>
+    excepción del panel. El <code>catch (JsonException)</code> vacío es una degradación deliberada: un 500
+    sin cuerpo produce igualmente una <code>ApiException</code>, con mensaje genérico, en vez de un fallo de
+    parseo incomprensible.
+</p>
+<p>
+    Gracias a eso, cada página tiene un solo tipo que capturar y un solo componente que pintarlo:
+    <code>Components/Shared/ErrorAlert.razor</code>, que además sabe desplegar
+    <code>FieldErrors</code> cuando el fallo fue de validación.
+</p>
+
+<h2 class="ddd-h2">7.4 · Recorrido de una ejecución</h2>
+<p>
+    Un usuario del panel crea un trigger con la clave <code>"pedido creado"</code> (con espacio: inválida).
+</p>
+
+<ol class="ddd-steps">
+    <li>
+        <strong><code>Components/Pages/Triggers/TriggersList.razor</code></strong> — el formulario llama a
+        <code>TriggersApiClient.CreateAsync(new CreateTriggerRequest(...), ct)</code>. El
+        <code>record</code> es el de <code>Web/Api/Triggers/TriggerModels.cs:11</code>, no el del servidor.
+    </li>
+    <li>
+        <strong><code>TriggersApiClient.cs:30</code></strong> —
+        <code>PostAsJsonAsync("/api/triggers", request, ApiJson.Options, ct)</code>.
+        <code>ApiJson.Options</code> (<code>Web/Api/ApiJson.cs:7</code>) es
+        <code>JsonSerializerDefaults.Web</code>: <em>camelCase</em>, el mismo que usa ASP.NET al recibir. Que
+        sea una constante compartida y no una instancia por llamada es lo que evita que un método se desvíe.
+    </li>
+    <li>
+        <strong>La red</strong> — el descubrimiento de servicios resuelve <code>apiservice</code> y la
+        petición sale.
+    </li>
+    <li>
+        <strong><code>ApiService</code></strong> — el endpoint construye el comando, el handler llama a
+        <code>EventKey.Create</code>, el regex falla y sale un <code>DomainException</code>
+        (<a href="/patrones/factory">ficha 1</a>). <code>GlobalExceptionHandler.cs:29-34</code> lo convierte
+        en un <strong>422</strong> con título "Regla de negocio violada".
+    </li>
+    <li>
+        <strong><code>ApiResponseExtensions.cs:12</code></strong> — de vuelta en el panel,
+        <code>IsSuccessStatusCode</code> es falso.
+    </li>
+    <li>
+        <strong><code>ApiResponseExtensions.cs:18</code></strong> — el cuerpo se lee como
+        <code>ProblemPayload</code>, un <code>record</code> <strong>privado</strong> declarado en la línea 27.
+        Ese tipo no sale nunca del fichero: es la forma del sistema ajeno, y muere aquí.
+    </li>
+    <li>
+        <strong><code>ApiResponseExtensions.cs:24</code></strong> —
+        <code>throw new ApiException(response.StatusCode, problem?.Title, problem?.Detail, problem?.Errors)</code>.
+        A partir de este punto el panel ya no habla HTTP: habla su propio idioma de errores.
+    </li>
+    <li>
+        <strong>La página</strong> captura <code>ApiException</code>, la guarda en un campo y la pasa a
+        <code>&lt;ErrorAlert Exception="..." /&gt;</code>, que pinta el título y el detalle.
+        <strong><code>CreateAsync</code> nunca llegó a deserializar nada</strong>: la línea 32 no se
+        ejecutó.
+    </li>
+</ol>
+
+<DddCallout Kind="concepto" Title="Dónde acaba el contrato de errores">
+    <p>
+        Fíjate en el trayecto completo de un error: <code>DomainException</code> (Domain) →
+        <code>ProblemDetails</code> 422 (ApiService) → <code>ApiException</code> (Web) →
+        <code>ErrorAlert</code> (UI). Cuatro representaciones del mismo hecho, cada una en el vocabulario de
+        su capa, y <strong>tres traductores</strong>, cada uno en un único fichero. Ese es el patrón
+        aplicado de punta a punta.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">7.5 · Qué pasaría sin el patrón</h2>
+<p>Contraejemplo <strong>hipotético</strong>: la página hablando HTTP.</p>
+
+<CodeBlock Title="Hipotético — HttpClient dentro del componente" Code="@HypotheticalSnippet" />
+
+<p>Lo que se rompe:</p>
+<ul>
+    <li>
+        <strong>La ruta y el contrato se copian por página.</strong> Renombrar un endpoint obliga a buscar
+        cadenas de texto por todo el proyecto en vez de cambiar un método.
+    </li>
+    <li>
+        <strong>El manejo de errores se vuelve incoherente.</strong> Cada componente decide si mira el código
+        de estado, y el que no lo mire deserializará un cuerpo de error como si fuera un resultado —con
+        <code>ReadFromJsonAsync</code> devolviendo <code>null</code> y un <code>NullReferenceException</code>
+        tres líneas más tarde.
+    </li>
+    <li>
+        <strong>Las opciones de JSON se dispersan.</strong> Basta con que un componente use el
+        <code>JsonSerializerOptions</code> por defecto (PascalCase) para que la deserialización devuelva
+        objetos vacíos sin error.
+    </li>
+</ul>
+<p>
+    <strong>Qué se paga:</strong> duplicación de modelos. <code>TriggerSummaryDto</code> existe dos veces
+    —<code>Application/Triggers/Queries/ListTriggers/TriggerSummaryDto.cs</code> y
+    <code>Web/Api/Triggers/TriggerModels.cs:3</code>— y nada garantiza que sigan iguales. La alternativa
+    sería un proyecto <code>Contracts</code> compartido, que elimina la duplicación a cambio de acoplar el
+    despliegue del panel al de la API: un cambio en el contrato obliga a recompilar y desplegar los dos a la
+    vez. Aquí se eligió la duplicación, y para un panel interno que se despliega junto a su API es una
+    elección defendible — pero es una elección, y tiene una factura. El ejercicio la muestra.
+</p>
+
+<h2 class="ddd-h2">7.6 · Otras apariciones en el repositorio</h2>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead><tr><th>Sitio</th><th>Variación</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><code>Web/Api/Templates/TemplatesApiClient.cs:5-52</code></td>
+                    <td>El más completo tras el de triggers. Mismo esqueleto de tres líneas; los métodos de
+                    creación añaden un cuarto paso: deserializar <code>CreatedResponse</code> y devolver solo
+                    el <code>Guid</code>, para que la página no vea la forma de la respuesta.</td>
+                </tr>
+                <tr>
+                    <td><code>Web/Api/Notifications/NotificationsApiClient.cs:5-21</code></td>
+                    <td>Un solo método. El log de notificaciones es de solo lectura desde el panel, y el
+                    Gateway lo refleja — igual que <code>INotificationRepository</code> refleja lo mismo en el
+                    otro extremo (<a href="/patrones/repositorio">ficha 2</a>).</td>
+                </tr>
+                <tr>
+                    <td><code>Web/Api/QueryString.cs:5-13</code></td>
+                    <td>Utilidad compartida por los cuatro: filtra los parámetros nulos o vacíos y escapa los
+                    valores con <code>Uri.EscapeDataString</code>. Sin ella, cada cliente concatenaría
+                    cadenas y el primer término de búsqueda con un <code>&amp;</code> rompería la consulta.</td>
+                </tr>
+                <tr>
+                    <td><code>Infrastructure/…/Sms/HttpSmsNotificationSender.cs:13</code></td>
+                    <td>El mismo patrón en el otro lado del sistema y con otro nombre: un cliente tipado sobre
+                    un gateway externo, registrado igual con <code>AddHttpClient&lt;,&gt;</code>
+                    (<code>NotificationSendingExtensions.cs:27</code>). Allí se le llama Adapter porque
+                    implementa un puerto del dominio; aquí Gateway porque no hay puerto, solo encapsulación.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h2 class="ddd-h2">7.7 · Señales de alarma</h2>
+<ul>
+    <li>
+        <strong>Un <code>HttpResponseMessage</code> devuelto por un método público del cliente.</strong>
+        Sería el fin del patrón: el protocolo se escaparía a las páginas.
+    </li>
+    <li>
+        <strong>Una página que inyecta <code>HttpClient</code>.</strong> Fácil de detectar en revisión y fácil
+        de justificar mal ("es solo una llamadita").
+    </li>
+    <li>
+        <strong>Deriva entre las dos copias de los modelos.</strong> No hay compilador que la detecte. El
+        único punto donde el proyecto se protege es un comentario: <code>Web/Api/Shared.cs:8-9</code>. Ver el
+        ejercicio.
+    </li>
+    <li>
+        <strong>El <code>!</code> tras <code>ReadFromJsonAsync</code>.</strong> Aparece en todos los métodos
+        de lectura (<code>TriggersApiClient.cs:18</code>, por ejemplo). Es correcto en la práctica —tras
+        <code>EnsureSuccessAsync</code> hay cuerpo—, pero convierte un <code>null</code> inesperado (un 204
+        donde se esperaba 200) en un <code>NullReferenceException</code> lejos del origen.
+    </li>
+    <li>
+        <strong>Reintentos y <em>circuit breakers</em> añadidos por página.</strong> Si algún día hacen
+        falta, el sitio es el registro de <code>Program.cs</code>, no el método del cliente ni el componente.
+    </li>
+</ul>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio">
+    <p>
+        <code>PagedResult&lt;T&gt;</code> está escrito <strong>dos veces</strong>: en
+        <code>Application/Common/PagedResult.cs</code> y en <code>Web/Api/Shared.cs</code>.
+    </p>
+    <p><strong>(a)</strong> Compara ambas. Hay una propiedad calculada cuyo cuerpo <strong>ya ha
+    divergido</strong>. Encuéntrala y cita las dos líneas.</p>
+    <p><strong>(b)</strong> ¿Con qué valores de entrada las dos copias devuelven cosas distintas? ¿Cuál es la
+    correcta para lo que hace el panel?</p>
+    <p><strong>(c)</strong> En el mismo <code>Shared.cs</code> hay otra duplicación con un comentario que
+    advierte de un riesgo. Descríbelo y explica qué fallo concreto —y silencioso— aparecería si alguien
+    añadiera un canal al dominio y olvidara el espejo.</p>
+    <p><strong>Verificación:</strong> (b) debe nombrar un valor concreto de <code>TotalCount</code>, y (c) debe
+    explicar por qué el fallo sería silencioso y no una excepción.</p>
+</DddCallout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p><strong>(a)</strong> Es <code>TotalPages</code>:</p>
+    <CodeBlock Title="Las dos copias, una al lado de la otra" Code="@SolutionDivergenceSnippet" />
+    <p>
+        La del panel envuelve el cálculo en <code>Math.Max(1, ...)</code>. La del servidor, no.
+    </p>
+    <p>
+        <strong>(b)</strong> Difieren cuando <code>TotalCount == 0</code>: el servidor devuelve
+        <strong>0</strong> y el panel <strong>1</strong>. (Con cualquier <code>TotalCount &gt; 0</code> el
+        <code>Math.Max</code> es inocuo, porque el techo de un número positivo ya es al menos 1.)
+    </p>
+    <p>
+        La correcta para el panel es la suya: <code>Components/Shared/Pager.razor</code> muestra "página X de
+        Y" y necesita que Y sea al menos 1, porque una lista vacía sigue estando en la página 1. Un
+        <code>0</code> produciría "página 1 de 0". Para la API, en cambio, <code>0</code> es más honesto: no
+        hay ninguna página de resultados.
+    </p>
+    <p>
+        Es decir: <strong>la divergencia no es un fallo, es una adaptación legítima al consumidor</strong>.
+        Y ese es justamente el argumento a favor de duplicar el modelo en vez de compartirlo — cada lado
+        puede tener la forma que le sirve. Lo que hay que tener claro es que la deriva es posible y que
+        nadie avisará de ella: aquí resultó benigna, pero el mecanismo que la permitió es el mismo que
+        permitiría una maligna.
+    </p>
+    <p>
+        <strong>(c)</strong> La otra duplicación es el <code>enum NotificationChannel</code>
+        (<code>Web/Api/Shared.cs:10-16</code>), espejo del de
+        <code>Domain/Shared/NotificationChannel.cs</code>. El comentario de las líneas 8-9 lo dice: los
+        valores numéricos deben coincidir <em>porque el canal viaja como número</em> en el cuerpo de las
+        peticiones (no hay <code>JsonStringEnumConverter</code> registrado, así que System.Text.Json
+        serializa el <code>enum</code> como entero).
+    </p>
+    <p>
+        El fallo si el espejo se desincroniza sería <strong>silencioso porque los dos lados serían
+        internamente coherentes</strong>. Imagina que el dominio inserta <code>Telegram = 3</code> y
+        renumera <code>Push = 5</code>, y el panel no se actualiza: al añadir una configuración de Push
+        desde la interfaz, <code>AddConfigurationRequest</code>
+        (<code>Web/Api/Triggers/TriggerModels.cs:17</code>) viajaría con <code>"channel": 3</code>, y el
+        servidor lo deserializaría como un <code>NotificationChannel</code> perfectamente válido — Telegram.
+        No hay excepción, no hay 400: <code>Enum.IsDefined</code> en
+        <code>NotificationConfiguration.cs:21</code> lo aprobaría, porque el valor <em>existe</em>. El error
+        solo se descubriría al ver que las notificaciones salen por el canal equivocado.
+    </p>
+    <p>
+        Dos formas de cerrar el hueco sin renunciar a la duplicación: registrar
+        <code>JsonStringEnumConverter</code> en los dos extremos, de modo que el canal viaje como
+        <code>"Push"</code> y un nombre desconocido produzca un 400 ruidoso; o un test del panel que compare
+        los nombres y valores de las dos enumeraciones por reflexión. La segunda cuesta diez líneas y
+        convierte un fallo de producción en uno de compilación continua.
+    </p>
+</details>
+
+<DddPrevNext PrevHref="/patrones/estrategia" PrevLabel="Strategy (roto)"
+             NextHref="/patrones/framework" NextLabel="Los que pone el framework" />
+
+@code {
+    private const string RegistrationSnippet = """
+// Clientes tipados hacia NotificationLog.ApiService. La URL usa "https+http://" para preferir
+// HTTPS cuando esté disponible; la resuelve el descubrimiento de servicios de Aspire.
+builder.Services.AddHttpClient<TriggersApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+""";
+
+    private const string ClientSnippet = """
+public sealed class TriggersApiClient(HttpClient http)
+{
+    public async Task<PagedResult<TriggerSummaryDto>> ListAsync(
+        string? search, bool? isEnabled, int page, int pageSize, CancellationToken ct)
+    {
+        var query = QueryString.Build(
+            ("search", search),
+            ("isEnabled", isEnabled?.ToString()),
+            ("page", page.ToString()),
+            ("pageSize", pageSize.ToString()));
+
+        var response = await http.GetAsync($"/api/triggers{query}", ct);
+        await response.EnsureSuccessAsync(ct);
+        return (await response.Content.ReadFromJsonAsync<PagedResult<TriggerSummaryDto>>(ApiJson.Options, ct))!;
+    }
+
+    public async Task<Guid> CreateAsync(CreateTriggerRequest request, CancellationToken ct)
+    {
+        var response = await http.PostAsJsonAsync("/api/triggers", request, ApiJson.Options, ct);
+        await response.EnsureSuccessAsync(ct);
+        var body = await response.Content.ReadFromJsonAsync<CreatedResponse>(ApiJson.Options, ct);
+        return body!.Id;
+    }
+
+    // ... SetStatusAsync, UpdateDescriptionAsync, AddConfigurationAsync,
+    //     DisableConfigurationAsync, EnableConfigurationAsync, ChangeConfigurationTemplateAsync
+}
+""";
+
+    private const string ErrorSnippet = """
+// Web/Api/ApiResponseExtensions.cs
+internal static class ApiResponseExtensions
+{
+    // El ApiService devuelve ProblemDetails/ValidationProblemDetails en los errores (404, 400, 422).
+    // Si el cuerpo no es JSON parseable (p. ej. un 500 sin cuerpo), se degrada a un mensaje genérico.
+    public static async Task EnsureSuccessAsync(this HttpResponseMessage response, CancellationToken ct)
+    {
+        if (response.IsSuccessStatusCode)
+            return;
+
+        ProblemPayload? problem = null;
+        try
+        {
+            problem = await response.Content.ReadFromJsonAsync<ProblemPayload>(ApiJson.Options, ct);
+        }
+        catch (JsonException)
+        {
+        }
+
+        throw new ApiException(response.StatusCode, problem?.Title, problem?.Detail, problem?.Errors);
+    }
+
+    private sealed record ProblemPayload(string? Title, string? Detail, Dictionary<string, string[]>? Errors);
+}
+
+// Web/Api/ApiException.cs
+public sealed class ApiException(
+    HttpStatusCode statusCode,
+    string? title,
+    string? detail,
+    IReadOnlyDictionary<string, string[]>? fieldErrors = null)
+    : Exception(detail ?? title ?? "Ocurrió un error al comunicarse con el servicio.")
+{
+    public HttpStatusCode StatusCode { get; } = statusCode;
+    public string? Title { get; } = title;
+    public IReadOnlyDictionary<string, string[]>? FieldErrors { get; } = fieldErrors;
+}
+""";
+
+    private const string HypotheticalSnippet = """
+// HIPOTÉTICO — el bloque de código de un componente .razor que inyecta HttpClient
+private async Task CrearAsync()
+{
+    var response = await Http.PostAsJsonAsync(
+        "https://localhost:7443/api/triggers",      // la URL, a mano, en cada página
+        new { eventKey = _eventKey, description = _descripcion });
+
+    if (!response.IsSuccessStatusCode)              // ...si alguien se acuerda de mirarlo
+    {
+        _error = await response.Content.ReadAsStringAsync();   // el JSON crudo, en pantalla
+        return;
+    }
+
+    // sin ApiJson.Options: PascalCase por defecto, y el objeto llega vacío sin dar error
+    var creado = await response.Content.ReadFromJsonAsync<CreatedResponse>();
+}
+""";
+
+    private const string SolutionDivergenceSnippet = """
+// Application/Common/PagedResult.cs:9  (servidor)
+public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
+
+// Web/Api/Shared.cs:5  (panel)
+public int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)PageSize));
+""";
+}

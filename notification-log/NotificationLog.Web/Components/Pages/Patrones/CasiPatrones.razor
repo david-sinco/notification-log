@@ -1,0 +1,446 @@
+@page "/patrones/casi-patrones"
+
+<PageTitle>Casi-patrones y ausentes · Patrones · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>9 · Casi-patrones y patrones ausentes</h1>
+        <p>Código que se parece a un patrón y no lo es, y tres patrones que faltan y ya están costando algo.</p>
+    </div>
+</div>
+
+<PatronesNav />
+
+<DddCallout Kind="concepto" Title="Por qué esta es la página que más enseña">
+    <p>
+        Reconocer un patrón bien aplicado es fácil. Lo difícil —y lo que separa a quien ha leído el catálogo
+        de quien sabe usarlo— es detectar las tres situaciones de esta página: la estructura que <em>parece</em>
+        un patrón sin serlo, el patrón que está a medias, y el hueco que un patrón cerraría.
+    </p>
+    <p>
+        Todo lo que sigue está verificado en el código, con ruta y línea. Nada es hipotético salvo lo que se
+        marque como tal.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">9.1 · Observer: el esqueleto sin ninguna de sus dos mitades</h2>
+
+<CodeBlock Title="Domain/Common/AggregateRoot.cs:3-12 (completo)" Code="@AggregateRootSnippet" />
+
+<p>
+    Un Observer necesita dos cosas: alguien que emita y alguien que escuche. Aquí <strong>no hay ninguna de
+    las dos</strong>, y se puede comprobar en treinta segundos:
+</p>
+
+<CodeBlock Title="La comprobación" Code="@GrepSnippet" />
+
+<ul>
+    <li>
+        <strong>Nadie emite.</strong> <code>Raise(</code> aparece una sola vez en todo el repositorio: en su
+        propia definición. Ninguno de los cuatro agregados lo llama.
+    </li>
+    <li>
+        <strong>Nadie escucha.</strong> <code>DomainEvents</code> y <code>ClearDomainEvents</code> no se
+        invocan desde ningún sitio. <code>NotificationDbContext</code> no sobrescribe
+        <code>SaveChangesAsync</code>, así que no hay despacho.
+    </li>
+    <li>
+        <strong>No hay eventos.</strong> <code>DomainEvent</code>
+        (<code>Domain/Common/DomainEvent.cs:3</code>) no tiene ni una sola clase derivada.
+    </li>
+</ul>
+<p>
+    Lo que hay, entonces, son cuatro ficheros y una lista por agregado que sugieren una capacidad que el
+    sistema no tiene. Alguien que lea <code>AggregateRoot</code> asumirá razonablemente que existe un
+    mecanismo de eventos de dominio y escribirá un <code>Raise</code> esperando que algo pase. No pasará
+    nada, sin ningún error.
+</p>
+
+<DddCallout Kind="advertencia" Title="Las dos salidas honestas">
+    <p>
+        <strong>Completarlo:</strong> hacer que un agregado emita (por ejemplo,
+        <code>NotificationTrigger.Disable()</code> emitiendo un <code>TriggerDisabled</code>), sobrescribir
+        <code>SaveChangesAsync</code> en <code>NotificationDbContext</code> para recolectar los eventos del
+        <em>change tracker</em> y despacharlos. Es media tarde de trabajo… y abre una pregunta que no es
+        trivial (ver el ejercicio).
+    </p>
+    <p>
+        <strong>Borrarlo:</strong> dejar <code>AggregateRoot</code> como marcador vacío que hereda de
+        <code>Entity</code> —o eliminarlo— hasta que haya una necesidad real. Cuatro ficheros menos y ninguna
+        promesa falsa.
+    </p>
+    <p>
+        Lo que no es una salida es dejarlo como está indefinidamente. Un mecanismo a medias es peor que su
+        ausencia, porque cuesta lo mismo de leer y no hace nada.
+    </p>
+</DddCallout>
+
+<h2 class="ddd-h2">9.2 · Singleton: un ciclo de vida no es un patrón</h2>
+
+<CodeBlock Title="Infrastructure/DependencyInjection.cs:54-56" Code="@SingletonSnippet" />
+
+<p>
+    Es habitual leer esto como "<code>ScribanTemplateRenderer</code> es un Singleton". No lo es. El patrón
+    Singleton implica que <strong>la clase impide su propia duplicación</strong>: constructor privado,
+    instancia estática, acceso global. Nada de eso está aquí —<code>ScribanTemplateRenderer</code> tiene
+    constructor público implícito y <code>new ScribanTemplateRenderer()</code> compila sin problema.
+</p>
+<p>
+    Lo que hay es un <strong>ciclo de vida del contenedor</strong>: "cuando alguien pida
+    <code>ITemplateRenderer</code>, dale siempre el mismo objeto". La diferencia es práctica, no académica:
+    con Singleton la unicidad es una invariante de la clase; con <code>AddSingleton</code> es una decisión de
+    configuración que se puede cambiar en una línea y que no afecta a quien construya la clase a mano (un
+    test, por ejemplo). El comentario de las líneas 54-55 lo enuncia bien: la razón es que <em>no tiene
+    estado</em>, no que deba ser único.
+</p>
+<p>
+    Regla práctica: en una base de código con inyección de dependencias, el Singleton del GoF casi nunca
+    hace falta y suele ser un problema —acopla a un tipo concreto y es difícil de sustituir en tests—. Que
+    aquí no aparezca es correcto.
+</p>
+
+<h2 class="ddd-h2">9.3 · Null Object invertido (y bien invertido)</h2>
+
+<CodeBlock Title="Infrastructure/…/WhatsApp/NotImplementedWhatsAppNotificationSender.cs:10-14" Code="@NullObjectSnippet" />
+
+<p>
+    Estructuralmente es un Null Object de manual: una implementación que ocupa el hueco de una dependencia
+    ausente para que el llamante no tenga que comprobar <code>null</code>. Pero hace justo lo contrario de
+    lo que hace un Null Object — en vez de no hacer nada en silencio, <strong>revienta siempre</strong>.
+</p>
+<p>
+    Y es la decisión correcta. Un Null Object sirve cuando "no hacer nada" es un comportamiento
+    <em>válido</em>: un logger nulo, una caché nula. Aquí "no hacer nada" significaría que el usuario cree
+    que le llegó un WhatsApp y no le llegó, y que el sistema registra un éxito falso. Lanzar hace que el
+    <code>catch</code> de <code>NotificationDispatchService.cs:150</code> lo convierta en una notificación
+    fallida con el motivo exacto — visible, auditable y coherente con la regla del proyecto de que nada se
+    pierde en silencio (<a href="/patrones/resultado">ficha 4</a>).
+</p>
+<p>
+    La crítica que sí merece la clase es otra, y no es suya: <strong>no debería tener que existir</strong>.
+    Existe porque el constructor de <code>NotificationDispatchService</code> exige las cuatro interfaces
+    (<a href="/patrones/estrategia">ficha 6</a>). Con un Strategy completo, WhatsApp simplemente no se
+    registraría.
+</p>
+
+<h2 class="ddd-h2">9.4 · Nombres que sugieren un patrón que no está</h2>
+
+<div class="table-responsive-wrap">
+    <div class="table-card">
+        <table class="table">
+            <thead><tr><th>Nombre</th><th>Qué parece</th><th>Qué es</th></tr></thead>
+            <tbody>
+                <tr>
+                    <td><code>Infrastructure/DependencyInjection.cs:18</code><br /><code>Application/DependencyInjection.cs:31</code></td>
+                    <td>Una fábrica o un contenedor</td>
+                    <td>Una clase estática con un método de extensión que registra servicios. No construye
+                    nada: describe registros. Es un <em>módulo de composición</em>, un idiom de .NET.</td>
+                </tr>
+                <tr>
+                    <td><code>Notifications/Sending/NotificationSendingExtensions.cs:12</code></td>
+                    <td>Un Builder</td>
+                    <td>Lo mismo: agrupación de registros para no inflar el fichero de arriba.</td>
+                </tr>
+                <tr>
+                    <td><code>Persistence/Context/NotificationDbContextFactory.cs:10</code></td>
+                    <td>Una fábrica del equipo</td>
+                    <td><strong>Es una fábrica de verdad</strong>, pero impuesta por el framework: implementa
+                    <code>IDesignTimeDbContextFactory&lt;T&gt;</code> porque <code>dotnet ef</code> necesita
+                    construir el contexto sin arrancar la aplicación. Origen: framework, no diseño.</td>
+                </tr>
+                <tr>
+                    <td><code>Persistence/Configuration/NotificationEntityConfiguration.cs:12</code></td>
+                    <td>Configuración de la entidad de dominio <code>NotificationConfiguration</code></td>
+                    <td>Configuración EF del agregado <code>Notification</code>. El nombre está torcido a
+                    propósito para no chocar con <code>NotificationConfigurationConfiguration</code>, y el
+                    propio fichero lo explica en las líneas 9-11. Buen ejemplo de colisión de vocabulario
+                    entre dominio y framework.</td>
+                </tr>
+                <tr>
+                    <td><code>RecipientSyncService</code>, <code>NotificationDispatchService</code></td>
+                    <td>Servicios de dominio (DDD)</td>
+                    <td><strong>Servicios de aplicación.</strong> Orquestan repositorios, puertos y handlers;
+                    no contienen reglas de negocio. Un servicio de dominio viviría en <code>Domain</code>, sin
+                    dependencias de infraestructura. Ambos comentan su papel en su cabecera
+                    (<code>NotificationDispatchService.cs:14-16</code>).</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<h2 class="ddd-h2">9.5 · Patrones a medias, con ficha propia</h2>
+<ul>
+    <li>
+        <strong>Strategy roto en cuatro</strong> — cuatro interfaces con la misma firma y un
+        <code>switch</code> para elegir. <a href="/patrones/estrategia">Ficha 6</a>. Es el punto de mayor
+        fricción del repositorio hoy.
+    </li>
+    <li>
+        <strong>Puerto con contrato sin tipo</strong> — <code>ITemplateRenderer.BuildData</code> devuelve
+        <code>object</code> y <code>Render</code> lo baja a <code>ScriptObject</code> sin comprobar.
+        <a href="/patrones/adaptador">Ficha 5</a>, ejercicio.
+    </li>
+</ul>
+
+<h2 class="ddd-h2">9.6 · Patrones ausentes que aliviarían un dolor real</h2>
+
+<h3 class="ddd-h3">1. Strategy completo para los canales — <em>prioridad alta</em></h3>
+<p>
+    <strong>El dolor:</strong> añadir un canal son seis ediciones, dos de ellas en un fichero de
+    <code>Application</code> que no tiene nada que ver con el canal nuevo. El
+    <code>NotificationChannel</code> se repite en dos <code>switch</code>
+    (<code>NotificationDispatchService.cs:166</code> y <code>Recipient.cs:59</code>) y existe una clase
+    —el stub de WhatsApp— cuya única razón de ser es satisfacer una firma.
+</p>
+<p>
+    <strong>El remedio</strong> está desarrollado con código en <a href="/patrones/estrategia">la ficha 6</a>:
+    una interfaz <code>INotificationSender</code> con una propiedad <code>Channel</code> y resolución por
+    diccionario. Tres ficheros de cambio, ninguna migración, cero riesgo de comportamiento.
+</p>
+
+<h3 class="ddd-h3">2. Despachador de eventos de dominio — <em>prioridad media</em></h3>
+<p>
+    <strong>El dolor:</strong> no es que falte una funcionalidad, es que <strong>ya se está pagando su
+    coste sin recibir su beneficio</strong>. La infraestructura existe (§9.1) y no hace nada. Además, hoy no
+    hay forma de reaccionar a un hecho del dominio sin meter la reacción dentro del handler que lo provocó:
+    si mañana hay que auditar cada vez que se deshabilita un trigger, la auditoría acabará dentro de
+    <code>SetTriggerStatusHandler</code>.
+</p>
+<p>
+    <strong>El remedio:</strong> completarlo o borrarlo. Las dos opciones son mejores que el estado actual.
+</p>
+
+<h3 class="ddd-h3">3. Specification (u objeto de criterios) para los listados — <em>prioridad baja</em></h3>
+<p>
+    <strong>El dolor:</strong> los cuatro repositorios repiten una firma que crece por parámetros:
+</p>
+
+<CodeBlock Title="Las cuatro firmas de ListAsync" Code="@SpecSnippet" />
+
+<p>
+    Cada filtro nuevo modifica <strong>cuatro</strong> sitios: la interfaz en <code>Domain</code>, la
+    implementación en <code>Infrastructure</code>, el handler de consulta y el
+    <code>[AsParameters]</code> del endpoint. Y como los parámetros son posicionales y del mismo tipo
+    —<code>string?</code>, <code>bool?</code>, <code>int</code>, <code>int</code>—, invertir dos por
+    descuido compila sin protestar.
+</p>
+<p>
+    <strong>El remedio:</strong> un objeto de criterios por agregado (<code>TriggerFilter</code>, con
+    <code>Search</code>, <code>IsEnabled</code> y la paginación) reduciría el cambio a un fichero. Un
+    Specification completo —con composición <code>And</code>/<code>Or</code> y traducción a
+    <code>Expression</code>— sería sobreingeniería para cuatro consultas.
+</p>
+<p>
+    <strong>Prioridad baja a propósito:</strong> hoy son cuatro consultas estables. Es un patrón para tener
+    en el bolsillo, no para aplicar esta semana. Aplicarlo antes de tiempo es tan caro como no aplicarlo
+    nunca.
+</p>
+
+<DddCallout Kind="honesto" Title="Lo que NO está en esta lista, y por qué">
+    <p>
+        Faltan cosas importantes en este sistema —un <em>outbox</em> para que publicar y guardar sean
+        atómicos, idempotencia en el consumo, reintentos con <em>circuit breaker</em>, autenticación— y
+        ninguna aparece aquí. No es un olvido: son decisiones de <strong>arquitectura</strong>, no de diseño
+        de clases, y están tratadas donde corresponde, en
+        <a href="/arquitectura/distribuido">Arquitectura · Distribuido</a>.
+    </p>
+    <p>
+        Mezclar los dos niveles es el error más común de estas guías: acabas proponiendo un patrón de diseño
+        para un problema que ningún patrón de diseño resuelve.
+    </p>
+</DddCallout>
+
+<DddCallout Kind="ejercicio" Title="Ejercicio">
+    <p>
+        Vas a decidir el futuro del mecanismo de eventos de dominio.
+    </p>
+    <p><strong>(a)</strong> Demuestra con búsquedas concretas que hoy no se usa. Indica qué buscaste y qué
+    salió.</p>
+    <p><strong>(b)</strong> Supón que se decide completarlo. Escribe dónde iría el despachador —fichero y
+    método exactos— y el esqueleto del código.</p>
+    <p><strong>(c)</strong> Ese despachador tiene un problema serio que no es de diseño de clases. Nómbralo,
+    explica las dos posiciones posibles (antes o después de guardar) y qué se rompe con cada una.</p>
+    <p><strong>(d)</strong> A la vista de (c), ¿completarlo o borrarlo? Defiende una postura.</p>
+    <p><strong>Verificación:</strong> (c) debe describir dos fallos <em>distintos</em>, uno por posición.</p>
+</DddCallout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p><strong>(a)</strong> Tres búsquedas bastan:</p>
+    <ul>
+        <li>
+            <code>Raise(</code> en todo el repositorio → una única coincidencia,
+            <code>Domain/Common/AggregateRoot.cs:9</code>, que es su propia definición. <strong>Nadie
+            emite.</strong>
+        </li>
+        <li>
+            <code>DomainEvents</code> / <code>ClearDomainEvents</code> → solo las líneas 5, 7 y 11 del mismo
+            fichero. <strong>Nadie consume.</strong>
+        </li>
+        <li>
+            <code>: DomainEvent</code> → solo <code>Domain/Common/DomainEvent.cs:3</code>, que es la propia
+            declaración de la clase base. <strong>No existe ni un evento concreto.</strong>
+        </li>
+    </ul>
+    <p>
+        Confirmación adicional: <code>NotificationDbContext</code>
+        (<code>Persistence/Context/NotificationDbContext.cs</code>) no sobrescribe
+        <code>SaveChangesAsync</code> — solo <code>OnModelCreating</code>—, así que no hay ningún punto donde
+        el despacho pudiera estar ocurriendo.
+    </p>
+    <p>
+        <strong>(b)</strong> El sitio natural es <code>NotificationDbContext</code>, sobrescribiendo
+        <code>SaveChangesAsync</code>, porque es el único punto por el que pasan todas las escrituras del
+        sistema y ya tiene acceso al <em>change tracker</em>:
+    </p>
+    <CodeBlock Title="Esqueleto — Persistence/Context/NotificationDbContext.cs" Code="@SolutionDispatcherSnippet" />
+    <p>
+        Con un <code>IDomainEventDispatcher</code> declarado en <code>Application/Abstractions/</code> —junto
+        a <code>IUnitOfWork</code>, que es su pariente— e implementado en <code>Infrastructure</code>.
+    </p>
+    <p>
+        <strong>(c)</strong> El problema es la <strong>atomicidad entre guardar y despachar</strong>, y no
+        tiene solución dentro del diseño de clases. Las dos posiciones fallan de forma distinta:
+    </p>
+    <ul>
+        <li>
+            <strong>Despachar antes de <code>SaveChanges</code></strong> (donde está el comentario
+            <em>"opción A"</em> del esqueleto): los manejadores se ejecutan sobre datos que
+            <strong>todavía no están guardados</strong>. Si uno de ellos consulta la base de datos, no verá
+            el cambio que provocó el evento; y si el <code>SaveChanges</code> posterior falla, se habrán
+            ejecutado reacciones a un hecho que nunca ocurrió — un correo enviado por un trigger que no
+            llegó a deshabilitarse.
+        </li>
+        <li>
+            <strong>Despachar después</strong> (opción B): los datos ya están, pero el despacho queda
+            <strong>fuera de la transacción</strong>. Si el proceso se cae entre el <code>commit</code> y el
+            despacho —o si un manejador falla—, el cambio queda guardado y su reacción se pierde para
+            siempre, sin rastro. Es el fallo más difícil de detectar de los dos, porque todo parece haber
+            funcionado.
+        </li>
+    </ul>
+    <p>
+        La solución conocida es el patrón <strong>Outbox</strong>: guardar los eventos <em>en la misma
+        transacción</em>, en una tabla, y despacharlos después desde un proceso aparte que reintenta. Eso ya
+        no es un patrón de diseño sino de integración, y está tratado en
+        <a href="/arquitectura/distribuido">Arquitectura · Distribuido</a>. Si los manejadores fuesen
+        siempre locales y síncronos, la opción B dentro de la misma transacción explícita sería suficiente;
+        en cuanto uno publique a RabbitMQ, hace falta el outbox.
+    </p>
+    <p>
+        <strong>(d)</strong> No hay una respuesta única, pero sí una mala: dejarlo como está. Dos posturas
+        defendibles:
+    </p>
+    <ul>
+        <li>
+            <strong>Borrarlo</strong> (postura recomendada hoy). No hay ningún caso de uso que lo pida: nadie
+            ha necesitado reaccionar a un hecho del dominio en toda la vida del proyecto. Mantener un
+            mecanismo por si acaso —y uno cuya versión correcta exige un outbox, es decir, una tabla, una
+            migración y un proceso de fondo— es coste sin beneficio. <code>AggregateRoot</code> quedaría como
+            marcador semántico, que ya vale para algo: distingue las raíces de agregado de las entidades
+            hijas.
+        </li>
+        <li>
+            <strong>Completarlo</strong>, si hay una necesidad concreta en el horizonte cercano —auditoría,
+            invalidación de caché, publicar hacia otros contextos—. En ese caso, hacerlo entero: eventos
+            concretos, despachador, y outbox si algún manejador sale del proceso. A medias no.
+        </li>
+    </ul>
+    <p>
+        Lo que hace útil este ejercicio es el orden del razonamiento: la pregunta no fue "¿qué patrón
+        aplicamos?", sino "¿qué problema tenemos?". Sin un caso de uso, un Observer es un fichero que hay que
+        leer y mantener a cambio de nada.
+    </p>
+</details>
+
+<DddPrevNext PrevHref="/patrones/framework" PrevLabel="Los que pone el framework"
+             NextHref="/patrones/ejercicios" NextLabel="Ejercicios" />
+
+@code {
+    private const string AggregateRootSnippet = """
+public abstract class AggregateRoot : Entity
+{
+    private readonly List<IDomainEvent> _domainEvents = new();
+
+    public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+
+    protected void Raise(IDomainEvent domainEvent) => _domainEvents.Add(domainEvent);
+
+    public void ClearDomainEvents() => _domainEvents.Clear();
+}
+""";
+
+    private const string GrepSnippet = """
+$ grep -rn "Raise(" --include=*.cs .
+Domain/Common/AggregateRoot.cs:9:    protected void Raise(IDomainEvent domainEvent) => _domainEvents.Add(domainEvent);
+
+$ grep -rn "DomainEvents" --include=*.cs .
+Domain/Common/AggregateRoot.cs:5:    private readonly List<IDomainEvent> _domainEvents = new();
+Domain/Common/AggregateRoot.cs:7:    public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+Domain/Common/AggregateRoot.cs:11:    public void ClearDomainEvents() => _domainEvents.Clear();
+
+$ grep -rn ": DomainEvent" --include=*.cs .
+Domain/Common/DomainEvent.cs:3:public abstract record DomainEvent: IDomainEvent
+""";
+
+    private const string SingletonSnippet = """
+// Sin estado ni configuración externa (a diferencia de los senders): Scriban parsea y
+// renderiza en memoria, así que un singleton alcanza.
+services.AddSingleton<ITemplateRenderer, ScribanTemplateRenderer>();
+""";
+
+    private const string NullObjectSnippet = """
+public sealed class NotImplementedWhatsAppNotificationSender : IWhatsAppNotificationSender
+{
+    public Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct)
+        => throw new NotSupportedException("IWhatsAppNotificationSender todavía no tiene una implementación real.");
+}
+""";
+
+    private const string SpecSnippet = """
+// Domain/Triggers/INotificationTriggerRepository.cs:9
+Task<(IReadOnlyList<NotificationTrigger> Items, int TotalCount)> ListAsync(
+    string? search, bool? isEnabled, int page, int pageSize, CancellationToken ct);
+
+// Domain/Recipients/IRecipientRepository.cs:7-8
+Task<(IReadOnlyList<Recipient> Items, int TotalCount)> ListAsync(
+    string? search, bool? isActive, int page, int pageSize, CancellationToken ct);
+
+// Domain/Templates/INotificationTemplateRepository.cs:9-11
+Task<(IReadOnlyList<NotificationTemplate> Items, int TotalCount)> ListAsync(
+    string? search, NotificationChannel? channel, bool? isEnabled,
+    int page, int pageSize, CancellationToken ct);
+
+// Domain/Notifications/INotificationRepository.cs:5-7
+Task<(IReadOnlyList<Notification> Items, int TotalCount)> ListAsync(
+    Guid? recipientId, string? eventKey, DeliveryStatus? status,
+    int page, int pageSize, CancellationToken ct);
+""";
+
+    private const string SolutionDispatcherSnippet = """
+// HIPOTÉTICO — no existe hoy
+public sealed class NotificationDbContext(
+    DbContextOptions<NotificationDbContext> options,
+    IDomainEventDispatcher dispatcher) : DbContext(options), IUnitOfWork
+{
+    public override async Task<int> SaveChangesAsync(CancellationToken ct = default)
+    {
+        var roots = ChangeTracker.Entries<AggregateRoot>()
+            .Select(e => e.Entity)
+            .Where(a => a.DomainEvents.Count > 0)
+            .ToList();
+
+        var events = roots.SelectMany(a => a.DomainEvents).ToList();
+        foreach (var root in roots) root.ClearDomainEvents();
+
+        // opción A: despachar aquí, ANTES de guardar
+        var affected = await base.SaveChangesAsync(ct);
+        // opción B: despachar aquí, DESPUÉS de guardar
+        await dispatcher.DispatchAsync(events, ct);
+
+        return affected;
+    }
+}
+""";
+}
