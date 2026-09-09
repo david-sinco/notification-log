@@ -1,4 +1,4 @@
-﻿using NotificationLog.NotificationService.Domain.Common;
+﻿using Domain.Shared.Exceptions;
 
 namespace NotificationLog.NotificationService.Domain.Notifications;
 

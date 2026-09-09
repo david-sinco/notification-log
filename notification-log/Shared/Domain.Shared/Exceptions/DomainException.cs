@@ -1,4 +1,4 @@
-﻿namespace NotificationLog.NotificationService.Domain.Common;
+﻿namespace Domain.Shared.Exceptions;
 
 public class DomainException : Exception
 {

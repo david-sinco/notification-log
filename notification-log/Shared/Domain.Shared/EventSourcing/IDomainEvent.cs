@@ -1,4 +1,4 @@
-﻿namespace NotificationLog.NotificationService.Domain.Common;
+﻿namespace Domain.Shared.EventSourcing;
 
 public interface IDomainEvent
 {

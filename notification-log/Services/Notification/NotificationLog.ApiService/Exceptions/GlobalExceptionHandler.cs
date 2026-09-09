@@ -1,16 +1,13 @@
-﻿using Microsoft.AspNetCore.Diagnostics;
+﻿using Domain.Shared.Exceptions;
+using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using NotificationLog.NotificationService.Application.Common;
-using NotificationLog.NotificationService.Domain.Common;
 
 namespace NotificationLog.ApiService.Exceptions;
 
-internal sealed class GlobalExceptionHandler : IExceptionHandler
+internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
-    private readonly ILogger<GlobalExceptionHandler> _logger;
-
-    public GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger)
-        => _logger = logger;
+    private readonly ILogger<GlobalExceptionHandler> _logger = logger;
 
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken ct)

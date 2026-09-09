@@ -1,4 +1,5 @@
-using System.Text.Json;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 using JasperFx.CodeGeneration.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -41,8 +42,19 @@ public static class RabbitMqMessagingExtensions
             //   - protobuf (default, sin content_type): "binary/protobuf"
             //   - JSON (para pruebas manuales): "application/json"
             opts.UseProtobufSerialization();
+            // PreferredObjectCreationHandling = Populate no es un detalle de estilo: los campos
+            // "map" de protobuf (attributes en UserContactUpdated, data en
+            // NotificationDispatchRequested) se generan como propiedades SOLO LECTURA
+            // (MapField<K,V> sin setter, inicializada en el constructor). System.Text.Json ignora
+            // en silencio toda propiedad sin setter al deserializar, así que sin esto un JSON
+            // publicado a mano llegaba con el map VACÍO y sin ningún error: el render con
+            // StrictVariables fallaba después, lejos de la causa. Con Populate, STJ escribe sobre
+            // la instancia que el mensaje ya trae en vez de intentar reemplazarla.
             opts.AddSerializer(new SystemTextJsonSerializer(
-                new JsonSerializerOptions(JsonSerializerDefaults.Web )));
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                {
+                    PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate
+                }));
 
             opts.ListenToRabbitQueue("user-changes")
                 .DefaultIncomingMessage<UserContactUpdated>();

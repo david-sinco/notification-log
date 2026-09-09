@@ -1,7 +1,4 @@
-﻿using NotificationLog.NotificationService.Domain.Common;
-using System;
-using System.Collections.Generic;
-using System.Text;
+﻿using Domain.Shared.Exceptions;
 using System.Text.RegularExpressions;
 
 namespace NotificationLog.NotificationService.Domain.Templates;

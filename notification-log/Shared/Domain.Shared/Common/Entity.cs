@@ -1,4 +1,4 @@
-﻿namespace NotificationLog.NotificationService.Domain.Common;
+﻿namespace Domain.Shared.Common;
 
 public abstract class Entity
 {

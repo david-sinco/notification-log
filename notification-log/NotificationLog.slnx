@@ -7,7 +7,11 @@
     <Project Path="Services/Notification/NotificationLog.NotificationService.Infrastructure/NotificationLog.NotificationService.Infrastructure.csproj" />
     <Project Path="Services/Notification/NotificationLog.Tests/NotificationLog.Tests.csproj" />
   </Folder>
+  <Folder Name="/Services/Users/">
+    <Project Path="Services/User/NotificationLog.UserService.Domain/NotificationLog.UserService.Domain.csproj" />
+  </Folder>
   <Folder Name="/Shared/">
+    <Project Path="Shared/Domain.Shared/Domain.Shared.csproj" />
     <Project Path="Shared/NotificationLog.Contracts/NotificationLog.Contracts.csproj" />
     <Project Path="Shared/NotificationLog.ServiceDefaults/NotificationLog.ServiceDefaults.csproj" />
   </Folder>
