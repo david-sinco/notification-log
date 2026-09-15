@@ -1,0 +1,143 @@
+@page "/rentals/inquiries"
+@implements IDisposable
+@inject InquiriesApiClient Api
+@inject RentalsActor Actor
+@inject NavigationManager Nav
+
+<PageTitle>Consultas · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Consultas</h1>
+        <p>Conversaciones entre interesados y publicadores. Se abren desde la publicación.</p>
+    </div>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="filter-bar">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Estado</label>
+            <select class="form-select" @bind="statusFilter" @bind:after="RefreshAsync">
+                <option value="">Todas</option>
+                <option value="false">Abiertas</option>
+                <option value="true">Cerradas</option>
+            </select>
+        </div>
+        <div class="col-md-4">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="only-mine" @bind="onlyMine" @bind:after="RefreshAsync" />
+                <label class="form-check-label small" for="only-mine">Solo las que abrí yo</label>
+            </div>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <button class="btn btn-outline-secondary w-100 w-md-auto" @onclick="RefreshAsync">Filtrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (page is { Items.Count: 0 })
+    {
+        <EmptyState Text="No se encontraron consultas." Icon="💬" />
+    }
+    else if (page is not null)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Publicación</th>
+                        <th>Interesado</th>
+                        <th>Último mensaje</th>
+                        <th>Mensajes</th>
+                        <th>Estado</th>
+                        <th>Fecha</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var i in page.Items)
+                    {
+                        <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/inquiries/{i.Id}")'>
+                            <td><ShortId Value="i.ListingId" Href="@($"/rentals/listings/{i.ListingId}")" /></td>
+                            <td><ShortId Value="i.SeekerId" /></td>
+                            <td class="small">@i.LastMessage</td>
+                            <td>@i.MessageCount</td>
+                            <td><StatusPill Text="@(i.IsClosed ? "Cerrada" : "Abierta")" Variant="@(i.IsClosed ? "neutral" : "success")" /></td>
+                            <td class="text-muted small">@RentalsFormat.Date(i.LastMessageAt)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="px-3 pb-3">
+            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
+        </div>
+    }
+</div>
+
+@code {
+    private PagedResult<InquirySummaryDto>? page;
+    private bool loading = true;
+    private ApiException? error;
+    private string statusFilter = "";
+    private bool onlyMine;
+    private int currentPage = 1;
+
+    protected override Task OnInitializedAsync()
+    {
+        Actor.Changed += OnActorChanged;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            bool? isClosed = statusFilter switch { "true" => true, "false" => false, _ => null };
+            page = await Api.ListAsync(null, onlyMine ? Actor.Id ?? Guid.Empty : null, isClosed, currentPage, 10, CancellationToken.None);
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPage(int p)
+    {
+        currentPage = p;
+        return LoadAsync();
+    }
+
+    private void OnActorChanged()
+    {
+        if (onlyMine)
+            InvokeAsync(async () =>
+            {
+                await RefreshAsync();
+                StateHasChanged();
+            });
+    }
+
+    public void Dispose() => Actor.Changed -= OnActorChanged;
+}

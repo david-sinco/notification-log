@@ -18,16 +18,7 @@ public interface IUserRepository
     /// </summary>
     Task AppendAsync(User user, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Busca el identificador de flujo a partir del correo, que es lo que hace falta para el
-    /// login y para rechazar altas duplicadas.
-    /// </summary>
-    /// <remarks>
-    /// "No puede haber dos usuarios con el mismo correo" es una invariante <em>del conjunto</em>,
-    /// no de un agregado: ninguna instancia de User puede verificarla mirándose a sí misma. Se
-    /// resuelve fuera, con una proyección de credenciales con índice único sobre el correo; si
-    /// esa proyección se construye en línea con la escritura, la unicidad es fuerte, y si es
-    /// asíncrona hay que asumir una ventana en la que dos altas simultáneas pasan el chequeo.
-    /// </remarks>
-    Task<Guid?> FindIdByEmailAsync(Email email, CancellationToken cancellationToken = default);
+    Task<bool> TryReserveEmailAsync(Email email, Guid userId, CancellationToken cancellationToken = default);
+
+    Task ReleaseEmailAsync(Email email, Guid userId, CancellationToken cancellationToken = default);
 }

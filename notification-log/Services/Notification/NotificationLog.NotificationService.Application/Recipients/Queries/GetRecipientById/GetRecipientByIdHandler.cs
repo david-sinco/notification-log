@@ -1,4 +1,4 @@
-﻿using NotificationLog.NotificationService.Application.Common;
+﻿using Application.Shared.Common;
 using NotificationLog.NotificationService.Application.Recipients.Dtos;
 using NotificationLog.NotificationService.Domain.Recipients;
 

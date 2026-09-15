@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx.Marten" Version="6.32.0" />
+    <PackageReference Include="WolverineFx.Protobuf" Version="6.33.0" />
+    <PackageReference Include="WolverineFx.RabbitMQ" Version="6.32.0" />
+    <PackageReference Include="WolverineFx.RuntimeCompilation" Version="6.32.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\NotificationLog.Contracts\NotificationLog.Contracts.csproj" />
+    <ProjectReference Include="..\NotificationLog.RentalService.Application\NotificationLog.RentalService.Application.csproj" />
+    <ProjectReference Include="..\NotificationLog.RentalService.Domain\NotificationLog.RentalService.Domain.csproj" />
+  </ItemGroup>
+
+</Project>

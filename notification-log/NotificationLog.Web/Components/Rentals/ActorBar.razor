@@ -1,0 +1,105 @@
+@implements IDisposable
+@using System.Security.Cryptography
+@using Microsoft.AspNetCore.Components.Server.ProtectedBrowserStorage
+@inject RentalsActor Actor
+@inject DevIdentityApiClient IdentityApi
+@inject ProtectedLocalStorage Storage
+
+<div class="actor-bar">
+    <span class="actor-bar-label">Actuando como</span>
+    <select class="form-select form-select-sm actor-bar-select" value="@(Actor.Id?.ToString() ?? "")" @onchange="OnSelect">
+        <option value="">Nadie (solo lectura)</option>
+        @foreach (var option in options)
+        {
+            <option value="@option.Id">@option.Label</option>
+        }
+        @if (Actor.Current is { Kind: RentalsActorKind.Custom } custom)
+        {
+            <option value="@custom.Id">@custom.Label</option>
+        }
+    </select>
+    <input class="form-control form-control-sm actor-bar-input" placeholder="…o pegá un identificador"
+           @bind="customId" @bind:event="oninput" @onkeyup="OnCustomKeyUp" />
+    <button class="btn btn-outline-secondary btn-sm" disabled="@(!Guid.TryParse(customId, out _))" @onclick="UseCustom">Usar</button>
+    <button class="btn btn-link btn-sm" @onclick="LoadAsync" title="Recargar identidades">↻</button>
+    <a href="/rentals/identity" class="small ms-auto">Gestionar identidades →</a>
+</div>
+
+@code {
+    private const string StorageKey = "rentals-actor";
+
+    private IReadOnlyList<RentalsActorOption> options = [];
+    private string customId = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        Actor.Changed += OnActorChanged;
+        await LoadAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || Actor.Current is not null)
+            return;
+
+        try
+        {
+            var stored = await Storage.GetAsync<RentalsActorOption>(StorageKey);
+
+            if (stored is { Success: true, Value: not null })
+                Actor.Set(stored.Value);
+        }
+        catch (CryptographicException)
+        {
+            await Storage.DeleteAsync(StorageKey);
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            options = RentalsActor.OptionsFrom(await IdentityApi.GetAsync(CancellationToken.None));
+        }
+        catch (ApiException)
+        {
+            options = [RentalsActor.TestModerator];
+        }
+    }
+
+    private void OnSelect(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+        Actor.Set(options.FirstOrDefault(o => o.Id.ToString() == value)
+            ?? (Actor.Current?.Id.ToString() == value ? Actor.Current : null));
+    }
+
+    private void UseCustom()
+    {
+        if (!Guid.TryParse(customId, out var id))
+            return;
+
+        Actor.Set(options.FirstOrDefault(o => o.Id == id)
+            ?? new RentalsActorOption(id, RentalsActorKind.Custom, $"Identificador {RentalsFormat.Short(id)}"));
+        customId = "";
+    }
+
+    private void OnCustomKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+            UseCustom();
+    }
+
+    private void OnActorChanged() => InvokeAsync(async () =>
+    {
+        if (Actor.Current is { } current)
+            await Storage.SetAsync(StorageKey, current);
+        else
+            await Storage.DeleteAsync(StorageKey);
+
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Actor.Changed -= OnActorChanged;
+}

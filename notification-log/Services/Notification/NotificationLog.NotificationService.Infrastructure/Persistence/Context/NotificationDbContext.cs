@@ -1,5 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using NotificationLog.NotificationService.Application.Abstractions;
+using Application.Shared.Abstractions;
 using NotificationLog.NotificationService.Domain.Notifications;
 using NotificationLog.NotificationService.Domain.Recipients;
 using NotificationLog.NotificationService.Domain.Templates;

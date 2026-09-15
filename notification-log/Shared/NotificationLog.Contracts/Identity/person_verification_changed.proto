@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package Identity.identity;
+
+option csharp_namespace = "NotificationLog.Contracts.Identity";
+
+import "google/protobuf/timestamp.proto";
+
+message PersonVerificationChanged {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  int32 schema_version = 3;
+
+  string person_id = 10;
+  string user_id = 11;
+  bool is_phone_verified = 12;
+  bool is_document_verified = 13;
+}

@@ -1,0 +1,161 @@
+@page "/rentals"
+@inject ListingsApiClient ListingsApi
+@inject OffersApiClient OffersApi
+@inject VisitsApiClient VisitsApi
+@inject InquiriesApiClient InquiriesApi
+@inject NavigationManager Nav
+
+<PageTitle>Arriendos · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Arriendos</h1>
+        <p>Estado general del portal: publicar → visitar → ofertar → cerrar.</p>
+    </div>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="rentals/moderation">
+            <span class="stat-icon">🛡️</span>
+            <span class="stat-label">En revisión</span>
+            <span class="stat-value">@(inReview?.ToString() ?? "—")</span>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="rentals/listings">
+            <span class="stat-icon">🏢</span>
+            <span class="stat-label">Publicadas</span>
+            <span class="stat-value">@(published?.ToString() ?? "—")</span>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="rentals/visits">
+            <span class="stat-icon">📅</span>
+            <span class="stat-label">Visitas por confirmar</span>
+            <span class="stat-value">@(requestedVisits?.ToString() ?? "—")</span>
+        </a>
+    </div>
+    <div class="col-6 col-lg-3">
+        <a class="stat-card" href="rentals/offers">
+            <span class="stat-icon">🏷️</span>
+            <span class="stat-label">Ofertas abiertas</span>
+            <span class="stat-value">@(openOffers?.ToString() ?? "—")</span>
+        </a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="table-card">
+            <div class="d-flex justify-content-between align-items-center px-3 pt-3 pb-2">
+                <h2 class="h6 mb-0">Publicaciones con actividad reciente</h2>
+                <a href="rentals/listings" class="small">Ver todo →</a>
+            </div>
+
+            @if (loading)
+            {
+                <div class="p-4 text-center text-muted">Cargando…</div>
+            }
+            else if (recent is { Count: 0 })
+            {
+                <EmptyState Text="Todavía no hay publicaciones." Icon="🏠" />
+            }
+            else if (recent is not null)
+            {
+                <div class="table-responsive-wrap">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Inmueble</th>
+                                <th>Precio</th>
+                                <th>Estado</th>
+                                <th>Actualizada</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var l in recent)
+                            {
+                                <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/listings/{l.Id}")'>
+                                    <td>@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</td>
+                                    <td>@RentalsFormat.Money(l.Price)</td>
+                                    <td><RentalStatusPill Status="@l.Status" /></td>
+                                    <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="surface-card">
+            <h2 class="h6">Para empezar</h2>
+            <ol class="small mb-0 ps-3">
+                <li class="mb-2">
+                    Registrá personas y asesores en <a href="rentals/identity">Identidades</a>: la réplica local de lo que
+                    publicaría el servicio de Identity.
+                </li>
+                <li class="mb-2">Elegí arriba con quién actuar. Cada acción viaja con ese identificador.</li>
+                <li class="mb-2">Creá una publicación, completala y enviala a revisión.</li>
+                <li>Aprobala como moderador y probá visitas, consultas y ofertas con otro usuario.</li>
+            </ol>
+        </div>
+        <div class="surface-card mt-3">
+            <h2 class="h6">Consultas abiertas</h2>
+            <div class="d-flex align-items-baseline justify-content-between">
+                <span class="stat-value fs-3 fw-bold">@(openInquiries?.ToString() ?? "—")</span>
+                <a href="rentals/inquiries" class="small">Ver consultas →</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool loading = true;
+    private ApiException? error;
+    private int? inReview;
+    private int? published;
+    private int? requestedVisits;
+    private int? openOffers;
+    private int? openInquiries;
+    private IReadOnlyList<ListingSummaryDto>? recent;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 1, CancellationToken.None);
+            var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 1, CancellationToken.None);
+            var recentTask = ListingsApi.ListAsync(null, null, null, null, 1, 6, CancellationToken.None);
+            var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.Requested, 1, 1, CancellationToken.None);
+            var awaitingPublisherTask = OffersApi.ListAsync(null, null, OfferStatus.AwaitingPublisher, 1, 1, CancellationToken.None);
+            var awaitingOffererTask = OffersApi.ListAsync(null, null, OfferStatus.AwaitingOfferer, 1, 1, CancellationToken.None);
+            var inquiriesTask = InquiriesApi.ListAsync(null, null, false, 1, 1, CancellationToken.None);
+
+            await Task.WhenAll(inReviewTask, publishedTask, recentTask, visitsTask, awaitingPublisherTask, awaitingOffererTask, inquiriesTask);
+
+            inReview = inReviewTask.Result.TotalCount;
+            published = publishedTask.Result.TotalCount;
+            recent = recentTask.Result.Items;
+            requestedVisits = visitsTask.Result.TotalCount;
+            openOffers = awaitingPublisherTask.Result.TotalCount + awaitingOffererTask.Result.TotalCount;
+            openInquiries = inquiriesTask.Result.TotalCount;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

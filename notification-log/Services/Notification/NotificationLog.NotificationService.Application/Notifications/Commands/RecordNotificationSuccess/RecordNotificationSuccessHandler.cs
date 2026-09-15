@@ -1,6 +1,6 @@
 using FluentValidation;
-using NotificationLog.NotificationService.Application.Abstractions;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Abstractions;
+using Application.Shared.Common;
 using NotificationLog.NotificationService.Domain.Notifications;
 
 namespace NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationSuccess;

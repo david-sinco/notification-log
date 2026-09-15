@@ -1,6 +1,6 @@
 using FluentValidation;
-using NotificationLog.NotificationService.Application.Abstractions;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Abstractions;
+using Application.Shared.Common;
 using NotificationLog.NotificationService.Domain.Recipients;
 
 namespace NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;

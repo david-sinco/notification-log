@@ -54,11 +54,24 @@ var apiService = builder.AddProject<Projects.NotificationLog_ApiService>("apiser
     // desincronizaba cada vez que Aspire reasignaba el puerto publicado del contenedor.
     .WaitFor(buggregator);
 
+var postgres = builder.AddPostgres("postgres")
+    .WithDataVolume();
+
+var rentalsDb = postgres.AddDatabase("rentals");
+
+var rentalsApi = builder.AddProject<Projects.NotificationLog_RentalService_Api>("notificationlog-rentalservice-api")
+    .WithHttpHealthCheck("/health")
+    .WithReference(rentalsDb)
+    .WaitFor(rentalsDb)
+    .WithReference(rabbitmq)
+    .WaitFor(rabbitmq);
+
 builder.AddProject<Projects.NotificationLog_Web>("webfrontend")
     .WithExternalHttpEndpoints()
     .WithHttpHealthCheck("/health")
     .WithReference(cache)
     .WaitFor(cache)
-    .WithReference(apiService);
+    .WithReference(apiService)
+    .WithReference(rentalsApi);
 
 builder.Build().Run();

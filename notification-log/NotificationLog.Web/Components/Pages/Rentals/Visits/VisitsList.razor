@@ -1,0 +1,154 @@
+@page "/rentals/visits"
+@implements IDisposable
+@inject VisitsApiClient Api
+@inject RentalsActor Actor
+@inject NavigationManager Nav
+
+<PageTitle>Visitas · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Visitas</h1>
+        <p>Solicitudes de visita y su resultado. Se solicitan desde la publicación.</p>
+    </div>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="filter-bar">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-4">
+            <label class="form-label">Estado</label>
+            <select class="form-select" @bind="statusFilter" @bind:after="RefreshAsync">
+                <option value="">Todos</option>
+                @foreach (var s in RentalsFormat.Values<VisitStatus>())
+                {
+                    <option value="@s">@RentalsFormat.Status(s.ToString())</option>
+                }
+            </select>
+        </div>
+        <div class="col-md-4">
+            <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="only-mine" @bind="onlyMine" @bind:after="RefreshAsync" />
+                <label class="form-check-label small" for="only-mine">Solo como visitante o anfitrión</label>
+            </div>
+        </div>
+        <div class="col-md-4 text-md-end">
+            <button class="btn btn-outline-secondary w-100 w-md-auto" @onclick="RefreshAsync">Filtrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (page is { Items.Count: 0 })
+    {
+        <EmptyState Text="No se encontraron visitas." Icon="📅" />
+    }
+    else if (page is not null)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Publicación</th>
+                        <th>Visitante</th>
+                        <th>Anfitrión</th>
+                        <th>Franja</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var v in page.Items)
+                    {
+                        <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/visits/{v.Id}")'>
+                            <td><ShortId Value="v.ListingId" Href="@($"/rentals/listings/{v.ListingId}")" /></td>
+                            <td><ShortId Value="v.VisitorId" /></td>
+                            <td><ShortId Value="v.HostId" /></td>
+                            <td>
+                                @RentalsFormat.Date(v.ConfirmedSlotStart ?? v.FirstSlotStart)
+                                @if (v.ConfirmedSlotStart is null && v.Status == "Requested")
+                                {
+                                    <div class="form-hint">Propuesta · responder antes de @RentalsFormat.Date(v.RespondBy)</div>
+                                }
+                            </td>
+                            <td><RentalStatusPill Status="@v.Status" /></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="px-3 pb-3">
+            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
+        </div>
+    }
+</div>
+
+@code {
+    private PagedResult<VisitSummaryDto>? page;
+    private bool loading = true;
+    private ApiException? error;
+    private string statusFilter = "";
+    private bool onlyMine;
+    private int currentPage = 1;
+
+    protected override Task OnInitializedAsync()
+    {
+        Actor.Changed += OnActorChanged;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            page = await Api.ListAsync(
+                null,
+                onlyMine ? Actor.Id ?? Guid.Empty : null,
+                Enum.TryParse<VisitStatus>(statusFilter, out var status) ? status : null,
+                currentPage,
+                10,
+                CancellationToken.None);
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPage(int p)
+    {
+        currentPage = p;
+        return LoadAsync();
+    }
+
+    private void OnActorChanged()
+    {
+        if (onlyMine)
+            InvokeAsync(async () =>
+            {
+                await RefreshAsync();
+                StateHasChanged();
+            });
+    }
+
+    public void Dispose() => Actor.Changed -= OnActorChanged;
+}

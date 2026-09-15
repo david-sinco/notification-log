@@ -1,7 +1,7 @@
 ﻿using Domain.Shared.Exceptions;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Common;
 
 namespace NotificationLog.ApiService.Exceptions;
 

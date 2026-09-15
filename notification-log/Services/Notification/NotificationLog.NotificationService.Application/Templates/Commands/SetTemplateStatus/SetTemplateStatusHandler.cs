@@ -1,5 +1,5 @@
-using NotificationLog.NotificationService.Application.Abstractions;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Abstractions;
+using Application.Shared.Common;
 using NotificationLog.NotificationService.Domain.Templates;
 
 namespace NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;

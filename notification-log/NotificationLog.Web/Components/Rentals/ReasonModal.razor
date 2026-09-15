@@ -1,0 +1,45 @@
+<Modal Title="@Title" IsVisible="IsVisible" IsVisibleChanged="IsVisibleChanged">
+    <ChildContent>
+        @if (Description is not null)
+        {
+            <p class="text-muted small">@Description</p>
+        }
+        <label class="form-label">@Label</label>
+        <textarea class="form-control" rows="3" maxlength="500" @bind="reason" @bind:event="oninput"></textarea>
+        <div class="form-hint">Máximo 500 caracteres.</div>
+        @if (Error is not null)
+        {
+            <div class="mt-3">
+                <ErrorAlert Exception="Error" />
+            </div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => IsVisibleChanged.InvokeAsync(false)">Cancelar</button>
+        <button type="button" class="btn @(Danger ? "btn-danger" : "btn-primary")"
+                disabled="@(Busy || string.IsNullOrWhiteSpace(reason))" @onclick="() => OnConfirm.InvokeAsync(reason)">
+            @ConfirmText
+        </button>
+    </FooterContent>
+</Modal>
+
+@code {
+    [Parameter] public bool IsVisible { get; set; }
+    [Parameter] public EventCallback<bool> IsVisibleChanged { get; set; }
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string Label { get; set; } = "Motivo";
+    [Parameter] public string ConfirmText { get; set; } = "Confirmar";
+    [Parameter] public bool Danger { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public ApiException? Error { get; set; }
+    [Parameter] public EventCallback<string> OnConfirm { get; set; }
+
+    private string reason = "";
+
+    protected override void OnParametersSet()
+    {
+        if (!IsVisible)
+            reason = "";
+    }
+}

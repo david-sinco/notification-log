@@ -7,16 +7,26 @@
     <Project Path="Services/Notification/NotificationLog.NotificationService.Infrastructure/NotificationLog.NotificationService.Infrastructure.csproj" />
     <Project Path="Services/Notification/NotificationLog.Tests/NotificationLog.Tests.csproj" />
   </Folder>
+  <Folder Name="/Services/Rentals/">
+    <Project Path="Services/Rentals/NotificationLog.RentalService.Api/NotificationLog.RentalService.Api.csproj" />
+    <Project Path="Services/Rentals/NotificationLog.RentalService.Application/NotificationLog.RentalService.Application.csproj" Id="11af1296-291e-4fa2-b873-c1b4b337f88e" />
+    <Project Path="Services/Rentals/NotificationLog.RentalService.Domain/NotificationLog.RentalService.Domain.csproj" Id="b9ce4509-f318-417f-829c-6a8cc20c6b2c" />
+    <Project Path="Services/Rentals/NotificationLog.RentalService.Infrastructure/NotificationLog.RentalService.Infrastructure.csproj" />
+  </Folder>
   <Folder Name="/Services/Users/">
+    <Project Path="Services/User/NotificationLog.UserService.Application/NotificationLog.UserService.Application.csproj" />
     <Project Path="Services/User/NotificationLog.UserService.Domain/NotificationLog.UserService.Domain.csproj" />
   </Folder>
   <Folder Name="/Shared/">
+    <Project Path="Shared/Application.Shared/Application.Shared.csproj" Id="054d82af-aa50-4a00-b016-b605e6e355fb" />
     <Project Path="Shared/Domain.Shared/Domain.Shared.csproj" />
     <Project Path="Shared/NotificationLog.Contracts/NotificationLog.Contracts.csproj" />
     <Project Path="Shared/NotificationLog.ServiceDefaults/NotificationLog.ServiceDefaults.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path="CLAUDE.md" />
+    <File Path="Person.md" />
+    <File Path="Rentals.md" />
   </Folder>
   <Project Path="NotificationLog.AppHost/NotificationLog.AppHost.csproj" />
   <Project Path="NotificationLog.Web/NotificationLog.Web.csproj" />

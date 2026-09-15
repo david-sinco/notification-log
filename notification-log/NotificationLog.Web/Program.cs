@@ -2,7 +2,15 @@ using NotificationLog.Web.Api.Notifications;
 using NotificationLog.Web.Api.Recipients;
 using NotificationLog.Web.Api.Templates;
 using NotificationLog.Web.Api.Triggers;
+using NotificationLog.Web.Api.Rentals;
+using NotificationLog.Web.Api.Rentals.Identity;
+using NotificationLog.Web.Api.Rentals.Inquiries;
+using NotificationLog.Web.Api.Rentals.Listings;
+using NotificationLog.Web.Api.Rentals.Offers;
+using NotificationLog.Web.Api.Rentals.Users;
+using NotificationLog.Web.Api.Rentals.Visits;
 using NotificationLog.Web.Components;
+using NotificationLog.Web.Components.Rentals;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,6 +28,15 @@ builder.Services.AddHttpClient<TriggersApiClient>(client => client.BaseAddress =
 builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
 builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
 builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+
+builder.Services.AddHttpClient<ListingsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddHttpClient<ModerationApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddHttpClient<OffersApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddHttpClient<VisitsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddHttpClient<InquiriesApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddHttpClient<UserCollectionsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddHttpClient<DevIdentityApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
+builder.Services.AddScoped<RentalsActor>();
 
 var app = builder.Build();
 

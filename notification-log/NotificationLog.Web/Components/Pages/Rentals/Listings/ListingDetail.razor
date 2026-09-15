@@ -1,0 +1,902 @@
+@page "/rentals/listings/{Id:guid}"
+@inject ListingsApiClient Api
+@inject VisitsApiClient VisitsApi
+@inject OffersApiClient OffersApi
+@inject InquiriesApiClient InquiriesApi
+@inject UserCollectionsApiClient CollectionsApi
+@inject DevIdentityApiClient IdentityApi
+@inject RentalsActor Actor
+@inject NavigationManager Nav
+
+<PageTitle>Publicación · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/rentals/listings" class="small">← Volver a publicaciones</a>
+</div>
+
+@if (loading && listing is null)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (loadError is not null)
+{
+    <ErrorAlert Exception="loadError" />
+}
+else if (listing is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1>@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</h1>
+            <p>@RentalsFormat.Term(listing.Operation) · @RentalsFormat.Money(listing.Price) · <ShortId Value="listing.Id" /></p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <RentalStatusPill Status="@listing.Status" />
+            @switch (listing.Status)
+            {
+                case "Draft":
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.SubmitForReviewAsync(Id, a, CancellationToken.None))">Enviar a revisión</button>
+                    break;
+                case "Published":
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.SetAvailabilityAsync(Id, a, false, CancellationToken.None))">Pausar</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.RenewAsync(Id, a, CancellationToken.None))">Renovar</button>
+                    break;
+                case "Paused":
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.SetAvailabilityAsync(Id, a, true, CancellationToken.None))">Reanudar</button>
+                    break;
+                case "Expired":
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.RenewAsync(Id, a, CancellationToken.None))">Renovar</button>
+                    break;
+                case "Reserved":
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(busy || listing.IsReservationExtended)" @onclick="() => RunAsync(a => Api.ExtendReservationAsync(Id, a, CancellationToken.None))">Ampliar reserva</button>
+                    <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(ReasonAction.CancelReservation)">Cancelar reserva</button>
+                    break;
+            }
+            @if (CanWithdraw)
+            {
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(ReasonAction.Withdraw)">Retirar</button>
+            }
+        </div>
+    </div>
+
+    @if (actionError is not null)
+    {
+        <ErrorAlert Exception="actionError" />
+    }
+
+    @if (listing.Status == "Draft" && listing.RejectionReasons.Count > 0)
+    {
+        <div class="alert alert-warning-soft small">
+            <strong>Moderación la rechazó:</strong> @string.Join(", ", listing.RejectionReasons.Select(RentalsFormat.Term)).
+            Corregí lo necesario y volvé a enviarla a revisión.
+        </div>
+    }
+
+    @if (listing.StatusReason is not null)
+    {
+        <div class="alert alert-info-soft small">
+            <strong>@(listing.Status switch { "Suspended" => "Suspendida:", "Withdrawn" => "Retirada:", _ => "Reserva liberada:" })</strong>
+            @listing.StatusReason
+        </div>
+    }
+
+    @if (listing.Status == "Draft")
+    {
+        <div class="alert alert-info-soft small">
+            Para enviarla a revisión necesita datos del inmueble (@Check(listing.City is not null)),
+            precio (@Check(listing.Price is not null)) y al menos @ListingLimits.MinPhotos fotos (@listing.Photos.Count/@ListingLimits.MinPhotos).
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="surface-card mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="h6 mb-0">Datos del inmueble</h2>
+                    @if (CanEdit)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenDetails">Editar</button>
+                    }
+                </div>
+                @if (listing.City is null)
+                {
+                    <p class="text-muted small mb-0">Todavía no se cargaron los datos del inmueble.</p>
+                }
+                else
+                {
+                    <dl class="kv-list mb-3">
+                        <dt>Tipo</dt>
+                        <dd>@RentalsFormat.Term(listing.Type)</dd>
+                        <dt>Ubicación</dt>
+                        <dd>@listing.Address · @listing.Neighborhood, @listing.City</dd>
+                        <dt>Área</dt>
+                        <dd>@listing.Area?.ToString("0.#") m²</dd>
+                        <dt>Habitaciones · baños</dt>
+                        <dd>@listing.Bedrooms · @listing.Bathrooms</dd>
+                        <dt>Parqueaderos</dt>
+                        <dd>@listing.ParkingSpots</dd>
+                        <dt>Estrato</dt>
+                        <dd>@listing.Stratum</dd>
+                        <dt>Piso · ascensor</dt>
+                        <dd>@(listing.Floor?.ToString() ?? "—") · @(listing.HasElevator ? "Sí" : "No")</dd>
+                        <dt>Administración</dt>
+                        <dd>@RentalsFormat.Money(listing.AdministrationFee)</dd>
+                    </dl>
+                    <div class="form-hint mb-1">Descripción</div>
+                    <p class="mb-0" style="white-space:pre-wrap">@listing.Description</p>
+                }
+                @if (listing.Status is "Published" or "Paused")
+                {
+                    <div class="form-hint mt-2">Editar datos o fotos de una publicación visible la devuelve a revisión.</div>
+                }
+            </div>
+
+            <div class="surface-card mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="h6 mb-0">Fotos (@listing.Photos.Count)</h2>
+                    @if (CanEdit)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenPhotos">Editar</button>
+                    }
+                </div>
+                @if (listing.Photos.Count == 0)
+                {
+                    <p class="text-muted small mb-0">Sin fotos.</p>
+                }
+                else
+                {
+                    @foreach (var photo in listing.Photos)
+                    {
+                        <span class="chip">@photo</span>
+                    }
+                }
+            </div>
+
+            <div class="table-card mb-4">
+                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Visitas</h2></div>
+                @if (visits.Count == 0)
+                {
+                    <EmptyState Text="Nadie pidió visitar este inmueble todavía." Icon="📅" />
+                }
+                else
+                {
+                    <div class="table-responsive-wrap">
+                        <table class="table">
+                            <thead><tr><th>Visitante</th><th>Franja</th><th>Estado</th></tr></thead>
+                            <tbody>
+                                @foreach (var v in visits)
+                                {
+                                    <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/visits/{v.Id}")'>
+                                        <td><ShortId Value="v.VisitorId" /></td>
+                                        <td>@RentalsFormat.Date(v.ConfirmedSlotStart ?? v.FirstSlotStart)</td>
+                                        <td><RentalStatusPill Status="@v.Status" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="table-card mb-4">
+                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Ofertas</h2></div>
+                @if (offers.Count == 0)
+                {
+                    <EmptyState Text="Todavía no hay ofertas." Icon="🏷️" />
+                }
+                else
+                {
+                    <div class="table-responsive-wrap">
+                        <table class="table">
+                            <thead><tr><th>Oferente</th><th>Monto</th><th>Responder antes de</th><th>Estado</th></tr></thead>
+                            <tbody>
+                                @foreach (var o in offers)
+                                {
+                                    <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/offers/{o.Id}")'>
+                                        <td><ShortId Value="o.OffererId" /></td>
+                                        <td>@RentalsFormat.Money(o.Amount)</td>
+                                        <td class="text-muted small">@RentalsFormat.Date(o.RespondBy)</td>
+                                        <td><RentalStatusPill Status="@o.Status" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+
+            <div class="table-card">
+                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Consultas</h2></div>
+                @if (inquiries.Count == 0)
+                {
+                    <EmptyState Text="Todavía no hay consultas." Icon="💬" />
+                }
+                else
+                {
+                    <div class="table-responsive-wrap">
+                        <table class="table">
+                            <thead><tr><th>Interesado</th><th>Último mensaje</th><th>Estado</th></tr></thead>
+                            <tbody>
+                                @foreach (var i in inquiries)
+                                {
+                                    <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/inquiries/{i.Id}")'>
+                                        <td><ShortId Value="i.SeekerId" /></td>
+                                        <td class="small">@i.LastMessage</td>
+                                        <td><StatusPill Text="@(i.IsClosed ? "Cerrada" : "Abierta")" Variant="@(i.IsClosed ? "neutral" : "success")" /></td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="surface-card mb-4">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h2 class="h6 mb-0">Precio</h2>
+                    @if (CanChangePrice)
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenPrice">Cambiar</button>
+                    }
+                </div>
+                <div class="fs-3 fw-bold mt-1">@RentalsFormat.Money(listing.Price)</div>
+                <div class="form-hint">Una vez publicada, el precio solo cambia una vez cada 24 horas.</div>
+            </div>
+
+            <div class="surface-card mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <h2 class="h6 mb-0">Participantes</h2>
+                    @if (listing.Status is not ("Closed" or "Withdrawn"))
+                    {
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenAdvisorAsync">Asesor</button>
+                    }
+                </div>
+                <dl class="kv-list mb-0">
+                    <dt>Propietario</dt>
+                    <dd><ShortId Value="listing.PublisherId" /> <span class="form-hint">persona</span></dd>
+                    <dt>Creada por</dt>
+                    <dd><ShortId Value="listing.CreatedBy" /></dd>
+                    <dt>Asesor</dt>
+                    <dd>
+                        @if (listing.AdvisorId is { } advisorId)
+                        {
+                            <ShortId Value="advisorId" />
+                        }
+                        else
+                        {
+                            <span class="text-muted">Sin asesor</span>
+                        }
+                    </dd>
+                </dl>
+                <div class="form-hint mt-2">El anfitrión de las visitas es el asesor o, si no hay, quien la creó.</div>
+            </div>
+
+            <div class="surface-card mb-4">
+                <h2 class="h6">Vigencia</h2>
+                <dl class="kv-list mb-0">
+                    <dt>Creada</dt>
+                    <dd>@RentalsFormat.Date(listing.CreatedAt)</dd>
+                    <dt>Vence</dt>
+                    <dd>@RentalsFormat.Date(listing.ExpiresAt)</dd>
+                    @if (listing.ReservedOfferId is { } reservedOfferId)
+                    {
+                        <dt>Reservada hasta</dt>
+                        <dd>@RentalsFormat.Date(listing.ReservedUntil)@(listing.IsReservationExtended ? " (ampliada)" : "")</dd>
+                        <dt>Oferta aceptada</dt>
+                        <dd><ShortId Value="reservedOfferId" Href="@($"/rentals/offers/{reservedOfferId}")" /></dd>
+                    }
+                    @if (listing.FinalPrice is not null)
+                    {
+                        <dt>Valor final</dt>
+                        <dd>@RentalsFormat.Money(listing.FinalPrice)</dd>
+                        <dt>Firmada el</dt>
+                        <dd>@RentalsFormat.Date(listing.SignedOn)</dd>
+                    }
+                    <dt>Reportes</dt>
+                    <dd>@listing.ReportCount</dd>
+                </dl>
+            </div>
+
+            <div class="surface-card">
+                <h2 class="h6">Como interesado</h2>
+                <p class="form-hint">Actuá con un usuario distinto al propietario o al asesor.</p>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenVisit">Solicitar visita</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenInquiry">Enviar consulta</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenOffer">Hacer oferta</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@(busy || listing.Status != "Published")"
+                            @onclick="() => RunAsync(a => CollectionsApi.AddFavoriteAsync(a, Id, CancellationToken.None))">
+                        Guardar en favoritos
+                    </button>
+                    <button class="btn btn-outline-danger btn-sm" disabled="@(listing.Status is not ("Published" or "Paused"))" @onclick="OpenReport">Reportar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<ReasonModal Title="@(reasonAction == ReasonAction.Withdraw ? "Retirar publicación" : "Cancelar reserva")"
+             Description="@(reasonAction == ReasonAction.Withdraw ? "La publicación deja de estar disponible y se cancelan sus visitas y consultas abiertas." : "La publicación vuelve a estar disponible y la oferta aceptada se cae.")"
+             ConfirmText="@(reasonAction == ReasonAction.Withdraw ? "Retirar" : "Cancelar reserva")"
+             Danger="true" Busy="modalBusy" Error="modalError"
+             @bind-IsVisible="showReason" OnConfirm="ConfirmReasonAsync" />
+
+<Modal Title="Datos del inmueble" Large="true" @bind-IsVisible="showDetails">
+    <ChildContent>
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Tipo</label>
+                <select class="form-select" @bind="details.Type">
+                    @foreach (var t in RentalsFormat.Values<PropertyType>())
+                    {
+                        <option value="@t">@RentalsFormat.Term(t)</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Área (m²)</label>
+                <input type="number" class="form-control" min="20" step="0.1" @bind="details.Area" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Estrato</label>
+                <input type="number" class="form-control" min="1" max="6" @bind="details.Stratum" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Habitaciones</label>
+                <input type="number" class="form-control" min="0" @bind="details.Bedrooms" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Baños</label>
+                <input type="number" class="form-control" min="1" @bind="details.Bathrooms" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Parqueaderos</label>
+                <input type="number" class="form-control" min="0" @bind="details.ParkingSpots" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Piso</label>
+                <input type="number" class="form-control" min="1" @bind="details.Floor" />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Administración (COP)</label>
+                <input type="number" class="form-control" min="0" step="1000" @bind="details.AdministrationFee" />
+            </div>
+            <div class="col-md-6 d-flex align-items-end">
+                <div class="form-check mb-2">
+                    <input class="form-check-input" type="checkbox" id="elevator" @bind="details.HasElevator" />
+                    <label class="form-check-label" for="elevator">Tiene ascensor</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Ciudad</label>
+                <input class="form-control" @bind="details.City" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Barrio</label>
+                <input class="form-control" @bind="details.Neighborhood" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Dirección</label>
+                <input class="form-control" @bind="details.Address" />
+            </div>
+            <div class="col-12">
+                <label class="form-label">Descripción</label>
+                <textarea class="form-control" rows="5" maxlength="@ListingLimits.MaxDescriptionLength" @bind="details.Description" @bind:event="oninput"></textarea>
+                <div class="form-hint">@details.Description.Trim().Length caracteres · mínimo @ListingLimits.MinDescriptionLength.</div>
+            </div>
+        </div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showDetails = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@modalBusy" @onclick="SaveDetailsAsync">Guardar</button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Fotos" @bind-IsVisible="showPhotos">
+    <ChildContent>
+        <label class="form-label">Una referencia por línea</label>
+        <textarea class="form-control font-monospace" rows="8" @bind="photosDraft" @bind:event="oninput"></textarea>
+        <div class="form-hint">Entre @ListingLimits.MinPhotos y @ListingLimits.MaxPhotos fotos, sin repetidas. Reemplaza la lista completa.</div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="FillSamplePhotos">Usar fotos de ejemplo</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPhotos = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@modalBusy" @onclick="SavePhotosAsync">Guardar</button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Cambiar precio" @bind-IsVisible="showPrice">
+    <ChildContent>
+        <label class="form-label">Nuevo precio (COP)</label>
+        <input type="number" class="form-control" min="0" step="10000" @bind="priceDraft" />
+        <div class="form-hint">Mínimo $300.000 para arriendo y $30.000.000 para venta.</div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPrice = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || priceDraft <= 0)"
+                @onclick="() => RunModalAsync(a => Api.ChangePriceAsync(Id, new ChangeListingPriceRequest(a, priceDraft), CancellationToken.None), () => showPrice = false)">
+            Guardar
+        </button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Asesor de la publicación" @bind-IsVisible="showAdvisor">
+    <ChildContent>
+        <label class="form-label">Asesor</label>
+        <select class="form-select" @bind="advisorDraft">
+            <option value="">Sin asesor</option>
+            @foreach (var a in advisors)
+            {
+                <option value="@a.Id">Asesor @RentalsFormat.Short(a.Id) · @string.Join(", ", a.ServiceCities)@(a.IsActive ? "" : " (inactivo)")</option>
+            }
+        </select>
+        <div class="form-hint">Solo el propietario o el asesor actual pueden cambiarlo. El asesor debe estar activo y atender la ciudad.</div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showAdvisor = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@modalBusy"
+                @onclick="() => RunModalAsync(a => Api.AssignAdvisorAsync(Id, a, advisorDraft, CancellationToken.None), () => showAdvisor = false)">
+            Guardar
+        </button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Reportar publicación" @bind-IsVisible="showReport">
+    <ChildContent>
+        <label class="form-label">Motivo</label>
+        <select class="form-select" @bind="reportReason">
+            @foreach (var r in RentalsFormat.Values<ReportReason>())
+            {
+                <option value="@r">@RentalsFormat.Term(r)</option>
+            }
+        </select>
+        <div class="form-hint">Con 3 reportes de usuarios distintos la publicación se suspende automáticamente.</div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showReport = false">Cancelar</button>
+        <button type="button" class="btn btn-danger" disabled="@modalBusy"
+                @onclick="() => RunModalAsync(a => Api.ReportAsync(Id, a, reportReason, CancellationToken.None), () => showReport = false)">
+            Reportar
+        </button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Cerrar negocio" @bind-IsVisible="showClose">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label">Valor final (COP)</label>
+            <input type="number" class="form-control" min="0" step="10000" @bind="closeFinalPrice" />
+        </div>
+        <div class="mb-1">
+            <label class="form-label">Fecha de firma</label>
+            <input type="date" class="form-control" @bind="closeSignedOn" />
+            <div class="form-hint">No puede estar en el futuro.</div>
+        </div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showClose = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || closeFinalPrice <= 0)"
+                @onclick="() => RunModalAsync(a => Api.CloseAsync(Id, new CloseListingRequest(a, closeFinalPrice, closeSignedOn), CancellationToken.None), () => showClose = false)">
+            Cerrar negocio
+        </button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Solicitar visita" @bind-IsVisible="showVisit">
+    <ChildContent>
+        <p class="text-muted small">
+            Proponé hasta @VisitLimits.MaxSlots franjas de una hora, en hora de Colombia, entre las @VisitLimits.EarliestHour:00
+            y las @VisitLimits.LatestHour:00, con al menos 2 horas de antelación y hasta 14 días.
+        </p>
+        @for (var i = 0; i < slotDrafts.Length; i++)
+        {
+            var index = i;
+            <div class="mb-2">
+                <label class="form-label">Franja @(index + 1)@(index == 0 ? "" : " (opcional)")</label>
+                <input type="datetime-local" class="form-control" @bind="slotDrafts[index]" />
+            </div>
+        }
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showVisit = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || slotDrafts.All(s => s is null))" @onclick="RequestVisitAsync">Solicitar</button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Enviar consulta" @bind-IsVisible="showInquiry">
+    <ChildContent>
+        <label class="form-label">Mensaje</label>
+        <textarea class="form-control" rows="4" maxlength="@InquiryLimits.MaxMessageLength" @bind="inquiryDraft" @bind:event="oninput"></textarea>
+        <div class="form-hint">No se permiten teléfonos, correos ni enlaces: el contacto pasa por la plataforma.</div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showInquiry = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || string.IsNullOrWhiteSpace(inquiryDraft))" @onclick="SendInquiryAsync">Enviar</button>
+    </FooterContent>
+</Modal>
+
+<Modal Title="Hacer oferta" @bind-IsVisible="showOffer">
+    <ChildContent>
+        <div class="mb-3">
+            <label class="form-label">Monto (COP)</label>
+            <input type="number" class="form-control" min="0" step="10000" @bind="offerAmount" />
+            <div class="form-hint">Al menos el 80% del precio publicado (@RentalsFormat.Money(listing?.Price)). Requiere teléfono y documento verificados y una visita realizada.</div>
+        </div>
+        @if (listing?.Operation == "Rent")
+        {
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label class="form-label">Inicio del arriendo</label>
+                    <input type="date" class="form-control" @bind="offerStart" />
+                    <div class="form-hint">Entre 7 y 90 días desde hoy.</div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Duración (meses)</label>
+                    <input type="number" class="form-control" min="@OfferLimits.MinRentMonths" max="@OfferLimits.MaxRentMonths" @bind="offerMonths" />
+                </div>
+            </div>
+        }
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showOffer = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || offerAmount <= 0)" @onclick="SubmitOfferAsync">Ofertar</button>
+    </FooterContent>
+</Modal>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private enum ReasonAction { Withdraw, CancelReservation }
+
+    private ListingDto? listing;
+    private IReadOnlyList<VisitSummaryDto> visits = [];
+    private IReadOnlyList<OfferSummaryDto> offers = [];
+    private IReadOnlyList<InquirySummaryDto> inquiries = [];
+    private IReadOnlyList<AdvisorDto> advisors = [];
+    private bool loading = true;
+    private ApiException? loadError;
+    private ApiException? actionError;
+    private bool busy;
+
+    private bool modalBusy;
+    private ApiException? modalError;
+
+    private bool showReason;
+    private ReasonAction reasonAction;
+    private bool showDetails;
+    private DetailsForm details = new();
+    private bool showPhotos;
+    private string photosDraft = "";
+    private bool showPrice;
+    private long priceDraft;
+    private bool showAdvisor;
+    private Guid? advisorDraft;
+    private bool showReport;
+    private ReportReason reportReason;
+    private bool showClose;
+    private long closeFinalPrice;
+    private DateOnly closeSignedOn;
+    private bool showVisit;
+    private DateTime?[] slotDrafts = new DateTime?[VisitLimits.MaxSlots];
+    private bool showInquiry;
+    private string inquiryDraft = "";
+    private bool showOffer;
+    private long offerAmount;
+    private DateOnly offerStart;
+    private int offerMonths = 12;
+
+    private bool CanEdit => listing?.Status is "Draft" or "InReview" or "Published" or "Paused";
+
+    private bool CanChangePrice => listing?.Status is "Draft" or "InReview" or "Published" or "Paused" or "Expired";
+
+    private bool CanWithdraw => listing?.Status is not ("Closed" or "Withdrawn" or "Reserved");
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var listingTask = Api.GetByIdAsync(Id, CancellationToken.None);
+            var visitsTask = VisitsApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
+            var offersTask = OffersApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
+            var inquiriesTask = InquiriesApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
+            await Task.WhenAll(listingTask, visitsTask, offersTask, inquiriesTask);
+
+            listing = listingTask.Result;
+            visits = visitsTask.Result.Items;
+            offers = offersTask.Result.Items;
+            inquiries = inquiriesTask.Result.Items;
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Guid, Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action(Actor.Require());
+            actionError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RunModalAsync(Func<Guid, Task> action, Action close)
+    {
+        modalBusy = true;
+        try
+        {
+            await action(Actor.Require());
+            close();
+            modalError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+
+    private static string Check(bool ok) => ok ? "✓" : "pendiente";
+
+    private void OpenReason(ReasonAction action)
+    {
+        reasonAction = action;
+        modalError = null;
+        showReason = true;
+    }
+
+    private Task ConfirmReasonAsync(string reason) => reasonAction == ReasonAction.Withdraw
+        ? RunModalAsync(a => Api.WithdrawAsync(Id, a, reason, CancellationToken.None), () => showReason = false)
+        : RunModalAsync(a => Api.CancelReservationAsync(Id, a, reason, CancellationToken.None), () => showReason = false);
+
+    private void OpenDetails()
+    {
+        details = DetailsForm.From(listing!);
+        modalError = null;
+        showDetails = true;
+    }
+
+    private Task SaveDetailsAsync() => RunModalAsync(
+        a => Api.UpdateDetailsAsync(Id, details.ToRequest(a), CancellationToken.None),
+        () => showDetails = false);
+
+    private void OpenPhotos()
+    {
+        photosDraft = string.Join('\n', listing!.Photos);
+        modalError = null;
+        showPhotos = true;
+    }
+
+    private void FillSamplePhotos() =>
+        photosDraft = string.Join('\n', Enumerable.Range(1, ListingLimits.MinPhotos).Select(n => $"https://fotos.llave.co/{RentalsFormat.Short(Id)}/{n}.jpg"));
+
+    private Task SavePhotosAsync()
+    {
+        var photos = photosDraft.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return RunModalAsync(a => Api.UpdatePhotosAsync(Id, new UpdateListingPhotosRequest(a, photos), CancellationToken.None), () => showPhotos = false);
+    }
+
+    private void OpenPrice()
+    {
+        priceDraft = listing!.Price ?? 0;
+        modalError = null;
+        showPrice = true;
+    }
+
+    private async Task OpenAdvisorAsync()
+    {
+        advisorDraft = listing!.AdvisorId;
+        modalError = null;
+        showAdvisor = true;
+        try
+        {
+            advisors = (await IdentityApi.GetAsync(CancellationToken.None)).Advisors;
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+    }
+
+    private void OpenReport()
+    {
+        reportReason = ReportReason.Fraud;
+        modalError = null;
+        showReport = true;
+    }
+
+    private void OpenClose()
+    {
+        closeFinalPrice = offers.FirstOrDefault(o => o.Id == listing!.ReservedOfferId)?.Amount ?? listing!.Price ?? 0;
+        closeSignedOn = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date);
+        modalError = null;
+        showClose = true;
+    }
+
+    private void OpenVisit()
+    {
+        var tomorrow = DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date.AddDays(1);
+        slotDrafts = [tomorrow.AddHours(10), tomorrow.AddHours(15), null];
+        modalError = null;
+        showVisit = true;
+    }
+
+    private async Task RequestVisitAsync()
+    {
+        modalBusy = true;
+        try
+        {
+            var slots = slotDrafts.OfType<DateTime>().Select(RentalsFormat.FromColombia).ToList();
+            var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Actor.Require(), Id, slots), CancellationToken.None);
+            showVisit = false;
+            Nav.NavigateTo($"/rentals/visits/{visitId}");
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+
+    private void OpenInquiry()
+    {
+        inquiryDraft = "";
+        modalError = null;
+        showInquiry = true;
+    }
+
+    private async Task SendInquiryAsync()
+    {
+        modalBusy = true;
+        try
+        {
+            var inquiryId = await InquiriesApi.SendMessageAsync(
+                new SendInquiryMessageRequest(Actor.Require(), Id, inquiryDraft), CancellationToken.None);
+            showInquiry = false;
+            Nav.NavigateTo($"/rentals/inquiries/{inquiryId}");
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+
+    private void OpenOffer()
+    {
+        offerAmount = listing!.Price ?? 0;
+        offerStart = DateOnly.FromDateTime(DateTime.Today.AddDays(15));
+        offerMonths = 12;
+        modalError = null;
+        showOffer = true;
+    }
+
+    private async Task SubmitOfferAsync()
+    {
+        modalBusy = true;
+        try
+        {
+            var isRent = listing!.Operation == "Rent";
+            var offerId = await OffersApi.SubmitAsync(
+                new SubmitOfferRequest(Actor.Require(), Id, offerAmount, isRent ? offerStart : null, isRent ? offerMonths : null),
+                CancellationToken.None);
+            showOffer = false;
+            Nav.NavigateTo($"/rentals/offers/{offerId}");
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+
+    private sealed class DetailsForm
+    {
+        public PropertyType Type { get; set; }
+        public decimal Area { get; set; } = 60;
+        public int Bedrooms { get; set; } = 2;
+        public int Bathrooms { get; set; } = 1;
+        public int ParkingSpots { get; set; }
+        public int Stratum { get; set; } = 3;
+        public int? Floor { get; set; }
+        public bool HasElevator { get; set; }
+        public long AdministrationFee { get; set; }
+        public string City { get; set; } = "";
+        public string Neighborhood { get; set; } = "";
+        public string Address { get; set; } = "";
+        public string Description { get; set; } = "";
+
+        public static DetailsForm From(ListingDto l) => l.City is null
+            ? new DetailsForm()
+            : new DetailsForm
+            {
+                Type = Enum.Parse<PropertyType>(l.Type!),
+                Area = l.Area ?? 0,
+                Bedrooms = l.Bedrooms ?? 0,
+                Bathrooms = l.Bathrooms ?? 1,
+                ParkingSpots = l.ParkingSpots ?? 0,
+                Stratum = l.Stratum ?? 1,
+                Floor = l.Floor,
+                HasElevator = l.HasElevator,
+                AdministrationFee = l.AdministrationFee ?? 0,
+                City = l.City,
+                Neighborhood = l.Neighborhood ?? "",
+                Address = l.Address ?? "",
+                Description = l.Description ?? ""
+            };
+
+        public UpdateListingDetailsRequest ToRequest(Guid actorId) =>
+            new(actorId, Type, Area, Bedrooms, Bathrooms, ParkingSpots, Stratum, Floor, HasElevator, AdministrationFee,
+                City, Neighborhood, Address, Description);
+    }
+}

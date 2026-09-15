@@ -1,0 +1,222 @@
+@page "/rentals/offers/{Id:guid}"
+@inject OffersApiClient Api
+@inject RentalsActor Actor
+
+<PageTitle>Oferta · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/rentals/offers" class="small">← Volver a ofertas</a>
+</div>
+
+@if (loading && offer is null)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (loadError is not null)
+{
+    <ErrorAlert Exception="loadError" />
+}
+else if (offer is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1>Oferta por @RentalsFormat.Money(offer.Amount)</h1>
+            <p>@RentalsFormat.Term(offer.Operation) · publicada en @RentalsFormat.Money(offer.ListedPrice) · <ShortId Value="offer.Id" /></p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <RentalStatusPill Status="@offer.Status" />
+            @if (IsOpen)
+            {
+                <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.AcceptAsync(Id, a, CancellationToken.None))">Aceptar</button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(busy || offer.CounterOfferCount >= OfferLimits.MaxCounterOffers)" @onclick="OpenCounter">Contraofertar</button>
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="OpenReject">Rechazar</button>
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.WithdrawAsync(Id, a, CancellationToken.None))">Retirar</button>
+            }
+        </div>
+    </div>
+
+    @if (actionError is not null)
+    {
+        <ErrorAlert Exception="actionError" />
+    }
+
+    @if (IsOpen)
+    {
+        <div class="alert alert-info-soft small">
+            Es el turno del <strong>@(offer.Status == "AwaitingPublisher" ? "publicador (propietario o asesor)" : "oferente")</strong>
+            hasta el @RentalsFormat.Date(offer.RespondBy). Retirar solo lo puede hacer el oferente; al aceptar se reserva la publicación.
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="surface-card">
+                <h2 class="h6">Condiciones</h2>
+                <dl class="kv-list mb-0">
+                    <dt>Publicación</dt>
+                    <dd><ShortId Value="offer.ListingId" Href="@($"/rentals/listings/{offer.ListingId}")" /></dd>
+                    <dt>Oferente</dt>
+                    <dd><ShortId Value="offer.OffererId" /></dd>
+                    <dt>Monto actual</dt>
+                    <dd>@RentalsFormat.Money(offer.Amount)</dd>
+                    <dt>Precio publicado</dt>
+                    <dd>@RentalsFormat.Money(offer.ListedPrice)</dd>
+                    @if (offer.RentStartDate is not null)
+                    {
+                        <dt>Inicio del arriendo</dt>
+                        <dd>@RentalsFormat.Date(offer.RentStartDate)</dd>
+                        <dt>Duración</dt>
+                        <dd>@offer.RentTermMonths meses</dd>
+                    }
+                    <dt>Contraofertas</dt>
+                    <dd>@offer.CounterOfferCount de @OfferLimits.MaxCounterOffers</dd>
+                    <dt>Último movimiento</dt>
+                    <dd>@RentalsFormat.Term(offer.LastMoveBy)</dd>
+                    <dt>Enviada</dt>
+                    <dd>@RentalsFormat.Date(offer.SubmittedAt)</dd>
+                </dl>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="table-card">
+                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Historial de la negociación</h2></div>
+                <div class="table-responsive-wrap">
+                    <table class="table">
+                        <thead><tr><th>Movimiento</th><th>Parte</th><th>Monto</th><th>Fecha</th></tr></thead>
+                        <tbody>
+                            @foreach (var m in offer.History)
+                            {
+                                <tr>
+                                    <td>
+                                        @RentalsFormat.Term(m.Kind)
+                                        @if (m.Reason is not null)
+                                        {
+                                            <div class="form-hint">@m.Reason</div>
+                                        }
+                                    </td>
+                                    <td>@(m.By is null ? "—" : RentalsFormat.Term(m.By))</td>
+                                    <td>@RentalsFormat.Money(m.Amount)</td>
+                                    <td class="text-muted small">@RentalsFormat.Date(m.At)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<Modal Title="Contraofertar" @bind-IsVisible="showCounter">
+    <ChildContent>
+        <label class="form-label">Nuevo monto (COP)</label>
+        <input type="number" class="form-control" min="0" step="10000" @bind="counterAmount" />
+        <div class="form-hint">Tiene que cambiar el monto y seguir siendo al menos el 80% del precio publicado.</div>
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showCounter = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || counterAmount <= 0)"
+                @onclick="() => RunModalAsync(a => Api.CounterAsync(Id, a, counterAmount, CancellationToken.None), () => showCounter = false)">
+            Contraofertar
+        </button>
+    </FooterContent>
+</Modal>
+
+<ReasonModal Title="Rechazar oferta" ConfirmText="Rechazar" Danger="true" Busy="modalBusy" Error="modalError"
+             @bind-IsVisible="showReject"
+             OnConfirm="reason => RunModalAsync(a => Api.RejectAsync(Id, a, reason, CancellationToken.None), () => showReject = false)" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private OfferDto? offer;
+    private bool loading = true;
+    private ApiException? loadError;
+    private ApiException? actionError;
+    private bool busy;
+
+    private bool modalBusy;
+    private ApiException? modalError;
+    private bool showCounter;
+    private long counterAmount;
+    private bool showReject;
+
+    private bool IsOpen => offer is not null && RentalsFormat.IsOpenOffer(offer.Status);
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            offer = await Api.GetByIdAsync(Id, CancellationToken.None);
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Guid, Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action(Actor.Require());
+            actionError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RunModalAsync(Func<Guid, Task> action, Action close)
+    {
+        modalBusy = true;
+        try
+        {
+            await action(Actor.Require());
+            close();
+            modalError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+
+    private void OpenCounter()
+    {
+        counterAmount = offer!.Amount;
+        modalError = null;
+        showCounter = true;
+    }
+
+    private void OpenReject()
+    {
+        modalError = null;
+        showReject = true;
+    }
+}

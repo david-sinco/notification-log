@@ -1,0 +1,211 @@
+@page "/rentals/visits/{Id:guid}"
+@inject VisitsApiClient Api
+@inject RentalsActor Actor
+
+<PageTitle>Visita · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/rentals/visits" class="small">← Volver a visitas</a>
+</div>
+
+@if (loading && visit is null)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (loadError is not null)
+{
+    <ErrorAlert Exception="loadError" />
+}
+else if (visit is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1>Visita @(visit.ConfirmedSlotStart is { } confirmed ? $"el {RentalsFormat.Date(confirmed)}" : "por confirmar")</h1>
+            <p>Franjas de @visit.SlotDurationMinutes minutos, hora de Colombia · <ShortId Value="visit.Id" /></p>
+        </div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <RentalStatusPill Status="@visit.Status" />
+            @if (visit.Status == "Requested")
+            {
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(VisitAction.Decline)">Rechazar</button>
+            }
+            @if (visit.Status == "Confirmed")
+            {
+                <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.ReportOutcomeAsync(Id, a, true, CancellationToken.None))">Se realizó</button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.ReportOutcomeAsync(Id, a, false, CancellationToken.None))">No asistió</button>
+            }
+            @if (visit.Status is "Requested" or "Confirmed")
+            {
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(VisitAction.Cancel)">Cancelar</button>
+            }
+        </div>
+    </div>
+
+    @if (actionError is not null)
+    {
+        <ErrorAlert Exception="actionError" />
+    }
+
+    @if (visit.Status == "Requested")
+    {
+        <div class="alert alert-info-soft small">
+            El anfitrión confirma una de las franjas o rechaza la solicitud antes del @RentalsFormat.Date(visit.RespondBy).
+        </div>
+    }
+    else if (visit.Status == "Confirmed")
+    {
+        <div class="alert alert-info-soft small">
+            El resultado se registra cuando termina la franja; si nadie lo hace, la visita se da por realizada 72 horas después.
+            Cancelar con menos de 12 horas cuenta como cancelación tardía.
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="surface-card">
+                <h2 class="h6">Datos</h2>
+                <dl class="kv-list mb-0">
+                    <dt>Publicación</dt>
+                    <dd><ShortId Value="visit.ListingId" Href="@($"/rentals/listings/{visit.ListingId}")" /></dd>
+                    <dt>Visitante</dt>
+                    <dd><ShortId Value="visit.VisitorId" /></dd>
+                    <dt>Anfitrión</dt>
+                    <dd><ShortId Value="visit.HostId" /></dd>
+                    <dt>Solicitada</dt>
+                    <dd>@RentalsFormat.Date(visit.RequestedAt)</dd>
+                    @if (visit.CancelledBy is not null)
+                    {
+                        <dt>Cancelada por</dt>
+                        <dd>@RentalsFormat.Term(visit.CancelledBy)@(visit.IsLateCancellation ? " · tardía" : "")</dd>
+                    }
+                    @if (visit.Reason is not null)
+                    {
+                        <dt>Motivo</dt>
+                        <dd>@visit.Reason</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="surface-card">
+                <h2 class="h6">Franjas propuestas</h2>
+                <ul class="slot-list">
+                    @foreach (var slot in visit.SlotStarts)
+                    {
+                        <li>
+                            <span>
+                                @RentalsFormat.Date(slot) – @slot.AddMinutes(visit.SlotDurationMinutes).ToOffset(RentalsFormat.ColombiaOffset).ToString("HH:mm")
+                                @if (visit.ConfirmedSlotStart == slot)
+                                {
+                                    <StatusPill Text="Confirmada" Variant="success" />
+                                }
+                            </span>
+                            @if (visit.Status == "Requested")
+                            {
+                                <button class="btn btn-sm btn-outline-secondary" disabled="@busy"
+                                        @onclick="() => RunAsync(a => Api.ConfirmAsync(Id, a, slot, CancellationToken.None))">
+                                    Confirmar esta
+                                </button>
+                            }
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+}
+
+<ReasonModal Title="@(reasonAction == VisitAction.Decline ? "Rechazar solicitud" : "Cancelar visita")"
+             ConfirmText="@(reasonAction == VisitAction.Decline ? "Rechazar" : "Cancelar visita")"
+             Danger="true" Busy="modalBusy" Error="modalError"
+             @bind-IsVisible="showReason" OnConfirm="ConfirmReasonAsync" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private enum VisitAction { Decline, Cancel }
+
+    private VisitDto? visit;
+    private bool loading = true;
+    private ApiException? loadError;
+    private ApiException? actionError;
+    private bool busy;
+
+    private bool modalBusy;
+    private ApiException? modalError;
+    private bool showReason;
+    private VisitAction reasonAction;
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            visit = await Api.GetByIdAsync(Id, CancellationToken.None);
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Guid, Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action(Actor.Require());
+            actionError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void OpenReason(VisitAction action)
+    {
+        reasonAction = action;
+        modalError = null;
+        showReason = true;
+    }
+
+    private async Task ConfirmReasonAsync(string reason)
+    {
+        modalBusy = true;
+        try
+        {
+            var actorId = Actor.Require();
+
+            if (reasonAction == VisitAction.Decline)
+                await Api.DeclineAsync(Id, actorId, reason, CancellationToken.None);
+            else
+                await Api.CancelAsync(Id, actorId, reason, CancellationToken.None);
+
+            showReason = false;
+            modalError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+}

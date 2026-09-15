@@ -1,0 +1,26 @@
+@implements IDisposable
+@inject RentalsActor Actor
+
+@if (Href is not null)
+{
+    <a href="@Href" class="short-id" title="@Value" @onclick:stopPropagation="true">@RentalsFormat.Short(Value)</a>
+}
+else
+{
+    <code class="short-id" title="@Value">@RentalsFormat.Short(Value)</code>
+}
+@if (Actor.Is(Value))
+{
+    <span class="chip chip-self">vos</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public Guid Value { get; set; }
+    [Parameter] public string? Href { get; set; }
+
+    protected override void OnInitialized() => Actor.Changed += OnActorChanged;
+
+    private void OnActorChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Actor.Changed -= OnActorChanged;
+}

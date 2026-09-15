@@ -1,0 +1,286 @@
+@page "/rentals/moderation"
+@implements IDisposable
+@inject ListingsApiClient ListingsApi
+@inject ModerationApiClient Api
+@inject RentalsActor Actor
+@inject NavigationManager Nav
+
+<PageTitle>Moderación · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Moderación</h1>
+        <p>Revisión de publicaciones nuevas, reportes y suspensiones. Actuá como moderador.</p>
+    </div>
+    <button class="btn btn-outline-secondary" disabled="@(Actor.Current?.Kind == RentalsActorKind.Moderator)"
+            @onclick="() => Actor.Set(RentalsActor.TestModerator)">
+        Actuar como moderador de pruebas
+    </button>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="table-card mb-4">
+    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">En revisión (@inReview.Count)</h2></div>
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (inReview.Count == 0)
+    {
+        <EmptyState Text="No hay publicaciones esperando revisión." Icon="✅" />
+    }
+    else
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead><tr><th>Inmueble</th><th>Operación</th><th>Precio</th><th>Enviada</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var l in inReview)
+                    {
+                        <tr>
+                            <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
+                            <td>@RentalsFormat.Term(l.Operation)</td>
+                            <td>@RentalsFormat.Money(l.Price)</td>
+                            <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" disabled="@busy"
+                                            @onclick="() => RunAsync(m => Api.ReviewAsync(l.Id, m, true, [], CancellationToken.None))">
+                                        Aprobar
+                                    </button>
+                                    <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReject(l)">Rechazar…</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="table-card mb-4">
+    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Visibles con reportes (@reported.Count)</h2></div>
+    @if (!loading && reported.Count == 0)
+    {
+        <EmptyState Text="Ninguna publicación visible tiene reportes." Icon="🚩" />
+    }
+    else if (!loading)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead><tr><th>Inmueble</th><th>Reportes</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var l in reported)
+                    {
+                        <tr>
+                            <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
+                            <td>@l.ReportCount</td>
+                            <td><RentalStatusPill Status="@l.Status" /></td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Suspend)">Suspender…</button>
+                                    <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Withdraw)">Retirar…</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<div class="table-card">
+    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Suspendidas (@suspended.Count)</h2></div>
+    @if (!loading && suspended.Count == 0)
+    {
+        <EmptyState Text="No hay publicaciones suspendidas." Icon="⏸️" />
+    }
+    else if (!loading)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead><tr><th>Inmueble</th><th>Actualizada</th><th></th></tr></thead>
+                <tbody>
+                    @foreach (var l in suspended)
+                    {
+                        <tr>
+                            <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
+                            <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" disabled="@busy"
+                                            @onclick="() => RunAsync(m => Api.ReinstateAsync(l.Id, m, CancellationToken.None))">
+                                        Levantar suspensión
+                                    </button>
+                                    <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Withdraw)">Retirar…</button>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+<Modal Title="Rechazar publicación" @bind-IsVisible="showReject">
+    <ChildContent>
+        <p class="text-muted small">La publicación vuelve a borrador y el propietario ve los motivos.</p>
+        @foreach (var reason in RentalsFormat.Values<RejectionReason>())
+        {
+            <div class="form-check">
+                <input class="form-check-input" type="checkbox" id="reason-@reason" checked="@rejectReasons.Contains(reason)"
+                       @onchange="e => ToggleReason(reason, (bool)e.Value!)" />
+                <label class="form-check-label" for="reason-@reason">@RentalsFormat.Term(reason)</label>
+            </div>
+        }
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showReject = false">Cancelar</button>
+        <button type="button" class="btn btn-danger" disabled="@(modalBusy || rejectReasons.Count == 0)" @onclick="RejectAsync">Rechazar</button>
+    </FooterContent>
+</Modal>
+
+<ReasonModal Title="@(reasonAction == ModerationAction.Suspend ? "Suspender publicación" : "Retirar publicación")"
+             Description="@(reasonAction == ModerationAction.Suspend ? "Deja de ser visible hasta que se levante la suspensión." : "Se retira definitivamente por decisión de moderación.")"
+             ConfirmText="@(reasonAction == ModerationAction.Suspend ? "Suspender" : "Retirar")"
+             Danger="true" Busy="modalBusy" Error="modalError"
+             @bind-IsVisible="showReason" OnConfirm="ConfirmReasonAsync" />
+
+@code {
+    private enum ModerationAction { Suspend, Withdraw }
+
+    private IReadOnlyList<ListingSummaryDto> inReview = [];
+    private IReadOnlyList<ListingSummaryDto> reported = [];
+    private IReadOnlyList<ListingSummaryDto> suspended = [];
+    private bool loading = true;
+    private bool busy;
+    private ApiException? error;
+
+    private bool modalBusy;
+    private ApiException? modalError;
+    private ListingSummaryDto? target;
+
+    private bool showReject;
+    private HashSet<RejectionReason> rejectReasons = [];
+
+    private bool showReason;
+    private ModerationAction reasonAction;
+
+    protected override Task OnInitializedAsync()
+    {
+        Actor.Changed += OnActorChanged;
+        return LoadAsync();
+    }
+
+    private void OnActorChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Actor.Changed -= OnActorChanged;
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 100, CancellationToken.None);
+            var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 100, CancellationToken.None);
+            var pausedTask = ListingsApi.ListAsync(null, ListingStatus.Paused, null, null, 1, 100, CancellationToken.None);
+            var suspendedTask = ListingsApi.ListAsync(null, ListingStatus.Suspended, null, null, 1, 100, CancellationToken.None);
+            await Task.WhenAll(inReviewTask, publishedTask, pausedTask, suspendedTask);
+
+            inReview = inReviewTask.Result.Items;
+            reported = publishedTask.Result.Items.Concat(pausedTask.Result.Items)
+                .Where(l => l.ReportCount > 0)
+                .OrderByDescending(l => l.ReportCount)
+                .ToList();
+            suspended = suspendedTask.Result.Items;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task RunAsync(Func<Guid, Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action(Actor.Require());
+            error = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RunModalAsync(Func<Guid, Task> action, Action close)
+    {
+        modalBusy = true;
+        try
+        {
+            await action(Actor.Require());
+            close();
+            modalError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            modalError = ex;
+        }
+        finally
+        {
+            modalBusy = false;
+        }
+    }
+
+    private void OpenReject(ListingSummaryDto listing)
+    {
+        target = listing;
+        rejectReasons = [];
+        modalError = null;
+        showReject = true;
+    }
+
+    private void ToggleReason(RejectionReason reason, bool isChecked)
+    {
+        if (isChecked) rejectReasons.Add(reason);
+        else rejectReasons.Remove(reason);
+    }
+
+    private Task RejectAsync() => RunModalAsync(
+        m => Api.ReviewAsync(target!.Id, m, false, rejectReasons.ToList(), CancellationToken.None),
+        () => showReject = false);
+
+    private void OpenReason(ListingSummaryDto listing, ModerationAction action)
+    {
+        target = listing;
+        reasonAction = action;
+        modalError = null;
+        showReason = true;
+    }
+
+    private Task ConfirmReasonAsync(string reason) => reasonAction == ModerationAction.Suspend
+        ? RunModalAsync(m => Api.SuspendAsync(target!.Id, m, reason, CancellationToken.None), () => showReason = false)
+        : RunModalAsync(m => Api.WithdrawAsync(target!.Id, m, reason, CancellationToken.None), () => showReason = false);
+}
