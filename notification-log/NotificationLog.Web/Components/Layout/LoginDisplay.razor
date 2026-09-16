@@ -1,0 +1,19 @@
+@inject NavigationManager Nav
+
+<AuthorizeView>
+    <Authorized>
+        <form action="authentication/logout" method="post" class="d-flex align-items-center gap-2">
+            <AntiforgeryToken />
+            <input type="hidden" name="returnUrl" value="/" />
+            <span class="small text-muted">@context.User.Identity?.Name</span>
+            <button type="submit" class="btn btn-outline-secondary btn-sm">Cerrar sesión</button>
+        </form>
+    </Authorized>
+    <NotAuthorized>
+        <a class="btn btn-primary btn-sm" href="@LoginHref">Iniciar sesión</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private string LoginHref => $"login?returnUrl={Uri.EscapeDataString("/" + Nav.ToBaseRelativePath(Nav.Uri))}";
+}

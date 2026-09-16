@@ -1,5 +1,4 @@
 @page "/rentals/listings"
-@implements IDisposable
 @inject ListingsApiClient Api
 @inject DevIdentityApiClient IdentityApi
 @inject RentalsActor Actor
@@ -170,11 +169,7 @@
     private bool createAsAdvisor;
     private IReadOnlyList<PersonDto> people = [];
 
-    protected override Task OnInitializedAsync()
-    {
-        Actor.Changed += OnActorChanged;
-        return LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
@@ -218,8 +213,8 @@
     private async Task OpenCreateAsync()
     {
         createError = null;
-        createAsAdvisor = Actor.Current?.Kind == RentalsActorKind.Advisor;
-        createPublisherId = Actor.Current?.PersonId ?? Guid.Empty;
+        createAsAdvisor = Actor.IsAdvisor;
+        createPublisherId = createAsAdvisor ? Guid.Empty : Actor.Id ?? Guid.Empty;
         showCreate = true;
 
         try
@@ -254,15 +249,4 @@
         }
     }
 
-    private void OnActorChanged()
-    {
-        if (onlyMine)
-            InvokeAsync(async () =>
-            {
-                await RefreshAsync();
-                StateHasChanged();
-            });
-    }
-
-    public void Dispose() => Actor.Changed -= OnActorChanged;
 }

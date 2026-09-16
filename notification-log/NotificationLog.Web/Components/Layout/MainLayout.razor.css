@@ -16,12 +16,15 @@ main {
 
 .top-row {
     background-color: transparent;
-    height: 1.5rem;
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
 }
 
 @media (max-width: 640.98px) {
     .top-row {
-        height: 0.5rem;
+        min-height: 2.5rem;
     }
 }
 

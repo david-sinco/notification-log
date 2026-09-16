@@ -1,5 +1,4 @@
 @page "/rentals/visits"
-@implements IDisposable
 @inject VisitsApiClient Api
 @inject RentalsActor Actor
 @inject NavigationManager Nav
@@ -98,11 +97,7 @@
     private bool onlyMine;
     private int currentPage = 1;
 
-    protected override Task OnInitializedAsync()
-    {
-        Actor.Changed += OnActorChanged;
-        return LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
@@ -140,15 +135,4 @@
         return LoadAsync();
     }
 
-    private void OnActorChanged()
-    {
-        if (onlyMine)
-            InvokeAsync(async () =>
-            {
-                await RefreshAsync();
-                StateHasChanged();
-            });
-    }
-
-    public void Dispose() => Actor.Changed -= OnActorChanged;
 }

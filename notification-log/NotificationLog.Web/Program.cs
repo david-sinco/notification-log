@@ -9,6 +9,7 @@ using NotificationLog.Web.Api.Rentals.Listings;
 using NotificationLog.Web.Api.Rentals.Offers;
 using NotificationLog.Web.Api.Rentals.Users;
 using NotificationLog.Web.Api.Rentals.Visits;
+using NotificationLog.Web.Authentication;
 using NotificationLog.Web.Components;
 using NotificationLog.Web.Components.Rentals;
 
@@ -19,6 +20,8 @@ builder.AddServiceDefaults();
 builder.AddRedisOutputCache("cache");
 
 // Add services to the container.
+builder.Services.AddIdentityAuthentication(builder.Configuration);
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
@@ -49,11 +52,16 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.UseAntiforgery();
 
 app.UseOutputCache();
 
 app.MapStaticAssets();
+
+app.MapAuthentication();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

@@ -1,0 +1,29 @@
+@page
+@model NotificationLog.IdentityService.Api.Pages.Account.RegisterModel
+@{
+    ViewData["Title"] = "Crear cuenta";
+}
+
+<h1>Crear cuenta</h1>
+
+@if (Model.Error is not null)
+{
+    <div class="error">@Model.Error</div>
+}
+
+<form method="post">
+    <input type="hidden" asp-for="ReturnUrl" />
+
+    <label asp-for="Identifier">Correo o teléfono</label>
+    <input asp-for="Identifier" autocomplete="username" autofocus />
+
+    <label asp-for="Password">Contraseña</label>
+    <input asp-for="Password" type="password" autocomplete="new-password" />
+
+    <label asp-for="ConfirmPassword">Repite la contraseña</label>
+    <input asp-for="ConfirmPassword" type="password" autocomplete="new-password" />
+
+    <button type="submit">Crear cuenta</button>
+</form>
+
+<p class="footer">¿Ya tienes cuenta? <a asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Iniciar sesión</a></p>

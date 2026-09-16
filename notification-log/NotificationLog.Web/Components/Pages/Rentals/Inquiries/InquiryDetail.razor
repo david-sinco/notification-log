@@ -1,5 +1,4 @@
 @page "/rentals/inquiries/{Id:guid}"
-@implements IDisposable
 @inject InquiriesApiClient Api
 @inject RentalsActor Actor
 
@@ -79,13 +78,7 @@ else if (inquiry is not null)
     private bool busy;
     private string draft = "";
 
-    protected override void OnInitialized() => Actor.Changed += OnActorChanged;
-
     protected override Task OnParametersSetAsync() => LoadAsync();
-
-    private void OnActorChanged() => InvokeAsync(StateHasChanged);
-
-    public void Dispose() => Actor.Changed -= OnActorChanged;
 
     private async Task LoadAsync()
     {

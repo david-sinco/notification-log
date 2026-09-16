@@ -375,37 +375,6 @@ textarea.form-control.font-monospace {
 }
 
 /* ===== Rentals ==================================================================== */
-.actor-bar {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--primary);
-    border-radius: var(--radius);
-    box-shadow: var(--shadow-sm);
-    padding: 0.6rem 1rem;
-    margin-bottom: 1.25rem;
-}
-
-    .actor-bar-label {
-        font-size: 0.72rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-muted);
-    }
-
-    .actor-bar-select {
-        width: auto;
-        min-width: 260px;
-    }
-
-    .actor-bar-input {
-        width: 260px;
-    }
-
 .short-id {
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     font-size: 0.82rem;
@@ -847,4 +816,46 @@ h3.ddd-h3 {
 
     .blazor-error-boundary::after {
         content: "Ha ocurrido un error."
+    }
+
+/* ===== Login ====================================================================== */
+.login-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: linear-gradient(180deg, var(--sidebar-from), var(--sidebar-to));
+}
+
+.login-card {
+    width: 100%;
+    max-width: 22rem;
+    background: var(--surface);
+    border-radius: var(--radius);
+    padding: 2rem;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+}
+
+    .login-card h1 {
+        font-size: 1.4rem;
+        margin: 0.75rem 0 0.5rem;
+    }
+
+    .login-card p {
+        color: var(--text-muted);
+        margin-bottom: 1.5rem;
+    }
+
+    .login-card .brand-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 0.6rem;
+        background: var(--primary);
+        color: #fff;
+        font-weight: 700;
     }

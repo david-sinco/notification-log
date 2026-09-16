@@ -1,5 +1,4 @@
 @page "/rentals/me"
-@implements IDisposable
 @inject UserCollectionsApiClient Api
 @inject RentalsActor Actor
 @inject NavigationManager Nav
@@ -9,14 +8,14 @@
 <div class="page-header">
     <div>
         <h1>Favoritos y búsquedas</h1>
-        <p>Lo que guardó el usuario con el que estás actuando. Las alertas avisan de publicaciones nuevas que coinciden.</p>
+        <p>Lo que guardaste. Las alertas avisan de publicaciones nuevas que coinciden.</p>
     </div>
     <button class="btn btn-primary" disabled="@(Actor.Id is null)" @onclick="OpenCreate">+ Nueva búsqueda</button>
 </div>
 
 @if (Actor.Id is null)
 {
-    <EmptyState Text="Elegí un usuario en «Actuando como» para ver sus favoritos y búsquedas." Icon="👤" />
+    <EmptyState Text="Inicia sesión para ver tus favoritos y búsquedas." Icon="👤" />
 }
 else
 {
@@ -176,11 +175,7 @@ else
     private Guid? editingId;
     private SearchForm form = new();
 
-    protected override Task OnInitializedAsync()
-    {
-        Actor.Changed += OnActorChanged;
-        return LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
@@ -282,15 +277,6 @@ else
         }
     }
 
-    private void OnActorChanged() => InvokeAsync(async () =>
-    {
-        searches = [];
-        favorites = [];
-        await LoadAsync();
-        StateHasChanged();
-    });
-
-    public void Dispose() => Actor.Changed -= OnActorChanged;
 
     private sealed class SearchForm
     {

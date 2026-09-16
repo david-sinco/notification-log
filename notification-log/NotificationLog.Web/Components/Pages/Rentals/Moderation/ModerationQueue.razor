@@ -1,5 +1,5 @@
 @page "/rentals/moderation"
-@implements IDisposable
+@attribute [Authorize(Roles = "Administrador")]
 @inject ListingsApiClient ListingsApi
 @inject ModerationApiClient Api
 @inject RentalsActor Actor
@@ -10,12 +10,8 @@
 <div class="page-header">
     <div>
         <h1>Moderación</h1>
-        <p>Revisión de publicaciones nuevas, reportes y suspensiones. Actuá como moderador.</p>
+        <p>Revisión de publicaciones nuevas, reportes y suspensiones. Solo para administradores.</p>
     </div>
-    <button class="btn btn-outline-secondary" disabled="@(Actor.Current?.Kind == RentalsActorKind.Moderator)"
-            @onclick="() => Actor.Set(RentalsActor.TestModerator)">
-        Actuar como moderador de pruebas
-    </button>
 </div>
 
 @if (error is not null)
@@ -177,15 +173,7 @@
     private bool showReason;
     private ModerationAction reasonAction;
 
-    protected override Task OnInitializedAsync()
-    {
-        Actor.Changed += OnActorChanged;
-        return LoadAsync();
-    }
-
-    private void OnActorChanged() => InvokeAsync(StateHasChanged);
-
-    public void Dispose() => Actor.Changed -= OnActorChanged;
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {

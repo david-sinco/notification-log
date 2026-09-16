@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/Services/" />
+  <Folder Name="/Services/Identity/">
+    <Project Path="Services/Identity/NotificationLog.IdentityService.Api/NotificationLog.IdentityService.Api.csproj" />
+  </Folder>
   <Folder Name="/Services/Notification/">
     <Project Path="Services/Notification/NotificationLog.ApiService/NotificationLog.ApiService.csproj" />
     <Project Path="Services/Notification/NotificationLog.NotificationService.Application/NotificationLog.NotificationService.Application.csproj" />

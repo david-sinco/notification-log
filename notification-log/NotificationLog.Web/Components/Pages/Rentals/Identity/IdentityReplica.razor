@@ -1,6 +1,5 @@
 @page "/rentals/identity"
 @inject DevIdentityApiClient Api
-@inject RentalsActor Actor
 
 <PageTitle>Identidades · NotificationLog</PageTitle>
 
@@ -70,13 +69,6 @@
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" @onclick="() => OpenPerson(p)">Editar</button>
-                                    @if (p.UserId is { } actAs)
-                                    {
-                                        <button class="btn btn-outline-secondary" disabled="@Actor.Is(actAs)"
-                                                @onclick="() => Actor.Set(RentalsActor.OptionsFrom(identity).First(o => o.Id == actAs))">
-                                            Actuar como
-                                        </button>
-                                    }
                                 </div>
                             </td>
                         </tr>
@@ -109,10 +101,6 @@
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" @onclick="() => OpenAdvisor(a)">Editar</button>
-                                    <button class="btn btn-outline-secondary" disabled="@Actor.Is(a.Id)"
-                                            @onclick="() => Actor.Set(RentalsActor.OptionsFrom(identity).First(o => o.Id == a.Id))">
-                                        Actuar como
-                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -270,7 +258,6 @@
             await Api.SetPersonAsync(Guid.Parse(personId), new SetPersonRequest(userId, personPhone, personDocument), CancellationToken.None);
             showPerson = false;
             await LoadAsync();
-            Actor.Set(Actor.Current);
         }
         catch (ApiException ex)
         {
@@ -306,7 +293,6 @@
             await Api.SetAdvisorAsync(Guid.Parse(advisorId), new SetAdvisorRequest(advisorActive, cities, advisorCapacity), CancellationToken.None);
             showAdvisor = false;
             await LoadAsync();
-            Actor.Set(Actor.Current);
         }
         catch (ApiException ex)
         {

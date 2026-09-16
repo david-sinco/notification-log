@@ -20,9 +20,12 @@ Servicios de la plataforma:
 
 | Servicio | Responsabilidad |
 |---|---|
-| **Identity** (este) | quién es cada persona, sus cuentas de acceso y sus perfiles de asesor |
+| **Identity** (este) | quién es cada persona, sus cuentas de acceso, sus perfiles de asesor y el inicio de sesión |
 | **Publicaciones** (futuro) | inmuebles, publicación, favoritos, búsquedas, visitas y el resto de lógica del portal |
 | **Notification** (existente) | envío de notificaciones por correo, SMS, push y WhatsApp |
+
+**Cada servicio tiene su propia base de datos.** Identity usa la base `identity` en PostgreSQL; ningún
+otro servicio la lee ni la escribe.
 
 ## 2. Responsabilidad del servicio
 
@@ -31,10 +34,12 @@ Identity responde a una sola pregunta, **"¿quién es?"**, en tres niveles:
 | Nivel | Agregado | Responde |
 |---|---|---|
 | Identidad de los datos | `Person` | quién es esta persona y qué datos suyos están verificados |
-| Identidad de acceso | `User` | con qué cuenta entra y qué sesiones tiene abiertas |
+| Identidad de acceso | `User` | con qué cuenta entra, qué roles tiene y si puede iniciar sesión |
 | Identidad profesional | `Advisor` | si además es asesor y en qué condiciones trabaja |
 
-Además guarda la prueba de los consentimientos de tratamiento de datos (`ConsentLedger`).
+Además guarda la prueba de los consentimientos de tratamiento de datos (`ConsentLedger`) y es el
+**servidor de autorización** de la plataforma (OpenIddict): emite los tokens con los que la Web llama a
+las APIs.
 
 **Por qué centralizar a las personas en un servicio propio:**
 
@@ -76,6 +81,47 @@ Referencia: el contexto *Identity and Access* de *Implementing Domain-Driven Des
 - Los value objects tienen `Create` (valida y normaliza) y un `FromStorage` interno que no revalida,
   para que endurecer una regla mañana no impida releer los eventos de ayer.
 - **La versión del flujo no vive en el dominio.** El control de concurrencia lo hace Marten al guardar.
+- En la base `identity` conviven dos almacenes, en esquemas separados: los flujos y documentos de Marten,
+  y las tablas de OpenIddict (EF Core, esquema `oidc`).
+
+### Por qué event sourcing en Identity
+
+Se justifica por tres requisitos que en Identity no son accesorios:
+
+1. **Auditoría de seguridad.** Quién bloqueó una cuenta, cuándo cambió la contraseña, quién otorgó el rol
+   de administrador, quién revisó un documento. Con CRUD eso es una tabla de auditoría escrita *además*
+   del estado, y puede quedar desincronizada. Con eventos, el historial **es** el estado: no se puede
+   cambiar un `User` sin dejar `UserLocked`, `PasswordChanged` o `UserRolesChanged`.
+2. **Prueba del consentimiento.** La Ley 1581 (art. 8) da derecho a solicitar prueba de la autorización:
+   qué se autorizó, con qué versión de la política, desde qué origen, cuándo y cuándo se revocó. Un
+   `UPDATE` borra justo lo que hay que probar; `ConsentLedger` es append-only por naturaleza.
+3. **Fuente de las réplicas de otros servicios.** Rentals y Notification mantienen réplicas de Identity.
+   Los eventos quedan guardados en la misma transacción que el cambio y una suscripción de Marten los
+   publica sin perder ninguno. Un servicio nuevo reconstruye su réplica reproduciendo el historial, y una
+   réplica dañada por un bug se repara reproduciéndolo otra vez.
+
+Además:
+
+- **Soporte y fraude necesitan la línea de tiempo.** Los duplicados se resuelven a mano desde soporte, y
+  un robo de cuenta (cambio de teléfono → restablecer contraseña → cambio de canal preferido) solo se ve
+  como secuencia.
+- **Preguntas en el tiempo.** "¿Tenía el documento verificado cuando publicó?" sale de reproducir el
+  flujo hasta esa fecha.
+- **Coherencia del laboratorio.** Rentals ya usa event sourcing; Identity es el ejemplo de *cuándo*
+  conviene el patrón, no solo de cómo se usa.
+
+**Costes asumidos:**
+
+| Coste | Cómo se resuelve |
+|---|---|
+| Los eventos viejos conservan datos personales | borrado criptográfico o enmascaramiento de Marten |
+| La unicidad no es un índice único | reservas en el repositorio de escritura |
+| Buscar por correo o listar usuarios | proyecciones |
+| OpenIddict no vive en los flujos | dos almacenes; rotar el stamp y revocar sesiones no es atómico, pero `ValidateSession` rechaza el stamp viejo aunque la revocación falle |
+
+**Alternativa descartada:** CRUD con EF Core, outbox de Wolverine y OpenIddict en el mismo `DbContext`.
+Es más simple y hace atómica la revocación, pero obliga a reinventar un historial append-only para los
+consentimientos y una auditoría paralela para la seguridad.
 
 ### Eventos
 
@@ -88,7 +134,7 @@ Referencia: el contexto *Identity and Access* de *Implementing Domain-Driven Des
   - Un evento por hecho cuando cada cambio tiene consecuencias distintas. Ejemplo: cambiar un
     identificador anula su verificación.
   - Un evento con el estado completo cuando quien lo consume siempre reevalúa el conjunto. Ejemplos:
-    `ContactPreferencesChanged`, `AdvisorProfileUpdated`.
+    `ContactPreferencesChanged`, `AdvisorProfileUpdated`, `UserRolesChanged`.
 
 ### Identificación de personas
 
@@ -108,45 +154,116 @@ Referencia: el contexto *Identity and Access* de *Implementing Domain-Driven Des
 - La unicidad es una regla sobre el conjunto de personas; ningún agregado puede comprobarla solo.
 - Se resuelve con **reservas en el repositorio de escritura**: `TryReserveIdentifierAsync` y
   `ReleaseIdentifierAsync`.
-- En Marten, la reserva es un documento cuyo `Id` es el identificador normalizado; la clave primaria
-  rechaza el duplicado.
+- En Marten, la reserva es un documento cuyo `Id` es el identificador normalizado y que guarda el
+  `PersonId`; la clave primaria rechaza el duplicado. La misma reserva sirve para encontrar a la persona
+  al iniciar sesión.
+- "Una cuenta por persona" se resuelve igual: una reserva cuyo `Id` es el `PersonId` y que guarda el
+  `UserId`.
 - **Contrato:** las reservas y los eventos se guardan en la **misma sesión**, y
   `IUnitOfWork.SaveChangesAsync` los confirma juntos. Así no quedan reservas huérfanas si algo falla.
 
-### Cuentas y sesiones
+### Cuentas y roles
 
 - `User` es la cuenta de acceso, con relación 1 a 1 con su `Person`.
 - Se inicia sesión con **cualquier correo o teléfono verificado** de la persona. `User` no guarda el
   identificador.
-- **Las sesiones no van en el flujo de eventos.** Dispositivo, refresh token y última actividad cambian
-  constantemente y caducan solos, así que viven en Redis con TTL.
 - **Un login correcto no genera evento.** Solo quedan en el flujo los hechos de seguridad auditables:
-  bloqueo, cambio de contraseña, rotación del *security stamp*.
-- **Security stamp:** es un valor que viaja dentro de cada sesión o token. Rotarlo (al cambiar la
-  contraseña o bloquear la cuenta) invalida todas las sesiones abiertas de una vez.
+  bloqueo, cambio de contraseña, cambio de roles, rotación del *security stamp*.
+- **Los intentos fallidos tampoco generan evento.** Se cuentan fuera del agregado (Redis con TTL, puerto
+  `ISignInAttemptCounter`); al superar el umbral, Application llama a `User.Lock`, que sí emite
+  `UserLocked`. Así un atacante no puede inflar el flujo con intentos.
+- **Security stamp:** valor que viaja dentro de la sesión (cookie de Identity, código y refresh token).
+  Rotarlo (al cambiar o restablecer la contraseña, bloquear o deshabilitar la cuenta) invalida todas las
+  sesiones abiertas.
 - El hash de contraseña lo calcula `IPasswordHasher`, en Application. El agregado recibe el
   `PasswordHash` ya calculado y la política de contraseñas es `PasswordPolicy`, en Domain.
+- **Roles:** por ahora solo `Administrador`, guardado en `User` y emitido como claim `role`.
+  **"Propietario" no es un rol:** sale del dato (`Listing.PublisherId == person_id`), porque cualquier
+  usuario puede publicar y buscar a la vez, y un rol en el token quedaría desactualizado al publicar el
+  primer inmueble. Quien busca tampoco es un rol; en `Rentals.md` se llama **Interesado**.
+- Cambiar los roles no rota el stamp: el siguiente refresh ya emite el token con los roles nuevos.
 
-### Asesores
+### Autenticación con OpenIddict
 
-- **"Un asesor es un usuario, pero un usuario no es un asesor"** se modela con composición, no con
-  herencia. `Advisor` es un agregado propio con el **mismo Id que su `User`**.
-- No se usa herencia porque un usuario se convierte en asesor tiempo después de registrarse, y porque la
-  cuenta y la actividad profesional tienen ciclos de vida distintos: suspender a un asesor no bloquea su
-  cuenta.
-- El token de sesión incluye el permiso de asesor solo si el `Advisor` está `Active`.
+**Qué es cada pieza (equivalencias con IdentityServer4):**
 
-### Consentimientos y anonimización
+| IdentityServer4 | OpenIddict |
+|---|---|
+| `Client` | *Application* (`IOpenIddictApplicationManager`) |
+| `ApiScope` / `ApiResource` | *Scope* con *Resources* (`IOpenIddictScopeManager`) |
+| `PersistedGrant` | *Token* + *Authorization* |
+| `IProfileService` | los claims se arman en los endpoints *passthrough* |
+| Quickstart UI | páginas propias en `IdentityService.Api` |
+| `AddDeveloperSigningCredential` | `AddDevelopmentSigningCertificate()` |
+| `IdentityServer4.AccessTokenValidation` | `OpenIddict.Validation.AspNetCore` |
 
-- Los consentimientos son un agregado aparte, `ConsentLedger`, con un flujo por persona **sin datos
-  personales**: solo `PersonId`, finalidad, versión de la política, origen y fechas. Así la prueba de
-  consentimiento sobrevive a la anonimización.
-- Anonimizar a una persona: `PersonAnonymized` deja el estado de `Person` sin datos personales y como
-  final, deshabilita el `User` y retira el `Advisor`, todo en la misma operación.
-- **Los eventos anteriores siguen conteniendo datos personales.** Se resuelve en infraestructura, con
-  borrado criptográfico (datos cifrados con una clave por persona que se destruye) o con el
-  enmascaramiento de eventos de Marten. El dominio debe dejar identificado qué campos de qué eventos son
-  datos personales.
+- **Passthrough:** OpenIddict valida que la petición cumpla el protocolo y la entrega a nuestro endpoint,
+  que decide quién es el usuario y llama a `SignIn`. No se usa ASP.NET Core Identity.
+- **Destinations:** un claim solo llega al access token o al id_token si se le asigna destino. Los claims
+  sin destino viajan en el código y en el refresh token, que solo lee el servidor; así va el
+  `security_stamp`.
+
+**Qué es stateless y qué no:**
+
+| Pieza | Stateless | Dónde vive |
+|---|---|---|
+| Access token (JWT firmado, sin cifrar, 5 a 15 min) | sí | lo validan las APIs con la clave pública |
+| Cookie de sesión de Identity (sesión SSO) | sí | navegador, cifrada |
+| Cookie de la Web | sí | navegador, cifrada; guarda los tokens |
+| Código de autorización (un solo uso) | no | store de OpenIddict |
+| Refresh token (revocable, rotativo) | no | store de OpenIddict |
+| Clientes y scopes | no | store de OpenIddict |
+
+Por eso **las sesiones no van en Redis**: una sesión es una *authorization* de OpenIddict con su refresh
+token, y OpenIddict solo trae stores para EF Core y MongoDB. Se usa EF Core en la base `identity`.
+
+**Flujo para la Web: Authorization Code + PKCE, cliente confidencial.** No se usa el grant de contraseña.
+
+```
+Web ──challenge──► Identity /connect/authorize
+                     ¿cookie de Identity? no ──► /account/login
+                     POST login → SignIn (contraseña, intentos, estado)
+                               → cookie de Identity con sub, person_id, roles y security_stamp
+                     /connect/authorize → SignIn(OpenIddict) → código
+Web /signin-oidc ──código──► /connect/token → access, id y refresh token
+Web → APIs con Authorization: Bearer <access_token>
+```
+
+- **La página de login vive en Identity**: las credenciales solo las ve el servidor de autorización.
+- **Refresh:** `/connect/token` llama a `ValidateSession`. Si la cuenta no puede entrar o el stamp
+  cambió, responde `invalid_grant`; si no, emite tokens con los datos y roles actuales.
+- **Cerrar sesión:** la Web borra su cookie y redirige a `/connect/endsession`, que borra la cookie de
+  Identity. Los access tokens emitidos siguen valiendo hasta vencer.
+- **Revocación:** bloquear, deshabilitar o cambiar la contraseña rota el stamp y revoca las autorizaciones
+  del usuario (`ISessionRevoker`). "Mis sesiones" lista esas autorizaciones y permite cerrar una.
+
+**Claims del token:**
+
+| Claim | Destino | Uso |
+|---|---|---|
+| `sub` | access, id | `UserId`; el actor en todas las APIs |
+| `person_id` | access | `PublisherId` en Rentals |
+| `name` | access, id | mostrar en la UI |
+| `role` | access, id | `administrador` |
+| `security_stamp` | ninguno | se compara en cada refresh |
+
+El permiso de asesor y el nivel de verificación **no** se usan desde el token para decidir: Rentals los
+toma de su réplica, que está más al día que un token emitido hace minutos.
+
+### Autorización en los servicios
+
+Tres capas, cada una en su sitio:
+
+1. **Autenticación, en la Api.** Validación local con `OpenIddict.Validation.AspNetCore`: issuer y claves
+   por discovery, audience propio por API. Sin introspección, para no llamar a Identity en cada petición.
+2. **Permisos gruesos, en los endpoints.** Scope de la API y rol `administrador` donde aplique
+   (administración de Notification, moderación en Rentals, administración de usuarios en Identity).
+3. **Autorización por dato, en Application.** Los endpoints toman el actor de `sub` y lo pasan al
+   comando; los contratos HTTP ya no llevan `ActorId`. Los handlers siguen comparando el actor con el
+   dueño del dato. Las consultas "mías" usan `/api/me/...`, nunca un id en la ruta.
+
+La mensajería no lleva tokens de usuario: los consumidores confían en el broker. Una llamada HTTP entre
+servicios sin usuario usaría el flujo *client credentials*.
 
 ### Application y CQRS
 
@@ -159,9 +276,11 @@ Referencia: el contexto *Identity and Access* de *Implementing Domain-Driven Des
 - El código genérico compartido entre servicios va en **`Application.Shared`**: `IUnitOfWork`,
   `AppValidationException`, `NotFoundException`, `ValidatorExtensions` y, cuando haga falta,
   `PagedResult`.
+- **Application no conoce OpenIddict.** Solo expone puertos (`ISessionRevoker`) y devuelve
+  `SignedInUser`; la Api lo convierte en cookie o en token.
 - **CQRS con proyectos separados de escritura y lectura:**
   - **Regla:** si el dato sirve para decidir, va por escritura, contra el flujo y con consistencia
-    fuerte (el login, las reservas). Si sirve para mostrarse, va por lectura.
+    fuerte (el login, las reservas, `ValidateSession`). Si sirve para mostrarse, va por lectura.
   - **Application.Read** nunca carga agregados. Solo usa DTOs y los puertos de consulta.
   - **Proyecciones:** la lógica es una función pura en Application.Read (vista + evento → vista nueva) y
     la alimenta Marten desde Infrastructure.Read. Se empieza con proyecciones inline, que actualizan la
@@ -179,6 +298,8 @@ Referencia: el contexto *Identity and Access* de *Implementing Domain-Driven Des
   objects en `ValueObjects/` y los eventos en `Events/`.
 - Handlers con campos `private readonly` asignados por tupla en el constructor, y método
   `HandleAsync(cmd, ct)`.
+- La carpeta de OpenIddict se llama `Oidc/`, no `OpenIddict/`, para que el namespace no tape al del
+  paquete.
 
 ## 5. Agregados
 
@@ -213,26 +334,31 @@ Referencia: el contexto *Identity and Access* de *Implementing Domain-Driven Des
   el representante sea una persona natural y esté activa lo comprueba Application antes de llamar al
   dominio.
 - El canal preferido tiene que ser un identificador verificado.
+- Solo se inicia sesión con un correo o teléfono **verificado** y con la persona `Active`
+  (`CanSignInWith`).
 - Si la persona tiene una cuenta activa, debe conservar al menos un correo o teléfono verificado, porque
   es con lo que inicia sesión. Lo comprueba Application antes de quitar un identificador.
 - Una persona anonimizada queda en estado final y rechaza cualquier comando.
 
 ### 5.2 `User`
 
-**Datos:** `PersonId`, estado, hash de contraseña y security stamp.
+**Datos:** `PersonId`, estado, hash de contraseña, security stamp, roles y, si está bloqueada, hasta
+cuándo.
 
 **Estados:** `Active | Locked | Disabled`.
 
 **Eventos:** `UserCreated(UserId, PersonId)`, `PasswordChanged`, `UserLocked(Reason, Until)`,
-`UserUnlocked`, `UserDisabled`, `UserEnabled`, `SecurityStampRotated`.
+`UserUnlocked`, `UserDisabled`, `UserEnabled`, `SecurityStampRotated`, `UserRolesChanged(Roles)`.
 
 **Reglas:**
-- Cada persona tiene como máximo una cuenta.
+- Cada persona tiene como máximo una cuenta (reserva por `PersonId`).
 - Para crear la cuenta, la persona necesita al menos un correo o teléfono verificado.
-- Varios intentos fallidos seguidos generan `UserLocked`. Un login correcto no genera evento.
-- Cambiar la contraseña o bloquear la cuenta rota el security stamp, y con eso se invalidan todas las
-  sesiones.
-- Una cuenta bloqueada o deshabilitada no puede iniciar sesión.
+- Varios intentos fallidos seguidos generan `UserLocked`. Ni un login correcto ni un intento fallido
+  generan evento.
+- Un bloqueo con fecha vence solo: `CanSignIn(now)` lo da por terminado sin necesidad de `UserUnlocked`.
+- Cambiar o restablecer la contraseña, bloquear o deshabilitar la cuenta rota el security stamp.
+- Una cuenta bloqueada o deshabilitada no puede iniciar sesión ni refrescar su sesión.
+- Cambiar los roles con el mismo conjunto no genera evento.
 
 ### 5.3 `Advisor`
 
@@ -280,16 +406,38 @@ el origen y las fechas. Sin ningún dato personal.
 
 ## 6. Integración con otros servicios
 
+- **Publicación de eventos:** una suscripción de Marten (`IntegrationEventsSubscription`, el mismo patrón
+  que `DomainEventsSubscription` en Rentals) lee los eventos guardados, arma el contrato con el estado
+  completo y lo publica con Wolverine. No hace falta outbox ni puerto de publicación en Application.
+- **Topología de RabbitMQ:** Identity publica a **exchanges** (`identity.users`, `identity.contacts`, …) y
+  cada servicio enlaza **su propia cola**. Con una cola compartida, el mensaje lo recibiría un solo
+  servicio.
+- **La réplica se une al token por el id:** el `sub` del token es la clave de la réplica local. Ningún
+  servicio consulta a Identity de forma síncrona.
+- **Consumidores:** idempotentes (ignoran mensajes más viejos que la réplica) y preparados para recibir
+  una petición con token válido antes de que llegue el mensaje de la cuenta.
 - **Notification:**
-  - **Cambios de contacto:** Identity le publica los cambios mediante el outbox de Wolverine (contrato
-    `UserContactUpdated`, que podría renombrarse a `PersonContactUpdated`). Solo se envían direcciones
-    **verificadas**; una cadena vacía significa "no hay valor verificado".
+  - **Cambios de contacto:** contrato `PersonContactUpdated` (hoy `UserContactUpdated`). Solo se envían
+    direcciones **verificadas**; una cadena vacía significa "no hay valor verificado".
   - **Códigos de verificación:** se envían con `IVerificationCodeSender`.
-- **Publicaciones:**
+  - **API:** valida el token y exige el rol `administrador`.
+- **Rentals:**
   - Guarda referencias por `PersonId`, `UserId` y `AdvisorId`.
-  - Consume por eventos el nivel de verificación, la tarjeta pública del asesor y los consentimientos.
-  - Nunca consulta a Identity de forma síncrona en cada petición.
-- **Token de sesión:** incluye el security stamp y el permiso de asesor cuando corresponde.
+  - Consume `UserAccountChanged`, `PersonVerificationChanged`, `AdvisorChanged` y
+    `AlertsConsentChanged`.
+  - Toma el actor del claim `sub`; la moderación exige el rol `administrador`.
+- **Web:** cliente OIDC confidencial (cookie + `OpenIdConnect`), envía el access token a las APIs y
+  administra usuarios contra `IdentityService.Api`.
+
+**Contratos que publica Identity:**
+
+| Contrato | Contenido | Consumidores |
+|---|---|---|
+| `UserAccountChanged` | user_id, person_id, nombre, estado, roles | Rentals |
+| `PersonContactUpdated` | direcciones verificadas y preferencias | Notification |
+| `PersonVerificationChanged` | teléfono y documento verificados | Rentals |
+| `AdvisorChanged` | estado, capacidad y zonas | Rentals |
+| `AlertsConsentChanged` | consentimiento de alertas | Rentals |
 
 ## 7. Estructura de proyectos
 
@@ -303,11 +451,11 @@ Services/Identity/
 ├── NotificationLog.IdentityService.Api
 └── NotificationLog.IdentityService.Tests
 
-Shared/                                    (sin cambios)
+Shared/
 ├── Domain.Shared
 ├── Application.Shared
-├── NotificationLog.Contracts
-└── NotificationLog.ServiceDefaults
+├── NotificationLog.Contracts              + contratos de Identity
+└── NotificationLog.ServiceDefaults        + validación de tokens compartida
 ```
 
 **Referencias entre proyectos:**
@@ -322,6 +470,21 @@ Shared/                                    (sin cambios)
 | Api | todos | — |
 | Api.Read (futuro) | Application.Read, Infrastructure.Read | Application.Write, Infrastructure.Write |
 
+**Dónde queda OpenIddict:**
+
+| Proyecto | Paquete | Qué hace ahí |
+|---|---|---|
+| Domain | ninguno | cuenta, contraseña, estado, roles y security stamp |
+| Application.Write / Read | ninguno | casos de uso y puertos |
+| Infrastructure.Write | `OpenIddict.EntityFrameworkCore` | stores, managers, `DbContext`, seed de clientes, revocación |
+| Infrastructure.Read | `OpenIddict.Core` | listar las sesiones de un usuario |
+| Api | `OpenIddict.Server.AspNetCore` | `/connect/*`, certificados, cookie de Identity, páginas de login |
+| ServiceDefaults | `OpenIddict.Validation.AspNetCore`, `OpenIddict.Validation.SystemNetHttp` | validar tokens en cada API |
+| Web | `Microsoft.AspNetCore.Authentication.OpenIdConnect` | cliente OIDC |
+
+**Core** es persistencia (Infrastructure), **Server** es protocolo HTTP (Api) y **Validation** es
+transversal a las APIs (ServiceDefaults).
+
 ## 8. Estructura de archivos
 
 ### 8.1 Domain
@@ -330,7 +493,7 @@ Shared/                                    (sin cambios)
 NotificationLog.IdentityService.Domain/
 ├── Persons/
 │   ├── Person.cs
-│   ├── IPersonRepository.cs               Load, Append, TryReserveIdentifier, ReleaseIdentifier
+│   ├── IPersonRepository.cs               Load, Append, TryReserveIdentifier, ReleaseIdentifier, FindIdByIdentifier
 │   ├── PersonKind.cs                      Natural | Juridica
 │   ├── PersonStatus.cs                    Active | Anonymized
 │   ├── IdentifierType.cs                  Email | Phone | Document
@@ -360,8 +523,9 @@ NotificationLog.IdentityService.Domain/
 │       └── ContactWindow.cs
 ├── Users/
 │   ├── User.cs
-│   ├── IUserRepository.cs
+│   ├── IUserRepository.cs                 Load, Append, TryReserveAccount, FindIdByPersonId
 │   ├── UserStatus.cs                      Active | Locked | Disabled
+│   ├── UserRole.cs                        Administrador
 │   ├── PasswordPolicy.cs
 │   ├── Events/
 │   │   ├── UserCreated.cs
@@ -370,7 +534,8 @@ NotificationLog.IdentityService.Domain/
 │   │   ├── UserUnlocked.cs
 │   │   ├── UserDisabled.cs
 │   │   ├── UserEnabled.cs
-│   │   └── SecurityStampRotated.cs
+│   │   ├── SecurityStampRotated.cs
+│   │   └── UserRolesChanged.cs
 │   └── ValueObjects/
 │       ├── PasswordHash.cs
 │       └── SecurityStamp.cs
@@ -417,8 +582,8 @@ NotificationLog.IdentityService.Application.Write/
 │   ├── IVerificationCodeStore.cs
 │   ├── IVerificationCodeSender.cs
 │   ├── VerificationPurpose.cs             Email | Phone | PasswordReset
-│   ├── ISessionStore.cs
-│   └── ITokenIssuer.cs
+│   ├── ISignInAttemptCounter.cs           intentos fallidos con TTL
+│   └── ISessionRevoker.cs                 RevokeAll(userId), Revoke(userId, sessionId)
 ├── Persons/Commands/
 │   ├── RegisterPerson/
 │   ├── AddIdentifier/
@@ -430,18 +595,22 @@ NotificationLog.IdentityService.Application.Write/
 │   ├── UpdatePersonProfile/               nombre y direcciones
 │   ├── UpdateContactPreferences/
 │   ├── AssignLegalRepresentative/
-│   └── AnonymizePerson/ *                 también deshabilita el User y retira el Advisor
-├── Users/Commands/
-│   ├── SignUp/                            crea Person y User en una sola operación
-│   ├── CreateUser/                        cuenta para una Person que ya existía
-│   ├── SignIn/
-│   ├── SignOut/ *
-│   ├── RefreshSession/
-│   ├── ChangePassword/
-│   ├── RequestPasswordReset/
-│   ├── ResetPassword/
-│   ├── SetUserStatus/ *
-│   └── UnlockUser/ *
+│   └── AnonymizePerson/ *                 también deshabilita el User, retira el Advisor y revoca sesiones
+├── Users/
+│   ├── SignedInUser.cs                    UserId, PersonId, Name, Roles, SecurityStamp
+│   ├── Commands/
+│   │   ├── SignUp/                        crea Person y User; devuelve SignedInUser
+│   │   ├── CreateUser/                    cuenta para una Person que ya existía
+│   │   ├── SignIn/                        persona → cuenta → hash → intentos/bloqueo; devuelve SignedInUser
+│   │   ├── RevokeSession/ *               cerrar una sesión desde "Mis sesiones"
+│   │   ├── ChangePassword/                rota el stamp y revoca sesiones
+│   │   ├── RequestPasswordReset/
+│   │   ├── ResetPassword/                 rota el stamp y revoca sesiones
+│   │   ├── SetUserStatus/ *               al bloquear o deshabilitar rota el stamp y revoca sesiones
+│   │   ├── UnlockUser/ *
+│   │   └── SetUserRoles/
+│   └── Queries/
+│       └── ValidateSession/               en escritura porque decide: SignedInUser actualizado o null
 ├── Advisors/Commands/
 │   ├── ApplyAsAdvisor/
 │   ├── ReviewAdvisor/                     aprobar o rechazar
@@ -464,7 +633,8 @@ Cada carpeta de consulta contiene `XQuery.cs` y `XHandler.cs`. Los proyectores s
 NotificationLog.IdentityService.Application.Read/
 ├── Abstractions/
 │   ├── IPersonQueries.cs
-│   ├── IAccountQueries.cs
+│   ├── IAccountQueries.cs                 mi cuenta y mis sesiones
+│   ├── IUserQueries.cs                    listado para administración
 │   └── IAdvisorQueries.cs
 ├── Persons/
 │   ├── Queries/
@@ -479,10 +649,15 @@ NotificationLog.IdentityService.Application.Read/
 ├── Users/
 │   ├── Queries/
 │   │   ├── GetMyAccount/
-│   │   └── ListMySessions/
-│   └── Dtos/
-│       ├── AccountDto.cs
-│       └── SessionDto.cs
+│   │   ├── ListMySessions/
+│   │   └── SearchUsers/
+│   ├── Dtos/
+│   │   ├── AccountDto.cs
+│   │   ├── SessionDto.cs                  SessionId (id de la autorización), cliente, fecha
+│   │   └── UserSummaryDto.cs
+│   └── Projections/
+│       ├── UserView.cs
+│       └── UserViewProjector.cs
 ├── Advisors/
 │   ├── Queries/
 │   │   ├── GetAdvisorById/
@@ -508,21 +683,33 @@ NotificationLog.IdentityService.Infrastructure.Write/
 │   ├── MartenAdvisorRepository.cs
 │   ├── MartenConsentLedgerRepository.cs
 │   └── Reservations/
-│       └── IdentifierReservation.cs       documento cuyo Id es el identificador: garantiza la unicidad
+│       ├── IdentifierReservation.cs       Id = identificador normalizado, guarda el PersonId
+│       └── AccountReservation.cs          Id = PersonId, guarda el UserId
+├── Oidc/
+│   ├── OidcDbContext.cs                   UseOpenIddict(), esquema "oidc"
+│   ├── OidcDbContextFactory.cs            design-time
+│   ├── Migrations/
+│   ├── OidcClientOptions.cs               ClientId, secreto y redirect URIs de la Web
+│   ├── OidcSeeder.cs                      IHostedService: cliente "web" y scopes con sus resources
+│   └── OpenIddictSessionRevoker.cs        ISessionRevoker con IOpenIddictAuthorizationManager
 ├── Security/
-│   ├── IdentityPasswordHasher.cs
-│   ├── JwtTokenIssuer.cs
-│   └── JwtOptions.cs
+│   └── IdentityPasswordHasher.cs
 ├── Sessions/
-│   └── RedisSessionStore.cs
+│   └── RedisSignInAttemptCounter.cs
 ├── Verification/
 │   ├── RedisVerificationCodeStore.cs
 │   └── NotificationVerificationCodeSender.cs
 ├── Messaging/
-│   ├── RabbitMqMessagingExtensions.cs
-│   └── Publishers/
-│       └── PersonContactPublisher.cs      avisa a Notification de los cambios de contacto (outbox de Wolverine)
-└── DependencyInjection.cs                 AddIdentityWrite()
+│   ├── RabbitMqMessagingExtensions.cs     exchanges identity.users, identity.contacts, …
+│   ├── Subscriptions/
+│   │   └── IntegrationEventsSubscription.cs
+│   └── Mapping/
+│       ├── UserAccountChangedMapper.cs
+│       ├── PersonContactUpdatedMapper.cs
+│       ├── PersonVerificationChangedMapper.cs
+│       ├── AdvisorChangedMapper.cs
+│       └── AlertsConsentChangedMapper.cs
+└── DependencyInjection.cs                 AddIdentityWrite(): Marten, OidcDbContext, AddOpenIddict().AddCore()
 ```
 
 ### 8.5 Infrastructure.Read
@@ -531,10 +718,12 @@ NotificationLog.IdentityService.Infrastructure.Write/
 NotificationLog.IdentityService.Infrastructure.Read/
 ├── Projections/
 │   ├── PersonViewProjection.cs            SingleStreamProjection que delega en PersonViewProjector
+│   ├── UserViewProjection.cs              SingleStreamProjection que delega en UserViewProjector
 │   └── AdvisorViewProjection.cs           SingleStreamProjection que delega en AdvisorViewProjector
 ├── Queries/
 │   ├── MartenPersonQueries.cs
-│   ├── MartenAccountQueries.cs            lee la vista de Marten y las sesiones de Redis
+│   ├── MartenAccountQueries.cs            vista de Marten + autorizaciones de OpenIddict
+│   ├── MartenUserQueries.cs
 │   └── MartenAdvisorQueries.cs
 └── DependencyInjection.cs                 AddIdentityRead()
 ```
@@ -543,17 +732,32 @@ NotificationLog.IdentityService.Infrastructure.Read/
 
 ```
 NotificationLog.IdentityService.Api/
-├── Program.cs                             llama a AddIdentityWrite() y AddIdentityRead()
+├── Program.cs                             AddIdentityWrite(), AddIdentityRead(), AddIdentityOidcServer(),
+│                                          AddTokenValidation(identity-api), AddRazorPages, MapOidc()
 ├── appsettings.json
-├── Properties/launchSettings.json
+├── Properties/launchSettings.json         puerto fijo: es el issuer
+├── Oidc/
+│   ├── OidcServerExtensions.cs            cookie de Identity + AddOpenIddict().AddServer()
+│   ├── OidcEndpoints.cs                   /connect/authorize, /connect/token, /connect/endsession
+│   └── OidcPrincipalFactory.cs            SignedInUser → principal de la cookie o del token
+├── Pages/
+│   ├── _ViewImports.cshtml
+│   ├── Shared/_Layout.cshtml
+│   └── Account/
+│       ├── Login.cshtml
+│       ├── Login.cshtml.cs                SignIn → cookie → returnUrl
+│       ├── Register.cshtml
+│       └── Register.cshtml.cs             SignUp → cookie → returnUrl
 ├── Endpoints/
 │   ├── PersonEndpoints.cs
-│   ├── AccountEndpoints.cs                registro, login, sesiones y contraseña
+│   ├── AccountEndpoints.cs                mi cuenta, mis sesiones, cambiar contraseña
+│   ├── UserEndpoints.cs                   administración: buscar, estado, roles, desbloquear
 │   ├── AdvisorEndpoints.cs
 │   └── ConsentEndpoints.cs
 ├── Contracts/
 │   ├── Persons/                           un request/response por endpoint, como en Notification
 │   ├── Accounts/
+│   ├── Users/
 │   ├── Advisors/
 │   └── Consents/
 └── Exceptions/
@@ -572,8 +776,95 @@ NotificationLog.IdentityService.Tests/
 │   └── ConsentLedgerTests.cs
 └── Application/
     ├── Persons/                           handlers con dobles en memoria, sin Docker
-    ├── Users/
+    ├── Users/                             SignIn, ValidateSession, SetUserRoles
     └── Advisors/
+```
+
+### 8.8 Fuera de Identity
+
+Leyenda: `+` nuevo · `~` cambia · `-` se elimina.
+
+```
+NotificationLog.AppHost/
+└── ~ AppHost.cs                           base "identity" en postgres, proyecto Identity con puerto fijo y
+                                           WithExternalHttpEndpoints, parámetro secreto del cliente web,
+                                           WithReference(identity) en web, rentals y apiservice
+
+Shared/NotificationLog.ServiceDefaults/
+└── + Authentication/
+    ├── + TokenValidationExtensions.cs     AddTokenValidation(audience)
+    ├── + ClaimsPrincipalExtensions.cs     GetUserId(), GetPersonId()
+    ├── + PlatformClaims.cs
+    ├── + PlatformRoles.cs
+    ├── + PlatformScopes.cs
+    └── + PlatformAudiences.cs
+
+Shared/NotificationLog.Contracts/
+├── Identity/
+│   ├── + user_account_changed.proto
+│   └── + person_contact_updated.proto
+└── Users/
+    └── - user_contact_updated.proto
+
+Services/Rentals/NotificationLog.RentalService.Infrastructure/
+├── IdentityReplica/
+│   ├── + UserAccountDocument.cs
+│   └── ~ MartenIdentityReplica.cs
+└── Messaging/
+    ├── ~ RabbitMqMessagingExtensions.cs   colas enlazadas a los exchanges de Identity
+    └── Consumers/
+        └── + UserAccountChangedHandler.cs
+
+Services/Rentals/NotificationLog.RentalService.Api/
+├── ~ Program.cs                           AddTokenValidation(rentals-api)
+├── Endpoints/
+│   ├── ~ ListingEndpoints.cs, OfferEndpoints.cs, VisitEndpoints.cs, InquiryEndpoints.cs
+│   │                                      actor desde sub; lectura pública con AllowAnonymous
+│   ├── ~ FavoriteEndpoints.cs, SavedSearchEndpoints.cs    /api/users/{userId}/… → /api/me/…
+│   ├── ~ ModerationEndpoints.cs           rol administrador
+│   └── - DevIdentityEndpoints.cs
+└── Contracts/
+    ├── ~ Listings/, Moderation/, Offers/, Visits/, Inquiries/    sin ActorId ni ModeratorId
+    ├── - SubmitListingForReviewRequest.cs, RenewListingRequest.cs, ExtendReservationRequest.cs,
+    │     ReinstateListingRequest.cs, AcceptOfferRequest.cs, WithdrawOfferRequest.cs   solo tenían el actor
+    └── - Dev/
+
+Services/Notification/
+├── NotificationLog.NotificationService.Infrastructure/Messaging/
+│   ├── RabbitMq/~ RabbitMqMessagingExtensions.cs    cola enlazada a identity.contacts
+│   └── Consumers/~ UserContactUpdatedHandler.cs     → PersonContactUpdatedHandler.cs
+└── NotificationLog.ApiService/
+    ├── ~ Program.cs                       AddTokenValidation(notification-api)
+    └── Endpoints/~ *.cs                   rol administrador en cada grupo
+
+NotificationLog.Web/
+├── ~ Program.cs                           autenticación, AccessTokenHandler en cada HttpClient, circuit handler
+├── + Authentication/
+│   ├── + WebAuthenticationExtensions.cs   cookie + OpenIdConnect (code, PKCE, SaveTokens, scopes)
+│   ├── + CookieOidcRefresher.cs
+│   ├── + AccessTokenHandler.cs
+│   ├── + CircuitServicesAccessor.cs
+│   ├── + ServicesAccessorCircuitHandler.cs
+│   └── + LoginLogoutEndpoints.cs
+├── Api/
+│   ├── + Identity/  AccountApiClient.cs, AccountModels.cs, UsersApiClient.cs, UserModels.cs
+│   └── Rentals/
+│       ├── - Identity/
+│       └── ~ */*Models.cs, ModerationApiClient.cs, UserCollectionsApiClient.cs    sin actor, rutas /api/me
+└── Components/
+    ├── ~ Routes.razor                     AuthorizeRouteView
+    ├── ~ _Imports.razor
+    ├── Layout/
+    │   ├── + LoginDisplay.razor
+    │   ├── ~ MainLayout.razor, NavMenu.razor, RentalsLayout.razor
+    ├── Rentals/
+    │   ├── ~ RentalsActor.cs              lee el usuario autenticado
+    │   └── - ActorBar.razor
+    └── Pages/
+        ├── + Account/MySessions.razor
+        ├── + Admin/Users/UsersList.razor, UserDetail.razor
+        ├── - Rentals/Identity/IdentityReplica.razor
+        └── ~ Rentals/Moderation/, Templates/, Triggers/, Recipients/, Notifications/   rol administrador
 ```
 
 ## 9. Estado actual del código
@@ -602,6 +893,12 @@ Lo que existe hoy y se reutiliza:
 
 Todavía no existen Infrastructure ni Api para este servicio.
 
+**Lo que hoy suple la autenticación:**
+- La Web elige con quién actuar en la barra «Actuando como» (`RentalsActor`, `ActorBar`) y envía
+  `ActorId` o `ModeratorId` en el body.
+- Rentals simula los eventos de Identity con `DevIdentityEndpoints`.
+- Ninguna API valida tokens, y nadie comprueba el permiso de moderador.
+
 **Correspondencia con el diseño nuevo:**
 
 | Hoy | Pasa a |
@@ -616,7 +913,9 @@ Todavía no existen Infrastructure ni Api para este servicio.
 | `ConfirmEmail`, `ConfirmPhone` | `VerifyIdentifier` |
 | `SetUserStatus` | se conserva, ahora sobre la cuenta (`User`) |
 | `Application` | `Application.Write` |
-| — | `User` (cuenta), `Advisor`, `ConsentLedger` y todo el lado de lectura: nuevos |
+| «Actuando como» y `ActorId` en el body | usuario autenticado y claim `sub` |
+| `DevIdentityEndpoints` | eventos reales publicados por Identity |
+| — | `User` (cuenta), `Advisor`, `ConsentLedger`, OpenIddict y todo el lado de lectura: nuevos |
 
 Como todavía no hay eventos guardados en ninguna base de datos, renombrar eventos y namespaces ahora no
 tiene coste de migración.
@@ -634,6 +933,16 @@ tiene coste de migración.
 - **¿Se puede anonimizar a alguien con publicaciones activas?** Requiere preguntar al servicio de
   Publicaciones.
 - **Forma exacta de `PersonName` y `LegalName`**, y cómo lleva cada tipo `PersonNameChanged`.
-- **AppHost:** añadir PostgreSQL para Marten y la API de Identity. Redis ya existe.
+- **AppHost:** añadir la base `identity` en PostgreSQL y la API de Identity. Redis ya existe.
 - **Al separar `Api.Read`:** decidir qué proceso ejecuta el daemon de Marten y las proyecciones inline, y
   configurar la réplica de lectura de PostgreSQL.
+- **Roles:** confirmar que "propietario" se deriva del dato y que quien busca se llama **Interesado**.
+  Si más adelante se separa `Moderador` de `Administrador`, cambian `UserRole`, `PlatformRoles`,
+  `ModerationEndpoints` y la página de moderación.
+- **Validación de tokens en `ServiceDefaults`** o en un proyecto `Shared/NotificationLog.Authentication`.
+  ServiceDefaults evita un proyecto más, pero la Web carga el paquete de validación sin usarlo.
+- **403 para "no es tuyo":** hoy los handlers de Rentals lanzan `AppValidationException` (400). Una
+  `ForbiddenException` en `Application.Shared` con su caso en los `GlobalExceptionHandler` lo haría 403.
+- **«Actuando como»:** eliminarlo o conservarlo solo en Development para los tutoriales.
+- **Tokens en Blazor Server:** el `AccessTokenHandler` no tiene `HttpContext` dentro del circuito; seguir
+  la muestra oficial `BlazorWebAppOidcServer` para leer y refrescar el token.
