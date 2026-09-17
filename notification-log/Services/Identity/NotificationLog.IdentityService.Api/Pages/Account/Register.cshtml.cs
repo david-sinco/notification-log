@@ -14,6 +14,18 @@ public sealed class RegisterModel : PageModel
     public string Identifier { get; set; } = string.Empty;
 
     [BindProperty]
+    public string Name { get; set; } = string.Empty;
+
+    [BindProperty]
+    public string Locale { get; set; } = AccountPolicy.DefaultLocale;
+
+    [BindProperty]
+    public string TimeZone { get; set; } = AccountPolicy.DefaultTimeZone;
+
+    [BindProperty]
+    public bool AcceptsNotifications { get; set; }
+
+    [BindProperty]
     public string Password { get; set; } = string.Empty;
 
     [BindProperty]
@@ -34,7 +46,8 @@ public sealed class RegisterModel : PageModel
             return Page();
         }
 
-        var result = await _accounts.RegisterAsync(Identifier, Password, ct);
+        var result = await _accounts.RegisterAsync(
+            new AccountRegistration(Identifier, Password, Name, Locale, TimeZone, AcceptsNotifications), ct);
 
         if (!result.Succeeded)
         {

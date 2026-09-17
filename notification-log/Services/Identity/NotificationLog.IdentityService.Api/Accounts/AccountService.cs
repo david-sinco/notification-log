@@ -24,14 +24,28 @@ public sealed class AccountService
         TimeProvider time)
         => (_users, _outbox, _codes, _time) = (users, outbox, codes, time);
 
-    public async Task<AccountResult> RegisterAsync(string identifier, string password, CancellationToken ct)
+    public async Task<AccountResult> RegisterAsync(AccountRegistration registration, CancellationToken ct)
     {
-        var login = LoginIdentifier.TryParse(identifier);
+        var login = LoginIdentifier.TryParse(registration.Identifier);
 
         if (login is null)
             return AccountResult.Fail("Escribe un correo o un teléfono válido.");
 
-        if (AccountPolicy.ValidatePassword(password) is { } passwordError)
+        var name = registration.Name?.Trim();
+
+        if (string.IsNullOrEmpty(name) || name.Length > AccountPolicy.NameMaxLength)
+            return AccountResult.Fail($"Escribe tu nombre (máximo {AccountPolicy.NameMaxLength} caracteres).");
+
+        if (!AccountPolicy.Locales.ContainsKey(registration.Locale))
+            return AccountResult.Fail("Elige un idioma válido.");
+
+        if (!AccountPolicy.TimeZones.ContainsKey(registration.TimeZone))
+            return AccountResult.Fail("Elige una zona horaria válida.");
+
+        if (!registration.AcceptsNotifications)
+            return AccountResult.Fail("Debes autorizar el envío de notificaciones para crear tu cuenta.");
+
+        if (AccountPolicy.ValidatePassword(registration.Password) is { } passwordError)
             return AccountResult.Fail(passwordError);
 
         var user = await FindAsync(login, ct);
@@ -47,16 +61,20 @@ public sealed class AccountService
                 PhoneNumber = login.Channel == LoginChannel.Phone ? login.Value : null
             };
 
-            var created = await _users.CreateAsync(user, password);
+            Apply(user, registration, name);
+
+            var created = await _users.CreateAsync(user, registration.Password);
 
             if (!created.Succeeded)
                 return AccountResult.Fail(Describe(created));
         }
         else
         {
+            Apply(user, registration, name);
+
             await _users.RemovePasswordAsync(user);
 
-            var replaced = await _users.AddPasswordAsync(user, password);
+            var replaced = await _users.AddPasswordAsync(user, registration.Password);
 
             if (!replaced.Succeeded)
                 return AccountResult.Fail(Describe(replaced));
@@ -117,8 +135,24 @@ public sealed class AccountService
                 OccurredAt = Timestamp.FromDateTimeOffset(_time.GetUtcNow()),
                 SchemaVersion = 1,
                 UserId = user.Id.ToString(),
-                Email = user.Email ?? string.Empty,
-                Phone = user.PhoneNumber ?? string.Empty
+                Name = user.Name ?? string.Empty,
+                Email = VerifiedEmail(user),
+                Phone = VerifiedPhone(user),
+                Locale = user.Locale ?? AccountPolicy.DefaultLocale,
+                TimeZone = user.TimeZone ?? AccountPolicy.DefaultTimeZone,
+                AcceptsNotifications = user.AcceptsNotifications
+            });
+        }
+        else
+        {
+            await _outbox.PublishAsync(new PersonVerificationChanged
+            {
+                EventId = Guid.NewGuid().ToString(),
+                OccurredAt = Timestamp.FromDateTimeOffset(_time.GetUtcNow()),
+                SchemaVersion = 1,
+                UserId = user.Id.ToString(),
+                Email = VerifiedEmail(user),
+                Phone = VerifiedPhone(user)
             });
         }
 
@@ -181,6 +215,20 @@ public sealed class AccountService
 
     private async Task<SignedInUser> ToSignedInUserAsync(ApplicationUser user) =>
         new(user.Id, user.Email, user.PhoneNumber, user.SecurityStamp!, [.. await _users.GetRolesAsync(user)]);
+
+    private static void Apply(ApplicationUser user, AccountRegistration registration, string name)
+    {
+        user.Name = name;
+        user.Locale = registration.Locale;
+        user.TimeZone = registration.TimeZone;
+        user.AcceptsNotifications = registration.AcceptsNotifications;
+    }
+
+    private static string VerifiedEmail(ApplicationUser user) =>
+        user.EmailConfirmed ? user.Email ?? string.Empty : string.Empty;
+
+    private static string VerifiedPhone(ApplicationUser user) =>
+        user.PhoneNumberConfirmed ? user.PhoneNumber ?? string.Empty : string.Empty;
 
     private static string ProviderFor(LoginChannel channel) =>
         channel == LoginChannel.Email ? TokenOptions.DefaultEmailProvider : TokenOptions.DefaultPhoneProvider;

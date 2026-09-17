@@ -31,6 +31,10 @@ public static class MessagingExtensions
             opts.PublishMessage<UserCreated>()
                 .ToRabbitExchange(UsersExchange, exchange => exchange.ExchangeType = ExchangeType.Fanout)
                 .UseProtobufSerialization();
+
+            opts.PublishMessage<PersonVerificationChanged>()
+                .ToRabbitExchange(UsersExchange, exchange => exchange.ExchangeType = ExchangeType.Fanout)
+                .UseProtobufSerialization();
         });
 
         return services;

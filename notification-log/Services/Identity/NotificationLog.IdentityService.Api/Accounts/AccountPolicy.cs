@@ -8,6 +8,28 @@ public static class AccountPolicy
     public const int MaxFailedAttempts = 5;
     public const int MaxUsersPerPage = 100;
     public const string DefaultCountryCode = "+57";
+    public const int NameMaxLength = 200;
+    public const int LocaleMaxLength = 20;
+    public const int TimeZoneMaxLength = 50;
+    public const string DefaultLocale = "es-CO";
+    public const string DefaultTimeZone = "America/Bogota";
+
+    public static readonly IReadOnlyDictionary<string, string> Locales = new Dictionary<string, string>
+    {
+        ["es-CO"] = "Español (Colombia)",
+        ["en-US"] = "English (United States)"
+    };
+
+    public static readonly IReadOnlyDictionary<string, string> TimeZones = new Dictionary<string, string>
+    {
+        ["America/Bogota"] = "Bogotá (GMT-5)",
+        ["America/Mexico_City"] = "Ciudad de México (GMT-6)",
+        ["America/Lima"] = "Lima (GMT-5)",
+        ["America/Santiago"] = "Santiago de Chile",
+        ["America/Argentina/Buenos_Aires"] = "Buenos Aires (GMT-3)",
+        ["America/New_York"] = "Nueva York",
+        ["Europe/Madrid"] = "Madrid"
+    };
 
     public static readonly TimeSpan FailedAttemptsLockout = TimeSpan.FromMinutes(15);
 

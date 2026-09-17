@@ -6,16 +6,16 @@ namespace NotificationLog.RentalService.Infrastructure.Messaging.Consumers;
 
 public static class PersonVerificationChangedHandler
 {
-    public static Task Handle(PersonVerificationChanged message, IDocumentSession session, CancellationToken ct)
+    public static async Task Handle(PersonVerificationChanged message, IDocumentSession session, CancellationToken ct)
     {
-        session.Store(new PersonVerificationDocument
-        {
-            Id = Guid.Parse(message.PersonId),
-            UserId = string.IsNullOrEmpty(message.UserId) ? null : Guid.Parse(message.UserId),
-            IsPhoneVerified = message.IsPhoneVerified,
-            IsDocumentVerified = message.IsDocumentVerified
-        });
+        var userId = Guid.Parse(message.UserId);
 
-        return session.SaveChangesAsync(ct);
+        var person = await session.LoadAsync<PersonVerificationDocument>(userId, ct)
+            ?? new PersonVerificationDocument { Id = userId, UserId = userId };
+
+        person.IsPhoneVerified = !string.IsNullOrEmpty(message.Phone);
+
+        session.Store(person);
+        await session.SaveChangesAsync(ct);
     }
 }

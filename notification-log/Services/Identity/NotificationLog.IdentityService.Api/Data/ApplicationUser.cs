@@ -13,6 +13,14 @@ public sealed class ApplicationUser : IdentityUser<Guid>
         UserName = id.ToString();
     }
 
+    public string? Name { get; set; }
+
+    public string? Locale { get; set; }
+
+    public string? TimeZone { get; set; }
+
+    public bool AcceptsNotifications { get; set; }
+
     public bool IsVerified => EmailConfirmed || PhoneNumberConfirmed;
 
     public bool IsConfirmed(LoginChannel channel) =>

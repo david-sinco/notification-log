@@ -62,7 +62,7 @@ public static class DependencyInjection
         services.AddScoped<ListRecipientsHandler>();
 
         // RecipientSyncService (Recipients/Services/Sync): lo invoca el consumer de mensajería
-        // (Infrastructure/Messaging) una vez por UserChange recibido.
+        // (Infrastructure/Messaging) una vez por UserCreated o PersonVerificationChanged recibido.
         services.AddScoped<RecipientSyncService>();
 
         // Notifications

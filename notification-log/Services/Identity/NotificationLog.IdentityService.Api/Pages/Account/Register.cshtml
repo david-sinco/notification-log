@@ -1,4 +1,5 @@
 @page
+@using NotificationLog.IdentityService.Api.Accounts
 @model NotificationLog.IdentityService.Api.Pages.Account.RegisterModel
 @{
     ViewData["Title"] = "Crear cuenta";
@@ -17,8 +18,13 @@
     <input type="hidden" asp-for="ReturnUrl" />
 
     <div class="field">
+        <label asp-for="Name">Nombre</label>
+        <input asp-for="Name" class="input" autocomplete="name" maxlength="@AccountPolicy.NameMaxLength" required autofocus />
+    </div>
+
+    <div class="field">
         <label asp-for="Identifier">Correo o celular</label>
-        <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" autofocus />
+        <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" />
         <span class="hint">Te enviaremos un código para confirmarlo. Los celulares de Colombia no necesitan +57.</span>
     </div>
 
@@ -35,6 +41,22 @@
         <label asp-for="ConfirmPassword">Confirma la contraseña</label>
         <input asp-for="ConfirmPassword" type="password" class="input" autocomplete="new-password" />
     </div>
+
+    <div class="field">
+        <label asp-for="Locale">Idioma</label>
+        <select asp-for="Locale" class="input" asp-items="@(new SelectList(AccountPolicy.Locales, "Key", "Value"))"></select>
+    </div>
+
+    <div class="field">
+        <label asp-for="TimeZone">Zona horaria</label>
+        <select asp-for="TimeZone" class="input" asp-items="@(new SelectList(AccountPolicy.TimeZones, "Key", "Value"))"></select>
+        <span class="hint">La usamos para mostrarte fechas y horas en tu horario local.</span>
+    </div>
+
+    <label class="checkbox">
+        <input asp-for="AcceptsNotifications" required />
+        <span>Autorizo a Llave a enviarme notificaciones por cualquier medio: correo, SMS, WhatsApp o push.</span>
+    </label>
 
     <button type="submit" class="button">Crear cuenta</button>
 

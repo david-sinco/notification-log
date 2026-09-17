@@ -45,19 +45,18 @@ public static class DevIdentityEndpoints
     private static async Task<IResult> SetPersonVerificationAsync(
         Guid personId,
         DevPersonVerificationRequest body,
-        IMessageBus bus,
+        IDocumentSession session,
         CancellationToken ct)
     {
-        await bus.InvokeAsync(new PersonVerificationChanged
+        session.Store(new PersonVerificationDocument
         {
-            EventId = Guid.NewGuid().ToString(),
-            OccurredAt = Timestamp.FromDateTime(DateTime.UtcNow),
-            SchemaVersion = 1,
-            PersonId = personId.ToString(),
-            UserId = body.UserId?.ToString() ?? string.Empty,
+            Id = personId,
+            UserId = body.UserId,
             IsPhoneVerified = body.IsPhoneVerified,
             IsDocumentVerified = body.IsDocumentVerified
-        }, ct);
+        });
+
+        await session.SaveChangesAsync(ct);
 
         return Results.NoContent();
     }

@@ -12,6 +12,10 @@ message UserCreated {
   int32 schema_version = 3;
 
   string user_id = 10;
-  string email = 11;
-  string phone = 12;
+  string name = 11;
+  string email = 12;
+  string phone = 13;
+  string locale = 14;
+  string time_zone = 15;
+  bool accepts_notifications = 16;
 }

@@ -4,7 +4,6 @@ using JasperFx.CodeGeneration.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.Contracts.Notifications;
-using NotificationLog.Contracts.Users;
 using Wolverine;
 using Wolverine.Protobuf;
 using Wolverine.RabbitMQ;
@@ -14,6 +13,9 @@ namespace NotificationLog.NotificationService.Infrastructure.Messaging.RabbitMq;
 
 public static class RabbitMqMessagingExtensions
 {
+    private const string IdentityUsersExchange = "identity.users";
+    private const string IdentityUsersQueue = "notification-identity-users";
+
     public static IServiceCollection AddRabbitMqMessaging(
         this IServiceCollection services, IConfiguration configuration)
     {
@@ -30,7 +32,13 @@ public static class RabbitMqMessagingExtensions
             // exponerlos.
             opts.ServiceLocationPolicy = ServiceLocationPolicy.AlwaysAllowed;
 
-            opts.UseRabbitMq(new Uri(connectionString)).AutoProvision();
+            opts.UseRabbitMq(new Uri(connectionString))
+                .DeclareExchange(IdentityUsersExchange, exchange =>
+                {
+                    exchange.ExchangeType = ExchangeType.Fanout;
+                    exchange.BindQueue(IdentityUsersQueue);
+                })
+                .AutoProvision();
 
             // UseProtobufSerialization pone el serializador protobuf como DEFAULT de toda la app
             // (WolverineOptions.DefaultSerializer) — no hay un "RegisterSerializer" a nivel de
@@ -43,8 +51,7 @@ public static class RabbitMqMessagingExtensions
             //   - JSON (para pruebas manuales): "application/json"
             opts.UseProtobufSerialization();
             // PreferredObjectCreationHandling = Populate no es un detalle de estilo: los campos
-            // "map" de protobuf (attributes en UserContactUpdated, data en
-            // NotificationDispatchRequested) se generan como propiedades SOLO LECTURA
+            // "map" de protobuf (data en NotificationDispatchRequested) se generan como propiedades SOLO LECTURA
             // (MapField<K,V> sin setter, inicializada en el constructor). System.Text.Json ignora
             // en silencio toda propiedad sin setter al deserializar, así que sin esto un JSON
             // publicado a mano llegaba con el map VACÍO y sin ningún error: el render con
@@ -56,8 +63,7 @@ public static class RabbitMqMessagingExtensions
                     PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate
                 }));
 
-            opts.ListenToRabbitQueue("user-changes")
-                .DefaultIncomingMessage<UserContactUpdated>();
+            opts.ListenToRabbitQueue(IdentityUsersQueue);
 
             // notification-dispatch: cola donde cualquier servicio publica "esto pasó"
             // (NotificationDispatchRequested) — la publicación todavía se hace a mano (UI de

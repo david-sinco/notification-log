@@ -38,6 +38,8 @@ internal sealed class RecipientConfiguration : IEntityTypeConfiguration<Recipien
 
         builder.Property(r => r.IsActive).IsRequired();
 
+        builder.Property(r => r.AcceptsNotifications).IsRequired();
+
         builder.HasIndex(r => r.IsActive)
             .HasDatabaseName("IX_Recipients_IsActive");
 

@@ -21,12 +21,13 @@ public sealed class Recipient : AggregateRoot
     public string Locale { get; private set; } = "es-CO";
     public string TimeZone { get; private set; } = "America/Bogota";
     public bool IsActive { get; private set; }
+    public bool AcceptsNotifications { get; private set; }
 
     public IReadOnlyDictionary<string, string> Attributes => _attributes;
 
     private Recipient() { }   // EF Core
 
-    public static Recipient Create(Guid userId, string name, string? email, string? phone)
+    public static Recipient Create(Guid userId, string name, string? email, string? phone, bool acceptsNotifications)
     {
         if (userId == Guid.Empty)
             throw new DomainException("El identificador del destinatario es obligatorio.");
@@ -37,6 +38,7 @@ public sealed class Recipient : AggregateRoot
             Name = NormalizeName(name),
             Email = NormalizeEmail(email),
             Phone = NormalizePhone(phone),
+            AcceptsNotifications = acceptsNotifications,
             IsActive = true
         };
     }
@@ -65,7 +67,7 @@ public sealed class Recipient : AggregateRoot
     };
 
     public bool CanReceive(NotificationChannel channel)
-        => IsActive && !string.IsNullOrWhiteSpace(AddressFor(channel));
+        => IsActive && AcceptsNotifications && !string.IsNullOrWhiteSpace(AddressFor(channel));
 
     // ---------- Atributos ----------
 
