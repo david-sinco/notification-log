@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package Identity.identity;
+
+option csharp_namespace = "NotificationLog.Contracts.Identity";
+
+import "google/protobuf/timestamp.proto";
+
+enum VerificationChannel {
+  VERIFICATION_CHANNEL_UNSPECIFIED = 0;
+  VERIFICATION_CHANNEL_EMAIL = 1;
+  VERIFICATION_CHANNEL_SMS = 2;
+}
+
+message VerificationCodeRequested {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  int32 schema_version = 3;
+
+  VerificationChannel channel = 10;
+  string address = 11;
+  string code = 12;
+}

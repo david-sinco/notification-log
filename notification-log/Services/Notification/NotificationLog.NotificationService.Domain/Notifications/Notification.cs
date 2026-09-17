@@ -1,6 +1,7 @@
 using Domain.Shared.Common;
 using Domain.Shared.Exceptions;
 using NotificationLog.NotificationService.Domain.Shared;
+using NotificationLog.NotificationService.Domain.Templates;
 
 namespace NotificationLog.NotificationService.Domain.Notifications;
 
@@ -10,15 +11,16 @@ public sealed class Notification : AggregateRoot
     public const int DestinationMaxLength = 320;
     public const int ErrorMaxLength = 2000;
     public const int ProviderMessageIdMaxLength = 200;
+    public const string VerificationCodeEventKey = "identity.codigo_verificacion";
 
-    private readonly Dictionary<string, string> _payload = [];
+    private Dictionary<string, string>? _payload = [];
 
     public Guid EventId { get; private set; }
     public string EventKey { get; private set; } = default!;
-    public Guid ConfigurationId { get; private set; }
+    public Guid? ConfigurationId { get; private set; }
     public Guid TemplateId { get; private set; }
     public Guid TemplateVersionId { get; private set; }
-    public Guid RecipientId { get; private set; }
+    public Guid? RecipientId { get; private set; }
     public NotificationChannel Channel { get; private set; }
     public string Destination { get; private set; } = default!;
     public DeliveryStatus Status { get; private set; }
@@ -26,7 +28,7 @@ public sealed class Notification : AggregateRoot
     public string? Error { get; private set; }
     public DateTime OccurredAt { get; private set; }
 
-    public IReadOnlyDictionary<string, string> Payload => _payload;
+    public IReadOnlyDictionary<string, string>? Payload => _payload;
 
     private Notification() { }   // EF Core
 
@@ -133,9 +135,78 @@ public sealed class Notification : AggregateRoot
 
         if (payload is not null)
             foreach (var (key, value) in payload)
-                notification._payload[key] = value;
+                notification._payload![key] = value;
 
         return notification;
+    }
+
+    public static Notification RecordVerificationCode(
+        Guid eventId,
+        Guid templateId,
+        Guid templateVersionId,
+        NotificationChannel channel,
+        string destination,
+        string? providerMessageId,
+        string? error,
+        DateTime occurredAt)
+    {
+        if (eventId == Guid.Empty)
+            throw new DomainException("El identificador del evento de origen es obligatorio.");
+
+        if (SystemTemplates.VerificationCodeFor(channel) != templateId)
+            throw new DomainException(
+                "Solo la plantilla de verificación del canal puede enviarse sin destinatario registrado.");
+
+        if (templateVersionId == Guid.Empty)
+            throw new DomainException("La versión de plantilla es obligatoria.");
+
+        if (string.IsNullOrWhiteSpace(destination))
+            throw new DomainException("No se puede registrar una notificación sin destino.");
+
+        var trimmedDestination = destination.Trim();
+
+        return new Notification
+        {
+            Id = Guid.NewGuid(),
+            EventId = eventId,
+            EventKey = VerificationCodeEventKey,
+            ConfigurationId = null,
+            TemplateId = templateId,
+            TemplateVersionId = templateVersionId,
+            RecipientId = null,
+            Channel = channel,
+            Destination = Mask(trimmedDestination, channel),
+            Status = error is null ? DeliveryStatus.Sent : DeliveryStatus.Failed,
+            ProviderMessageId = error is null && providerMessageId is not null
+                ? Truncate(providerMessageId.Trim(), ProviderMessageIdMaxLength)
+                : null,
+            Error = error is null ? null : MaskError(error.Trim(), trimmedDestination, channel),
+            OccurredAt = occurredAt,
+            _payload = null
+        };
+    }
+
+    private static string Mask(string destination, NotificationChannel channel)
+    {
+        if (channel is NotificationChannel.Email)
+        {
+            var at = destination.IndexOf('@');
+
+            return at <= 0
+                ? "***"
+                : $"{destination[0]}***{destination[at..]}";
+        }
+
+        return destination.Length <= 4
+            ? "***"
+            : $"***{destination[^4..]}";
+    }
+
+    private static string MaskError(string error, string destination, NotificationChannel channel)
+    {
+        var masked = error.Replace(destination, Mask(destination, channel), StringComparison.OrdinalIgnoreCase);
+
+        return Truncate(masked, ErrorMaxLength);
     }
 
     private static string Truncate(string value, int max)

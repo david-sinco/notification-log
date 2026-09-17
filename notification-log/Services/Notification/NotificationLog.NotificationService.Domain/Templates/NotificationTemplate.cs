@@ -11,6 +11,7 @@ public sealed class NotificationTemplate : AggregateRoot
     public TemplateName Name { get; private set; } = default!;
     public NotificationChannel Channel { get; private set; }
     public bool IsEnabled { get; private set; }
+    public bool IsSystem { get; private set; }
 
     public IReadOnlyCollection<TemplateVersion> Versions => _versions.AsReadOnly();
 
@@ -33,7 +34,8 @@ public sealed class NotificationTemplate : AggregateRoot
             Id = Guid.NewGuid(),
             Name = name,
             Channel = channel,
-            IsEnabled = true
+            IsEnabled = true,
+            IsSystem = false
         };
 
         template._versions.Add(TemplateVersion.Create(1, subject, body, channel));
@@ -57,5 +59,12 @@ public sealed class NotificationTemplate : AggregateRoot
 
     public void Enable() => IsEnabled = true;
 
-    public void Disable() => IsEnabled = false;
+    public void Disable()
+    {
+        if (IsSystem)
+            throw new DomainException(
+                $"La plantilla '{Name.Value}' es del sistema y no se puede deshabilitar.");
+
+        IsEnabled = false;
+    }
 }

@@ -15,6 +15,8 @@ public static class RabbitMqMessagingExtensions
 {
     private const string IdentityUsersExchange = "identity.users";
     private const string IdentityUsersQueue = "notification-identity-users";
+    private const string VerificationCodesExchange = "identity.verification-codes";
+    private const string VerificationCodesQueue = "notification-verification-codes";
 
     public static IServiceCollection AddRabbitMqMessaging(
         this IServiceCollection services, IConfiguration configuration)
@@ -37,6 +39,11 @@ public static class RabbitMqMessagingExtensions
                 {
                     exchange.ExchangeType = ExchangeType.Fanout;
                     exchange.BindQueue(IdentityUsersQueue);
+                })
+                .DeclareExchange(VerificationCodesExchange, exchange =>
+                {
+                    exchange.ExchangeType = ExchangeType.Fanout;
+                    exchange.BindQueue(VerificationCodesQueue);
                 })
                 .AutoProvision();
 
@@ -64,6 +71,11 @@ public static class RabbitMqMessagingExtensions
                 }));
 
             opts.ListenToRabbitQueue(IdentityUsersQueue);
+
+            // Exchange propio y no el fanout identity.users: el código de verificación viaja en el
+            // mensaje, así que solo debe llegar a esta cola y no a los demás consumidores de
+            // Identity (Rentals está enlazado a identity.users).
+            opts.ListenToRabbitQueue(VerificationCodesQueue);
 
             // notification-dispatch: cola donde cualquier servicio publica "esto pasó"
             // (NotificationDispatchRequested) — la publicación todavía se hace a mano (UI de

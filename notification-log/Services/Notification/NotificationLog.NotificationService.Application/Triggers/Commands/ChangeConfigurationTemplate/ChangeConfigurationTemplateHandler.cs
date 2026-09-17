@@ -1,4 +1,4 @@
-using Application.Shared.Abstractions;
+﻿using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using NotificationLog.NotificationService.Domain.Templates;
 using NotificationLog.NotificationService.Domain.Triggers;
@@ -28,6 +28,10 @@ public sealed class ChangeConfigurationTemplateHandler
         if (!template.IsEnabled)
             throw new AppValidationException(
                 $"La plantilla '{template.Name}' está desactivada.");
+
+        if (template.IsSystem)
+            throw new AppValidationException(
+                $"La plantilla '{template.Name}' es del sistema y no se puede usar en un trigger.");
 
         trigger.ChangeConfigurationTemplate(cmd.ConfigurationId, template.Id, template.Channel);
 

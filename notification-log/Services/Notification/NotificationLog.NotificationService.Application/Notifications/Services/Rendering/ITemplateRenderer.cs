@@ -1,4 +1,4 @@
-using NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
+﻿using NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
 using NotificationLog.NotificationService.Domain.Notifications;
 using NotificationLog.NotificationService.Domain.Recipients;
 
@@ -11,6 +11,8 @@ public interface ITemplateRenderer
     // interpreta ni transforma nada, solo junta evento+destinatario y reenvía lo que
     // BuildData le devuelva a Render, sin saber qué hay adentro.
     object BuildData(BusinessEvent businessEvent, Recipient recipient);
+
+    object BuildVerificationCodeData(string code);
 
     RenderedMessage Render(string? subjectTemplate, string bodyTemplate, object data);
 }

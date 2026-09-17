@@ -1,4 +1,4 @@
-@page "/notifications"
+﻿@page "/notifications"
 @inject NotificationsApiClient Api
 
 <PageTitle>Notificaciones · NotificationLog</PageTitle>
@@ -159,6 +159,8 @@
 
     private Task OnFilterKeyUp(KeyboardEventArgs e) => e.Key == "Enter" ? RefreshAsync() : Task.CompletedTask;
 
-    private static string FormatPayload(IReadOnlyDictionary<string, string> payload)
-        => payload.Count == 0 ? "—" : string.Join(", ", payload.Select(kv => $"{kv.Key}={kv.Value}"));
+    private static string FormatPayload(IReadOnlyDictionary<string, string>? payload)
+        => payload is null || payload.Count == 0
+            ? "—"
+            : string.Join(", ", payload.Select(kv => $"{kv.Key}={kv.Value}"));
 }

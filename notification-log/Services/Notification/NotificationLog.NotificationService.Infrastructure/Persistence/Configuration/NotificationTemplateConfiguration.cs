@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using NotificationLog.NotificationService.Domain.Templates;
 
@@ -32,6 +32,7 @@ internal sealed class NotificationTemplateConfiguration
             .IsRequired();
 
         builder.Property(t => t.IsEnabled).IsRequired();
+        builder.Property(t => t.IsSystem).IsRequired();
 
         builder.HasIndex(t => new { t.Channel, t.IsEnabled })
             .HasDatabaseName("IX_NotificationTemplates_Channel_IsEnabled");

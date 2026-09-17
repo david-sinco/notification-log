@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -24,10 +24,8 @@ internal sealed class NotificationEntityConfiguration : IEntityTypeConfiguration
             .HasMaxLength(Notification.EventKeyMaxLength)
             .IsRequired();
 
-        builder.Property(n => n.ConfigurationId).IsRequired();
         builder.Property(n => n.TemplateId).IsRequired();
         builder.Property(n => n.TemplateVersionId).IsRequired();
-        builder.Property(n => n.RecipientId).IsRequired();
 
         builder.Property(n => n.Channel).HasConversion<int>().IsRequired();
         builder.Property(n => n.Status).HasConversion<int>().IsRequired();
@@ -61,21 +59,20 @@ internal sealed class NotificationEntityConfiguration : IEntityTypeConfiguration
         // enfoque que Recipient.Attributes en RecipientConfiguration).
         builder.Ignore(n => n.Payload);
 
-        var payloadComparer = new ValueComparer<Dictionary<string, string>>(
+        var payloadComparer = new ValueComparer<Dictionary<string, string>?>(
             (a, b) => (a ?? new()).SequenceEqual(b ?? new()),
-            d => d.Aggregate(0, (hash, kv) => HashCode.Combine(hash, kv.Key, kv.Value)),
-            d => new Dictionary<string, string>(d));
+            d => d == null ? 0 : d.Aggregate(0, (hash, kv) => HashCode.Combine(hash, kv.Key, kv.Value)),
+            d => d == null ? null : new Dictionary<string, string>(d));
 
-        builder.Property<Dictionary<string, string>>("_payload")
+        builder.Property<Dictionary<string, string>?>("_payload")
             .HasField("_payload")
             .UsePropertyAccessMode(PropertyAccessMode.Field)
             .HasColumnName("Payload")
             .HasConversion(
-                dict => JsonSerializer.Serialize(dict, (JsonSerializerOptions?)null),
+                dict => dict == null ? null : JsonSerializer.Serialize(dict, (JsonSerializerOptions?)null),
                 json => string.IsNullOrEmpty(json)
-                    ? new Dictionary<string, string>()
-                    : JsonSerializer.Deserialize<Dictionary<string, string>>(json, (JsonSerializerOptions?)null)!,
-                payloadComparer)
-            .IsRequired();
+                    ? null
+                    : JsonSerializer.Deserialize<Dictionary<string, string>>(json, (JsonSerializerOptions?)null),
+                payloadComparer);
     }
 }

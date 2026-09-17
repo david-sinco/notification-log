@@ -2,6 +2,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationFailure;
 using NotificationLog.NotificationService.Application.Notifications.Commands.RecordNotificationSuccess;
+using NotificationLog.NotificationService.Application.Notifications.Commands.SendVerificationCode;
 using NotificationLog.NotificationService.Application.Notifications.Queries.ListNotifications;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Application.Recipients.Commands.UpdateRecipient;
@@ -69,6 +70,10 @@ public static class DependencyInjection
         services.AddScoped<RecordNotificationSuccessHandler>();
         services.AddScoped<RecordNotificationFailureHandler>();
         services.AddScoped<ListNotificationsHandler>();
+
+        // SendVerificationCodeHandler: lo invoca VerificationCodeRequestedHandler
+        // (Infrastructure/Messaging/Consumers) — no pasa por triggers ni destinatarios.
+        services.AddScoped<SendVerificationCodeHandler>();
 
         // NotificationDispatchService (Notifications/Services/Dispatch): no es un BackgroundService,
         // lo invoca NotificationDispatchHandler (Infrastructure/Messaging/Consumers) una vez por

@@ -29,6 +29,10 @@ public sealed class AddConfigurationHandler
             throw new AppValidationException(
                 $"La plantilla '{template.Name}' está desactivada.");
 
+        if (template.IsSystem)
+            throw new AppValidationException(
+                $"La plantilla '{template.Name}' es del sistema y no se puede usar en un trigger.");
+
         if (template.Channel != cmd.Channel)
             throw new AppValidationException(
                 $"La plantilla es de canal {template.Channel}, no {cmd.Channel}.");

@@ -20,6 +20,7 @@
     <Protobuf Include="Identity/advisor_changed.proto" GrpcServices="None" />
     <Protobuf Include="Identity/alerts_consent_changed.proto" GrpcServices="None" />
     <Protobuf Include="Identity/user_created.proto" GrpcServices="None" />
+    <Protobuf Include="Identity/verification_code_requested.proto" GrpcServices="None" />
   </ItemGroup>
 
 </Project>

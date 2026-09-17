@@ -1,4 +1,4 @@
-using NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
+﻿using NotificationLog.NotificationService.Application.Notifications.Services.Dispatch;
 using NotificationLog.NotificationService.Application.Notifications.Services.Rendering;
 using NotificationLog.NotificationService.Domain.Notifications;
 using NotificationLog.NotificationService.Domain.Recipients;
@@ -34,6 +34,9 @@ public sealed class ScribanTemplateRenderer : ITemplateRenderer
 
         return root;
     }
+
+    public object BuildVerificationCodeData(string code)
+        => new ScriptObject { ["code"] = code };
 
     public RenderedMessage Render(string? subjectTemplate, string bodyTemplate, object data)
     {
