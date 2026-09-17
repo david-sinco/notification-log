@@ -1,8 +1,7 @@
-using Google.Protobuf.WellKnownTypes;
+﻿using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NotificationLog.Contracts.Identity;
-using NotificationLog.IdentityService.Api.Accounts.Verification;
 using NotificationLog.IdentityService.Api.Data;
 using Wolverine.EntityFrameworkCore;
 
@@ -14,15 +13,13 @@ public sealed class AccountService
 
     private readonly UserManager<ApplicationUser> _users;
     private readonly IDbContextOutbox<IdentityServiceDbContext> _outbox;
-    private readonly VerificationCodeSender _codes;
     private readonly TimeProvider _time;
 
     public AccountService(
         UserManager<ApplicationUser> users,
         IDbContextOutbox<IdentityServiceDbContext> outbox,
-        VerificationCodeSender codes,
         TimeProvider time)
-        => (_users, _outbox, _codes, _time) = (users, outbox, codes, time);
+        => (_users, _outbox, _time) = (users, outbox, time);
 
     public async Task<AccountResult> RegisterAsync(AccountRegistration registration, CancellationToken ct)
     {
@@ -210,7 +207,20 @@ public sealed class AccountService
     private async Task SendCodeAsync(ApplicationUser user, LoginIdentifier login, CancellationToken ct)
     {
         var code = await _users.GenerateUserTokenAsync(user, ProviderFor(login.Channel), VerificationPurpose);
-        await _codes.SendAsync(login, code, ct);
+
+        await _outbox.PublishAsync(new VerificationCodeRequested
+        {
+            EventId = Guid.NewGuid().ToString(),
+            OccurredAt = Timestamp.FromDateTimeOffset(_time.GetUtcNow()),
+            SchemaVersion = 1,
+            Channel = login.Channel == LoginChannel.Email
+                ? VerificationChannel.Email
+                : VerificationChannel.Sms,
+            Address = login.Value,
+            Code = code
+        });
+
+        await _outbox.SaveChangesAndFlushMessagesAsync(ct);
     }
 
     private async Task<SignedInUser> ToSignedInUserAsync(ApplicationUser user) =>

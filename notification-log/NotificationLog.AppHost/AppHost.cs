@@ -1,4 +1,4 @@
-using NotificationLog.AppHost;
+﻿using NotificationLog.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -90,7 +90,6 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WaitFor(identityDb)
         .WithReference(rabbitmq)
         .WaitFor(rabbitmq)
-        .WaitFor(buggregator)
         .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])
         .WithEnvironment("Oidc__Audiences__identity", oidcConfig["Audiences:Identity"])
         .WithEnvironment("Oidc__Audiences__rentals", oidcConfig["Audiences:Rentals"])

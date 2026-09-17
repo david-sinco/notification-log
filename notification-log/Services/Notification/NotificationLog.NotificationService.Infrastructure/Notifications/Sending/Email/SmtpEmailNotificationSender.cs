@@ -22,7 +22,11 @@ public sealed class SmtpEmailNotificationSender : IEmailNotificationSender
         using var mail = new MailMessage(_options.From, destination)
         {
             Subject = message.Subject ?? string.Empty,
-            Body = message.Body
+            Body = message.Body,
+            // El cuerpo lo decide cada plantilla: las de texto plano seguirían llegando con las
+            // etiquetas escapadas si esto fuera siempre true, y las HTML llegarían como código
+            // fuente si fuera siempre false.
+            IsBodyHtml = message.Body.TrimStart().StartsWith('<')
         };
 
         using var client = new SmtpClient(_options.Host, _options.Port)

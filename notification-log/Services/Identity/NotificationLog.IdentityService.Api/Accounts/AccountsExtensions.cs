@@ -1,6 +1,5 @@
-using Microsoft.AspNetCore.Identity;
+﻿using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using NotificationLog.IdentityService.Api.Accounts.Verification;
 using NotificationLog.IdentityService.Api.Data;
 using NotificationLog.IdentityService.Api.Messaging;
 using Wolverine.EntityFrameworkCore;
@@ -36,10 +35,6 @@ public static class AccountsExtensions
             .AddEntityFrameworkStores<IdentityServiceDbContext>()
             .AddTokenProvider<EmailTokenProvider<ApplicationUser>>(TokenOptions.DefaultEmailProvider)
             .AddTokenProvider<PhoneNumberTokenProvider<ApplicationUser>>(TokenOptions.DefaultPhoneProvider);
-
-        services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
-        services.Configure<SmsOptions>(configuration.GetSection(SmsOptions.SectionName));
-        services.AddHttpClient<VerificationCodeSender>();
 
         services.AddSingleton(TimeProvider.System);
         services.AddScoped<AccountService>();
