@@ -3,23 +3,72 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>@ViewData["Title"] · Cuentas</title>
-    <style>
-        body { font-family: system-ui, sans-serif; background: #f4f5f7; margin: 0; padding: 3rem 1rem; color: #1f2933; }
-        main { max-width: 24rem; margin: 0 auto; background: #fff; border-radius: .5rem; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
-        h1 { font-size: 1.4rem; margin-top: 0; }
-        label { display: block; margin: 1rem 0 .25rem; font-weight: 600; font-size: .9rem; }
-        input { width: 100%; box-sizing: border-box; padding: .6rem; border: 1px solid #cbd2d9; border-radius: .35rem; font-size: 1rem; }
-        button { margin-top: 1.5rem; width: 100%; padding: .7rem; border: 0; border-radius: .35rem; background: #2563eb; color: #fff; font-size: 1rem; cursor: pointer; }
-        button.link { background: none; color: #2563eb; margin-top: .75rem; padding: 0; }
-        .error { background: #fde8e8; color: #9b1c1c; padding: .6rem; border-radius: .35rem; margin-bottom: 1rem; }
-        .info { background: #e1effe; color: #1e429f; padding: .6rem; border-radius: .35rem; margin-bottom: 1rem; }
-        p.footer { margin-top: 1.5rem; font-size: .9rem; text-align: center; }
-    </style>
+    <meta name="theme-color" content="#16302e" />
+    <title>@ViewData["Title"] · Llave</title>
+    <link rel="icon" type="image/svg+xml" href="~/img/llave-mark.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Inter:wght@400;500;600&display=swap" />
+    <link rel="stylesheet" href="~/css/llave.css" asp-append-version="true" />
 </head>
 <body>
-    <main>
-        @RenderBody()
-    </main>
+    <div class="shell">
+        <aside class="brand-panel">
+            <a class="brand" asp-page="/Index">
+                <img src="~/img/llave-mark.svg" alt="" />
+                <span>
+                    <span class="brand-name">Llave</span>
+                    <span class="brand-tag">Arriendo y venta de vivienda</span>
+                </span>
+            </a>
+
+            <div class="brand-copy">
+                <h2>Del anuncio a la entrega de <em>la llave</em>, en un solo lugar.</h2>
+                <p>Publica tu apartamento, agenda visitas y recibe ofertas con seguimiento hasta el cierre.</p>
+
+                <ol class="steps">
+                    <li>
+                        <span class="step-number">1</span>
+                        <div><strong>Publica o encuentra</strong><span>Anuncios revisados antes de salir al aire.</span></div>
+                    </li>
+                    <li>
+                        <span class="step-number">2</span>
+                        <div><strong>Visita con fecha y hora</strong><span>Solicitudes y confirmaciones sin llamadas perdidas.</span></div>
+                    </li>
+                    <li>
+                        <span class="step-number">3</span>
+                        <div><strong>Oferta y cierra</strong><span>Contraofertas, reserva y cierre registrados.</span></div>
+                    </li>
+                </ol>
+            </div>
+
+            <p class="brand-footer">© @DateTime.Now.Year Llave · Colombia</p>
+        </aside>
+
+        <main class="auth">
+            <a class="brand auth-mobile-brand" asp-page="/Index">
+                <img src="~/img/llave-mark.svg" alt="" />
+                <span class="brand-name">Llave</span>
+            </a>
+
+            <div class="auth-card">
+                @RenderBody()
+            </div>
+
+            <p class="auth-footer">Tus datos se tratan conforme a la Ley 1581 de 2012 de protección de datos personales.</p>
+        </main>
+    </div>
+
+    <script>
+        document.querySelectorAll("[data-toggle-password]").forEach(button => {
+            const input = document.getElementById(button.dataset.togglePassword);
+            button.addEventListener("click", () => {
+                const hidden = input.type === "password";
+                input.type = hidden ? "text" : "password";
+                button.textContent = hidden ? "Ocultar" : "Mostrar";
+                button.setAttribute("aria-pressed", hidden);
+            });
+        });
+    </script>
 </body>
 </html>

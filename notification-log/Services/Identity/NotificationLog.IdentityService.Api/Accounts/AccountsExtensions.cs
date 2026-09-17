@@ -11,8 +11,8 @@ public static class AccountsExtensions
 {
     public static IServiceCollection AddAccounts(this IServiceCollection services, IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("identity")
-            ?? throw new InvalidOperationException("Falta la cadena de conexión 'identity'.");
+        var connectionString = configuration.GetConnectionString("identity-db")
+            ?? throw new InvalidOperationException("Falta la cadena de conexión 'identity-db'.");
 
         services.AddDbContextWithWolverineIntegration<IdentityServiceDbContext>(
             options => options.UseNpgsql(connectionString),

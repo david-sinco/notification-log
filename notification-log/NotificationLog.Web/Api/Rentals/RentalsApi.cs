@@ -4,7 +4,7 @@ namespace NotificationLog.Web.Api.Rentals;
 
 internal static class RentalsApi
 {
-    public const string BaseAddress = "https+http://rentalservice";
+    public const string BaseAddress = "https+http://rental";
 
     public static async Task<T> GetJsonAsync<T>(this HttpClient http, string url, CancellationToken ct)
     {

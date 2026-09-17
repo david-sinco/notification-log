@@ -27,10 +27,10 @@ builder.Services.AddRazorComponents()
 
 // Clientes tipados hacia NotificationLog.ApiService. La URL usa "https+http://" para preferir
 // HTTPS cuando esté disponible; la resuelve el descubrimiento de servicios de Aspire.
-builder.Services.AddHttpClient<TriggersApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
-builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
-builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
-builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://apiservice"));
+builder.Services.AddHttpClient<TriggersApiClient>(client => client.BaseAddress = new("https+http://notification"));
+builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress = new("https+http://notification"));
+builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://notification"));
+builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://notification"));
 
 builder.Services.AddHttpClient<ListingsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
 builder.Services.AddHttpClient<ModerationApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));

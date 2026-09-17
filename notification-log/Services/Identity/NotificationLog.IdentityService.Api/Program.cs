@@ -13,7 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
 builder.Services.AddAccounts(builder.Configuration);
-builder.Services.AddConnect();
+builder.Services.AddConnect(builder.Configuration);
 builder.Services.AddMessaging(builder.Configuration);
 
 builder.Services.Configure<IdentitySeedOptions>(builder.Configuration.GetSection(IdentitySeedOptions.SectionName));
@@ -45,10 +45,11 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapStaticAssets();
 app.MapDefaultEndpoints();
 
 app.MapConnect();
 app.MapUsers();
-app.MapRazorPages();
+app.MapRazorPages().WithStaticAssets();
 
 app.Run();

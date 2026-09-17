@@ -16,10 +16,6 @@
     <Project Path="Services/Rentals/NotificationLog.RentalService.Domain/NotificationLog.RentalService.Domain.csproj" Id="b9ce4509-f318-417f-829c-6a8cc20c6b2c" />
     <Project Path="Services/Rentals/NotificationLog.RentalService.Infrastructure/NotificationLog.RentalService.Infrastructure.csproj" />
   </Folder>
-  <Folder Name="/Services/Users/">
-    <Project Path="Services/User/NotificationLog.UserService.Application/NotificationLog.UserService.Application.csproj" />
-    <Project Path="Services/User/NotificationLog.UserService.Domain/NotificationLog.UserService.Domain.csproj" />
-  </Folder>
   <Folder Name="/Shared/">
     <Project Path="Shared/Application.Shared/Application.Shared.csproj" Id="054d82af-aa50-4a00-b016-b605e6e355fb" />
     <Project Path="Shared/Domain.Shared/Domain.Shared.csproj" />

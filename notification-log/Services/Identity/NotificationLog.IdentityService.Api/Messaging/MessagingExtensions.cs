@@ -14,8 +14,8 @@ public static class MessagingExtensions
 
     public static IServiceCollection AddMessaging(this IServiceCollection services, IConfiguration configuration)
     {
-        var identity = configuration.GetConnectionString("identity")
-            ?? throw new InvalidOperationException("Falta la cadena de conexión 'identity'.");
+        var identity = configuration.GetConnectionString("identity-db")
+            ?? throw new InvalidOperationException("Falta la cadena de conexión 'identity-db'.");
 
         var rabbitmq = configuration.GetConnectionString("rabbitmq")
             ?? throw new InvalidOperationException("Falta la cadena de conexión 'rabbitmq'.");

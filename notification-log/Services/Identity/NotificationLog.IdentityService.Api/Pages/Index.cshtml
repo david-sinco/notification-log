@@ -1,8 +1,13 @@
 @page
 @{
-    ViewData["Title"] = "Inicio";
+    ViewData["Title"] = "Cuentas";
 }
 
-<h1>Servicio de cuentas</h1>
-<p>Desde aquí se inicia sesión en las aplicaciones de la plataforma.</p>
-<p class="footer"><a asp-page="/Account/Login">Iniciar sesión</a> · <a asp-page="/Account/Register">Crear cuenta</a></p>
+<p class="eyebrow">Cuentas Llave</p>
+<h1>Una sola cuenta para todo Llave</h1>
+<p class="lead">Con tu cuenta buscas y guardas apartamentos, agendas visitas, haces ofertas y publicas tu vivienda.</p>
+
+<div class="actions">
+    <a class="button" asp-page="/Account/Login">Iniciar sesión</a>
+    <a class="button button-secondary" asp-page="/Account/Register">Crear cuenta</a>
+</div>

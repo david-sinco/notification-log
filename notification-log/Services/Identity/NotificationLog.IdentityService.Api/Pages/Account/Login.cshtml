@@ -4,28 +4,39 @@
     ViewData["Title"] = "Iniciar sesión";
 }
 
-<h1>Iniciar sesión</h1>
+<p class="eyebrow">Cuentas Llave</p>
+<h1>Bienvenido de nuevo</h1>
+<p class="lead">Ingresa con el correo o el celular con el que te registraste.</p>
 
 @if (Model.Message is not null)
 {
-    <div class="info">@Model.Message</div>
+    <div class="alert alert-info" role="status">@Model.Message</div>
 }
 
 @if (Model.Error is not null)
 {
-    <div class="error">@Model.Error</div>
+    <div class="alert alert-error" role="alert">@Model.Error</div>
 }
 
 <form method="post">
     <input type="hidden" asp-for="ReturnUrl" />
 
-    <label asp-for="Identifier">Correo o teléfono</label>
-    <input asp-for="Identifier" autocomplete="username" autofocus />
+    <div class="field">
+        <label asp-for="Identifier">Correo o celular</label>
+        <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" autofocus />
+    </div>
 
-    <label asp-for="Password">Contraseña</label>
-    <input asp-for="Password" type="password" autocomplete="current-password" />
+    <div class="field">
+        <label asp-for="Password">Contraseña</label>
+        <div class="password">
+            <input asp-for="Password" type="password" class="input" autocomplete="current-password" />
+            <button type="button" class="password-toggle" data-toggle-password="Password" aria-pressed="false">Mostrar</button>
+        </div>
+    </div>
 
-    <button type="submit">Entrar</button>
+    <button type="submit" class="button">Iniciar sesión</button>
 </form>
 
-<p class="footer">¿No tienes cuenta? <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Crear cuenta</a></p>
+<div class="divider"></div>
+
+<p class="switch">¿Aún no tienes cuenta? <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Crea una gratis</a></p>

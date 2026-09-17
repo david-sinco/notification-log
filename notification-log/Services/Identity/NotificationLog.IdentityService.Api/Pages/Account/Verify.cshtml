@@ -2,29 +2,44 @@
 @model NotificationLog.IdentityService.Api.Pages.Account.VerifyModel
 @{
     ViewData["Title"] = "Verificar cuenta";
+    var isEmail = Model.Identifier.Contains('@');
 }
 
-<h1>Verifica tu cuenta</h1>
+<p class="eyebrow">Último paso</p>
+<h1>Confirma que eres tú</h1>
+<p class="lead">Escribe el código de 6 dígitos que te enviamos. Vence en pocos minutos.</p>
 
 @if (Model.Message is not null)
 {
-    <div class="info">@Model.Message</div>
+    <div class="alert alert-info" role="status">@Model.Message</div>
 }
 
 @if (Model.Error is not null)
 {
-    <div class="error">@Model.Error</div>
+    <div class="alert alert-error" role="alert">@Model.Error</div>
 }
 
-<p>Enviamos un código a <strong>@Model.Identifier</strong>.</p>
+<div class="sent-to">
+    <span class="icon" aria-hidden="true">@(isEmail ? "✉" : "✆")</span>
+    <div>
+        <small>@(isEmail ? "Enviado al correo" : "Enviado por SMS al celular")</small>
+        <strong>@Model.Identifier</strong>
+    </div>
+</div>
 
 <form method="post">
     <input type="hidden" asp-for="Identifier" />
     <input type="hidden" asp-for="ReturnUrl" />
 
-    <label asp-for="Code">Código</label>
-    <input asp-for="Code" inputmode="numeric" autocomplete="one-time-code" autofocus />
+    <div class="field">
+        <label asp-for="Code">Código de verificación</label>
+        <input asp-for="Code" class="input code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" autofocus />
+    </div>
 
-    <button type="submit">Verificar</button>
-    <button type="submit" class="link" asp-page-handler="Resend">Enviar otro código</button>
+    <button type="submit" class="button">Verificar y continuar</button>
+    <button type="submit" class="button-link" asp-page-handler="Resend">¿No te llegó? Enviar otro código</button>
 </form>
+
+<div class="divider"></div>
+
+<p class="switch">¿Escribiste mal el dato? <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Vuelve a empezar</a></p>

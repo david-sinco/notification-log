@@ -24,6 +24,7 @@ public static class IdentityAuthenticationExtensions
             {
                 options.Authority = identity["Authority"]
                     ?? throw new InvalidOperationException("Falta la configuración 'Identity:Authority'.");
+                options.BackchannelHttpHandler = LocalhostSubdomainHandler.Create();
                 options.ClientId = identity["ClientId"];
                 options.ClientSecret = identity["ClientSecret"];
 

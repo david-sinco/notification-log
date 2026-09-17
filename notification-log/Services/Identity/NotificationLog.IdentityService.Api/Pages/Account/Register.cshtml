@@ -4,26 +4,43 @@
     ViewData["Title"] = "Crear cuenta";
 }
 
-<h1>Crear cuenta</h1>
+<p class="eyebrow">Cuentas Llave</p>
+<h1>Crea tu cuenta</h1>
+<p class="lead">Guarda favoritos, agenda visitas y publica tu apartamento cuando quieras.</p>
 
 @if (Model.Error is not null)
 {
-    <div class="error">@Model.Error</div>
+    <div class="alert alert-error" role="alert">@Model.Error</div>
 }
 
 <form method="post">
     <input type="hidden" asp-for="ReturnUrl" />
 
-    <label asp-for="Identifier">Correo o teléfono</label>
-    <input asp-for="Identifier" autocomplete="username" autofocus />
+    <div class="field">
+        <label asp-for="Identifier">Correo o celular</label>
+        <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" autofocus />
+        <span class="hint">Te enviaremos un código para confirmarlo. Los celulares de Colombia no necesitan +57.</span>
+    </div>
 
-    <label asp-for="Password">Contraseña</label>
-    <input asp-for="Password" type="password" autocomplete="new-password" />
+    <div class="field">
+        <label asp-for="Password">Contraseña</label>
+        <div class="password">
+            <input asp-for="Password" type="password" class="input" autocomplete="new-password" />
+            <button type="button" class="password-toggle" data-toggle-password="Password" aria-pressed="false">Mostrar</button>
+        </div>
+        <span class="hint">Mínimo 8 caracteres, con al menos una letra y un número.</span>
+    </div>
 
-    <label asp-for="ConfirmPassword">Repite la contraseña</label>
-    <input asp-for="ConfirmPassword" type="password" autocomplete="new-password" />
+    <div class="field">
+        <label asp-for="ConfirmPassword">Confirma la contraseña</label>
+        <input asp-for="ConfirmPassword" type="password" class="input" autocomplete="new-password" />
+    </div>
 
-    <button type="submit">Crear cuenta</button>
+    <button type="submit" class="button">Crear cuenta</button>
+
+    <p class="legal">Al crear tu cuenta autorizas el tratamiento de tus datos personales para gestionar tu acceso a Llave.</p>
 </form>
 
-<p class="footer">¿Ya tienes cuenta? <a asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Iniciar sesión</a></p>
+<div class="divider"></div>
+
+<p class="switch">¿Ya tienes cuenta? <a asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Inicia sesión</a></p>

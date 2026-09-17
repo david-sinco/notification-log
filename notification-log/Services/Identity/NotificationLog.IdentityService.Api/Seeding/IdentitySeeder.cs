@@ -12,9 +12,10 @@ public sealed class IdentitySeeder : IHostedService
 {
     private readonly IServiceScopeFactory _scopes;
     private readonly IdentitySeedOptions _options;
+    private readonly OidcOptions _oidc;
 
-    public IdentitySeeder(IServiceScopeFactory scopes, IOptions<IdentitySeedOptions> options)
-        => (_scopes, _options) = (scopes, options.Value);
+    public IdentitySeeder(IServiceScopeFactory scopes, IOptions<IdentitySeedOptions> options, IOptions<OidcOptions> oidc)
+        => (_scopes, _options, _oidc) = (scopes, options.Value, oidc.Value);
 
     public async Task StartAsync(CancellationToken ct)
     {
@@ -63,18 +64,22 @@ public sealed class IdentitySeeder : IHostedService
         await users.AddToRoleAsync(admin, nameof(UserRole.Administrador));
     }
 
-    private static async Task SeedScopesAsync(IOpenIddictScopeManager scopes, CancellationToken ct)
+    private async Task SeedScopesAsync(IOpenIddictScopeManager scopes, CancellationToken ct)
     {
-        foreach (var (name, resource) in OidcScopes.Resources)
+        foreach (var (name, audience) in _oidc.Audiences)
         {
-            if (await scopes.FindByNameAsync(name, ct) is not null)
-                continue;
-
-            await scopes.CreateAsync(new OpenIddictScopeDescriptor
+            var descriptor = new OpenIddictScopeDescriptor
             {
                 Name = name,
-                Resources = { resource }
-            }, ct);
+                Resources = { audience }
+            };
+
+            var existing = await scopes.FindByNameAsync(name, ct);
+
+            if (existing is null)
+                await scopes.CreateAsync(descriptor, ct);
+            else
+                await scopes.UpdateAsync(existing, descriptor, ct);
         }
     }
 

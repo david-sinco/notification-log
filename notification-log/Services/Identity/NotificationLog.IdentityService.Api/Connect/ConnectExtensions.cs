@@ -9,8 +9,16 @@ public static class ConnectExtensions
 {
     public const string AdministradorPolicy = nameof(UserRole.Administrador);
 
-    public static IServiceCollection AddConnect(this IServiceCollection services)
+    public static IServiceCollection AddConnect(this IServiceCollection services, IConfiguration configuration)
     {
+        var oidcSection = configuration.GetSection(OidcOptions.SectionName);
+        var oidc = oidcSection.Get<OidcOptions>();
+
+        if (string.IsNullOrWhiteSpace(oidc?.Issuer) || !oidc.Audiences.TryGetValue(OidcScopes.Identity, out var identityAudience))
+            throw new InvalidOperationException("Faltan 'Oidc:Issuer' y 'Oidc:Audiences:identity' en la configuración.");
+
+        services.Configure<OidcOptions>(oidcSection);
+
         services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
             .AddCookie(SessionCookie.Scheme, options =>
             {
@@ -26,6 +34,8 @@ public static class ConnectExtensions
                 .UseDbContext<IdentityServiceDbContext>())
             .AddServer(options =>
             {
+                options.SetIssuer(new Uri(oidc.Issuer));
+
                 options.SetAuthorizationEndpointUris("connect/authorize")
                     .SetTokenEndpointUris("connect/token")
                     .SetEndSessionEndpointUris("connect/endsession");
@@ -58,7 +68,7 @@ public static class ConnectExtensions
             .AddValidation(options =>
             {
                 options.UseLocalServer();
-                options.AddAudiences(OidcScopes.IdentityAudience);
+                options.AddAudiences(identityAudience);
                 options.UseAspNetCore();
             });
 
