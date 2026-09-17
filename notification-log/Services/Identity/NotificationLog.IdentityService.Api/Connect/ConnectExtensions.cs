@@ -1,5 +1,6 @@
 using NotificationLog.IdentityService.Api.Accounts;
 using NotificationLog.IdentityService.Api.Data;
+using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 
@@ -7,6 +8,7 @@ namespace NotificationLog.IdentityService.Api.Connect;
 
 public static class ConnectExtensions
 {
+    public const string IdentityScopePolicy = OidcScopes.Identity;
     public const string AdministradorPolicy = nameof(UserRole.Administrador);
 
     public static IServiceCollection AddConnect(this IServiceCollection services, IConfiguration configuration)
@@ -73,6 +75,9 @@ public static class ConnectExtensions
             });
 
         services.AddAuthorizationBuilder()
+            .AddPolicy(IdentityScopePolicy, policy => policy
+                .RequireAuthenticatedUser()
+                .RequireAssertion(context => context.User.HasScope(OidcScopes.Identity)))
             .AddPolicy(AdministradorPolicy, policy => policy
                 .RequireAuthenticatedUser()
                 .RequireRole(nameof(UserRole.Administrador)));

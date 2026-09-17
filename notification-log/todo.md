@@ -22,16 +22,13 @@
 ## Integración y negocio
 
 - [ ] **Log de eventos reproducible** (estilo Kafka) para reconstruir estado o alimentar servicios nuevos; hoy RabbitMQ solo garantiza la entrega.
-- [ ] **Suscriptores de `UserCreated`:** hoy nadie tiene una cola enlazada a `identity.users`.
 - [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, perfil de asesor, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
-- [ ] Resolver en Notification el envío de códigos a direcciones sin verificar.
 - [ ] Responder 403 en lugar de 400 para "no es tuyo" en Rentals (`ForbiddenException`).
 
 ## Configuración y limpieza
 
-- [ ] Buggregator: quitar `localhost:1025` y `localhost:8000` fijos de los appsettings de Notification e Identity y tomarlos de Aspire.
+- [ ] Buggregator: quitar `localhost:1025` y `localhost:8000` fijos del appsettings de Notification y tomarlos de Aspire.
 - [ ] Redirect URIs y audiences con puertos fijos en `AppHost/appsettings.json`: mantenerlos alineados con los `launchSettings`.
 - [ ] Actualizar los nombres viejos (`apiservice`, `webfrontend`) en las páginas de tutoriales y en `CLAUDE.md`.
 - [ ] Actualizar `Person.md`, que describe el diseño anterior.
-- [ ] Eliminar el proyecto sin uso `Services/User`.
 - [ ] Tests para Identity, el login de la Web y el outbox.

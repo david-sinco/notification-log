@@ -13,9 +13,10 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users")
             .WithTags("Users")
-            .RequireAuthorization(ConnectExtensions.AdministradorPolicy);
+            .RequireAuthorization(ConnectExtensions.IdentityScopePolicy);
 
         group.MapGet("/", SearchAsync)
+            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
             .WithName("SearchUsers")
             .WithSummary("Busca usuarios por correo o teléfono")
             .Produces<IReadOnlyList<UserDto>>()
@@ -23,11 +24,13 @@ public static class UserEndpoints
 
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetUserById")
-            .WithSummary("Obtiene un usuario por su identificador")
+            .WithSummary("Obtiene el perfil propio, o el de cualquier usuario si eres administrador")
             .Produces<UserDto>()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}/roles", SetRolesAsync)
+            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
             .WithName("SetUserRoles")
             .WithSummary("Reemplaza los roles de un usuario")
             .Produces(StatusCodes.Status204NoContent)
@@ -35,6 +38,7 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{id:guid}/lock", LockAsync)
+            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
             .WithName("LockUser")
             .WithSummary("Bloquea un usuario y cierra todas sus sesiones")
             .Produces(StatusCodes.Status204NoContent)
@@ -42,6 +46,7 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{id:guid}/unlock", UnlockAsync)
+            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
             .WithName("UnlockUser")
             .WithSummary("Desbloquea un usuario")
             .Produces(StatusCodes.Status204NoContent)
@@ -93,8 +98,11 @@ public static class UserEndpoints
         return Results.Ok(page.Select(u => ToDto(u, [.. rolesByUser[u.Id]])).ToList());
     }
 
-    private static async Task<IResult> GetByIdAsync(Guid id, UserManager<ApplicationUser> users)
+    private static async Task<IResult> GetByIdAsync(Guid id, ClaimsPrincipal principal, UserManager<ApplicationUser> users)
     {
+        if (principal.GetUserId() != id && !principal.IsInRole(nameof(UserRole.Administrador)))
+            return Forbidden("Solo puedes consultar tu propio perfil.");
+
         var user = await users.FindByIdAsync(id.ToString());
 
         return user is null
@@ -180,6 +188,9 @@ public static class UserEndpoints
 
     private static IResult Invalid(string field, string message) =>
         Results.ValidationProblem(new Dictionary<string, string[]> { [field] = [message] }, title: "Errores de validación");
+
+    private static IResult Forbidden(string detail) =>
+        Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Acceso denegado", detail: detail);
 
     private static IResult UserNotFound(Guid id) =>
         Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Recurso no encontrado", detail: $"Usuario con id '{id}' no fue encontrado.");
