@@ -1,0 +1,22 @@
+---
+interface Props {
+    kind?: 'concepto' | 'codigo' | 'advertencia' | 'antipatron' | 'ejercicio' | 'honesto';
+    title: string;
+}
+
+const { kind = 'concepto', title } = Astro.props;
+
+const icons = {
+    concepto: '💡',
+    codigo: '🧩',
+    advertencia: '⚠️',
+    antipatron: '🚫',
+    ejercicio: '✏️',
+    honesto: '🔍'
+};
+---
+
+<div class:list={['ddd-box', `ddd-box-${kind}`]}>
+    <p class="ddd-box-title"><span aria-hidden="true">{icons[kind]}</span> {title}</p>
+    <slot />
+</div>

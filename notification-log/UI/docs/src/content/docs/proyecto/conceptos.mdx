@@ -1,0 +1,84 @@
+---
+title: "Los cinco conceptos del panel"
+description: "Todo lo que administra NotificationLog se explica con estas cinco piezas."
+sidebar:
+  order: 1
+  label: "1 · Los cinco conceptos del panel"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+## Trigger: "cuando pasa X, revisa qué hacer"
+
+Un **trigger** representa un hecho de negocio que le importa a NotificationLog — "un pedido se confirmó", "un usuario verificó su email". Se identifica con un *event key* con formato `dominio.accion` (`pedido.confirmado`), tiene una descripción legible y un interruptor general: habilitado o deshabilitado. Deshabilitar un trigger apaga todas sus notificaciones de un golpe, sin borrar la configuración.
+
+### Configuración: el canal dentro de un trigger
+
+Cada trigger puede tener varias **configuraciones**, una por canal (Email, SMS, Push, WhatsApp). Cada configuración apunta a una plantilla concreta. La única regla dura del sistema: un mismo trigger no puede tener dos configuraciones activas para el mismo canal — no tiene sentido enviar dos emails distintos por el mismo hecho. Una configuración se puede deshabilitar sin borrarla (por ejemplo, para pausar el canal SMS de un trigger sin perder a qué plantilla apuntaba).
+
+<Callout kind="concepto" title="Un ejemplo completo">
+
+Trigger `pedido.confirmado` → configuración de canal **Email** apuntando a la plantilla `confirmacion_compra`, y otra configuración de canal **SMS** apuntando a `confirmacion_compra_sms`. Cuando llega el hecho "pedido confirmado" para un destinatario, ambas configuraciones activas se procesan — ese destinatario recibe, potencialmente, un email y un SMS por el mismo evento.
+
+</Callout>
+
+## Plantilla: el contenido, versionado
+
+Una **plantilla** tiene un nombre (`snake_case`, como `confirmacion_compra`), pertenece a un solo canal, y guarda un historial de **versiones**: cada publicación nueva (`PublishVersion`) retira la versión anterior y la reemplaza como "vigente", sin borrar el historial. Solo Email y Push exigen asunto; SMS y WhatsApp no lo admiten — es una regla que vive en el propio dominio (`TemplateVersion.NormalizeSubject`), no una validación aparte del formulario.
+
+El cuerpo de una plantilla puede usar los datos del destinatario que la recibe (`recipient.name`, `recipient.email`, `recipient.phone`, `recipient.locale`, `recipient.timeZone`, más cualquier atributo propio del destinatario) y los campos que traiga el propio evento de negocio — el panel de creación de plantillas muestra exactamente esa lista de datos disponibles al escribir el contenido.
+
+## Destinatario: a quién le puede llegar algo
+
+Un **destinatario** (`Recipient`) es un perfil delgado: nombre, email, teléfono, idioma, zona horaria, un estado activo/inactivo, y atributos libres clave-valor para lo que un negocio concreto necesite (por ejemplo, `plan: premium`). No es "el usuario completo" del sistema que lo originó — es solo lo que este proyecto necesita para decidir a dónde y en qué idioma enviar algo. Un destinatario "puede recibir" por un canal solo si está activo y tiene el dato de contacto de ese canal (email para Email, teléfono para SMS/WhatsApp).
+
+## Notificación: el registro de lo que pasó
+
+Una **notificación** es el resultado de un intento de envío — nunca se crea "antes" de intentar enviar, siempre después, ya sea con éxito o con fallo. Guarda el canal, el destino real usado, el evento que la originó, la plantilla y versión exactas que se usaron, y si falló, el motivo del error. Es la vista de auditoría: "¿a quién le llegó qué, cuándo, y si algo falló, por qué".
+
+## Cómo se relacionan
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 780 210" role="img" aria-labelledby="conceptsTitle">
+        <title id="conceptsTitle">Relación entre trigger, configuración, plantilla, destinatario y notificación</title>
+        <defs>
+            <marker id="conceptArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="20" width="160" height="60" rx="8" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="100" y="45" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Trigger</text>
+        <text x="100" y="62" text-anchor="middle" font-size="8" fill="#64748b">pedido.confirmado</text>
+
+        <line x1="100" y1="80" x2="100" y2="105" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#conceptArrow)" />
+
+        <rect x="20" y="108" width="160" height="55" rx="8" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="100" y="130" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Configuración</text>
+        <text x="100" y="147" text-anchor="middle" font-size="8" fill="#64748b">canal: Email</text>
+
+        <line x1="180" y1="135" x2="230" y2="135" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#conceptArrow)" />
+
+        <rect x="230" y="108" width="160" height="55" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="310" y="130" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Plantilla</text>
+        <text x="310" y="147" text-anchor="middle" font-size="8" fill="#64748b">confirmacion_compra v3</text>
+
+        <line x1="180" y1="45" x2="480" y2="45" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="3,3" />
+        <line x1="480" y1="45" x2="480" y2="105" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#conceptArrow)" />
+        <text x="330" y="35" text-anchor="middle" font-size="8" fill="#94a3b8">"ocurrió, para este destinatario"</text>
+
+        <rect x="400" y="20" width="160" height="60" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="480" y="45" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Destinatario</text>
+        <text x="480" y="62" text-anchor="middle" font-size="8" fill="#64748b">email + teléfono</text>
+
+        <line x1="390" y1="135" x2="600" y2="135" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#conceptArrow)" />
+
+        <rect x="600" y="108" width="160" height="55" rx="8" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="680" y="130" text-anchor="middle" font-size="10" font-weight="700" fill="#334155">Notificación</text>
+        <text x="680" y="147" text-anchor="middle" font-size="8" fill="#64748b">Sent / Failed</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Un trigger dispara sus configuraciones activas; cada configuración usa una plantilla; cada intento,
+        contra un destinatario concreto, queda como una notificación.
+    </p>
+</div>

@@ -9,13 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\NotificationLog.Web\NotificationLog.Web.csproj" />
+    <ProjectReference Include="..\UI\NotificationLog.Web\NotificationLog.Web.csproj" />
     <ProjectReference Include="..\Services\Identity\NotificationLog.IdentityService.Api\NotificationLog.IdentityService.Api.csproj" />
     <ProjectReference Include="..\Services\Notification\NotificationLog.ApiService\NotificationLog.ApiService.csproj" />
     <ProjectReference Include="..\Services\Rentals\NotificationLog.RentalService.Api\NotificationLog.RentalService.Api.csproj" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Aspire.Hosting.JavaScript" Version="13.5.4" />
     <PackageReference Include="Aspire.Hosting.PostgreSQL" Version="13.5.4" />
     <PackageReference Include="Aspire.Hosting.RabbitMQ" Version="13.5.4" />
     <PackageReference Include="Aspire.Hosting.Redis" Version="13.5.4" />

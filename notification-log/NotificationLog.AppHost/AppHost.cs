@@ -48,6 +48,7 @@ var notification = AddNotification();
 var identity = AddIdentity();
 var rental = AddRental();
 AddWeb();
+AddDocs();
 
 builder.Build().Run();
 
@@ -127,6 +128,13 @@ void AddWeb() =>
         .WithEnvironment("Identity__Authority", oidcConfig["Issuer"])
         .WithEnvironment("Identity__ClientId", webClientConfig["ClientId"])
         .WithEnvironment("Identity__ClientSecret", webClientSecret)
+        .WithDevUrls()
+        .WithParentRelationship(ui);
+
+void AddDocs() =>
+    builder.AddViteApp("docs", "../UI/docs")
+        .WithNpm()
+        .WithExternalHttpEndpoints()
         .WithDevUrls()
         .WithParentRelationship(ui);
 

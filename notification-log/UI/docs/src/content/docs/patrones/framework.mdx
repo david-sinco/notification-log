@@ -1,0 +1,351 @@
+---
+title: "Los que pone el framework"
+description: "Seis patrones que nadie de este equipo decidió aplicar y que se usan todos los días. Reconocerlos cambia cómo se lee el código."
+sidebar:
+  order: 8
+  label: "8 · Los que pone el framework"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Por qué merecen una página aunque no fueran una decisión">
+
+Ninguno de estos patrones se eligió: vienen dentro de ASP.NET Core, EF Core, FluentValidation o Wolverine. Pero son los mejor implementados del repositorio —los ha pulido mucha gente durante muchos años— y, sobre todo, **se usan constantemente sin darles nombre**. Quien sepa que `OnModelCreating` es un Template Method deja de memorizar "hay que llamar a `base`" y empieza a entender por qué.
+
+Cada uno va aquí con su forma corta: el hueco que rellena, dónde está en este código y qué señal vigilar. Ninguno da para ficha propia; juntos explican la mitad de la infraestructura.
+
+</Callout>
+
+## 8.1 · Chain of Responsibility — el pipeline y el manejador de errores
+
+**El hueco que rellena:** una petición HTTP necesita pasar por varias etapas independientes —excepciones, HTTPS, antiforgery, caché, enrutado— sin que ninguna sepa de las otras ni del orden.
+
+**La idea:** cada eslabón recibe la petición, hace lo suyo y decide si la pasa al siguiente o corta la cadena ahí mismo. Añadir o quitar un eslabón no toca a los demás.
+
+```csharp title="ApiService/Exceptions/GlobalExceptionHandler.cs:15-51 (extracto)"
+internal sealed class GlobalExceptionHandler : IExceptionHandler
+{
+    public async ValueTask<bool> TryHandleAsync(
+        HttpContext context, Exception exception, CancellationToken ct)
+    {
+        var problem = exception switch
+        {
+            NotFoundException e => new ProblemDetails
+            {
+                Status = StatusCodes.Status404NotFound,
+                Title = "Recurso no encontrado",
+                Detail = e.Message
+            },
+
+            AppValidationException e => BuildValidationProblem(e),
+
+            DomainException e => new ProblemDetails
+            {
+                Status = StatusCodes.Status422UnprocessableEntity,
+                Title = "Regla de negocio violada",
+                Detail = e.Message
+            },
+
+            _ => null
+        };
+
+        if (problem is null)
+        {
+            _logger.LogError(exception, "Error no controlado en {Path}", context.Request.Path);
+            return false;   // deja que el pipeline devuelva el 500 por defecto
+        }
+
+        problem.Instance = context.Request.Path;
+
+        context.Response.StatusCode = problem.Status!.Value;
+        await context.Response.WriteAsJsonAsync(problem, ct);
+
+        return true;
+    }
+}
+```
+
+El `return false` de la línea 43 es literalmente el patrón: *"esto no es mío, que lo intente el siguiente"*. El `return true` de la línea 50 corta la cadena. Y fíjate en el `switch` sobre tipos de excepción: es el mismo olor que critiqué en [la ficha 6](/patrones/estrategia), pero aquí está justificado — concentra a propósito todo el contrato de errores de la API en un sitio legible, y crece cada varios años, no cada sprint.
+
+**Señal de alarma:** un `try/catch` en un endpoint que devuelva un `Results.BadRequest`. Sería un eslabón paralelo, invisible desde aquí, y el contrato de errores dejaría de estar en un solo fichero.
+
+## 8.2 · Template Method — `OnModelCreating` y `AbstractValidator`
+
+**El hueco que rellena:** el framework sabe *cuándo* hay que construir el modelo o validar un objeto, pero no *qué* contiene ese modelo ni qué reglas aplican.
+
+**La idea:** la clase base fija el esqueleto del algoritmo y deja un hueco —un método virtual o un constructor— para que la subclase rellene solo la parte variable.
+
+```csharp title="Persistence/Context/NotificationDbContext.cs:17-23 y Triggers/…/CreateTriggerValidator.cs:8-17"
+// Persistence/Context/NotificationDbContext.cs — el hueco es un método virtual
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    modelBuilder.ApplyConfigurationsFromAssembly(
+        typeof(NotificationDbContext).Assembly);
+
+    base.OnModelCreating(modelBuilder);
+}
+
+// Triggers/Commands/CreateTrigger/CreateTriggerValidator.cs — el hueco es el constructor
+internal sealed class CreateTriggerValidator : AbstractValidator<CreateTriggerCommand>
+{
+    public CreateTriggerValidator()
+    {
+        RuleFor(x => x.Description)
+            .NotEmpty()
+            .MaximumLength(NotificationTrigger.DescriptionMaxLength);
+
+        RuleFor(x => x.EventKey)
+            .NotEmpty()
+            .MaximumLength(EventKey.MaxLength);
+    }
+}
+```
+
+En el `DbContext`, EF llama a `OnModelCreating` una vez y cachea el resultado; el `base.OnModelCreating(modelBuilder)` del final es el paso de la plantilla que no hay que saltarse. En `AbstractValidator<T>` el hueco es el propio constructor: las llamadas a `RuleFor` registran reglas que la base ejecutará después en `ValidateAsync`. La subclase nunca decide *cuándo* se valida.
+
+**Señal de alarma:** sobrescribir el hueco y olvidar la llamada a `base`. En `OnModelCreating` el fallo es silencioso hasta que falta una convención.
+
+## 8.3 · Builder fluido (DSL interno) — configuración encadenada
+
+**El hueco que rellena:** describir una construcción con veinte opciones opcionales sin un constructor de veinte parámetros ni veinte asignaciones sueltas.
+
+**La idea:** cada método devuelve el propio constructor, así que las opciones se encadenan y el resultado se lee como una frase. No es el Builder del GoF —no hay director ni producto inmutable—, es su versión de configuración.
+
+```text title="Tres builders distintos, el mismo patrón"
+// 1) EF Core — Persistence/Configuration/NotificationTriggerConfiguration.cs:17-28
+builder.Property(t => t.EventKey)
+    .HasConversion(
+        key => key.Value,
+        value => EventKey.Create(value))
+    .HasColumnName("EventKey")
+    .HasMaxLength(EventKey.MaxLength)
+    .IsUnicode(false)
+    .IsRequired();
+
+builder.HasIndex(t => t.EventKey)
+    .IsUnique()
+    .HasDatabaseName("UX_NotificationTriggers_EventKey");
+
+// 2) Minimal API — ApiService/Endpoints/TriggerEndpoints.cs:22-27
+group.MapPost("/", CreateAsync)
+    .WithName("CreateTrigger")
+    .WithSummary("Crea un trigger de notificación")
+    .Produces<CreatedTriggerResponse>(StatusCodes.Status201Created)
+    .ProducesValidationProblem()
+    .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+// 3) Wolverine — Messaging/RabbitMq/RabbitMqMessagingExtensions.cs:55-56
+opts.ListenToRabbitQueue("notification-dispatch")
+    .DefaultIncomingMessage<NotificationDispatchRequested>();
+```
+
+**Señal de alarma:** el encadenado esconde el orden. En `NotificationTriggerConfiguration.cs:41-43`, el `FindNavigation(...)!.SetPropertyAccessMode(PropertyAccessMode.Field)` tiene que ir *después* del `HasMany`, porque la navegación no existe antes — y el `!` convertiría el error de orden en un `NullReferenceException` de arranque.
+
+## 8.4 · Options — configuración tipada por sección
+
+**El hueco que rellena:** un sender necesita host, puerto y credenciales, y no debe conocer `IConfiguration` ni la ruta donde viven esos valores.
+
+```csharp title="Email/EmailNotificationOptions.cs:3-13, su registro y su consumo"
+// 1) la clase de opciones lleva su propia ruta de sección
+public sealed class EmailNotificationOptions
+{
+    public const string SectionName = "Notifications:Email";
+
+    public string Host { get; set; } = "localhost";
+    public int Port { get; set; } = 1025;
+    public string From { get; set; } = "notificaciones@notificationlog.local";
+    public bool EnableSsl { get; set; }
+    public string? Username { get; set; }
+    public string? Password { get; set; }
+}
+
+// 2) el registro — Notifications/Sending/NotificationSendingExtensions.cs:23-24
+services.Configure<EmailNotificationOptions>(configuration.GetSection(EmailNotificationOptions.SectionName));
+services.AddScoped<IEmailNotificationSender, SmtpEmailNotificationSender>();
+
+// 3) el consumo — Email/SmtpEmailNotificationSender.cs:16-17
+public SmtpEmailNotificationSender(IOptions<EmailNotificationOptions> options)
+    => _options = options.Value;
+```
+
+Tres detalles que hacen que esto funcione bien aquí: la ruta de la sección es una constante *dentro de la propia clase de opciones* (línea 5), así que no hay cadenas mágicas repartidas; cada canal tiene su propio objeto en vez de un bloque compartido —el comentario de `NotificationSendingExtensions.cs:14-19` lo justifica—; y los valores por defecto están en las propiedades, con comentarios que explican cuándo se usan (`SmsNotificationOptions.cs:20-23`).
+
+**Señal de alarma:** inyectar `IConfiguration` en una clase de servicio. Es la forma de saltarse el patrón y perder el tipado.
+
+## 8.5 · Registro por convención
+
+**El hueco que rellena:** tener que acordarse de registrar cada pieza nueva de una familia homogénea.
+
+```text title="Dos escaneos de ensamblado"
+// EF Core: encuentra las 6 implementaciones de IEntityTypeConfiguration<T> del ensamblado
+modelBuilder.ApplyConfigurationsFromAssembly(typeof(NotificationDbContext).Assembly);
+
+// FluentValidation: encuentra los 8 AbstractValidator<T>, incluidos los internal
+services.AddValidatorsFromAssembly(
+    typeof(DependencyInjection).Assembly,
+    includeInternalTypes: true);
+```
+
+Seis configuraciones de EF y ocho validadores se registran solos. `includeInternalTypes: true` es lo que permite que los validadores sean `internal` (ver [la ficha 3](/patrones/comandos)).
+
+**La comparación interesante:** los *handlers* de `Application` **no** usan convención — se registran uno a uno en `Application/DependencyInjection.cs:40-76`. Es la misma familia homogénea y se trata al revés. La razón es la de la ficha 3: renunciar al escaneo mantiene el grafo navegable. Es una decisión coherente, pero conviene ver que el proyecto usa los dos enfoques a propósito y no por descuido.
+
+**Señal de alarma:** lo que se registra solo, se rompe solo. Un validador mal tipado —`AbstractValidator<OtroComando>` por copiar y pegar— se registra sin protestar y nunca se ejecuta.
+
+## 8.6 · Inyección de dependencias… y un Service Locator deliberado
+
+La inyección por constructor está en todo el repositorio y no necesita explicación. Lo que sí merece una parada es la única vez que el proyecto **renuncia** a ella a propósito:
+
+```csharp title="Infrastructure/Messaging/RabbitMq/RabbitMqMessagingExtensions.cs:22-32"
+services.AddWolverine(opts =>
+{
+    // RecipientSyncService depende de tipos internal (RecipientRepository,
+    // CreateRecipientValidator) y de IUnitOfWork registrado por factory lambda — Wolverine
+    // no puede "inlinear" esa cadena en el código generado y por defecto lo rechaza
+    // (ServiceLocationPolicy.NotAllowed). Esos internal existen a propósito (encapsulan
+    // detalles de Infrastructure/Application), así que se relaja la política en vez de
+    // exponerlos.
+    opts.ServiceLocationPolicy = ServiceLocationPolicy.AlwaysAllowed;
+
+    opts.UseRabbitMq(new Uri(connectionString)).AutoProvision();
+    // ...
+});
+```
+
+Wolverine genera código en tiempo de compilación y prefiere *inlinear* la construcción de las dependencias en vez de pedirlas al contenedor. Cuando no puede —porque los tipos son `internal` o están registrados con una lambda—, su política por defecto (`ServiceLocationPolicy.NotAllowed`) hace fallar el arranque.
+
+Aquí hay un conflicto real entre dos cosas buenas: la encapsulación (`RecipientRepository` y `CreateTriggerValidator` son `internal` por diseño; `IUnitOfWork` se registra con lambda para compartir instancia, ver [la ficha 2](/patrones/repositorio)) y la optimización de la librería. El comentario elige explícitamente la primera. Es la forma correcta de tomar este tipo de decisión: no "esto no funcionaba, lo puse en `AlwaysAllowed`", sino la razón escrita al lado.
+
+**Señal de alarma:** que alguien "arregle" esto haciendo públicos los repositorios y validadores. Es tentador —quita una línea de configuración— y rompe la encapsulación de dos capas para ganar una micro-optimización en el arranque.
+
+## 8.7 · Composite — los componentes Blazor
+
+De propina, el patrón que estás mirando ahora mismo. Un `RenderFragment` permite que un componente contenga otros y que ambos se traten igual: `Components/Ddd/DddCallout.razor:9` declara `[Parameter] public RenderFragment? ChildContent`, y esa es toda la definición de un Composite. Esta página es un árbol de componentes que se renderiza recursivamente.
+
+## 8.8 · Recorrido de una ejecución
+
+Una sola petición —`GET /api/triggers/{id}` con un id que no existe— atraviesa cinco de estos patrones.
+
+<ol class="ddd-steps">
+    <li>
+        <strong><code>ApiService/Program.cs:32</code></strong> — <code>app.UseExceptionHandler()</code> es el
+        primer eslabón de la <em>cadena</em>. Se limita a envolver el resto en un <code>try</code>.
+    </li>
+    <li>
+        <strong><code>ApiService/Program.cs:54</code></strong> — <code>MapTriggers()</code> registró la ruta
+        con un <em>builder fluido</em> (<code>TriggerEndpoints.cs:29-33</code>). El enrutado la resuelve y
+        crea el <em>scope</em> de <strong>inyección de dependencias</strong> de la petición.
+    </li>
+    <li>
+        <strong>Resolución</strong> — el contenedor construye <code>GetTriggerByIdHandler</code> →
+        <code>NotificationTriggerRepository</code> → <code>NotificationDbContext</code>. La forma del modelo
+        de este último ya estaba cacheada desde el arranque, cuando el <em>template method</em>
+        <code>OnModelCreating</code> ejecutó el <em>registro por convención</em>
+        <code>ApplyConfigurationsFromAssembly</code>.
+    </li>
+    <li>
+        <strong><code>GetTriggerByIdHandler.cs:13-14</code></strong> — el repositorio devuelve
+        <code>null</code> y el handler lanza <code>NotFoundException</code>.
+    </li>
+    <li>
+        <strong>Vuelta a la cadena</strong> — el middleware atrapa la excepción y llama a
+        <code>GlobalExceptionHandler.TryHandleAsync</code>. El <code>switch</code> encaja en el primer caso
+        (línea 20), se escribe un <code>ProblemDetails</code> 404 y <code>return true</code>
+        <strong>corta</strong>: nadie más de la cadena verá la petición.
+    </li>
+    <li>
+        <strong>Fin del scope</strong> — el <code>DbContext</code> se destruye. En el panel, este mismo 404
+        se convertirá en <code>ApiException</code> (<a href="/patrones/gateway">ficha 7</a>).
+    </li>
+</ol>
+
+<Callout kind="ejercicio" title="Ejercicio">
+
+`RabbitMqMessagingExtensions.cs:30` pone `opts.ServiceLocationPolicy = ServiceLocationPolicy.AlwaysAllowed;`.
+
+**(a)** Nombra las **tres** clases o registros concretos que, según el comentario del propio fichero, obligan a esa línea. Localiza cada uno en el repositorio con su ruta.
+
+**(b)** Describe qué cambios harían falta para poder volver a `NotAllowed`, y qué se perdería con cada uno.
+
+**(c)** ¿Qué patrón de esta guía quedaría roto si se aplicara el cambio sobre `IUnitOfWork`? Explica el fallo exacto que aparecería en ejecución.
+
+**Verificación:** (c) debe describir un fallo que *no* sea una excepción.
+
+</Callout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p><strong>(a)</strong> El comentario de las líneas 24-29 menciona tres cosas:</p>
+    <ol class="ddd-steps">
+        <li>
+            <code>RecipientRepository</code> —
+            <code>Infrastructure/Persistence/Repositories/RecipientRepository.cs:7</code>—, declarado
+            <code>internal sealed</code>. Igual que sus tres hermanos de esa carpeta.
+        </li>
+        <li>
+            <code>CreateRecipientValidator</code> —
+            <code>Application/Recipients/Commands/CreateRecipient/CreateRecipientValidator.cs</code>—,
+            <code>internal sealed</code> como los otros siete validadores.
+        </li>
+        <li>
+            <code>IUnitOfWork</code>, registrado con una lambda en
+            <code>Infrastructure/DependencyInjection.cs:36-37</code>:
+            <code>services.AddScoped&lt;IUnitOfWork&gt;(sp =&gt; sp.GetRequiredService&lt;NotificationDbContext&gt;())</code>.
+        </li>
+    </ol>
+    <p>
+        Wolverine genera código C# que construye la cadena de dependencias del handler. Con tipos
+        <code>internal</code> no puede escribir <code>new RecipientRepository(...)</code> —su ensamblado no
+        los ve—, y con un registro por lambda no tiene forma de reproducir esa lambda en el código generado.
+        En los dos casos su única salida es pedirle el objeto al contenedor en ejecución, que es
+        exactamente lo que <code>NotAllowed</code> prohíbe.
+    </p>
+    <p><strong>(b)</strong> Tres cambios, cada uno con su factura:</p>
+    <ul>
+        <li>
+            <strong>Hacer públicos los repositorios.</strong> Se pierde la garantía de que
+            <code>NotificationTriggerRepository</code> solo se pueda usar a través de su interfaz. Hoy, un
+            handler que quisiera saltarse el puerto ni siquiera puede nombrar la clase; sería una barrera de
+            compilación menos.
+        </li>
+        <li>
+            <strong>Hacer públicos los validadores.</strong> Pasarían a formar parte de la superficie pública
+            de <code>Application</code>, cuando son un detalle de implementación de un caso de uso concreto.
+        </li>
+        <li>
+            <strong>Registrar <code>IUnitOfWork</code> sin lambda</strong>, es decir
+            <code>services.AddScoped&lt;IUnitOfWork, NotificationDbContext&gt;()</code>. Ver (c).
+        </li>
+    </ul>
+    <p>
+        A cambio de todo eso se gana que Wolverine <em>inlinee</em> la construcción en vez de resolver del
+        contenedor: un ahorro de microsegundos por mensaje. La decisión del repositorio —una línea de
+        configuración a cambio de conservar la encapsulación de dos capas— es claramente la correcta, y el
+        comentario la deja escrita para que nadie la revierta "limpiando" código.
+    </p>
+    <p>
+        <strong>(c)</strong> Se rompería el <strong>Unit of Work</strong>
+        (<a href="/patrones/repositorio">ficha 2</a>), y el fallo sería <em>silencioso</em>: no habría
+        excepción alguna.
+    </p>
+    <p>
+        <code>AddScoped&lt;IUnitOfWork, NotificationDbContext&gt;()</code> le dice al contenedor "cuando te
+        pidan <code>IUnitOfWork</code>, construye un <code>NotificationDbContext</code>". Pero
+        <code>NotificationDbContext</code> ya está registrado por su cuenta con
+        <code>AddDbContext</code> (<code>Infrastructure/DependencyInjection.cs:27</code>), y esos dos
+        registros son <strong>entradas distintas</strong>: el contenedor crearía <strong>dos instancias
+        diferentes</strong> dentro del mismo scope.
+    </p>
+    <p>
+        Consecuencia: los repositorios —que reciben <code>NotificationDbContext</code>— acumularían los
+        cambios en la instancia A, y el handler llamaría a <code>SaveChangesAsync</code> sobre la instancia
+        B, cuyo <em>change tracker</em> está vacío. <code>SaveChangesAsync</code> devolvería <code>0</code>
+        tan tranquilo y <strong>no se guardaría nada</strong>. El endpoint respondería
+        <code>201 Created</code> con un identificador de un trigger que no existe en la base de datos.
+    </p>
+    <p>
+        Es el fallo más peligroso de los tres: no rompe el arranque, no lanza, no deja rastro en los logs, y
+        solo se descubre cuando alguien busca el dato y no está. Por eso la lambda de la línea 36 no es un
+        rodeo: es el patrón funcionando.
+    </p>
+</details>

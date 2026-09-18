@@ -1,0 +1,175 @@
+.ddd-box {
+    border-radius: 0.5rem;
+    padding: 1.1rem 1.35rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    background: var(--sl-color-gray-6);
+}
+
+.ddd-box-title {
+    font-weight: 600;
+    margin-bottom: 0.6rem;
+}
+
+.ddd-box > :last-child {
+    margin-bottom: 0;
+}
+
+.ddd-box-concepto {
+    background: var(--sl-color-blue-low);
+    border-color: var(--sl-color-blue);
+}
+
+.ddd-box-ejercicio {
+    background: var(--sl-color-green-low);
+    border-color: var(--sl-color-green);
+}
+
+.ddd-box-advertencia {
+    background: var(--sl-color-orange-low);
+    border-color: var(--sl-color-orange);
+}
+
+.ddd-box-antipatron {
+    background: var(--sl-color-red-low);
+    border-color: var(--sl-color-red);
+}
+
+.ddd-diagram {
+    margin: 1.5rem 0;
+}
+
+.ddd-diagram svg {
+    width: 100%;
+    height: auto;
+    background: #fff;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+}
+
+.ddd-diagram-caption {
+    font-size: 0.875rem;
+    color: var(--sl-color-gray-3);
+    margin-top: 0.6rem;
+}
+
+.ddd-lede {
+    font-size: 1.05rem;
+    color: var(--sl-color-gray-2);
+    max-width: 75ch;
+}
+
+.surface-card {
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.ddd-card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 1rem;
+    margin: 1.5rem 0;
+}
+
+.ddd-card {
+    background: var(--sl-color-gray-6);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    padding: 1.1rem 1.25rem;
+    text-decoration: none;
+    color: inherit;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    transition: transform .12s ease, border-color .12s ease;
+}
+
+.ddd-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--sl-color-accent);
+    color: inherit;
+}
+
+.ddd-card .ddd-card-num {
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--sl-color-accent-high);
+    letter-spacing: 0.05em;
+}
+
+.ddd-card h3 {
+    font-size: 1rem;
+    margin: 0;
+}
+
+.ddd-card p {
+    font-size: 0.82rem;
+    color: var(--sl-color-gray-3);
+    margin: 0;
+}
+
+.term-pair {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--sl-color-gray-5);
+}
+
+.term-pair:last-child {
+    border-bottom: none;
+}
+
+.term-pair .biz {
+    font-weight: 600;
+}
+
+.term-pair .code {
+    font-family: var(--sl-font-mono);
+    font-size: 0.85rem;
+    background: var(--sl-color-gray-6);
+    padding: 0.2rem 0.5rem;
+    border-radius: 0.35rem;
+}
+
+.term-pair .arrow {
+    color: var(--sl-color-gray-3);
+}
+
+.ddd-steps {
+    list-style: none;
+    counter-reset: ddd-step;
+    padding-left: 0;
+    margin: 1.5rem 0;
+}
+
+.ddd-steps li {
+    counter-increment: ddd-step;
+    position: relative;
+    padding: 0.75rem 1rem 0.75rem 3rem;
+    margin-bottom: 0.6rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-gray-6);
+}
+
+.ddd-steps li::before {
+    content: counter(ddd-step);
+    position: absolute;
+    left: 0.9rem;
+    top: 0.8rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    background: var(--sl-color-accent-low);
+    color: var(--sl-color-accent-high);
+    font-weight: 700;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}

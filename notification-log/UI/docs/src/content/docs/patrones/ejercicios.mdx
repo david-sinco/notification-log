@@ -1,0 +1,87 @@
+---
+title: "Ejercicios"
+description: "Los nueve ejercicios de la guía, ordenados por dificultad. Todos se resuelven leyendo este repositorio."
+sidebar:
+  order: 10
+  label: "10 · Ejercicios"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+Cada ejercicio vive al final de su ficha, con la solución plegada bajo un desplegable. Esta página los reúne para poder usarlos como sesión de trabajo: repartir dos o tres por persona, poner treinta minutos y comparar respuestas. **No mires la solución antes de escribir la tuya** — la mayoría se contestan con dos búsquedas y una lectura atenta, y el valor está en el camino.
+
+<Callout kind="concepto" title="Cómo usarlos en una sesión de equipo">
+
+El formato que funciona: cada persona resuelve dos ejercicios en solitario (20-30 min), luego se ponen en común en grupo y solo entonces se abre la solución. Lo interesante casi nunca es el acierto, sino las respuestas *distintas* a las preguntas de "¿es correcto o es un hueco?" — ahí es donde salen los criterios reales del equipo.
+
+Los cuatro primeros son de lectura. Del 5 en adelante piden proponer un diseño alternativo y defenderlo, y son los que dan mejor conversación.
+
+</Callout>
+
+## Nivel 1 · Lectura dirigida
+
+| # | Ficha | Enunciado | Qué entrena |
+| --- | --- | --- | --- |
+| 1 | [01 Factory](/patrones/factory) | Tres agregados generan su `Id` y uno no. Localiza cuál, y explica por qué `NotificationConfiguration.Create` es `internal` escribiendo el código que esa palabra impide. | Ver una invariante protegida por la visibilidad, no por una comprobación. |
+| 2 | [02 Repository](/patrones/repositorio) | Una de las cuatro interfaces de repositorio no tiene `GetByIdAsync`. Encuéntrala, justifica la ausencia y argumenta contra un `IRepository<T>` genérico. | Entender que la forma de un repositorio la dicta el ciclo de vida del agregado. |
+| 3 | [07 Gateway](/patrones/gateway) | `PagedResult<T>` está duplicado y una propiedad ya ha divergido. Encuéntrala, di con qué entrada difieren, y describe el fallo silencioso que causaría desincronizar el `enum` espejo. | Medir el coste real de duplicar un contrato en vez de compartirlo. |
+| 4 | [09 Casi-patrones](/patrones/casi-patrones) | Demuestra con búsquedas que el mecanismo de eventos de dominio no se usa; luego decide completarlo o borrarlo y defiéndelo. | Distinguir un patrón de su esqueleto, y decidir sin caso de uso. |
+
+## Nivel 2 · Diagnóstico
+
+| # | Ficha | Enunciado | Qué entrena |
+| --- | --- | --- | --- |
+| 5 | [03 Command/Handler](/patrones/comandos) | Hay 14 comandos y 8 validadores. Lista los seis sin validador y clasifica cada ausencia como correcta o como hueco, con el código en la mano. | Ver el precio concreto de renunciar a un *pipeline*, sin convertirlo en un argumento a favor de la librería. |
+| 6 | [04 Result](/patrones/resultado) | Un sender tiene `try/catch` y otro no. Sigue el fallo del gateway caído paso a paso, empareja los dos criterios y encuentra la diferencia observable que no está en la base de datos. | Separar "fallo esperado" de "avería", y ver dónde acaba cada uno. |
+| 7 | [08 Framework](/patrones/framework) | Explica las tres causas de `ServiceLocationPolicy.AlwaysAllowed`, qué costaría revertirlas y qué patrón se rompería —silenciosamente— al tocar el registro de `IUnitOfWork`. | Leer una decisión de configuración como lo que es: un trade-off documentado. |
+
+## Nivel 3 · Rediseño
+
+| # | Ficha | Enunciado | Qué entrena |
+| --- | --- | --- | --- |
+| 8 | [05 Adapter](/patrones/adaptador) | Elimina el `object` de `ITemplateRenderer` sin romper la razón del comentario. Nombra los tres ficheros que tocarías. | Reparar un puerto con una fuga de tipos, midiendo el alcance del cambio. |
+| 9 | [06 Strategy](/patrones/estrategia) | Soporta un canal Telegram: primero con el diseño actual, después con una interfaz única. Cuenta ficheros en ambos casos y encuentra el que hay que tocar de todos modos. | Separar el acoplamiento al *mecanismo* —que un patrón elimina— del acoplamiento al *modelo*, que no. |
+
+## Nivel 4 · Trabajo real sobre el repositorio
+
+Estos dos no tienen solución plegada: producen un cambio commiteable y el criterio de aceptación es que la solución compile y los tests pasen. Son el paso natural después de la guía.
+
+<Callout kind="ejercicio" title="A · Cierra el hueco de validación">
+
+Escribe `ChangeConfigurationTemplateValidator` siguiendo el modelo de `RecordNotificationSuccessValidator.cs:8-18`, y añade la llamada a `ValidateAndThrowAppAsync` en su handler.
+
+**Criterio de aceptación:** un `PUT` a `/api/triggers/{id}/configurations/{configId}/template` con `"templateId": "00000000-0000-0000-0000-000000000000"` debe responder **400** con la lista de campos, no **404**. Compruébalo desde la interfaz de Scalar (`/scalar` en desarrollo).
+
+**Trampa:** el validador tiene que ser `internal sealed` para que `AddValidatorsFromAssembly(..., includeInternalTypes: true)` lo recoja sin tocar el registro. Si lo declaras `public` también funcionará, pero habrás roto la convención de las otras ocho.
+
+</Callout>
+
+<Callout kind="ejercicio" title="B · Aplica el Strategy completo">
+
+Implementa la propuesta de la [ficha 6](/patrones/estrategia): una interfaz `INotificationSender` con `NotificationChannel Channel`, las cuatro implementaciones declarando el suyo, el registro en `NotificationSendingExtensions` y la sustitución del `switch` de `NotificationDispatchService.cs:164-173` por una resolución por diccionario.
+
+**Criterio de aceptación:** el constructor de `NotificationDispatchService` baja de once a ocho parámetros; las cuatro interfaces `I{Email,Sms,Push,WhatsApp}NotificationSender` desaparecen; el envío por correo y por SMS sigue funcionando de punta a punta contra Buggregator (`localhost:8000`).
+
+**Decisión que tienes que tomar y justificar:** ¿qué pasa ahora con `NotImplementedWhatsAppNotificationSender`? Con la interfaz única ya no es obligatorio registrarlo. Registrarlo mantiene el mensaje de error explícito; no registrarlo hace que el canal falle con un `KeyNotFoundException` genérico. Hay una tercera opción mejor que las dos: encuéntrala. *(Pista: el mejor momento para descubrir que falta un sender no es durante un envío.)*
+
+</Callout>
+
+## Recorrido rápido para quien entra nuevo
+
+Si solo hay tiempo para tres cosas antes de tocar código, en este orden:
+
+<ol class="ddd-steps">
+    <li>
+        Lee <a href="/patrones/factory">Factory</a>, <a href="/patrones/repositorio">Repository</a> y
+        <a href="/patrones/comandos">Command/Handler</a>. Son el estilo de casa y explican el 80 % de
+        <code>Domain</code> y <code>Application</code>.
+    </li>
+    <li>
+        Haz los ejercicios 1 y 2. Se contestan en veinte minutos y enseñan a leer las decisiones del
+        repositorio, no solo su estructura.
+    </li>
+    <li>
+        Lee <a href="/patrones/estrategia">Strategy</a> entera. Es donde vas a chocar en cuanto toques
+        envíos, y te ahorra descubrir el <code>switch</code> por las malas.
+    </li>
+</ol>

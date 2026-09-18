@@ -27,6 +27,8 @@
     <File Path="Person.md" />
     <File Path="Rentals.md" />
   </Folder>
+  <Folder Name="/UI/">
+    <Project Path="UI/NotificationLog.Web/NotificationLog.Web.csproj" />
+  </Folder>
   <Project Path="NotificationLog.AppHost/NotificationLog.AppHost.csproj" />
-  <Project Path="NotificationLog.Web/NotificationLog.Web.csproj" />
 </Solution>

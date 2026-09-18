@@ -1,0 +1,328 @@
+---
+title: "Command / Handler"
+description: "Un `record` con la intención, una clase con la ejecución. Veintiuna veces, sin MediatR y a propósito."
+sidebar:
+  order: 3
+  label: "3 · Command / Handler"
+---
+
+import { Code } from '@astrojs/starlight/components';
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Ficha rápida">
+
+- **Tipo:** GoF de comportamiento (Command), llevado al nivel de caso de uso — lo que en la práctica se llama CQRS táctico.
+- **Origen:** deliberado, y con una decisión extra encima: **sin librería**. No hay MediatR ni ningún despachador.
+- **Dónde:** 14 comandos y 7 consultas, cada uno en su carpeta, registrados a mano en `Application/DependencyInjection.cs:40-76`.
+
+</Callout>
+
+## 3.1 · El problema
+
+Este servicio tiene veintiún casos de uso. Cada uno necesita más o menos lo mismo: validar la entrada, cargar uno o más agregados, comprobar reglas que cruzan varios de ellos, mutar y confirmar. Si eso vive en los endpoints, `TriggerEndpoints.cs` acaba con 400 líneas de lógica de negocio atada a HTTP — y entonces el mismo caso de uso no se puede disparar desde un mensaje de RabbitMQ sin duplicarlo.
+
+Que no sea un problema teórico se ve en un sitio concreto: `NotificationDispatchService` necesita **registrar una notificación**, y lo necesita desde un consumidor de cola, no desde una petición HTTP. Si "registrar notificación" fuese código dentro de un endpoint, habría que copiarlo.
+
+La alternativa obvia —un `TriggerService` con nueve métodos— resuelve la reutilización pero crea otro problema: una clase con nueve dependencias en el constructor, de las que cada método usa dos, y donde todo el mundo edita el mismo fichero.
+
+## 3.2 · La idea del patrón
+
+Se separa *qué se quiere hacer* de *cómo se hace*. La intención se convierte en un objeto de datos inmutable —el comando— que se puede construir, serializar, registrar en un log o validar sin ejecutar nada. La ejecución vive en una clase distinta con un solo método público.
+
+El resultado es que cada caso de uso tiene su propia clase, sus propias dependencias y su propio fichero. Añadir uno nuevo no toca ninguno existente, y el conjunto de casos de uso del sistema es literalmente el listado de carpetas de `Application/`. La contrapartida es la ceremonia: tres ficheros para algo que podría ser un método.
+
+## 3.3 · Cómo se ve aquí
+
+```csharp title="Application/Triggers/Commands/CreateTrigger/ — los tres ficheros de la carpeta"
+// CreateTriggerCommand.cs — la intención
+public sealed record CreateTriggerCommand(string EventKey, string Description);
+
+// CreateTriggerHandler.cs — la ejecución
+public sealed class CreateTriggerHandler
+{
+    private readonly INotificationTriggerRepository _triggers;
+    private readonly IUnitOfWork _uow;
+    private readonly IValidator<CreateTriggerCommand> _validator;
+
+    public CreateTriggerHandler(
+        INotificationTriggerRepository triggers,
+        IUnitOfWork uow,
+        IValidator<CreateTriggerCommand> validator)
+        => (_triggers, _uow, _validator) = (triggers, uow, validator);
+
+    public async Task<Guid> HandleAsync(CreateTriggerCommand cmd, CancellationToken ct)
+    {
+        await _validator.ValidateAndThrowAppAsync(cmd, ct);
+
+        var eventKey = EventKey.Create(cmd.EventKey);
+
+        if (await _triggers.ExistsAsync(eventKey, ct))
+            throw new AppValidationException($"Ya existe un trigger para '{eventKey}'.");
+
+        var trigger = NotificationTrigger.Create(eventKey, cmd.Description);
+
+        await _triggers.AddAsync(trigger, ct);
+        await _uow.SaveChangesAsync(ct);
+
+        return trigger.Id;
+    }
+}
+
+// CreateTriggerValidator.cs — internal, nunca se nombra desde fuera
+internal sealed class CreateTriggerValidator : AbstractValidator<CreateTriggerCommand>
+{
+    public CreateTriggerValidator()
+    {
+        RuleFor(x => x.Description)
+            .NotEmpty()
+            .MaximumLength(NotificationTrigger.DescriptionMaxLength);
+
+        RuleFor(x => x.EventKey)
+            .NotEmpty()
+            .MaximumLength(EventKey.MaxLength);
+    }
+}
+```
+
+Los papeles:
+
+- **El comando** (`CreateTriggerCommand.cs:3`) es un `record` de una línea: solo datos, sin comportamiento, inmutable. Fíjate en que lleva `string EventKey` y no `EventKey` — el comando es del borde, todavía no del dominio.
+- **El handler** (`CreateTriggerHandler.cs:9`) es el *invoker*: recibe el comando, orquesta y confirma. Sus tres dependencias son exactamente las que necesita: un repositorio, la unidad de trabajo y su validador. Ni una más.
+- **El validador** (`CreateTriggerValidator.cs:6`) es `internal` y nunca se nombra: se pide como `IValidator<CreateTriggerCommand>` y el contenedor lo resuelve gracias a `AddValidatorsFromAssembly(..., includeInternalTypes: true)` (`Application/DependencyInjection.cs:35`).
+- **El cliente** es quien construya el comando. Hoy, el endpoint. Mañana, un consumidor de cola. El handler no distingue.
+
+### Comandos y consultas no se parecen
+
+```csharp title="Application/Triggers/Queries/ListTriggers/ListTriggersHandler.cs:6-28 (completo)"
+public sealed class ListTriggersHandler(INotificationTriggerRepository triggers)
+{
+    private readonly INotificationTriggerRepository _triggers = triggers;
+
+    public async Task<PagedResult<TriggerSummaryDto>> HandleAsync(ListTriggersQuery query, CancellationToken ct)
+    {
+        var page = Math.Max(query.Page, 1);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+
+        var (items, total) = await _triggers.ListAsync(
+            query.Search, query.IsEnabled, page, pageSize, ct);
+
+        var dtos = items
+            .Select(t => new TriggerSummaryDto(
+                t.Id,
+                t.EventKey.Value,
+                t.Description,
+                t.IsEnabled,
+                t.Configurations.Count(c => c.IsEnabled)))
+            .ToList();
+
+        return new PagedResult<TriggerSummaryDto>(dtos, page, pageSize, total);
+    }
+}
+```
+
+Un handler de consulta **no inyecta `IUnitOfWork`** —no tiene nada que confirmar—, no valida nada y no devuelve entidades: proyecta a `TriggerSummaryDto`. La separación no es un dogma, es una consecuencia: leer y escribir necesitan cosas distintas. Compruébalo con los siete handlers de `Queries/`; ninguno recibe la unidad de trabajo.
+
+### La parte deliberadamente incómoda: el registro manual
+
+```csharp title="Application/DependencyInjection.cs:39-48 (extracto de 21 registros)"
+        // Triggers
+        services.AddScoped<CreateTriggerHandler>();
+        services.AddScoped<GetTriggerByIdHandler>();
+        services.AddScoped<ListTriggersHandler>();
+        services.AddScoped<AddConfigurationHandler>();
+        services.AddScoped<DisableConfigurationHandler>();
+        services.AddScoped<EnableConfigurationHandler>();
+        services.AddScoped<ChangeConfigurationTemplateHandler>();
+        services.AddScoped<SetTriggerStatusHandler>();
+        services.AddScoped<UpdateTriggerDescriptionHandler>();
+```
+
+Veintiún `AddScoped` escritos a mano. Con MediatR bastaría un `AddMediatR(assembly)`. La decisión de no usarlo tiene un precio evidente —olvidar el registro produce un fallo de arranque— y dos ventajas concretas:
+
+- **El grafo de llamadas es navegable.** Pulsar F12 sobre `handler.HandleAsync(...)` en un endpoint lleva al método. Con un `mediator.Send(command)`, lleva a la librería, y quién atiende ese comando se resuelve en tiempo de ejecución por reflexión.
+- **Un servicio puede componer handlers con tipos concretos.** Es exactamente lo que hace el recorrido de abajo.
+
+## 3.4 · Recorrido de una ejecución
+
+El más interesante no empieza en HTTP. Sigamos un mensaje `NotificationDispatchRequested` que llega a la cola y cuya plantilla tiene un `{{ order_number }}` que el evento no trae — un fallo de renderizado.
+
+<ol class="ddd-steps">
+    <li>
+        <strong><code>Infrastructure/Messaging/Consumers/NotificationDispatchHandler.cs:8</code></strong> —
+        Wolverine abre un scope y llama al método estático <code>Handle</code>, inyectando
+        <code>NotificationDispatchService</code>. El protobuf se traduce a <code>BusinessEvent</code>
+        (línea 15) y muere ahí.
+    </li>
+    <li>
+        <strong><code>Application/…/Dispatch/NotificationDispatchService.cs:52-70</code></strong> — resuelve
+        el trigger por su <code>EventKey</code>, carga el destinatario y recorre
+        <code>trigger.ResolveActiveConfigurations()</code>.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:110-111</code></strong> —
+        <code>_renderer.BuildData(...)</code> y <code>_renderer.Render(...)</code>. Scriban está en
+        <code>StrictVariables = true</code> (<code>ScribanTemplateRenderer.cs:59</code>), así que el
+        placeholder sin dato <strong>lanza</strong>.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:119-123</code></strong> — aquí está el nudo del patrón.
+        El servicio no escribe SQL ni construye una entidad: <em>construye un comando</em> y llama a un
+        handler que ya existía para el caso de uso HTTP.
+        <Code code={"await _recordFailure.HandleAsync(\n    new RecordNotificationFailureCommand(\n        businessEvent.EventId, eventKey, configuration.Id, template.Id, version.Id, recipient.Id,\n        configuration.Channel, destination, ex.Message, DateTime.UtcNow, businessEvent.Data),\n    ct);\nreturn;"} lang="csharp" />
+        Es una llamada tipada y directa: <code>_recordFailure</code> es un
+        <code>RecordNotificationFailureHandler</code>, inyectado por constructor
+        (<code>NotificationDispatchService.cs:28</code>). El compilador comprueba los once argumentos.
+    </li>
+    <li>
+        <strong><code>Application/…/RecordNotificationFailure/RecordNotificationFailureHandler.cs</code></strong> —
+        el handler hace su rutina de siempre: valida el comando con su
+        <code>IValidator&lt;RecordNotificationFailureCommand&gt;</code>, llama a
+        <code>Notification.RecordFailure(...)</code> (la fábrica de <a href="/patrones/factory">la ficha 1</a>),
+        <code>AddAsync</code> y <code>SaveChangesAsync</code>.
+    </li>
+    <li>
+        <strong>Vuelta</strong> — <code>DispatchConfigurationAsync</code> hace <code>return</code>
+        (línea 124) y sigue con la <em>siguiente</em> configuración del trigger. El fallo de un canal no
+        cancela los demás, y queda una fila en <code>Notifications</code> con el motivo exacto.
+    </li>
+</ol>
+
+<Callout kind="concepto" title="Por qué este recorrido justifica el patrón entero">
+
+El mismo `RecordNotificationFailureHandler` podría exponerse mañana como endpoint HTTP sin cambiar una línea, y el flujo de dispatch seguiría funcionando igual. Ese es todo el valor de separar la intención de su disparador: **el caso de uso no sabe quién lo invoca**. Y nótese que no hizo falta ningún despachador para conseguirlo — bastó una clase con un método.
+
+</Callout>
+
+## 3.5 · Qué pasaría sin el patrón
+
+Contraejemplo **hipotético**: la lógica en el endpoint.
+
+```csharp title="Hipotético — sin comando ni handler"
+// HIPOTÉTICO — así NO está el código
+group.MapPost("/", async (
+    CreateTriggerRequest body,
+    NotificationDbContext db,
+    CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(body.Description))
+        return Results.BadRequest("La descripción es obligatoria.");
+
+    var key = body.EventKey.Trim().ToLowerInvariant();
+
+    if (await db.Triggers.AnyAsync(t => t.EventKey == key, ct))
+        return Results.BadRequest($"Ya existe un trigger para '{key}'.");
+
+    var trigger = NotificationTrigger.Create(EventKey.Create(key), body.Description);
+
+    await db.Triggers.AddAsync(trigger, ct);
+    await db.SaveChangesAsync(ct);
+
+    return Results.Created($"/api/triggers/{trigger.Id}", new { id = trigger.Id });
+});
+```
+
+Lo que se rompe:
+
+- **El caso de uso queda atrapado en HTTP.** `NotificationDispatchService` no puede reutilizarlo; tendría que duplicar el registro de notificaciones o inyectarse un `DbContext`.
+- **La entrada deja de ser un objeto.** No hay nada que validar de una pieza, ni que registrar en un log de auditoría, ni que serializar para reintentar.
+- **Los tests necesitan un servidor HTTP.** Hoy un handler se prueba con tres dobles y una llamada a un método.
+
+**Qué se paga:** tres ficheros y un registro en DI por caso de uso, y una capa más de indirección para leer algo sencillo. En un `SetTriggerStatusHandler` de diez líneas la ceremonia es casi todo el fichero. Es el precio de que *todos* los casos de uso se parezcan, incluidos los que no lo necesitaban.
+
+## 3.6 · Otras apariciones en el repositorio
+
+| Sitio | Variación |
+| --- | --- |
+| `Application/…/Sync/RecipientSyncService.cs:29-47` | **Composición de handlers.** El servicio decide entre `CreateRecipientHandler` y `UpdateRecipientHandler` según `ExistsAsync`, y construye el comando correspondiente. Es un caso de uso hecho de otros dos. |
+| `Application/…/UpdateRecipient/UpdateRecipientHandler.cs:18-48` | El comando como **snapshot completo**, no como delta: todos los campos se aplican siempre. El comentario de las líneas 25-35 explica por qué un campo vacío significa "borrado" y no "no tocar" — semántica del comando, documentada en el handler. |
+| `Application/…/SetTriggerStatus/SetTriggerStatusHandler.cs:15-26` | Handler mínimo: sin validador, un `if` que elige entre dos métodos del agregado. La decisión de negocio está en el dominio; el handler solo traduce un `bool` a una intención. |
+| `Application/…/AddConfiguration/AddConfigurationHandler.cs:28-34` | Reglas **entre agregados** en el handler (la plantilla debe estar habilitada y ser del mismo canal). No caben en `NotificationTrigger`, que no conoce a `NotificationTemplate`. |
+| `ApiService/Endpoints/TriggerEndpoints.cs:83-179` | Nueve métodos privados, cada uno de tres líneas: construir el comando, llamar al handler, devolver el `IResult`. Un endpoint que crece más allá de eso es la señal de que se está colando lógica en el borde. |
+
+## 3.7 · Señales de alarma
+
+- **Un handler que llama a otro handler del mismo nivel.** Aquí no pasa: quien compone handlers es un *servicio* (`RecipientSyncService`, `NotificationDispatchService`), y esa distinción es la que mantiene los handlers planos. Un `CreateTriggerHandler` que invocara a `AddConfigurationHandler` encadenaría dos `SaveChangesAsync` y perdería la atomicidad.
+- **Un comando con métodos.** Si al `record` le crece lógica, deja de ser una intención y pasa a ser un modelo paralelo al dominio.
+- **Un handler de consulta que inyecta `IUnitOfWork`.** O sobra la dependencia, o esa consulta está escribiendo.
+- **Validación inconsistente.** Sin librería no hay *pipeline*, así que `ValidateAndThrowAppAsync` es **opt-in**: se ejecuta solo si el handler se acuerda de llamarla. Este es el coste real de renunciar a MediatR y hoy ya se nota — cuéntalos en el ejercicio.
+- **Un handler olvidado en `DependencyInjection.cs`.** El fallo llega en el arranque, no en compilación. Es ruidoso y se arregla en un minuto, pero conviene mirar ese fichero en cada revisión que añada una carpeta a `Application/`.
+
+<Callout kind="ejercicio" title="Ejercicio">
+
+En `Application/` hay **14 comandos** y solo **8 validadores** (ficheros `*Validator.cs`).
+
+**(a)** Lista los seis comandos que no tienen validador.
+
+**(b)** Para cada uno, decide si la ausencia es *correcta* (no hay nada que validar que el tipo o el dominio no cubran ya) o si es un *hueco*. Justifica con el código.
+
+**(c)** Explica en dos frases cómo un pipeline de MediatR habría cambiado la respuesta a (b), y por qué eso no significa automáticamente que renunciar a MediatR fuese un error.
+
+**Verificación:** tu lista de (a) debe tener exactamente seis nombres, y al menos uno de los seis tiene que quedar clasificado como "correcto".
+
+</Callout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p><strong>(a)</strong> Los seis comandos sin <code>*Validator.cs</code> en su carpeta:</p>
+    <ol class="ddd-steps">
+        <li><code>Triggers/Commands/AddConfiguration/AddConfigurationCommand</code></li>
+        <li><code>Triggers/Commands/ChangeConfigurationTemplate/ChangeConfigurationTemplateCommand</code></li>
+        <li><code>Triggers/Commands/DisableConfiguration/DisableConfigurationCommand</code></li>
+        <li><code>Triggers/Commands/EnableConfiguration/EnableConfigurationCommand</code></li>
+        <li><code>Triggers/Commands/SetTriggerStatus/SetTriggerStatusCommand</code></li>
+        <li><code>Templates/Commands/SetTemplateStatus/SetTemplateStatusCommand</code></li>
+    </ol>
+    <p>
+        (Los ocho que sí lo tienen: <code>CreateTrigger</code>, <code>UpdateTriggerDescription</code>,
+        <code>CreateTemplate</code>, <code>PublishTemplateVersion</code>, <code>CreateRecipient</code>,
+        <code>UpdateRecipient</code>, <code>RecordNotificationSuccess</code> y
+        <code>RecordNotificationFailure</code>.)
+    </p>
+    <p><strong>(b)</strong> Clasificación:</p>
+    <ul>
+        <li>
+            <strong>Correctas — 4 de 6.</strong> <code>SetTriggerStatus</code> y
+            <code>SetTemplateStatus</code> llevan un <code>Guid</code> y un <code>bool</code>: no existe
+            valor mal formado que un validador pueda rechazar. <code>DisableConfiguration</code> y
+            <code>EnableConfiguration</code> llevan dos <code>Guid</code>, y la única comprobación real —que
+            la configuración pertenezca a ese trigger— la hace el agregado en
+            <code>NotificationTrigger.RequireConfiguration</code>
+            (<code>NotificationTrigger.cs:119-121</code>), que es donde debe estar: es una invariante, no un
+            formato.
+        </li>
+        <li>
+            <strong>Discutible — <code>AddConfiguration</code>.</strong> No hay validador, pero el handler
+            lanza <code>AppValidationException</code> a mano en
+            <code>AddConfigurationHandler.cs:28-34</code> y el canal lo comprueba
+            <code>NotificationConfiguration.Create</code> con <code>Enum.IsDefined</code>
+            (<code>NotificationConfiguration.cs:21</code>). Está cubierto, pero la validación acaba repartida
+            en tres sitios en vez de uno.
+        </li>
+        <li>
+            <strong>Hueco real — <code>ChangeConfigurationTemplate</code>.</strong> El comando lleva tres
+            <code>Guid</code> y ninguno se comprueba contra <code>Guid.Empty</code> antes de tocar la base de
+            datos. Con un <code>templateId</code> vacío, el handler consulta el repositorio y acaba en un
+            <code>NotFoundException</code> → <strong>404</strong>, cuando lo correcto sería un
+            <strong>400</strong>: el cliente mandó una petición mal formada, no pidió algo que no existe.
+            Compáralo con <code>RecordNotificationSuccessValidator.cs:10-17</code>, que sí hace
+            <code>RuleFor(x =&gt; x.TemplateId).NotEmpty()</code> para exactamente el mismo tipo de campo.
+            Un <code>ChangeConfigurationTemplateValidator</code> de cuatro líneas cerraría el hueco.
+        </li>
+    </ul>
+    <p>
+        <strong>(c)</strong> Un <code>ValidationBehavior</code> en el pipeline de MediatR ejecutaría el
+        validador de cada comando <em>automáticamente</em> si existe, así que el problema pasaría de "el
+        handler olvidó llamar a <code>ValidateAndThrowAppAsync</code>" a "no se escribió el validador" — más
+        difícil de olvidar, porque la ausencia sería visible como una carpeta sin fichero en vez de como una
+        línea que falta dentro de un método.
+    </p>
+    <p>
+        Pero eso no convierte la decisión en un error: MediatR resuelve <em>este</em> problema a cambio de
+        que toda invocación pase por un despachador por reflexión, que es justo lo que permitiría el paso 4
+        del recorrido de arriba —<code>NotificationDispatchService</code> llamando a un handler concreto con
+        comprobación de tipos en compilación—. La disciplina que hoy falta se puede recuperar con algo más
+        barato que una librería: una regla de revisión, o un test que recorra el ensamblado y exija un
+        validador por cada comando con campos no triviales. Eso, además, sería un buen ejercicio para
+        <a href="/arquitectura/estructura">los tests de arquitectura que este repositorio no tiene</a>.
+    </p>
+</details>

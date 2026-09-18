@@ -1,0 +1,164 @@
+---
+title: "Los conceptos, y el sistema donde comprobarlos"
+description: "Esta guía tiene dos mitades que se necesitan. La primera enseña arquitectura de software —qué decisiones son arquitectura, cómo se eligen, qué duele al distribuir, cómo se evita que todo se degrade con el tiempo— y la segunda recorre las capas de este proyecto con archivos reales: `Domain`, `Application`, `Infrastructure` y la pareja `API`/`Web`. Ningún concepto se explica con la tienda online imaginaria de siempre: se explica señalando un archivo de este repositorio que puedes abrir y comprobar."
+sidebar:
+  order: 0
+  label: "Introducción"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+Esta guía tiene dos mitades que se necesitan. La primera enseña arquitectura de software —qué decisiones son arquitectura, cómo se eligen, qué duele al distribuir, cómo se evita que todo se degrade con el tiempo— y la segunda recorre las capas de este proyecto con archivos reales: `Domain`, `Application`, `Infrastructure` y la pareja `API`/`Web`. Ningún concepto se explica con la tienda online imaginaria de siempre: se explica señalando un archivo de este repositorio que puedes abrir y comprobar.
+
+Y donde este sistema no hace lo que el concepto recomienda —no hay ADRs, no hay outbox, no hay autenticación, no hay tests de arquitectura— la guía lo dice de frente y explica qué costaría arreglarlo. Un sistema real nunca se parece a la foto del libro; aprender a leer esa diferencia es buena parte del trabajo.
+
+Hay una pregunta que atraviesa las once páginas y que conviene repetir en cada decisión que discutas con tu equipo: **"¿qué atributo de calidad estamos comprando, y cuál estamos pagando?"**. No existen arquitecturas buenas; existen compromisos adecuados a un contexto. Si una propuesta solo enumera ventajas, el análisis todavía no está terminado.
+
+## Bloque A · Los conceptos (sesiones 1 a 5)
+
+Cinco módulos pensados como cinco sesiones de unos 90 minutos: concepto, aplicación inmediata a este sistema y discusión del trade-off. Cada uno termina con ejercicios que producen algo commiteable.
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/arquitectura/fundamentos">
+        <span class="ddd-card-num">01</span>
+        <h3>Fundamentos</h3>
+        <p>Qué es arquitectura (lo caro de revertir), atributos de calidad con número, trade-offs, ADRs y
+        el modelo C4 — con el diagrama de contenedores real de este sistema.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/estructura">
+        <span class="ddd-card-num">02</span>
+        <h3>Estructura</h3>
+        <p>Acoplamiento y cohesión medidos con un número, la regla de dependencia, capas frente a
+        hexagonal, monolito modular y los tests de arquitectura que aquí faltan.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/estilos">
+        <span class="ddd-card-num">03</span>
+        <h3>Estilos</h3>
+        <p>Monolito, microservicios y eventos — coreografía frente a orquestación, y por qué este sistema
+        usa las dos en tramos distintos.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/distribuido">
+        <span class="ddd-card-num">04</span>
+        <h3>Distribuido</h3>
+        <p>Falacias de la red, CAP y consistencia eventual, outbox e idempotencia, contratos, resiliencia
+        y observabilidad. La sesión donde más huecos reales aparecen.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/evolucion">
+        <span class="ddd-card-num">05</span>
+        <h3>Evolución</h3>
+        <p>Fitness functions, ley de Conway, deuda técnica, modernización de legacy, seguridad y coste
+        como atributos, y el catálogo de antipatrones con veredicto.</p>
+    </a>
+</div>
+
+## Bloque B · Este sistema, capa por capa
+
+La regla que sostiene todo el proyecto es una sola: **las dependencias apuntan hacia adentro**. `Domain` no conoce a nadie. `Application` solo conoce a `Domain`. `Infrastructure` conoce a los dos anteriores e implementa sus interfaces. `API` y `Web` son los bordes que hablan con el mundo exterior — HTTP, un navegador — y traducen hacia y desde ese núcleo. Es la misma regla que ya viste aplicada al modelo de dominio en [el módulo 11 del tutorial de DDD](/ddd/arquitectura); aquí la recorremos capa por capa, con más detalle de infraestructura real: Entity Framework, RabbitMQ, Aspire.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 260" role="img" aria-labelledby="arqMapTitle">
+        <title id="arqMapTitle">Cuatro capas y sus dependencias hacia adentro</title>
+        <defs>
+            <marker id="arqMapArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#4f46e5" />
+            </marker>
+        </defs>
+
+        <rect x="640" y="20" width="160" height="220" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="720" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">API / Web</text>
+        <text x="720" y="58" text-anchor="middle" font-size="8.5" fill="#9a3412">Minimal API · Blazor</text>
+
+        <rect x="460" y="20" width="160" height="220" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="540" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">Infrastructure</text>
+        <text x="540" y="58" text-anchor="middle" font-size="8.5" fill="#475569">EF Core · RabbitMQ · Wolverine</text>
+
+        <rect x="280" y="20" width="160" height="220" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="360" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">Application</text>
+        <text x="360" y="58" text-anchor="middle" font-size="8.5" fill="#14532d">Commands · Queries · Puertos</text>
+
+        <rect x="100" y="20" width="160" height="220" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="180" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Domain</text>
+        <text x="180" y="58" text-anchor="middle" font-size="8.5" fill="#4338ca">0 PackageReference</text>
+
+        <line x1="640" y1="130" x2="620" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+        <line x1="460" y1="130" x2="440" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+        <line x1="280" y1="130" x2="260" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+
+        <text x="530" y="110" text-anchor="middle" font-size="8" fill="#94a3b8">implementa puertos de</text>
+        <text x="350" y="110" text-anchor="middle" font-size="8" fill="#94a3b8">orquesta contra</text>
+        <text x="720" y="180" text-anchor="middle" font-size="8" fill="#9a3412">llama comandos/queries de</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Las flechas son la única dirección de dependencia de compilación permitida. Nadie a la izquierda
+        conoce a nadie a la derecha.
+    </p>
+</div>
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/arquitectura/dominio">
+        <span class="ddd-card-num">06</span>
+        <h3>Dominio</h3>
+        <p>Los cuatro agregados — <code>NotificationTrigger</code>, <code>NotificationTemplate</code>,
+        <code>Recipient</code>, <code>Notification</code> — y por qué su <code>.csproj</code> no tiene ni un
+        <code>PackageReference</code>.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/aplicacion">
+        <span class="ddd-card-num">07</span>
+        <h3>Aplicación</h3>
+        <p>Comandos y queries organizados por feature, los puertos que define y cuál de esas piezas ya
+        está enchufada de punta a punta y cuál todavía espera un productor real.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/infraestructura">
+        <span class="ddd-card-num">08</span>
+        <h3>Infraestructura</h3>
+        <p>EF Core como implementación de los repositorios, y Wolverine + RabbitMQ como implementación
+        actual de la mensajería — con Protobuf de por medio.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/presentacion">
+        <span class="ddd-card-num">09</span>
+        <h3>API + Web</h3>
+        <p>Minimal API con <code>ProblemDetails</code>, y un Blazor Server aparte que le habla por HTTP
+        con descubrimiento de servicios de Aspire — no un monolito de una sola app.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/decisiones">
+        <span class="ddd-card-num">10</span>
+        <h3>Decisiones</h3>
+        <p>Siete decisiones de arquitectura reales, verificadas archivo por archivo — con las piezas que
+        todavía están a medio camino marcadas sin adornos.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/ejercicios">
+        <span class="ddd-card-num">11</span>
+        <h3>Ejercicios</h3>
+        <p>Siete ejercicios sobre este repositorio, uno o dos por sesión, cada uno con un entregable
+        concreto: un ADR, un diagrama, un test que se pone rojo cuando debe.</p>
+    </a>
+</div>
+
+## Si vas a impartir esto
+
+Tres errores hunden cualquier formación de arquitectura, y los tres son fáciles de cometer:
+
+<ol class="ddd-steps">
+    <li>
+        <strong>Enseñar un catálogo de estilos.</strong> El equipo memoriza "microservicios frente a
+        monolito" y sale creyendo que arquitectura es elegir una caja. Arquitectura es elegir qué se
+        sacrifica.
+    </li>
+    <li>
+        <strong>Presentarla como algo del arquitecto.</strong> Si el mensaje es "esto lo decide otro", nadie
+        aplica nada. El mensaje correcto es que todos toman decisiones arquitectónicas cada semana; la
+        diferencia está en si son conscientes y quedan registradas.
+    </li>
+    <li>
+        <strong>Omitir el coste.</strong> Cada patrón de esta guía tiene un precio en complejidad operativa.
+        Preséntalo siempre junto al beneficio, o acabarás con un equipo con síndrome de arquitectura de CV.
+    </li>
+</ol>
+
+El formato que funciona en cada bloque es el mismo: **concepto (10 min) → aplicarlo a nuestro sistema (10 min) → discusión del trade-off (10 min)**. La segunda parte es la que hace que se recuerde, y es la razón de que esta guía use este repositorio como material de práctica en lugar de un ejemplo inventado.
+
+<Callout kind="honesto" title="Cómo se relaciona con el tutorial de DDD">
+
+El [tutorial de DDD](/ddd) cubre el modelado táctico —agregados, value objects, invariantes— y tiene su propio módulo de arquitectura centrado en Clean Architecture y CQRS. Esta guía trabaja el nivel de encima: qué decisiones son arquitectura, cómo se eligen entre alternativas, qué pasa cuando el sistema se distribuye y cómo se evita que se degrade. Se solapan poco y a propósito; donde lo hacen, cada página enlaza a la otra en vez de repetirla.
+
+</Callout>

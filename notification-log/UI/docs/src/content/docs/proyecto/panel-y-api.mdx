@@ -1,0 +1,37 @@
+---
+title: "Panel y API: cómo se administra todo esto"
+description: "Un tour por las pantallas del panel, y la API HTTP que las sostiene."
+sidebar:
+  order: 4
+  label: "4 · Panel y API: cómo se administra todo esto"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+## El panel: cinco pantallas, un patrón repetido
+
+`NotificationLog.Web` es el panel de administración. Su navegación tiene cinco destinos, y los cuatro de recursos siguen el mismo patrón: una lista con búsqueda, filtro y paginación, y una vista de detalle donde se edita.
+
+- **Panel (`/`):** resumen con el conteo de triggers, plantillas, destinatarios y notificaciones enviadas, más las seis notificaciones más recientes — la primera pantalla que ve un administrador al entrar.
+- **Triggers (`/triggers`):** lista con búsqueda por event key/descripción y filtro por estado; cada fila muestra cuántas configuraciones activas tiene. El detalle (`/triggers/{id}`) permite habilitar/deshabilitar el trigger completo, cambiar su descripción, y agregar, habilitar, deshabilitar o recablear a otra plantilla cada configuración de canal.
+- **Plantillas (`/templates`):** lista por canal y estado. Crear una plantilla nueva (`/templates/new`) pide nombre, canal y el contenido de la primera versión — el formulario oculta el campo de asunto automáticamente para SMS/WhatsApp, reflejando la misma regla que ya protege el dominio. El detalle permite publicar una nueva versión (retira la anterior) y ver el historial completo de versiones.
+- **Destinatarios (`/recipients`):** de solo consulta en la práctica — se alimentan solos por el flujo de sincronización (ver [página 2](/proyecto/flujo-recipients)). El detalle muestra sus datos de contacto, atributos libres y si puede recibir por cada canal.
+- **Notificaciones (`/notifications`):** el log de auditoría — filtrable por canal y estado, con el motivo exacto de cada fallo visible en la fila.
+
+<Callout kind="concepto" title="Un solo endpoint de desarrollo, marcado como tal">
+
+El único punto de entrada que crea un `Recipient` a mano (`POST /api/dev/recipients`) solo se registra cuando `ApiService` corre en modo desarrollo (`if (app.Environment.IsDevelopment())` en `Program.cs`) — no existe en producción, precisamente porque en producción esa entidad se alimenta por mensajería, no a mano.
+
+</Callout>
+
+## La API: los mismos cuatro recursos, expuestos por HTTP
+
+Cada pantalla del panel tiene su contraparte exacta en la API bajo `/api/<recurso>`: `/api/triggers`, `/api/templates`, `/api/recipients`, `/api/notifications`. Todas las operaciones de escritura devuelven el código HTTP que corresponde a lo que pasó — `201` al crear, `204` al modificar sin cuerpo de respuesta, `404` si el recurso no existe, `422` si se viola una regla de negocio (dos configuraciones activas del mismo canal, por ejemplo), `400` con el detalle por campo si la validación de forma falla.
+
+En desarrollo, `ApiService` expone su documentación OpenAPI en `/openapi` y una UI interactiva con **Scalar** para probar cada endpoint sin salir del navegador — útil para explorar la API sin necesidad de tener el panel de Blazor corriendo.
+
+<Callout kind="honesto" title="Nada se elimina, todo se deshabilita">
+
+Ni el panel ni la API exponen un solo `DELETE` para triggers, plantillas o destinatarios — coherente con que `Notification` guarda referencias por id a configuraciones y plantillas concretas: borrar de verdad rompería ese historial. La única forma de "retirar" algo es deshabilitarlo, lo que además es exactamente lo que ya protege el propio dominio (ver [página de Dominio](/arquitectura/dominio)).
+
+</Callout>

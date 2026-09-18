@@ -1,0 +1,195 @@
+---
+title: "Domain-Driven Design, explicado con el código que ya tienes"
+description: "Se puede aprender DDD con el ejemplo del carrito de compras, o se puede aprender abriendo `NotificationLog.NotificationService.Domain` y viendo por qué una clase se llama `EventKey` y no `string key`, o por qué `NotificationTrigger` rechaza una configuración duplicada antes de que llegue a la base de datos. Este tutorial elige la segunda opción: cada concepto se enseña señalando un archivo real de este repositorio, con su ruta completa, para que puedas abrirlo y comprobar por ti mismo que la explicación es cierta."
+sidebar:
+  order: 0
+  label: "Introducción"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+Se puede aprender DDD con el ejemplo del carrito de compras, o se puede aprender abriendo `NotificationLog.NotificationService.Domain` y viendo por qué una clase se llama `EventKey` y no `string key`, o por qué `NotificationTrigger` rechaza una configuración duplicada antes de que llegue a la base de datos. Este tutorial elige la segunda opción: cada concepto se enseña señalando un archivo real de este repositorio, con su ruta completa, para que puedas abrirlo y comprobar por ti mismo que la explicación es cierta.
+
+Cuando el código todavía no cubre un patrón — por ejemplo, el mecanismo de eventos de dominio existe pero nadie lo usa todavía — este tutorial te lo dice de frente, en vez de inventar un ejemplo que no existe. Esa honestidad es, en sí misma, parte de la lección: un sistema real con DDD bien aplicado no se ve como la foto perfecta de un libro, se ve como este repositorio, con partes maduras y partes en construcción.
+
+NotificationLog es un servicio que escucha hechos de negocio publicados por otros sistemas — por ejemplo, "un usuario verificó su email" — y decide, según una configuración declarativa propia, si eso dispara una notificación, con qué texto y por qué canal. Esa separación — *quien produce el hecho no sabe nada de plantillas ni de canales; quien notifica no sabe nada del negocio que originó el hecho* — es el hilo que conecta las cuatro secciones de este tutorial: primero el vocabulario y las fronteras del negocio, después cómo se protege ese negocio dentro del código, y por último la arquitectura y los ejercicios para practicar sobre el propio repositorio.
+
+## Cómo está organizado
+
+El temario avanza de lo estratégico (decisiones sobre el negocio, antes de escribir una sola clase) a lo táctico (cómo se modela dentro de una frontera ya decidida) y termina en la arquitectura que sostiene todo eso en producción. La última sección no enseña un concepto nuevo: es una lista de tareas reales para modificar este mismo código y comprobar, con las manos, que entendiste el resto.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 300" role="img" aria-labelledby="mapTitle">
+        <title id="mapTitle">Mapa del tutorial: de lo estratégico a lo táctico, la arquitectura y la práctica</title>
+        <defs>
+            <marker id="mapArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="20" width="240" height="260" rx="12" fill="#eef2ff" stroke="#dbe2ff" />
+        <text x="140" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">1 · ESTRATÉGICO</text>
+        <text x="140" y="66" text-anchor="middle" font-size="10" fill="#4338ca">¿de qué habla el negocio?</text>
+
+        <rect x="40" y="82" width="200" height="42" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="140" y="99" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">1 · Lenguaje ubicuo</text>
+        <text x="140" y="114" text-anchor="middle" font-size="9" fill="#64748b">un vocabulario, sin traducción</text>
+
+        <rect x="40" y="134" width="200" height="42" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="140" y="151" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">2 · Subdominios</text>
+        <text x="140" y="166" text-anchor="middle" font-size="9" fill="#64748b">core, soporte, genérico</text>
+
+        <rect x="40" y="186" width="200" height="42" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="140" y="203" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">3-4 · Bounded Context</text>
+        <text x="140" y="218" text-anchor="middle" font-size="9" fill="#64748b">+ Context Map / ACL</text>
+
+        <rect x="300" y="20" width="240" height="260" rx="12" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="420" y="48" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">2 · TÁCTICO</text>
+        <text x="420" y="66" text-anchor="middle" font-size="10" fill="#14532d">¿cómo se modela el dominio?</text>
+
+        <rect x="320" y="82" width="200" height="34" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="420" y="103" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">5 · Value Objects</text>
+
+        <rect x="320" y="122" width="200" height="34" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="420" y="143" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">6 · Entidades</text>
+
+        <rect x="320" y="162" width="200" height="34" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="420" y="183" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">7 · Agregados</text>
+
+        <rect x="320" y="202" width="200" height="34" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="420" y="223" text-anchor="middle" font-size="11" fill="#1e293b" font-weight="600">8-10 · Domain Services, Repos, Events</text>
+
+        <rect x="580" y="20" width="260" height="152" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="710" y="44" text-anchor="middle" font-size="12" font-weight="700" fill="#9a3412">3 · ARQUITECTURA</text>
+        <text x="710" y="60" text-anchor="middle" font-size="10" fill="#9a3412">¿cómo se sostiene todo?</text>
+        <rect x="600" y="72" width="220" height="38" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="710" y="87" text-anchor="middle" font-size="10.5" fill="#1e293b" font-weight="600">11 · Clean Architecture + CQRS</text>
+        <text x="710" y="101" text-anchor="middle" font-size="9" fill="#64748b">Domain ← App ← Infra ← API</text>
+        <rect x="600" y="116" width="220" height="42" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="710" y="131" text-anchor="middle" font-size="10.5" fill="#1e293b" font-weight="600">12-13 · Persistencia y pruebas</text>
+        <text x="710" y="145" text-anchor="middle" font-size="9" fill="#64748b">que el modelo sobreviva al mundo real</text>
+
+        <rect x="580" y="182" width="260" height="98" rx="12" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="710" y="206" text-anchor="middle" font-size="12" font-weight="700" fill="#9d174d">4 · PRÁCTICA</text>
+        <text x="710" y="222" text-anchor="middle" font-size="10" fill="#9d174d">¿puedes hacerlo tú?</text>
+        <rect x="600" y="232" width="220" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
+        <text x="710" y="247" text-anchor="middle" font-size="10.5" fill="#1e293b" font-weight="600">14 · Tareas guiadas</text>
+        <text x="710" y="261" text-anchor="middle" font-size="9" fill="#64748b">ejercicios sobre este repositorio</text>
+
+        <line x1="262" y1="150" x2="298" y2="150" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
+        <line x1="542" y1="150" x2="578" y2="150" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
+        <line x1="710" y1="172" x2="710" y2="178" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#mapArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        El temario sigue este orden: vocabulario y fronteras del negocio, modelado táctico dentro de esas
+        fronteras, la arquitectura que protege el modelo, y finalmente ejercicios prácticos.
+    </p>
+</div>
+
+## Temario completo
+
+Catorce módulos, cada uno con un objetivo de aprendizaje concreto y al menos un archivo real que lo demuestra. Puedes seguirlo en orden con los botones "Siguiente" al final de cada página, o saltar directo al tema que te interese desde la barra de arriba.
+
+| # | Módulo | Vas a aprender a... | Archivo ancla |
+| --- | --- | --- | --- |
+| 1 | [Lenguaje ubicuo](/ddd/lenguaje-ubicuo) | Reconocer cuándo el código habla como el negocio, y cuándo traduce en secreto. | `Domain/Triggers/EventKey.cs` |
+| 2 | [Subdominios y Core Domain](/ddd/subdominios) | Decidir dónde vale la pena invertir en modelado táctico completo y dónde no. | El propio dominio de `Notifications` |
+| 3 | [Bounded Context](/ddd/bounded-context) | Diseñar un modelo delgado que sirva a un solo propósito, en vez de a todos a la vez. | `Domain/Recipients/Recipient.cs` |
+| 4 | [Context Map e integración](/ddd/context-map) | Identificar un Anti-Corruption Layer real y por qué existe. | `UserContactUpdatedHandler.cs` |
+| 5 | [Value Objects](/ddd/value-objects) | Convertir un string suelto en un tipo que no puede existir con un valor inválido. | `Domain/Templates/TemplateName.cs` |
+| 6 | [Entidades](/ddd/entidades) | Distinguir igualdad por identidad de igualdad por valores, en código real. | `Domain/Common/Entity.cs` |
+| 7 | [Agregados](/ddd/agregados) | Aplicar las cuatro reglas de Vernon a un agregado que protege una invariante real. | `Domain/Triggers/NotificationTrigger.cs` |
+| 8 | [Domain Services](/ddd/domain-services) | Notar la diferencia entre un servicio de dominio y uno de aplicación — y por qué este proyecto no tiene ninguno del primer tipo. | `Application/.../NotificationDispatchService.cs` |
+| 9 | [Repositorios y Factories](/ddd/repositorios-y-factories) | Escribir interfaces con nombre de negocio y esconder el ORM detrás de ellas. | `Domain/Triggers/INotificationTriggerRepository.cs` |
+| 10 | [Domain Events](/ddd/domain-events) | Diferenciar un evento de dominio (interno) de un evento de integración (público). | `Domain/Common/AggregateRoot.cs` |
+| 11 | [Arquitectura y CQRS](/ddd/arquitectura) | Verificar la regla de dependencia leyendo un `.csproj`, no un diagrama. | `NotificationService.Domain.csproj` |
+| 12 | [Persistencia y consistencia](/ddd/persistencia) | Mapear un agregado encapsulado a tablas SQL sin abrirle un solo setter — y ver qué invariante se rompe bajo concurrencia. | `Persistence/Configuration/*.cs` |
+| 13 | [Probar el dominio](/ddd/pruebas) | Escribir tests de invariantes sin base de datos, sin framework y sin mocks. | `NotificationLog.Tests/WebTests.cs` |
+| 14 | [Tareas guiadas](/ddd/tareas) | Aplicar todo lo anterior escribiendo código nuevo en este mismo repositorio. | — (es tu turno de escribir el archivo) |
+
+## Recorre la guía
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/ddd/lenguaje-ubicuo">
+        <span class="ddd-card-num">01</span>
+        <h3>Lenguaje ubicuo</h3>
+        <p>Por qué <code>EventKey</code> y los mensajes de <code>DomainException</code> hablan como el negocio.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/subdominios">
+        <span class="ddd-card-num">02</span>
+        <h3>Subdominios</h3>
+        <p>¿Es NotificationLog un dominio core, de soporte o genérico? La respuesta tiene matices.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/bounded-context">
+        <span class="ddd-card-num">03</span>
+        <h3>Bounded Context</h3>
+        <p><code>Recipient</code> no es "el usuario completo": es solo lo que este contexto necesita saber.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/context-map">
+        <span class="ddd-card-num">04</span>
+        <h3>Context Map</h3>
+        <p>El consumer de mensajería como Anti-Corruption Layer real, con Published Language versionado.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/value-objects">
+        <span class="ddd-card-num">05</span>
+        <h3>Value Objects</h3>
+        <p><code>TemplateName</code> y <code>EventKey</code>: validación que no se puede saltar.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/entidades">
+        <span class="ddd-card-num">06</span>
+        <h3>Entidades</h3>
+        <p>Igualdad por identidad, no por valores: <code>Entity.Equals</code> línea por línea.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/agregados">
+        <span class="ddd-card-num">07</span>
+        <h3>Agregados</h3>
+        <p><code>NotificationTrigger</code> protegiendo su propia invariante de canal único.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/domain-services">
+        <span class="ddd-card-num">08</span>
+        <h3>Domain Services</h3>
+        <p>Por qué este dominio todavía no tiene ninguno, y cuándo aparecería uno de verdad.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/repositorios-y-factories">
+        <span class="ddd-card-num">09</span>
+        <h3>Repositorios y Factories</h3>
+        <p>Interfaces con nombre de negocio en el dominio, EF Core escondido en infraestructura.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/domain-events">
+        <span class="ddd-card-num">10</span>
+        <h3>Domain Events</h3>
+        <p>El mecanismo ya existe en <code>AggregateRoot</code>. Todavía nadie lo usa. Aun así importa entenderlo.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/arquitectura">
+        <span class="ddd-card-num">11</span>
+        <h3>Arquitectura y CQRS</h3>
+        <p>Clean Architecture por capas, puertos y adaptadores por dentro, comandos y consultas separados sin MediatR.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/persistencia">
+        <span class="ddd-card-num">12</span>
+        <h3>Persistencia y consistencia</h3>
+        <p>Cómo EF Core entra por la puerta de atrás sin abrir el agregado — y la carrera de concurrencia que hoy nadie frena.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/pruebas">
+        <span class="ddd-card-num">13</span>
+        <h3>Probar el dominio</h3>
+        <p>Un solo test existe hoy, y no verifica ninguna regla de negocio. Aquí está qué probar y por qué.</p>
+    </a>
+    <a class="ddd-card" href="/ddd/tareas">
+        <span class="ddd-card-num">14</span>
+        <h3>Tareas guiadas</h3>
+        <p>Ejercicios reales para escribir en este repositorio: desde un Value Object nuevo hasta un canal de envío completo.</p>
+    </a>
+</div>
+
+<Callout kind="honesto" title="Dos guías hermanas, si buscas otro ángulo">
+
+Este tutorial se enfoca en el modelado táctico y estratégico de DDD. Si quieres el detalle técnico de capas, EF Core y mensajería sin el filtro de DDD, está [la guía de Arquitectura](/arquitectura); si quieres una explicación funcional de qué hace el sistema sin leer una sola línea de código, está [la guía "Cómo funciona"](/proyecto).
+
+</Callout>
+
+<Callout kind="honesto" title="Cómo leer cada página">
+
+Vas a encontrar seis tipos de recuadro, siempre con el mismo significado: **concepto** (la definición general, la que encontrarías en cualquier libro de DDD), **código real** (extraído tal cual de este repositorio, con su ruta exacta), **advertencia** (un matiz o un error común al aplicar el patrón), **antipatrón** (una forma concreta de hacerlo mal), **ejercicio** (algo para pensar antes de seguir) y **honesto** (una nota que marca qué parte del patrón todavía no está implementada en este código, o una decisión de diseño real del equipo). La idea es que nunca tengas que confiar en la palabra de esta guía: cada afirmación se puede verificar abriendo el archivo señalado.
+
+</Callout>

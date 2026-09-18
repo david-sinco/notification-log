@@ -1,0 +1,96 @@
+---
+title: "Decisiones de arquitectura, verificadas archivo por archivo"
+description: "Siete decisiones reales de este proyecto, cada una con el archivo que la prueba — y las piezas que todavía están a medio camino, marcadas sin adornos."
+sidebar:
+  order: 10
+  label: "10 · Decisiones de arquitectura, verificadas archivo por archivo"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+Esta página no resume una conversación de diseño que tuvo el equipo — resume lo que el código dice hoy, con el mismo criterio de honestidad que ya sigue [el tutorial de DDD](/ddd): si algo todavía no está construido, se marca como tal en vez de darlo por hecho.
+
+## 1 · Mensajería: Wolverine + RabbitMQ hoy, con una migración prevista en el propio código
+
+El bus de mensajería real y funcionando en este proyecto es RabbitMQ, orquestado por Wolverine — no un mock, no un simulador. Pero el propio comentario que acompaña su registro en `Infrastructure/DependencyInjection.cs` deja escrita la intención de reemplazarlo:
+
+```csharp title="Infrastructure/DependencyInjection.cs (comentario original)"
+// Ejemplo de mensajería con RabbitMQ (Messaging/RabbitMq): consume UserChange y llama a
+// RecipientSyncService. Cuando se integre Kafka, este llamado se reemplaza por el
+// equivalente en Messaging/Kafka sin tocar Application.
+services.AddRabbitMqMessaging(configuration);
+```
+
+Es un dato interesante precisamente porque no depende de que confíes en esta guía: puedes abrir ese archivo tú mismo y leer la misma frase. Verás el resto de la implementación en la [página de Infraestructura](/arquitectura/infraestructura).
+
+## 2 · Contratos: Protobuf compartido, sin acoplar a un cliente de mensajería
+
+`NotificationLog.Contracts` —el proyecto que define los mensajes que cruzan entre servicios— solo referencia `Google.Protobuf` y `Grpc.Tools` (para compilar el `.proto` en tiempo de build). Nada de `Confluent.Kafka`, nada de un cliente de RabbitMQ: el contrato del mensaje es independiente de por dónde viaja.
+
+```csharp title="Shared/NotificationLog.Contracts.csproj (completo)"
+<ItemGroup>
+  <PackageReference Include="Google.Protobuf" Version="3.36.1" />
+  <PackageReference Include="Grpc.Tools" Version="2.72.0">
+    <PrivateAssets>all</PrivateAssets>
+  </PackageReference>
+</ItemGroup>
+
+<ItemGroup>
+  <Protobuf Include="Users/user_contact_updated.proto" GrpcServices="None" />
+  <Protobuf Include="Notifications/notification_dispatch_requested.proto" GrpcServices="None" />
+</ItemGroup>
+```
+
+Esa independencia es lo que hace posible el punto anterior: cambiar de bus de mensajería no obligaría a tocar un solo `.proto`.
+
+## 3 · El event key nombra un hecho — y ese formato se aplica en tiempo de creación
+
+`EventKey.Create` impone el formato `dominio.accion` con una expresión regular (ver [página de Dominio](/arquitectura/dominio)), así que ningún trigger puede llamarse `email_transaccion_v2` aunque quisiera — el propio value object lo rechaza antes de que exista.
+
+<Callout kind="honesto" title="Lo que no existe todavía: renombrar un event key sin perder el historial">
+
+`NotificationDbContext` tiene cuatro `DbSet`: `Triggers`, `Templates`, `Recipients`, `Notifications`. Nada más. Si un evento cambiara de nombre en el sistema productor, hoy habría que crear un `NotificationTrigger` nuevo a mano — no hay ninguna tabla ni mecanismo de alias que traduzca automáticamente un `EventKey` viejo a uno nuevo en la ingesta. Es una extensión razonable, simplemente todavía no construida.
+
+</Callout>
+
+## 4 · Sin Schema Registry: la compatibilidad depende del NuGet compartido
+
+No hay ningún Schema Registry (Confluent o de otro tipo) desplegado ni referenciado en `AppHost.cs`. La compatibilidad de esquema hoy depende de dos cosas: que productor y consumidor compilen contra el mismo paquete `NotificationLog.Contracts`, y de la disciplina del campo `schema_version` dentro de cada mensaje Protobuf (ver [módulo de Context Map](/ddd/context-map) del tutorial de DDD).
+
+<Callout kind="honesto" title="El campo existe; nada lo valida todavía">
+
+`schema_version` está definido en ambos `.proto`, pero ningún handler de `Infrastructure/Messaging/Consumers` lo lee hoy. Un mensaje con una versión de esquema más nueva de la que este servicio entiende se procesaría igual, sin ningún aviso. Endurecer esa validación es exactamente la [tarea 8 del tutorial de DDD](/ddd/tareas).
+
+</Callout>
+
+## 5 · Modelo de datos: cuatro tablas raíz, jerarquías anidadas en vez de tablas sueltas
+
+`NotificationDbContext` expone exactamente cuatro `DbSet` — `Triggers` (que incluye `NotificationConfiguration` como tabla hija, no como `DbSet` propio), `Templates` (con `TemplateVersion` igual de anidada), `Recipients` y `Notifications`. Ninguna tabla adicional de catálogos, logs o auditoría por separado: el propio `Notification` ya cumple el rol de auditoría de envíos.
+
+## 6 · Event-driven, no event sourced
+
+El sistema se comunica por eventos (mensajes que cruzan la mensajería), pero no es event sourced: guarda estado actual en tablas, no un log de eventos como fuente de verdad. Se confirma en el propio modelo: `Notification` es el registro más cercano a un "evento" que existe, pero es un **resultado** inmutable de un envío (éxito o fallo), no la fuente de la que se reconstruye el estado de un trigger o un destinatario. `NotificationTrigger`, `NotificationTemplate` y `Recipient` guardan su estado actual directamente en sus columnas, mutado por sus propios métodos — el patrón clásico de un dominio persistido por estado, no por eventos.
+
+## 7 · Sin mediador: handlers inyectados directo
+
+Ni un `using MediatR` en todo el repositorio. Cada endpoint recibe su handler como parámetro inyectado (ver [módulo 11 del tutorial de DDD](/ddd/arquitectura) para el razonamiento completo: con quince casos de uso, el beneficio real de un mediador —los *behaviors*— no compensaba el coste de la indirección adicional).
+
+## El estado real del proyecto, en una sola tabla
+
+Juntando las piezas honestas que aparecen a lo largo de esta guía y la de DDD:
+
+| Pieza | Estado | Dónde verificarlo |
+| --- | --- | --- |
+| Remitentes Email / SMS / Push | Construido | `Infrastructure/Notifications/Sending/{Email,Sms,Push}` |
+| Renderizador de plantillas (Scriban) | Construido | `ScribanTemplateRenderer.cs`, registrado como singleton |
+| Remitente de WhatsApp | Stub deliberado (siempre falla) | `NotImplementedWhatsAppNotificationSender.cs` |
+| Consumer de despacho de notificaciones | Construido, sin productor real | cola `notification-dispatch` en `RabbitMqMessagingExtensions.cs` |
+| Validación de `schema_version` | No construida | [tarea 8 del tutorial de DDD](/ddd/tareas) |
+| Eventos de dominio (`Raise`) | Mecanismo listo, sin usar | [módulo 10 del tutorial de DDD](/ddd/domain-events) |
+| Tabla de alias de `EventKey` | No construida | — (cuatro `DbSet` en `NotificationDbContext`, nada más) |
+
+<Callout kind="ejercicio" title="Cómo verificar cualquier afirmación de esta página tú mismo">
+
+Cada fila de esa tabla se puede confirmar o refutar en minutos: abrir el archivo señalado, o buscar el nombre de la clase en todo el repositorio. Ese es el mismo criterio que sigue toda esta guía y la de DDD: nada se afirma sin un archivo real detrás.
+
+</Callout>

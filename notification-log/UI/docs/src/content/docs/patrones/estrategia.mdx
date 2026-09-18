@@ -1,0 +1,335 @@
+---
+title: "Strategy, a medio aplicar"
+description: "Cuatro interfaces con la misma firma y un `switch` para elegir entre ellas. Se paga el coste del patrón sin cobrar el beneficio."
+sidebar:
+  order: 6
+  label: "6 · Strategy, a medio aplicar"
+---
+
+import { Code } from '@astrojs/starlight/components';
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Ficha rápida">
+
+- **Tipo:** GoF de comportamiento.
+- **Origen:** deliberado en la intención, **incompleto en la ejecución**. La abstracción existe cuatro veces en vez de una.
+- **Dónde:** `Application/Notifications/Services/Sending/` (los puertos), `Infrastructure/Notifications/Sending/` (las implementaciones) y `NotificationDispatchService.cs:164-173` (la selección).
+- **Veredicto:** es el punto del repositorio donde un patrón mal aplicado genera más fricción hoy.
+
+</Callout>
+
+## 6.1 · El problema
+
+Una notificación se envía por Email, SMS, Push o WhatsApp. La operación es conceptualmente la misma —"llévale este texto a esta dirección"— pero cada canal habla con un proveedor distinto: SMTP para correo, un gateway REST para SMS, otro REST distinto para push, y WhatsApp todavía sin proveedor elegido.
+
+El servicio de dispatch no debe saber nada de eso. Su trabajo es recorrer las configuraciones activas de un trigger y, para cada una, renderizar y enviar. Si dentro de ese bucle apareciera un `SmtpClient`, la capa de aplicación quedaría atada a una librería de correo y añadir un canal significaría reescribir el flujo de negocio.
+
+## 6.2 · La idea del patrón
+
+Se define **una** abstracción para la operación que varía, y una implementación por cada forma de hacerla. El código que la usa depende solo de la abstracción y recibe la implementación concreta desde fuera; nunca la elige con un condicional sobre un tipo.
+
+La palabra importante es *una*. El valor del patrón no está en tener varias implementaciones —eso se consigue con cualquier interfaz—, sino en que el cliente **no sepa cuántas hay**. Si el cliente tiene que enumerarlas para elegir, el polimorfismo no está haciendo su trabajo y el patrón se ha quedado a mitad.
+
+## 6.3 · Cómo se ve aquí
+
+```csharp title="Application/Notifications/Services/Sending/ — cuatro ficheros, cuatro interfaces"
+// IEmailNotificationSender.cs
+public interface IEmailNotificationSender
+{
+    Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct);
+}
+
+// ISmsNotificationSender.cs
+public interface ISmsNotificationSender
+{
+    Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct);
+}
+
+// IPushNotificationSender.cs
+public interface IPushNotificationSender
+{
+    Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct);
+}
+
+// IWhatsAppNotificationSender.cs
+public interface IWhatsAppNotificationSender
+{
+    Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct);
+}
+```
+
+Cuatro interfaces con **la misma firma exacta**. No hay una interfaz base, ni un tipo común, ni nada que las relacione: para el compilador son cuatro contratos independientes que casualmente se parecen.
+
+Y la consecuencia inmediata está en el cliente:
+
+```csharp title="Application/…/Dispatch/NotificationDispatchService.cs:164-173 (completo)"
+    private Task<NotificationSendResult> SendAsync(
+        NotificationChannel channel, string destination, RenderedMessage message, CancellationToken ct)
+        => channel switch
+        {
+            NotificationChannel.Email => _emailSender.SendAsync(destination, message, ct),
+            NotificationChannel.Sms => _smsSender.SendAsync(destination, message, ct),
+            NotificationChannel.Push => _pushSender.SendAsync(destination, message, ct),
+            NotificationChannel.WhatsApp => _whatsAppSender.SendAsync(destination, message, ct),
+            _ => throw new InvalidOperationException($"El canal '{channel}' no tiene un remitente registrado.")
+        };
+```
+
+Diagnóstico, pieza a pieza:
+
+- **Lo que sí es Strategy:** el algoritmo de envío está encapsulado fuera del servicio, detrás de una interfaz, y la implementación concreta llega por inyección. Cambiar el proveedor de SMS es cambiar una clase de `Infrastructure` y nada más. Eso funciona y es valioso.
+- **Lo que falta:** la *selección*. Un Strategy completo recibe la estrategia ya elegida; aquí el cliente enumera las cuatro y decide con un `switch` sobre un `enum`. Es exactamente el condicional que el patrón existe para eliminar.
+- **La rama `_`:** `throw new InvalidOperationException("...no tiene un remitente registrado.")`. Esa rama es la confesión del problema — existe porque el compilador *no puede* garantizar que todos los canales estén cubiertos.
+
+El coste se ve mejor en el constructor:
+
+```csharp title="NotificationDispatchService.cs:31-46 (constructor)"
+    public NotificationDispatchService(
+        INotificationTriggerRepository triggers,
+        IRecipientRepository recipients,
+        INotificationTemplateRepository templates,
+        ITemplateRenderer renderer,
+        IEmailNotificationSender emailSender,
+        ISmsNotificationSender smsSender,
+        IPushNotificationSender pushSender,
+        IWhatsAppNotificationSender whatsAppSender,
+        RecordNotificationSuccessHandler recordSuccess,
+        RecordNotificationFailureHandler recordFailure,
+        ILogger<NotificationDispatchService> log)
+        => (_triggers, _recipients, _templates, _renderer, _emailSender, _smsSender, _pushSender,
+            _whatsAppSender, _recordSuccess, _recordFailure, _log)
+            = (triggers, recipients, templates, renderer, emailSender, smsSender, pushSender,
+               whatsAppSender, recordSuccess, recordFailure, log);
+```
+
+Once parámetros, de los cuales **cuatro son la misma dependencia repetida**. Y hay una víctima colateral concreta: como el constructor exige las cuatro interfaces, WhatsApp —que no tiene proveedor— necesita una implementación para que el contenedor pueda construir el servicio. De ahí sale esta clase:
+
+```csharp title="Infrastructure/Notifications/Sending/WhatsApp/NotImplementedWhatsAppNotificationSender.cs:6-14 (completo)"
+// Sin proveedor de WhatsApp elegido todavía. Este stub existe únicamente para que
+// NotificationDispatchService pueda registrarse en el contenedor — su constructor pide las cuatro
+// interfaces de envío — y revienta siempre a propósito: un mensaje de WhatsApp que "se envía" en
+// silencio sería peor que uno que queda registrado como notificación fallida con el motivo exacto.
+public sealed class NotImplementedWhatsAppNotificationSender : IWhatsAppNotificationSender
+{
+    public Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct)
+        => throw new NotSupportedException("IWhatsAppNotificationSender todavía no tiene una implementación real.");
+}
+```
+
+El comentario es honesto y la decisión de lanzar —en vez de fingir un envío— es **correcta**: un mensaje que "se envía" en silencio sería peor que uno registrado como fallido con su motivo (y el `catch` de `NotificationDispatchService.cs:150` lo convierte justo en eso). Pero fíjate en la primera frase: *"este stub existe únicamente para que NotificationDispatchService pueda registrarse en el contenedor"*. La clase no existe por una necesidad del dominio, existe **para satisfacer una firma**. Es deuda del diseño, no del negocio.
+
+<Callout kind="antipatron" title="El coste real: añadir un canal hoy son seis ediciones">
+
+Para soportar Telegram habría que tocar:
+
+<ol class="ddd-steps">
+        <li><code>Domain/Shared/NotificationChannel.cs</code> — añadir el valor al <code>enum</code>. <em>Inevitable con cualquier diseño.</em></li>
+        <li><code>Application/…/Sending/ITelegramNotificationSender.cs</code> — una interfaz nueva idéntica a las otras cuatro.</li>
+        <li><code>Infrastructure/…/Telegram/HttpTelegramNotificationSender.cs</code> — la implementación. <em>Inevitable.</em></li>
+        <li><code>Infrastructure/…/Sending/NotificationSendingExtensions.cs</code> — el registro. <em>Inevitable.</em></li>
+        <li><code>NotificationDispatchService.cs</code> — un campo, un parámetro de constructor y una asignación en la tupla.</li>
+        <li><code>NotificationDispatchService.cs</code> — una rama más en el <code>switch</code>.</li>
+    </ol>
+
+Tres de las seis (2, 5 y 6) son puro coste del diseño actual, y dos de ellas están en un fichero de **la capa de aplicación** que no tiene nada que ver con Telegram. El principio abierto/cerrado dice que añadir un comportamiento no debería obligar a modificar el código que lo usa; aquí obliga, dos veces.
+
+</Callout>
+
+## 6.4 · Recorrido de una ejecución
+
+Un evento con una configuración de canal SMS activa.
+
+<ol class="ddd-steps">
+    <li>
+        <strong><code>NotificationDispatchService.cs:69</code></strong> —
+        <code>foreach (var configuration in trigger.ResolveActiveConfigurations())</code>. El agregado
+        devuelve las configuraciones habilitadas (<code>NotificationTrigger.cs:82-85</code>); cada una lleva
+        su <code>Channel</code>.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:88</code></strong> —
+        <code>recipient.CanReceive(configuration.Channel)</code>. Aquí hay un <strong>segundo</strong>
+        <code>switch</code> sobre el mismo <code>enum</code>, escondido en
+        <code>Recipient.AddressFor</code> (<code>Recipient.cs:59-64</code>). Dos sitios distintos que hay que
+        recordar actualizar cuando aparezca un canal nuevo — y este segundo no lanza en el caso por defecto,
+        devuelve <code>null</code>, así que un canal sin dirección simplemente se salta con un aviso.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:104</code></strong> —
+        <code>recipient.AddressFor(configuration.Channel)!</code>. El <code>!</code> se apoya en que
+        <code>CanReceive</code> ya lo comprobó.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:129</code></strong> — se llama a <code>SendAsync</code>
+        con el canal como parámetro. <strong>Este es el momento en que el patrón debería haber terminado ya
+        su trabajo</strong> y en cambio empieza.
+    </li>
+    <li>
+        <strong><code>NotificationDispatchService.cs:169</code></strong> — el <code>switch</code> compara
+        contra <code>NotificationChannel.Sms</code> y devuelve
+        <code>_smsSender.SendAsync(destination, message, ct)</code>. Los otros tres senders estaban
+        inyectados, construidos y sin usar.
+    </li>
+    <li>
+        <strong><code>Infrastructure/…/Sms/HttpSmsNotificationSender.cs:27</code></strong> — ahora sí, el
+        polimorfismo real: el servicio nunca supo que detrás había un <code>HttpClient</code> configurado en
+        <code>NotificationSendingExtensions.cs:27-31</code>.
+    </li>
+    <li>
+        <strong>Vuelta</strong> — el <code>NotificationSendResult</code> sube y se registra
+        (<a href="/patrones/resultado">ficha 4</a>).
+    </li>
+</ol>
+
+Los pasos 4 y 5 son el problema entero: entre la decisión ("canal SMS") y la acción hay un condicional que el sistema de tipos no puede verificar.
+
+## 6.5 · Qué pasaría sin el patrón, y qué pasaría con él completo
+
+### Sin ningún patrón
+
+```csharp title="Hipotético — el proveedor dentro del servicio de aplicación"
+// HIPOTÉTICO — así NO está el código
+private async Task<NotificationSendResult> SendAsync(
+    NotificationChannel channel, string destination, RenderedMessage message, CancellationToken ct)
+{
+    if (channel == NotificationChannel.Email)
+    {
+        using var mail = new MailMessage(_from, destination) { Subject = message.Subject, Body = message.Body };
+        using var client = new SmtpClient(_host, _port);
+        await client.SendMailAsync(mail, ct);
+        return NotificationSendResult.Success(null);
+    }
+
+    if (channel == NotificationChannel.Sms)
+    {
+        var response = await _http.PostAsJsonAsync(_smsPath, new { to = destination, message = message.Body }, ct);
+        // ...
+    }
+    // ...
+}
+```
+
+`Application` pasaría a depender de `System.Net.Mail` y de `HttpClient`, probar el flujo de dispatch exigiría un servidor SMTP, y cambiar de proveedor de SMS sería un cambio en la capa de negocio. **Lo que hay hoy es claramente mejor que esto**: el mérito de las cuatro interfaces es real, y conviene decirlo antes de criticar lo que falta.
+
+### Con el patrón completo
+
+La corrección es pequeña: **una** interfaz, que además declara a qué canal sirve.
+
+```csharp title="Propuesta — una abstracción y una resolución por clave"
+// Application/Notifications/Services/Sending/INotificationSender.cs
+public interface INotificationSender
+{
+    NotificationChannel Channel { get; }
+
+    Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct);
+}
+
+// y en el servicio, sin switch:
+private readonly IReadOnlyDictionary<NotificationChannel, INotificationSender> _senders;
+
+public NotificationDispatchService(/* ... */ IEnumerable<INotificationSender> senders /* ... */)
+    => _senders = senders.ToDictionary(s => s.Channel);
+
+private Task<NotificationSendResult> SendAsync(
+    NotificationChannel channel, string destination, RenderedMessage message, CancellationToken ct)
+    => _senders[channel].SendAsync(destination, message, ct);
+```
+
+Lo que se gana:
+
+- **El constructor baja de once a ocho parámetros**, y añadir un canal ya no lo toca.
+- **El `switch` desaparece**, y con él la rama `_` imposible de verificar. El fallo "no hay sender para este canal" pasa de ser una excepción en mitad de un envío a ser una comprobación que se puede hacer *al arrancar*.
+- **El stub de WhatsApp deja de ser obligatorio.** Puede seguir existiendo —la decisión de lanzar en vez de fingir sigue siendo buena— pero por elección, no porque una firma lo exija.
+- **Añadir un canal son tres ediciones** en vez de seis, y ninguna en `Application`.
+
+**Qué se paga:** la resolución deja de ser estática. Con el `switch`, cualquiera ve de un vistazo qué implementación atiende cada canal; con el diccionario hay que mirar el registro en DI. También hay un riesgo nuevo: dos senders declarando el mismo `Channel`, que el `ToDictionary` convertiría en una excepción de arranque — ruidosa, pero de arranque, que es justo cuando quieres enterarte.
+
+## 6.6 · Otras apariciones del mismo `switch` en el repositorio
+
+| Sitio | ¿Es el mismo problema? |
+| --- | --- |
+| `Domain/Recipients/Recipient.cs:59-64` — `AddressFor` | **No, y está bien así.** Es un mapeo de canal a dato, no una selección de comportamiento: no hay nada polimórfico que extraer. Convertirlo en cuatro clases sería sobreingeniería. Eso sí, es el *segundo* sitio que hay que tocar al añadir un canal. |
+| `Domain/Templates/TemplateVersion.cs:35` — `requiresSubject` | **No.** Un `is Email or Push` de una línea que expresa una regla de negocio ("solo estos canales tienen asunto"). Una jerarquía de clases por canal aquí oscurecería una regla que hoy se lee de un vistazo. |
+| `ApiService/Exceptions/GlobalExceptionHandler.cs:18-37` | **Es discutible, y hoy no duele.** Un `switch` sobre tipos de excepción es el olor clásico que pide polimorfismo, pero aquí concentra *a propósito* todo el contrato de errores de la API en un sitio legible. Crece muy despacio (tres tipos en toda la vida del proyecto) y el traductor no debe vivir en las excepciones, que están en capas que no conocen HTTP. |
+| `Web/Components/Ddd/DddCallout.razor:11-20` | **No.** Un `switch` de presentación que asocia un icono a un tipo de recuadro. Ni negocio ni comportamiento. |
+
+<Callout kind="concepto" title="La regla para distinguirlos">
+
+Un `switch` pide Strategy cuando **cada rama hace algo distinto** —invoca otro colaborador, ejecuta otro algoritmo— y cuando la lista de ramas va a crecer. Un `switch` que solo *elige un dato* y vive dentro del tipo dueño de ese dato no pide nada: convertirlo en clases añade ficheros y no elimina el acoplamiento al `enum`.
+
+</Callout>
+
+## 6.7 · Señales de alarma
+
+- **Varias interfaces con la misma firma.** Es la señal que define este caso. Si cuatro contratos son idénticos salvo por el nombre, el tipo común que falta es la abstracción del patrón.
+- **Una rama `default` que lanza.** Casi siempre significa que el compilador no puede comprobar algo que el diseño da por cierto.
+- **Dependencias inyectadas y no usadas en la mayoría de las ejecuciones.** En cada envío se construyen cuatro senders —dos de ellos con su `HttpClient`— y se usa uno.
+- **Una implementación que existe solo para que el contenedor arranque.** `NotImplementedWhatsAppNotificationSender` es el ejemplo, y el comentario lo admite.
+- **El mismo `enum` repartido en varios `switch`.** Hoy son dos (`SendAsync` y `AddressFor`); en cuanto sean cuatro, olvidar uno al añadir un canal deja de ser una posibilidad y pasa a ser una certeza.
+- **Un Strategy que se degrada al revés.** Ojo también con la dirección contraria: si alguien "arregla" esto metiendo `if` por canal *dentro* de un sender único, se habrá cambiado un problema visible por uno escondido.
+
+<Callout kind="ejercicio" title="Ejercicio">
+
+Hay que soportar un canal nuevo: **Telegram**, contra un gateway REST igual que el de SMS.
+
+**(a)** Lista todos los ficheros que habría que crear o modificar *con el diseño actual*, en orden, indicando qué cambia en cada uno. Marca cuáles serían inevitables con cualquier diseño.
+
+**(b)** Escribe la interfaz única que sustituiría a las cuatro y el registro en DI que la resuelve por canal.
+
+**(c)** Con esa interfaz, repite la lista de (a). ¿Cuántos ficheros de `Application` quedan?
+
+**(d)** Hay un fichero que sigue habiendo que tocar en los dos diseños y que no está en `Sending/`. Encuéntralo y explica por qué ningún patrón lo evita.
+
+**Verificación:** la respuesta de (c) debe ser cero, y la de (d) debe estar en `Domain/Recipients/`.
+
+</Callout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p><strong>(a)</strong> Con el diseño actual, seis ediciones en cinco ficheros:</p>
+    <ol class="ddd-steps">
+        <li><code>Domain/Shared/NotificationChannel.cs</code> — <code>Telegram = 5</code>. <strong>Inevitable.</strong></li>
+        <li><code>Application/…/Sending/ITelegramNotificationSender.cs</code> — interfaz nueva, copia exacta de las otras cuatro. <strong>Evitable.</strong></li>
+        <li><code>Infrastructure/…/Sending/Telegram/HttpTelegramNotificationSender.cs</code> + <code>TelegramNotificationOptions.cs</code>. <strong>Inevitable.</strong></li>
+        <li><code>Infrastructure/…/Sending/NotificationSendingExtensions.cs</code> — <code>Configure&lt;&gt;</code> + <code>AddHttpClient&lt;&gt;</code>. <strong>Inevitable.</strong></li>
+        <li><code>NotificationDispatchService.cs</code> — campo <code>_telegramSender</code>, parámetro de constructor y entrada en la asignación de tuplas de las líneas 43-46. <strong>Evitable.</strong></li>
+        <li><code>NotificationDispatchService.cs</code> — rama <code>NotificationChannel.Telegram =&gt; _telegramSender.SendAsync(...)</code>. <strong>Evitable.</strong></li>
+    </ol>
+    <p><strong>(b)</strong> Una interfaz que declara su canal, y una resolución por diccionario:</p>
+    <Code code={"// 1) Application/Notifications/Services/Sending/INotificationSender.cs\npublic interface INotificationSender\n{\n    NotificationChannel Channel { get; }\n    Task<NotificationSendResult> SendAsync(string destination, RenderedMessage message, CancellationToken ct);\n}\n\n// 2) cada sender declara su canal\npublic sealed class HttpSmsNotificationSender : INotificationSender\n{\n    public NotificationChannel Channel => NotificationChannel.Sms;\n    // ... resto igual\n}\n\n// 3) Infrastructure/Notifications/Sending/NotificationSendingExtensions.cs\nservices.Configure<SmsNotificationOptions>(configuration.GetSection(SmsNotificationOptions.SectionName));\nservices.AddHttpClient<HttpSmsNotificationSender>((sp, client) =>\n{\n    var options = sp.GetRequiredService<IOptions<SmsNotificationOptions>>().Value;\n    client.BaseAddress = new Uri(options.BaseUrl);\n});\nservices.AddScoped<INotificationSender>(sp => sp.GetRequiredService<HttpSmsNotificationSender>());\n\n// ... lo mismo para Email, Push, Telegram. WhatsApp: registrarlo o no, ya es una elecci\u00f3n libre."} lang="csharp" title="Propuesta completa" />
+    <p>
+        Nota sobre el registro: <code>AddHttpClient&lt;INotificationSender, HttpSmsNotificationSender&gt;</code>
+        no sirve, porque registraría la interfaz con una sola implementación. Hay que registrar el tipo
+        concreto y añadirlo a la colección con <code>AddScoped&lt;INotificationSender&gt;(sp =&gt; ...)</code>,
+        como muestra el ejemplo — el mismo truco de lambda que ya usa
+        <code>Infrastructure/DependencyInjection.cs:36</code> para <code>IUnitOfWork</code>.
+    </p>
+    <p><strong>(c)</strong> Con la interfaz única, tres ediciones:</p>
+    <ol class="ddd-steps">
+        <li><code>Domain/Shared/NotificationChannel.cs</code> — el valor del <code>enum</code>.</li>
+        <li><code>Infrastructure/…/Sending/Telegram/</code> — la implementación y sus opciones.</li>
+        <li><code>Infrastructure/…/Sending/NotificationSendingExtensions.cs</code> — el registro.</li>
+    </ol>
+    <p>
+        <strong>Ficheros de <code>Application</code> tocados: cero.</strong> Eso es literalmente el
+        principio abierto/cerrado: la capa que <em>usa</em> el comportamiento no cambia cuando aparece un
+        comportamiento nuevo. Y como beneficio secundario, la rama <code>_</code> del <code>switch</code>
+        —un fallo que hoy solo se descubre enviando— se convierte en un
+        <code>KeyNotFoundException</code> que se puede adelantar al arranque con una comprobación de que
+        todos los valores del <code>enum</code> tienen sender.
+    </p>
+    <p>
+        <strong>(d)</strong> Es <code>Domain/Recipients/Recipient.cs</code>, y son dos sitios en la misma
+        clase: <code>AddressFor</code> (líneas 59-64) necesita una rama para Telegram —¿va por
+        <code>Phone</code>, como SMS y WhatsApp, o por un atributo nuevo?— y de ella depende
+        <code>CanReceive</code> (línea 66).
+    </p>
+    <p>
+        Ningún patrón de envío lo evita porque <strong>no es un problema de envío</strong>: es una pregunta de
+        modelo. "¿Qué dato de contacto identifica a una persona en Telegram?" solo la puede contestar el
+        dominio, y la respuesta cambia la forma de <code>Recipient</code> —quizá haga falta un campo nuevo, o
+        usar el diccionario <code>Attributes</code>—. Un Strategy bien aplicado elimina el acoplamiento del
+        <em>mecanismo</em>; el acoplamiento del <em>modelo</em> no lo elimina ningún patrón, y confundir los
+        dos es la causa habitual de las abstracciones que no ahorran nada.
+    </p>
+</details>

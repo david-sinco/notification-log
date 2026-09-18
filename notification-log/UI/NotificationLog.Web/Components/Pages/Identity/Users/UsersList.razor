@@ -1,0 +1,139 @@
+@page "/users"
+@attribute [Authorize(Roles = IdentityRoles.Administrador)]
+@inject UsersApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Usuarios · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Usuarios</h1>
+        <p>Cuentas registradas en Identity: roles y bloqueos.</p>
+    </div>
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+<div class="filter-bar">
+    <div class="row g-2 align-items-end">
+        <div class="col-md-9">
+            <label class="form-label">Buscar</label>
+            <input class="form-control" placeholder="Correo o teléfono… (Enter para buscar)"
+                   @bind="search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
+        </div>
+        <div class="col-md-3 text-md-end">
+            <button class="btn btn-outline-secondary w-100" @onclick="RefreshAsync">Filtrar</button>
+        </div>
+    </div>
+</div>
+
+<div class="table-card">
+    @if (loading)
+    {
+        <div class="p-4 text-center text-muted">Cargando…</div>
+    }
+    else if (users is { Count: 0 })
+    {
+        <EmptyState Text="No se encontraron usuarios." Icon="👥" />
+    }
+    else if (users is not null)
+    {
+        <div class="table-responsive-wrap">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Correo</th>
+                        <th>Teléfono</th>
+                        <th>Roles</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var u in users)
+                    {
+                        <tr class="row-link" @onclick='() => Nav.NavigateTo($"/users/{u.Id}")'>
+                            <td>
+                                @(u.Email ?? "—")
+                                @if (u.Email is not null && !u.IsEmailVerified)
+                                {
+                                    <span class="small text-muted"> (sin verificar)</span>
+                                }
+                            </td>
+                            <td>
+                                @(u.Phone ?? "—")
+                                @if (u.Phone is not null && !u.IsPhoneVerified)
+                                {
+                                    <span class="small text-muted"> (sin verificar)</span>
+                                }
+                            </td>
+                            <td>@(u.Roles.Count == 0 ? "—" : string.Join(", ", u.Roles))</td>
+                            <td>
+                                <StatusPill Text="@(u.LockedUntil is null ? "Activo" : "Bloqueado")"
+                                            Variant="@(u.LockedUntil is null ? "success" : "danger")" />
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="d-flex justify-content-between align-items-center px-3 pb-3">
+            <button class="btn btn-outline-secondary btn-sm" disabled="@(skip == 0)" @onclick="PreviousAsync">← Anterior</button>
+            <span class="small text-muted">Página @(skip / PageSize + 1)</span>
+            <button class="btn btn-outline-secondary btn-sm" disabled="@(users.Count < PageSize)" @onclick="NextAsync">Siguiente →</button>
+        </div>
+    }
+</div>
+
+@code {
+    private const int PageSize = 20;
+
+    private IReadOnlyList<UserDto>? users;
+    private bool loading = true;
+    private ApiException? error;
+
+    private string search = "";
+    private int skip;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            users = await Api.SearchAsync(string.IsNullOrWhiteSpace(search) ? null : search, skip, PageSize, CancellationToken.None);
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        skip = 0;
+        return LoadAsync();
+    }
+
+    private Task PreviousAsync()
+    {
+        skip = Math.Max(0, skip - PageSize);
+        return LoadAsync();
+    }
+
+    private Task NextAsync()
+    {
+        skip += PageSize;
+        return LoadAsync();
+    }
+
+    private Task OnSearchKeyUp(KeyboardEventArgs e) => e.Key == "Enter" ? RefreshAsync() : Task.CompletedTask;
+}

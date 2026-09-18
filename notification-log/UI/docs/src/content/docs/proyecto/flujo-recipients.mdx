@@ -1,0 +1,75 @@
+---
+title: "Cómo entra un destinatario, sin que nadie lo dé de alta"
+description: "El único flujo de mensajería que hoy corre de punta a punta en este proyecto."
+sidebar:
+  order: 2
+  label: "2 · Cómo entra un destinatario, sin que nadie lo dé de alta"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+NotificationLog no tiene una pantalla de "crear destinatario" para uso normal — el botón de desarrollo en `/api/dev/recipients` existe solo para pruebas. En producción, los destinatarios se crean y actualizan solos, a medida que otro sistema (el que administra usuarios) informa cambios de contacto.
+
+## Paso a paso
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 240" role="img" aria-labelledby="recFlowTitle">
+        <title id="recFlowTitle">De un cambio de contacto en Usuarios a un Recipient sincronizado</title>
+        <defs>
+            <marker id="recFlowArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="90" width="140" height="70" rx="8" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="90" y="118" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">Sistema de Usuarios</text>
+        <text x="90" y="135" text-anchor="middle" font-size="8" fill="#334155">alguien cambia su email</text>
+
+        <line x1="160" y1="125" x2="205" y2="125" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#recFlowArrow)" />
+
+        <rect x="205" y="90" width="150" height="70" rx="8" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="280" y="112" text-anchor="middle" font-size="9" font-weight="700" fill="#334155">cola "user-changes"</text>
+        <text x="280" y="130" text-anchor="middle" font-size="8" fill="#64748b">RabbitMQ</text>
+        <text x="280" y="146" text-anchor="middle" font-size="8" fill="#64748b">snapshot Protobuf completo</text>
+
+        <line x1="355" y1="125" x2="400" y2="125" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#recFlowArrow)" />
+
+        <rect x="400" y="30" width="180" height="190" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="490" y="55" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a3412">NotificationLog</text>
+        <text x="490" y="80" text-anchor="middle" font-size="8" fill="#334155">1 · deserializa el mensaje</text>
+        <text x="490" y="98" text-anchor="middle" font-size="8" fill="#334155">2 · lo traduce a tipo propio</text>
+        <text x="490" y="116" text-anchor="middle" font-size="8" fill="#334155">   (UserChange)</text>
+        <text x="490" y="140" text-anchor="middle" font-size="8" fill="#334155">3 · ¿existe ya el destinatario?</text>
+        <text x="490" y="164" text-anchor="middle" font-size="8" fill="#334155">   no → lo crea</text>
+        <text x="490" y="182" text-anchor="middle" font-size="8" fill="#334155">   sí → lo actualiza</text>
+        <text x="490" y="200" text-anchor="middle" font-size="8" fill="#334155">4 · un SaveChanges, todo o nada</text>
+
+        <line x1="580" y1="125" x2="625" y2="125" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#recFlowArrow)" />
+
+        <rect x="625" y="90" width="170" height="70" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="710" y="118" text-anchor="middle" font-size="9.5" font-weight="700" fill="#14532d">Recipient</text>
+        <text x="710" y="135" text-anchor="middle" font-size="8" fill="#334155">listo para recibir</text>
+        <text x="710" y="150" text-anchor="middle" font-size="8" fill="#334155">notificaciones</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Nadie llama a un endpoint del panel para esto — el mensaje empuja el cambio de principio a fin.
+    </p>
+</div>
+
+### 1 · El mensaje es un snapshot completo, no un delta
+
+Cada mensaje trae **todos** los datos de contacto del usuario, no solo el campo que cambió. Eso significa que si se pierde un mensaje en el camino, el siguiente snapshot que llegue lo corrige solo — ningún destinatario queda permanentemente desincronizado por un mensaje perdido. Un email vacío en el mensaje es un valor real ("sin dato confirmado"), no "no vino" — así que NotificationLog no intenta adivinar si debe conservar el email anterior o borrarlo: siempre refleja exactamente lo que dice el último snapshot.
+
+### 2 · Un solo comando, no uno por campo
+
+Como el mensaje ya trae todo, NotificationLog no dispara un comando distinto por cada campo cambiado (uno para el email, otro para el teléfono…). Descomponerlo así rompería la atomicidad: si el tercer comando fallara, los dos anteriores ya habrían quedado guardados a medias. Un único comando aplica todos los campos sobre la misma instancia y hace un solo guardado — o entra completo, o no entra nada.
+
+### 3 · Qué datos guarda realmente un destinatario
+
+Nombre, email, teléfono, si está activo, idioma (`locale`) y zona horaria son campos fijos. Además, el mensaje puede traer un mapa de atributos libres (clave-valor) que se copian tal cual — la ausencia de una clave en un snapshot nuevo ya significa "el usuario dejó de tener ese atributo", así que no hace falta un valor especial para "bórralo".
+
+<Callout kind="honesto" title="¿Por qué este es el único flujo que corre de punta a punta hoy?">
+
+Porque es sincronización de estado (sé quién es el usuario), no un hecho de negocio con canal y plantilla. Es más simple de construir un extremo a extremo completo porque no depende de que exista un remitente de email o SMS real — solo escribe en la base de datos. El flujo que sí dispara notificaciones ([siguiente página](/proyecto/flujo-notificacion)) tiene más piezas, y justamente ahí es donde el proyecto todavía tiene partes sin conectar.
+
+</Callout>

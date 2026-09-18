@@ -1,0 +1,310 @@
+---
+title: "Factory Method estático"
+description: "Constructor privado, `Create(...)` público. En este dominio no existe la instancia a medio construir."
+sidebar:
+  order: 1
+  label: "1 · Factory Method estático"
+---
+
+import { Code } from '@astrojs/starlight/components';
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Ficha rápida">
+
+- **Tipo:** GoF creacional (variante *static factory method*, no la del libro con subclases).
+- **Origen:** deliberado. Nada en C#, EF Core ni ASP.NET obliga a escribirlo así.
+- **Dónde:** los cuatro agregados, los tres value objects y el objeto de resultado de envío.
+
+</Callout>
+
+## 1.1 · El problema
+
+Un `NotificationTrigger` se identifica por una clave con formato obligatorio: `dominio.accion`, en minúsculas, máximo 200 caracteres. Si esa clave se pudiera escribir mal, el sistema entero deja de funcionar en silencio — el mensaje llega a la cola, nadie encuentra el trigger, y no hay nada que auditar porque la notificación jamás se intentó.
+
+Con un constructor público normal, la validación tiene que repetirse en todas partes: en el endpoint que crea el trigger, en el handler, en el importador que algún día lea un CSV, en el test que monta datos de prueba. Y en cuanto uno de esos sitios se olvide, existe en memoria un objeto que el resto del código supone válido y no lo está. El dolor no es "hay que validar"; el dolor es **que la validación es opcional**.
+
+Lo mismo pasa con el registro de entrega: una `Notification` tiene once campos y dos formas legítimas de existir (envío correcto o fallo). Un constructor con once parámetros no distingue entre ambas, y nada impide crear una fallida sin motivo de fallo.
+
+## 1.2 · La idea del patrón
+
+Se esconde el constructor y se ofrece en su lugar un método estático que devuelve la instancia ya construida. Como el método es el único camino de entrada, todo lo que compruebe se cumple *siempre*: no hay forma de crear el objeto saltándose la comprobación, ni por descuido ni a propósito.
+
+De regalo, el método tiene nombre. Un constructor solo puede llamarse como la clase, así que dos formas distintas de crear el mismo tipo se distinguen únicamente por la lista de parámetros. Un método estático se puede llamar `RecordSuccess` y `RecordFailure`, y entonces el compilador ya no permite crear un fallo sin motivo: sencillamente no hay una firma que lo acepte.
+
+## 1.3 · Cómo se ve aquí
+
+```csharp title="Services/Notification/NotificationLog.NotificationService.Domain/Triggers/EventKey.cs:6-34 (completo)"
+public sealed record EventKey
+{
+    public const int MaxLength = 200;
+
+    private static readonly Regex Format =
+        new(@"^[a-z0-9]+(\.[a-z0-9]+)+$", RegexOptions.Compiled);
+
+    public string Value { get; }
+
+    private EventKey(string value) => Value = value;
+
+    public static EventKey Create(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new DomainException("El event key es obligatorio.");
+
+        var normalized = value.Trim().ToLowerInvariant();
+
+        if (normalized.Length > MaxLength)
+            throw new DomainException($"El event key no puede superar {MaxLength} caracteres.");
+
+        if (!Format.IsMatch(normalized))
+            throw new DomainException(
+                $"El event key '{value}' debe tener el formato dominio.accion.");
+
+        return new EventKey(normalized);
+    }
+
+    public override string ToString() => Value;
+}
+```
+
+Lectura de las piezas:
+
+- **El constructor privado** (línea 15) es la pieza que hace todo lo demás obligatorio. Sin él, el patrón es solo una sugerencia.
+- **`Create`** (línea 17) es el *factory method*: valida, normaliza y construye. Fíjate en el orden — primero rechaza lo vacío, luego `ToLowerInvariant()`, y el regex se aplica sobre el valor *ya normalizado*. Por eso `"Pedido.Creado"` es una clave válida y se guarda como `"pedido.creado"`.
+- **El cliente** es cualquiera que necesite una clave: el handler, el converter de EF, un test. Ninguno puede equivocarse porque ninguno tiene alternativa.
+- **`record`, no `class`** (línea 6): la igualdad por valor la genera el compilador, y es la que hace que `t.EventKey == eventKey` funcione en el repositorio.
+
+En los agregados el mismo patrón añade dos matices. El primero, el constructor sin parámetros que exige EF Core para materializar filas:
+
+```csharp title="Domain/Triggers/NotificationTrigger.cs:19-35"
+    protected NotificationTrigger() { }
+
+    public static NotificationTrigger Create(EventKey eventKey, string description)
+    {
+        ArgumentNullException.ThrowIfNull(eventKey);
+
+        if (string.IsNullOrWhiteSpace(description))
+            throw new DomainException("La descripción del trigger es obligatoria.");
+
+        return new NotificationTrigger
+        {
+            Id = Guid.NewGuid(),
+            EventKey = eventKey,
+            Description = NormalizeDescription(description),
+            IsEnabled = true
+        };
+    }
+```
+
+`protected NotificationTrigger() { }` (línea 19) es la única grieta del patrón, y es inevitable: EF necesita instanciar el objeto vacío para rellenarlo. Al ser `protected`, el código de aplicación no la ve. En `NotificationTemplate.cs:20`, `Recipient.cs:26` y `Notification.cs:30` ese constructor es directamente `private` y lleva el comentario `// EF Core` — el mismo compromiso, documentado.
+
+El segundo matiz es el que más se olvida: **la visibilidad del método de fábrica marca quién puede crear qué**.
+
+```csharp title="Domain/Triggers/NotificationConfiguration.cs:15-31"
+    internal static NotificationConfiguration Create(
+        Guid templateId, NotificationChannel channel)
+    {
+        if (templateId == Guid.Empty)
+            throw new DomainException("La configuración requiere una plantilla.");
+
+        if (!Enum.IsDefined(channel))
+            throw new DomainException($"El canal '{channel}' no es válido.");
+
+        return new NotificationConfiguration
+        {
+            Id = Guid.NewGuid(),
+            TemplateId = templateId,
+            Channel = channel,
+            IsEnabled = true
+        };
+    }
+```
+
+`internal static`, no `public static`. Una `NotificationConfiguration` no tiene sentido fuera de su trigger, y el trigger es quien impone la regla de "un solo canal activo". Si `Create` fuese público, un handler podría fabricar una configuración suelta y añadirla por su cuenta, esquivando `EnsureChannelIsFree`. La única puerta es `NotificationTrigger.AddConfiguration` (`NotificationTrigger.cs:37`), que llama a `EnsureChannelIsFree` *antes*. Lo mismo con `TemplateVersion.Create` (`TemplateVersion.cs:19`), que solo puede invocar `NotificationTemplate`.
+
+### Fábricas con nombre: dos formas de existir, dos métodos
+
+```csharp title="Domain/Notifications/Notification.cs:32-83 (extracto)"
+    public static Notification RecordSuccess(
+        Guid eventId, string eventKey, Guid configurationId, Guid templateId,
+        Guid templateVersionId, Guid recipientId, NotificationChannel channel,
+        string destination, string? providerMessageId, DateTime occurredAt,
+        IReadOnlyDictionary<string, string>? payload = null)
+    {
+        var notification = Create(
+            eventId, eventKey, configurationId, templateId, templateVersionId,
+            recipientId, channel, destination, payload);
+
+        notification.Status = DeliveryStatus.Sent;
+        notification.ProviderMessageId = providerMessageId is null
+            ? null
+            : Truncate(providerMessageId.Trim(), ProviderMessageIdMaxLength);
+        notification.OccurredAt = occurredAt;
+
+        return notification;
+    }
+
+    public static Notification RecordFailure(
+        // ... misma lista, pero con "string error" en vez de providerMessageId
+        )
+    {
+        if (string.IsNullOrWhiteSpace(error))
+            throw new DomainException("El motivo del fallo es obligatorio.");
+
+        var notification = Create(
+            eventId, eventKey, configurationId, templateId, templateVersionId,
+            recipientId, channel, destination, payload);
+
+        notification.Status = DeliveryStatus.Failed;
+        notification.Error = Truncate(error.Trim(), ErrorMaxLength);
+        notification.OccurredAt = occurredAt;
+
+        return notification;
+    }
+```
+
+Aquí el patrón se usa en su versión más rentable. Los dos métodos públicos llaman a un `private static Create` (línea 85) que concentra las siete validaciones comunes, y después cada uno pone lo suyo: `RecordSuccess` asigna `ProviderMessageId`, `RecordFailure` exige un `error` no vacío *antes* de construir nada. Un constructor único no podría hacer eso sin un `if` sobre un parámetro `status`.
+
+## 1.4 · Recorrido de una ejecución
+
+Sigamos un `POST /api/triggers` con el cuerpo `{ "eventKey": "Pedido.Creado", "description": "Aviso al cliente" }`.
+
+<ol class="ddd-steps">
+    <li>
+        <strong><code>ApiService/Endpoints/TriggerEndpoints.cs:83</code></strong> — <code>CreateAsync</code>
+        recibe un <code>CreateTriggerRequest</code> (strings crudos) y lo convierte en
+        <code>CreateTriggerCommand</code>. Todavía no hay ni un value object: en el borde HTTP todo son
+        cadenas.
+    </li>
+    <li>
+        <strong><code>Application/…/CreateTrigger/CreateTriggerHandler.cs:23</code></strong> — el validador
+        de FluentValidation comprueba lo barato (no vacío, longitud máxima). Ojo: <em>no</em> comprueba el
+        formato <code>dominio.accion</code>. Eso es deliberado — es una regla de dominio, no de entrada.
+    </li>
+    <li>
+        <strong><code>CreateTriggerHandler.cs:25</code></strong> → <code>EventKey.Create(cmd.EventKey)</code>.
+        Primera fábrica. Aquí <code>"Pedido.Creado"</code> se normaliza a <code>"pedido.creado"</code> y pasa
+        el regex. Si no pasara, saldría un <code>DomainException</code> que
+        <code>GlobalExceptionHandler.cs:29</code> convierte en un <strong>422</strong>, no en un 400: el
+        cliente mandó algo bien formado que el negocio rechaza.
+    </li>
+    <li>
+        <strong><code>CreateTriggerHandler.cs:27</code></strong> — <code>ExistsAsync(eventKey, ct)</code>. La
+        clave ya viaja como value object, así que la comprobación de duplicado usa el valor
+        <em>normalizado</em>. Si se hubiera consultado con el string crudo, <code>"Pedido.Creado"</code> y
+        <code>"pedido.creado"</code> parecerían triggers distintos.
+    </li>
+    <li>
+        <strong><code>Domain/Triggers/NotificationTrigger.cs:21</code></strong> — segunda fábrica.
+        <code>Create</code> genera el <code>Id</code>, normaliza la descripción vía
+        <code>NormalizeDescription</code> (línea 104) y fija <code>IsEnabled = true</code>. Un trigger nace
+        habilitado: es una regla de negocio que vive en la fábrica, no en el handler.
+    </li>
+    <li>
+        <strong><code>Infrastructure/Persistence/Repositories/NotificationTriggerRepository.cs:24</code></strong>
+        → <code>AddAsync</code>, y después <code>_uow.SaveChangesAsync(ct)</code>.
+    </li>
+    <li>
+        <strong>El viaje de vuelta</strong> — cuando esa misma fila se lee, EF materializa el objeto con el
+        constructor <code>protected</code> y rellena <code>EventKey</code> pasando por el
+        <em>value converter</em> de <code>Persistence/Configuration/NotificationTriggerConfiguration.cs:17-24</code>,
+        cuyo lado de lectura es… <code>value =&gt; EventKey.Create(value)</code>. <strong>La misma
+        fábrica.</strong> Un dato corrupto en base de datos revienta al cargarlo, no tres capas más
+        adelante.
+    </li>
+</ol>
+
+<Callout kind="concepto" title="El detalle del paso 7 es el que hace que el patrón valga la pena">
+
+Que el converter reutilice `EventKey.Create` en lugar de un `new EventKey(value)` de atajo significa que la invariante se cumple en *los dos sentidos*: no hay forma de meter una clave inválida y tampoco de sacarla. Es gratis, y es lo primero que se pierde cuando alguien "optimiza" el converter.
+
+</Callout>
+
+## 1.5 · Qué pasaría sin el patrón
+
+Contraejemplo **hipotético**, no existe en el repositorio:
+
+```csharp title="Hipotético — EventKey sin fábrica"
+// HIPOTÉTICO — así NO está el código
+public sealed record EventKey(string Value);
+
+// y entonces, repartido por todo el sistema:
+var key = new EventKey(request.EventKey.Trim().ToLowerInvariant());   // el handler se acuerda
+var key = new EventKey(row.EventKey);                                 // el converter, no
+var key = new EventKey("PEDIDO CREADO");                              // el test, tampoco
+```
+
+Lo que se rompe, en orden de gravedad:
+
+- **La validación pasa a ser opcional.** `new EventKey("no válido")` compila y se ejecuta. El fallo aparecerá en producción, cuando un mensaje no encuentre su trigger.
+- **La normalización se dispersa.** Cada llamante tiene que acordarse de `ToLowerInvariant()`. Basta con que uno se olvide para tener dos triggers que el humano ve iguales y la base de datos no.
+- **El converter de EF necesita su propia copia** de las mismas reglas, y las dos copias divergen en el primer cambio.
+
+**Qué se paga a cambio:** un salto de indirección al leer (`Create` en vez de `new`), la imposibilidad de usar inicializadores de objeto desde fuera, y una grieta permanente — el constructor para EF — que hay que recordar mantener cerrado. En un objeto sin invariantes, como el `record CreateTriggerCommand` de una sola línea, este patrón sería puro ruido; por eso los comandos y DTOs *no* lo usan.
+
+## 1.6 · Otras apariciones en el repositorio
+
+| Sitio | Variación |
+| --- | --- |
+| `Domain/Templates/TemplateName.cs:20` | Idéntico a `EventKey` pero con otro regex (guion bajo en vez de punto). Dos value objects gemelos, ninguna abstracción compartida — y está bien: son reglas independientes que pueden divergir. |
+| `Domain/Templates/TemplateVersion.cs:19` | `internal static`. Además valida *en función de otro parámetro*: `NormalizeSubject(subject, channel)` exige asunto en Email/Push y lo prohíbe en SMS/WhatsApp. |
+| `Domain/Notifications/RenderedMessage.cs:16` | Value object con fábrica que además *trunca* en vez de rechazar: un asunto de 600 caracteres no es un error de negocio, se recorta a 500. |
+| `Domain/Recipients/Recipient.cs:28` | La excepción interesante del repositorio — ver el ejercicio. |
+| `Application/…/Sending/NotificationSendResult.cs:5-7` | Fuera del dominio: dos fábricas con nombre (`Success`/`Failure`) sobre un `record` de tres campos. Ver [la ficha 4](/patrones/resultado). |
+| `Infrastructure/…/Context/NotificationDbContextFactory.cs:10` | Una fábrica de verdad, pero **del framework**: implementa `IDesignTimeDbContextFactory` porque `dotnet ef` lo exige. No es una decisión de diseño del equipo. |
+
+## 1.7 · Señales de alarma
+
+- **Un constructor que deja de ser privado.** Es el fin del patrón, aunque la fábrica siga ahí. En revisión: si aparece un `public` en el constructor de un agregado o value object, pregunta quién lo necesitaba y por qué la fábrica no le servía.
+- **Fábricas que solo asignan.** Un `Create` sin una sola validación es un constructor con pasos extra. O le falta la invariante que debería defender, o el tipo no la tiene y sobra el patrón.
+- **Validación duplicada fuera de la fábrica.** Si un handler comprueba el formato de la clave *antes* de llamar a `EventKey.Create`, hay dos fuentes de verdad. La única validación legítima fuera es la barata y genérica de FluentValidation (no vacío, longitud), y aun esa se apoya en las constantes del dominio: mira `CreateTriggerValidator.cs:12-16` usando `EventKey.MaxLength`.
+- **El constructor de EF creciendo.** Si alguien le pone parámetros al constructor `protected`/`private` "para reutilizar", deja de ser una grieta controlada y pasa a ser una segunda puerta.
+- **Un converter que hace `new`.** Ver el paso 7 del recorrido.
+
+<Callout kind="ejercicio" title="Ejercicio">
+
+**(a)** Los cuatro agregados tienen un `Create` estático. Tres de ellos generan su propio identificador; **uno no**. Localízalo, cita la línea exacta y explica por qué la diferencia no es un descuido.
+
+**(b)** `NotificationTrigger.Create` es `public static` y `NotificationConfiguration.Create` es `internal static`. Escribe el código (hipotético) que la palabra `internal` está impidiendo, y di qué invariante concreta se saltaría.
+
+**Verificación:** tu respuesta a (b) debe nombrar un método privado concreto de `NotificationTrigger`.
+
+</Callout>
+
+<details class="surface-card">
+    <summary><strong>Ver solución</strong></summary>
+    <p>
+        <strong>(a)</strong> Es <code>Recipient.Create</code>, en
+        <code>Domain/Recipients/Recipient.cs:28-41</code>. En lugar de <code>Id = Guid.NewGuid()</code>
+        hace <code>Id = userId</code>, y lo primero que valida (línea 30) es que ese
+        <code>userId</code> no sea <code>Guid.Empty</code>.
+    </p>
+    <p>
+        No es un descuido: <code>Recipient</code> <strong>no es fuente de verdad</strong>, es una réplica del
+        usuario que vive en otro contexto. Su identidad la fija ese sistema de origen y llega en el mensaje
+        <code>UserContactUpdated</code>; generar aquí un <code>Guid</code> nuevo rompería la correlación —
+        el <code>recipient_id</code> que trae un <code>NotificationDispatchRequested</code>
+        (<code>Messaging/Consumers/NotificationDispatchHandler.cs:20</code>) no encontraría a nadie. Por eso
+        <code>RecipientConfiguration.cs:16</code> marca <code>ValueGeneratedNever()</code> y por eso
+        <code>RecipientSyncService.cs:31</code> decide crear o actualizar preguntando
+        <code>ExistsAsync(change.UserId)</code>: el id ya viene dado.
+    </p>
+    <p>
+        <strong>(b)</strong> Lo que <code>internal</code> impide desde fuera del ensamblado de dominio
+        —por ejemplo, desde <code>AddConfigurationHandler</code>— es esto:
+    </p>
+    <Code code={"// HIPOT\u00c9TICO \u2014 no compila hoy, y ese es el objetivo\nvar config = NotificationConfiguration.Create(template.Id, NotificationChannel.Email);\ntrigger.Configurations.Add(config);   // adem\u00e1s, Configurations es IReadOnlyCollection"} lang="csharp" title="Hipot\u00e9tico \u2014 lo que internal est\u00e1 bloqueando" />
+    <p>
+        La invariante que se saltaría es <strong>"como máximo una configuración habilitada por canal"</strong>,
+        impuesta por el método privado <code>NotificationTrigger.EnsureChannelIsFree</code>
+        (<code>NotificationTrigger.cs:123-133</code>). Solo se ejecuta desde dentro del agregado:
+        <code>AddConfiguration</code> lo llama en la línea 39 y <code>EnableConfiguration</code> en la 53. Un
+        <code>Create</code> público permitiría dos configuraciones de Email activas en el mismo trigger, y
+        entonces <code>ResolveActiveConfigurations()</code> (línea 82) devolvería las dos y
+        <code>NotificationDispatchService</code> enviaría el mismo correo dos veces.
+    </p>
+    <p>
+        Nota de matiz: <code>internal</code> protege del <em>resto del sistema</em>, no del propio proyecto
+        <code>Domain</code>. Es una barrera de ensamblado, no de clase. Suficiente aquí, porque
+        <code>Domain</code> es pequeño y se revisa entero.
+    </p>
+</details>

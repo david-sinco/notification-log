@@ -1,0 +1,127 @@
+---
+title: "Lenguaje ubicuo"
+description: "Un vocabulario único entre negocio y código. Cero traducción."
+sidebar:
+  order: 1
+  label: "1 · Lenguaje ubicuo"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Explicar qué es el lenguaje ubicuo y por qué su coste de no tenerlo no es estético.
+- Reconocerlo en el código real de este servicio, incluidos los mensajes de error.
+- Practicar el ejercicio de mapear vocabulario de negocio contra nombres del código.
+
+</Callout>
+
+## Concepto
+
+El lenguaje ubicuo (*ubiquitous language*) es un vocabulario riguroso, compartido entre quien conoce el negocio y quien escribe el código, que aparece **literalmente** en el código: nombres de clases, de métodos, de mensajes de error. Si negocio dice "el evento `transaccion.realizada` dispara una notificación por el canal activo", el código debería poder decir exactamente eso — sin traducir a `type == 3` o a un booleano llamado `flagA`. El coste de no tenerlo se paga en cada bug ("¿qué significa el estado 2?") y en cada reunión ("cuando dices 'trigger', ¿es lo mismo que la fila de `Configuration` en la base de datos?").
+
+## El vocabulario ya vive en el dominio
+
+No hace falta un glosario aparte para empezar: el propio código de `NotificationLog.NotificationService.Domain` ya usa las palabras que usaría alguien de negocio en una reunión sobre este servicio. Mira cómo se valida el identificador de un hecho de negocio:
+
+```csharp title="Domain/Triggers/EventKey.cs"
+public static EventKey Create(string value)
+{
+    if (string.IsNullOrWhiteSpace(value))
+        throw new DomainException("El event key es obligatorio.");
+
+    var normalized = value.Trim().ToLowerInvariant();
+
+    if (normalized.Length > MaxLength)
+        throw new DomainException($"El event key no puede superar {MaxLength} caracteres.");
+
+    if (!Format.IsMatch(normalized))
+        throw new DomainException(
+            $"El event key '{value}' debe tener el formato dominio.accion.");
+
+    return new EventKey(normalized);
+}
+```
+
+Fíjate en un detalle que suele pasar desapercibido: los mensajes de `DomainException` no están escritos para quien programa, son la voz del propio dominio explicando por qué rechazó algo. "El event key es obligatorio", "Ya existe una configuración activa para el canal Email", "La plantilla está desactivada" — cualquiera de esas frases la podría decir alguien de negocio sin saber qué es C#. Esa es la prueba de que el lenguaje ubicuo funciona aquí: el error de validación **es** la regla de negocio, dicha en su propio idioma, no una traducción de ella.
+
+### El nombre del evento describe un hecho, no una plantilla
+
+Compara `EventKey` con lo que *no* hace: no describe un canal, ni una plantilla, ni una prioridad. Su formato exigido — `dominio.accion`, como `pedido.confirmado` o `usuario.email_verificado` — obliga a que el identificador nombre algo que ya ocurrió en el negocio, nunca cómo se va a notificar sobre eso. Esa separación es lenguaje ubicuo aplicado a una decisión estratégica: el "qué pasó" y el "qué se hace con eso" no comparten un mismo nombre, porque tampoco son la misma decisión. Plantilla, canal y condiciones de envío viven aparte, en `NotificationConfiguration` — la verás en el [módulo de agregados](/ddd/agregados).
+
+## Glosario: término de negocio ↔ nombre en el código
+
+Este es exactamente el ejercicio de traducción que pide el lenguaje ubicuo, ya resuelto para este dominio — la distancia entre columna izquierda y derecha debería ser mínima:
+
+<div class="ddd-box ddd-box-codigo">
+    <div class="term-pair">
+        <span class="biz">"Un hecho que ocurrió en otro sistema"</span>
+        <span class="arrow">→</span>
+        <span class="code">EventKey (Domain/Triggers)</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"Reglas que deciden si/cómo notificar ese hecho"</span>
+        <span class="arrow">→</span>
+        <span class="code">NotificationTrigger + NotificationConfiguration</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"El texto que se envía, en su versión vigente"</span>
+        <span class="arrow">→</span>
+        <span class="code">NotificationTemplate.CurrentVersion</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"A quién le llega y por dónde puede recibir"</span>
+        <span class="arrow">→</span>
+        <span class="code">Recipient.CanReceive(channel)</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"El registro de que se envió (o falló) una notificación"</span>
+        <span class="arrow">→</span>
+        <span class="code">Notification.RecordSuccess / RecordFailure</span>
+    </div>
+    <div class="term-pair">
+        <span class="biz">"Publicar el siguiente texto de una plantilla"</span>
+        <span class="arrow">→</span>
+        <span class="code">NotificationTemplate.PublishVersion(...)</span>
+    </div>
+</div>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 760 200" role="img" aria-labelledby="ubiquitousTitle">
+        <title id="ubiquitousTitle">Coste de traducción con y sin lenguaje ubicuo</title>
+        <defs>
+            <marker id="ulArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <text x="190" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#991b1b">Sin lenguaje ubicuo</text>
+        <rect x="40" y="40" width="140" height="50" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="110" y="70" text-anchor="middle" font-size="11" fill="#991b1b">"el usuario está inactivo"</text>
+        <line x1="180" y1="65" x2="230" y2="65" stroke="#dc2626" stroke-width="1.5" marker-end="url(#ulArrow)" />
+        <text x="205" y="55" text-anchor="middle" font-size="9" fill="#dc2626">traduce</text>
+        <rect x="230" y="40" width="140" height="50" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="300" y="65" text-anchor="middle" font-size="11" fill="#991b1b" font-family="monospace">status == 3</text>
+        <text x="205" y="110" text-anchor="middle" font-size="10" fill="#991b1b">se paga en cada bug y cada reunión</text>
+
+        <text x="570" y="26" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">Con lenguaje ubicuo (este repo)</text>
+        <rect x="440" y="40" width="140" height="50" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="510" y="65" text-anchor="middle" font-size="11" fill="#14532d">"el event key es obligatorio"</text>
+        <line x1="580" y1="65" x2="630" y2="65" stroke="#16a34a" stroke-width="1.5" marker-end="url(#ulArrow)" />
+        <text x="605" y="55" text-anchor="middle" font-size="9" fill="#16a34a">es</text>
+        <rect x="630" y="40" width="140" height="50" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="700" y="60" text-anchor="middle" font-size="9" fill="#14532d" font-family="monospace">throw new</text>
+        <text x="700" y="72" text-anchor="middle" font-size="9" fill="#14532d" font-family="monospace">DomainException(...)</text>
+        <text x="605" y="110" text-anchor="middle" font-size="10" fill="#14532d">el mensaje de error ES la regla</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        El mensaje de <code>DomainException</code> no es un detalle de implementación: es el punto donde
+        el lenguaje de negocio y el código de negocio son, literalmente, la misma frase.
+    </p>
+</div>
+
+<Callout kind="ejercicio" title="Ejercicio para pensar">
+
+Abre cualquier método de `Recipient.cs` o `NotificationTrigger.cs` y tapa el cuerpo con la mano. Solo con el nombre del método y sus parámetros, intenta adivinar qué regla de negocio implementa. Si aciertas casi siempre sin leer el cuerpo, el lenguaje ubicuo está haciendo su trabajo. Repite el ejercicio con un proyecto propio que tenga métodos como `ProcesarData()` o `Update(int status)` — la diferencia de esfuerzo es la medida real del lenguaje ubicuo.
+
+</Callout>

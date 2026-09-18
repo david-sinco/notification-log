@@ -1,0 +1,98 @@
+---
+title: "Cómo funciona este proyecto, y por qué está armado así"
+description: "Esta guía explica NotificationLog desde el ángulo funcional: qué problema resuelve, qué conceptos maneja un administrador del sistema (no un desarrollador leyendo clases), y cómo se ve, de punta a punta, que un hecho de negocio termine convertido en un email o un SMS. Si buscas el detalle técnico de capas y decisiones de código, esa es [la guía de arquitectura](/arquitectura); si buscas el modelado de dominio, [el tutorial de DDD](/ddd)."
+sidebar:
+  order: 0
+  label: "Introducción"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+Esta guía explica NotificationLog desde el ángulo funcional: qué problema resuelve, qué conceptos maneja un administrador del sistema (no un desarrollador leyendo clases), y cómo se ve, de punta a punta, que un hecho de negocio termine convertido en un email o un SMS. Si buscas el detalle técnico de capas y decisiones de código, esa es [la guía de arquitectura](/arquitectura); si buscas el modelado de dominio, [el tutorial de DDD](/ddd).
+
+En una frase: **los sistemas de negocio publican hechos, y NotificationLog decide, según reglas configurables por un administrador, si eso dispara una notificación, con qué plantilla y por qué canal**. Ningún sistema productor necesita saber que existen plantillas de email, límites de SMS o preferencias de canal — eso vive enteramente aquí.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 220" role="img" aria-labelledby="proyMapTitle">
+        <title id="proyMapTitle">De un hecho de negocio a una notificación entregada</title>
+        <defs>
+            <marker id="proyArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="70" width="150" height="80" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="95" y="100" text-anchor="middle" font-size="10.5" font-weight="700" fill="#334155">Sistema externo</text>
+        <text x="95" y="118" text-anchor="middle" font-size="8.5" fill="#64748b">"pedido.confirmado"</text>
+
+        <line x1="170" y1="110" x2="215" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#proyArrow)" />
+
+        <rect x="215" y="30" width="170" height="160" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="300" y="55" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">NotificationLog</text>
+        <text x="300" y="80" text-anchor="middle" font-size="8.5" fill="#334155">¿hay trigger habilitado?</text>
+        <text x="300" y="98" text-anchor="middle" font-size="8.5" fill="#334155">¿qué canales activos?</text>
+        <text x="300" y="116" text-anchor="middle" font-size="8.5" fill="#334155">¿destinatario puede recibir?</text>
+        <text x="300" y="134" text-anchor="middle" font-size="8.5" fill="#334155">renderiza la plantilla vigente</text>
+        <text x="300" y="152" text-anchor="middle" font-size="8.5" fill="#334155">registra el resultado</text>
+
+        <line x1="385" y1="110" x2="430" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#proyArrow)" />
+
+        <rect x="430" y="30" width="150" height="45" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="505" y="57" text-anchor="middle" font-size="9.5" fill="#334155">📧 Email</text>
+        <rect x="430" y="82" width="150" height="45" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="505" y="109" text-anchor="middle" font-size="9.5" fill="#334155">💬 SMS / WhatsApp</text>
+        <rect x="430" y="134" width="150" height="45" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="505" y="161" text-anchor="middle" font-size="9.5" fill="#334155">🔔 Push</text>
+
+        <rect x="620" y="70" width="180" height="80" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="710" y="95" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">Panel NotificationLog</text>
+        <text x="710" y="118" text-anchor="middle" font-size="8.5" fill="#334155">quién ve qué se envió,</text>
+        <text x="710" y="134" text-anchor="middle" font-size="8.5" fill="#334155">a quién, y si falló</text>
+
+        <line x1="580" y1="110" x2="618" y2="110" stroke="#bbf7d0" stroke-width="1.5" stroke-dasharray="3,3" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        El productor solo sabe que "un pedido se confirmó". Qué canal, qué texto y a quién es decisión
+        exclusiva de la configuración dentro de NotificationLog.
+    </p>
+</div>
+
+## Recorre la guía
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/proyecto/conceptos">
+        <span class="ddd-card-num">01</span>
+        <h3>Conceptos</h3>
+        <p>Trigger, configuración, plantilla, destinatario, notificación: el vocabulario del panel,
+        explicado sin jerga de código.</p>
+    </a>
+    <a class="ddd-card" href="/proyecto/flujo-recipients">
+        <span class="ddd-card-num">02</span>
+        <h3>Cómo entra un destinatario</h3>
+        <p>De un cambio de contacto en otro sistema a un <code>Recipient</code> listo para recibir
+        notificaciones, sin que nadie lo dé de alta a mano.</p>
+    </a>
+    <a class="ddd-card" href="/proyecto/flujo-notificacion">
+        <span class="ddd-card-num">03</span>
+        <h3>Cómo se envía una notificación</h3>
+        <p>El recorrido completo de un hecho de negocio, paso a paso — y qué parte de ese recorrido todavía
+        no está conectada.</p>
+    </a>
+    <a class="ddd-card" href="/proyecto/panel-y-api">
+        <span class="ddd-card-num">04</span>
+        <h3>Panel y API</h3>
+        <p>Un tour por las pantallas que usaría un administrador, y la API HTTP que las sostiene.</p>
+    </a>
+    <a class="ddd-card" href="/proyecto/entorno-dev">
+        <span class="ddd-card-num">05</span>
+        <h3>Entorno de desarrollo</h3>
+        <p>Por qué levantar este proyecto trae SQL Server, Redis, RabbitMQ y Buggregator — y qué rol
+        cumple cada uno.</p>
+    </a>
+</div>
+
+<Callout kind="honesto" title="Un proyecto de aprendizaje, con una pieza deliberadamente incompleta">
+
+NotificationLog es, ante todo, un ejercicio para practicar DDD y arquitectura limpia con un caso real y acotado. Los remitentes de email, SMS y push ya están construidos y funcionan de verdad contra un entorno de pruebas local; el canal de WhatsApp es, a propósito, un stub que siempre falla, porque no hay proveedor elegido todavía. Y aunque toda la lógica de despacho de notificaciones existe y está conectada a una cola de mensajería, ningún sistema de negocio publica hoy un evento real en ella — hay que simularlo a mano. Esta guía señala esa pieza exacta cada vez que aparece, en vez de dar a entender que el sistema envía notificaciones de punta a punta sin intervención hoy.
+
+</Callout>

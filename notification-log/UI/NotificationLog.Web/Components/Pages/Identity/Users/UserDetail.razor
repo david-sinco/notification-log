@@ -1,0 +1,186 @@
+@page "/users/me"
+@page "/users/{Id:guid}"
+@inject UsersApiClient Api
+
+<PageTitle>@(IsOwnProfile ? "Mi perfil" : "Usuario") · NotificationLog</PageTitle>
+
+<AuthorizeView Roles="@IdentityRoles.Administrador">
+    <div class="mb-3">
+        <a href="/users" class="small">← Volver a usuarios</a>
+    </div>
+</AuthorizeView>
+
+@if (loading)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (loadError is not null)
+{
+    <ErrorAlert Exception="loadError" />
+}
+else if (user is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1>@(IsOwnProfile ? "Mi perfil" : user.Email ?? user.Phone ?? "Usuario")</h1>
+            <p class="font-monospace small">@user.Id</p>
+        </div>
+        <div>
+            <StatusPill Text="@(user.LockedUntil is null ? "Activo" : "Bloqueado")"
+                        Variant="@(user.LockedUntil is null ? "success" : "danger")" />
+        </div>
+    </div>
+
+    @if (actionError is not null)
+    {
+        <ErrorAlert Exception="actionError" />
+    }
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="surface-card">
+                <h2 class="h6">Datos de acceso</h2>
+                <dl class="kv-list">
+                    <dt>Correo</dt>
+                    <dd>@(user.Email ?? "—") @VerifiedLabel(user.Email, user.IsEmailVerified)</dd>
+                    <dt>Teléfono</dt>
+                    <dd>@(user.Phone ?? "—") @VerifiedLabel(user.Phone, user.IsPhoneVerified)</dd>
+                    <dt>Roles</dt>
+                    <dd>@(user.Roles.Count == 0 ? "—" : string.Join(", ", user.Roles))</dd>
+                    <dt>Bloqueo</dt>
+                    <dd>@LockLabel(user.LockedUntil)</dd>
+                </dl>
+            </div>
+        </div>
+
+        <AuthorizeView Roles="@IdentityRoles.Administrador">
+            <div class="col-lg-6">
+                <div class="surface-card mb-4">
+                    <h2 class="h6">Roles</h2>
+                    @foreach (var role in AllRoles)
+                    {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="role-@role"
+                                   checked="@selectedRoles.Contains(role)" @onchange="e => ToggleRole(role, (bool)e.Value!)" />
+                            <label class="form-check-label" for="role-@role">@role</label>
+                        </div>
+                    }
+                    <button class="btn btn-primary btn-sm mt-3" disabled="@busy" @onclick="SaveRolesAsync">Guardar roles</button>
+                </div>
+
+                <div class="surface-card">
+                    <h2 class="h6">Bloqueo</h2>
+                    @if (user.LockedUntil is null)
+                    {
+                        <label class="form-label">Bloquear hasta</label>
+                        <input type="datetime-local" class="form-control" @bind="lockUntil" />
+                        <div class="form-hint">Vacío = bloqueo indefinido. Cierra todas las sesiones del usuario.</div>
+                        <button class="btn btn-danger btn-sm mt-3" disabled="@busy" @onclick="LockAsync">Bloquear</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="UnlockAsync">Desbloquear</button>
+                    }
+                </div>
+            </div>
+        </AuthorizeView>
+    </div>
+}
+
+@code {
+    private static readonly string[] AllRoles = [IdentityRoles.Administrador, IdentityRoles.Propietario, IdentityRoles.Asesor];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    private UserDto? user;
+    private bool loading = true;
+    private bool busy;
+    private ApiException? loadError;
+    private ApiException? actionError;
+
+    private Guid currentUserId;
+    private HashSet<string> selectedRoles = [];
+    private DateTime? lockUntil;
+
+    private bool IsOwnProfile => user?.Id == currentUserId;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var principal = (await AuthState).User;
+        currentUserId = Guid.TryParse(principal.FindFirst(IdentityClaims.Subject)?.Value, out var sub) ? sub : Guid.Empty;
+
+        actionError = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            user = await Api.GetByIdAsync(Id ?? currentUserId, CancellationToken.None);
+            selectedRoles = [.. user.Roles];
+            lockUntil = null;
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void ToggleRole(string role, bool selected)
+    {
+        if (selected)
+            selectedRoles.Add(role);
+        else
+            selectedRoles.Remove(role);
+    }
+
+    private Task SaveRolesAsync() =>
+        RunAsync(() => Api.SetRolesAsync(user!.Id, new SetUserRolesRequest([.. selectedRoles]), CancellationToken.None));
+
+    private Task LockAsync() =>
+        RunAsync(() => Api.LockAsync(
+            user!.Id,
+            new LockUserRequest(lockUntil is { } until ? new DateTimeOffset(until) : null),
+            CancellationToken.None));
+
+    private Task UnlockAsync() =>
+        RunAsync(() => Api.UnlockAsync(user!.Id, CancellationToken.None));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            actionError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string VerifiedLabel(string? value, bool verified) =>
+        value is null ? "" : verified ? "(verificado)" : "(sin verificar)";
+
+    private static string LockLabel(DateTimeOffset? lockedUntil) => lockedUntil switch
+    {
+        null => "Sin bloqueo",
+        { Year: >= 9999 } => "Indefinido",
+        { } until => $"Hasta {until.ToLocalTime():g}"
+    };
+}

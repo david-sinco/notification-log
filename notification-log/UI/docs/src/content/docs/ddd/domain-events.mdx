@@ -1,0 +1,135 @@
+---
+title: "Domain Events"
+description: "El mecanismo ya está construido. Todavía nadie se ha subido."
+sidebar:
+  order: 10
+  label: "10 · Domain Events"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Definir un evento de dominio y para qué problema existe.
+- Verificar, buscando en el código, que el mecanismo existe pero no se usa todavía.
+- No confundir un evento de dominio (interno) con un evento de integración (público).
+
+</Callout>
+
+## Concepto
+
+Un evento de dominio es un hecho relevante para el negocio que ya ocurrió, expresado en pasado: `PedidoConfirmado`, `PagoRechazado`. Es el pegamento entre agregados **dentro del mismo contexto**: permite cumplir la regla de "una transacción, un agregado" — el agregado A cambia y publica un evento; un handler reacciona y modifica B, en el mismo servicio. Cruzar la frontera de un bounded context es un problema distinto, que resuelve un evento de **integración**, no uno de dominio — es justo la distinción que cierra este módulo.
+
+<Callout kind="honesto" title="El mecanismo existe. El uso, todavía no.">
+
+`AggregateRoot` ya trae todo lo necesario para levantar eventos de dominio: `Raise`, `DomainEvents` y `ClearDomainEvents`. Pero si buscas en todo el proyecto quién llama a `Raise(...)`, la respuesta es: nadie todavía. Ningún agregado de este dominio levanta un solo evento hoy. Vale la pena decirlo así de directo, porque es exactamente el tipo de detalle que este tutorial se propuso no esconder.
+
+</Callout>
+
+```csharp title="Domain/Common/AggregateRoot.cs (completo)"
+public abstract class AggregateRoot : Entity
+{
+    private readonly List<IDomainEvent> _domainEvents = new();
+
+    public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+
+    protected void Raise(IDomainEvent domainEvent) => _domainEvents.Add(domainEvent);
+
+    public void ClearDomainEvents() => _domainEvents.Clear();
+}
+
+// Búsqueda en todo el repo de `Raise(`: solo aparece aquí, en la definición.
+// Ningún NotificationTrigger, NotificationTemplate, Recipient o Notification lo invoca.
+```
+
+## ¿Por qué no hacía falta todavía?
+
+Repasa el [módulo de agregados](/ddd/agregados): la única operación de este dominio que toca dos agregados a la vez (`AddConfigurationHandler` leyendo `NotificationTrigger` y `NotificationTemplate`) solo *lee* el segundo, nunca lo muta. No hay, todavía, ningún caso real en el código donde cambiar un agregado deba disparar una mutación de otro. Los eventos de dominio resuelven un problema — desacoplar la reacción en cascada entre agregados — que este dominio, en su estado actual, no tiene.
+
+## Así se vería si lo necesitaras
+
+Imagina que el negocio pidiera: "cuando se agregue una configuración a un trigger, hay que notificar a un sistema externo de auditoría". Hoy eso obligaría a inyectar ese sistema externo directo en `AddConfigurationHandler`, mezclando dos responsabilidades. Con el mecanismo que ya existe, la solución sería levantar un evento desde el agregado y reaccionar fuera de la transacción principal:
+
+```csharp title="Hipotético: cómo se vería usando el mecanismo existente"
+// HIPOTÉTICO — así se vería, no está implementado en el repo actual.
+
+// 1) El agregado levanta el hecho, en pasado, sin saber quién reaccionará:
+public sealed record ConfigurationAdded(Guid TriggerId, Guid ConfigurationId, NotificationChannel Channel)
+    : DomainEvent;
+
+public NotificationConfiguration AddConfiguration(Guid templateId, NotificationChannel channel)
+{
+    EnsureChannelIsFree(channel);
+    var configuration = NotificationConfiguration.Create(templateId, channel);
+    _configurations.Add(configuration);
+
+    Raise(new ConfigurationAdded(Id, configuration.Id, channel));   // <- la línea que falta hoy
+
+    return configuration;
+}
+
+// 2) Algo (un interceptor de EF Core, o el propio handler) despacha trigger.DomainEvents
+//    después de SaveChangesAsync, y limpia con ClearDomainEvents(). El handler de auditoría
+//    externo se suscribe a ConfigurationAdded sin que AddConfigurationHandler sepa que existe.
+```
+
+<Callout kind="advertencia" title="Dos trampas del ejemplo de arriba, puestas a propósito">
+
+**El nombre.** `ConfigurationAdded` es el nombre del método en pasado, no un hecho de negocio: nadie de negocio dice "se añadió una configuración". Compáralo con `PedidoConfirmado` o `PagoRechazado` del inicio del módulo. Es el vicio más común al adoptar este patrón — eventos CRUD disfrazados de eventos de dominio, que nombran la operación técnica en vez del hecho que le importa a alguien. En este dominio el candidato con lenguaje ubicuo de verdad está en la ruta de envío: `NotificacionFallida` es un hecho que negocio querría conocer y sobre el que querría reaccionar; "se añadió una configuración", no.
+
+**El momento del despacho.** Despachar después de `SaveChangesAsync` significa que el efecto secundario ocurre *fuera* de la transacción: si el proceso muere entre el commit y el despacho, el evento se pierde sin rastro. Y despacharlo dentro te devuelve el problema de consistencia que intentabas evitar. La salida real es un **outbox** — persistir el evento en la misma transacción que el cambio, y publicarlo después desde un proceso aparte — y es justo la conversación que abre `notification_dispatch_requested.proto`.
+
+</Callout>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 800 240" role="img" aria-labelledby="deTitle">
+        <title id="deTitle">Domain event interno (hipotético) frente a integration event real (mensajería)</title>
+        <defs>
+            <marker id="deArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="30" y="20" width="330" height="190" rx="10" fill="#f8fafc" stroke="#e5e9f2" stroke-dasharray="5,4" />
+        <text x="195" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Domain event — HIPOTÉTICO, no existe hoy</text>
+        <rect x="55" y="60" width="130" height="50" rx="6" fill="#fff" stroke="#e5e9f2" />
+        <text x="120" y="82" text-anchor="middle" font-size="9.5" fill="#334155">NotificationTrigger</text>
+        <text x="120" y="96" text-anchor="middle" font-size="8.5" fill="#64748b">.Raise(ConfigurationAdded)</text>
+        <line x1="185" y1="85" x2="235" y2="85" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#deArrow)" />
+        <rect x="235" y="60" width="110" height="50" rx="6" fill="#fff" stroke="#e5e9f2" />
+        <text x="290" y="82" text-anchor="middle" font-size="9" fill="#334155">handler interno</text>
+        <text x="290" y="96" text-anchor="middle" font-size="8" fill="#64748b">mismo proceso</text>
+        <text x="195" y="140" text-anchor="middle" font-size="9" fill="#64748b">privado a este bounded context</text>
+        <text x="195" y="156" text-anchor="middle" font-size="9" fill="#64748b">nunca cruza a otro servicio</text>
+        <text x="195" y="180" text-anchor="middle" font-size="9" fill="#64748b" font-style="italic">— aún no usado en este repo —</text>
+
+        <rect x="420" y="20" width="350" height="190" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="595" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Integration event — real (módulo 4)</text>
+        <rect x="440" y="60" width="140" height="50" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="510" y="80" text-anchor="middle" font-size="9" fill="#334155">Contexto Usuarios</text>
+        <text x="510" y="94" text-anchor="middle" font-size="8" fill="#64748b">productor</text>
+        <line x1="580" y1="85" x2="625" y2="85" stroke="#4f46e5" stroke-width="1.7" marker-end="url(#deArrow)" />
+        <rect x="625" y="60" width="130" height="50" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="690" y="80" text-anchor="middle" font-size="9" fill="#334155">users.contact</text>
+        <text x="690" y="94" text-anchor="middle" font-size="8" fill="#64748b">versionado</text>
+        <text x="595" y="140" text-anchor="middle" font-size="9" fill="#4338ca">público, entre servicios distintos</text>
+        <text x="595" y="156" text-anchor="middle" font-size="9" fill="#4338ca">Published Language + schema_version</text>
+        <text x="595" y="180" text-anchor="middle" font-size="9" fill="#4338ca" font-style="italic">esto SÍ existe y lo consume el ACL</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Mismo espíritu — "algo pasó, reacciona" — pero alcance y mecanismo completamente distintos. Confundir
+        ambos conceptos es un error común al aprender este patrón.
+    </p>
+</div>
+
+<Callout kind="advertencia" title="No confundas las dos cosas">
+
+`UserContactUpdated` (que ya viste en el [módulo de Context Map](/ddd/context-map)) es un **evento de integración**: cruza la frontera de dos servicios, viaja por un bus de mensajería, está versionado con `schema_version` y usa event-carried state transfer. Un **evento de dominio** como el `ConfigurationAdded` hipotético de arriba sería interno a este único servicio, no necesita versión de esquema ni tolerar pérdida de mensajes, y probablemente se procesaría en la misma unidad de trabajo o inmediatamente después. Son herramientas para problemas distintos — este repo ya resuelve el primero; todavía no ha necesitado el segundo.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Ejercicio para pensar">
+
+Busca en tu propio código un lugar donde, después de guardar algo, el mismo método sigue trabajando para actualizar una segunda cosa no relacionada directamente ("guardar el pedido y también actualizar el inventario y también mandar un correo"). Esa cadena de responsabilidades mezcladas en un solo método es exactamente lo que un evento de dominio permitiría separar.
+
+</Callout>

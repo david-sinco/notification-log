@@ -1,0 +1,116 @@
+---
+title: "Ocho patrones reales, y los que faltan"
+description: "Esta guía no enseña el catálogo GoF. Enseña los patrones que **ya están en este repositorio**: cada uno se presenta por el dolor concreto que lo hizo necesario aquí, se ilustra con código copiado literalmente del proyecto —con su ruta y su línea— y se recorre siguiendo una ejecución real de principio a fin."
+sidebar:
+  order: 0
+  label: "Introducción"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+Esta guía no enseña el catálogo GoF. Enseña los patrones que **ya están en este repositorio**: cada uno se presenta por el dolor concreto que lo hizo necesario aquí, se ilustra con código copiado literalmente del proyecto —con su ruta y su línea— y se recorre siguiendo una ejecución real de principio a fin.
+
+Y donde el patrón está mal aplicado, incompleto o directamente ausente, la guía lo dice sin adornos. El [Strategy de los canales de envío](/patrones/estrategia) está roto en cuatro interfaces y un `switch`; el [Observer de eventos de dominio](/patrones/casi-patrones) tiene el esqueleto y ningún observador. Esos dos capítulos enseñan más que los seis que funcionan bien.
+
+Un patrón no es una plantilla que se copia: es un **compromiso**. Todos cobran en indirección lo que pagan en flexibilidad. La pregunta que atraviesa las diez páginas es siempre la misma: *"¿qué cambio futuro estoy comprando, y cuánta indirección estoy pagando por él?"*. Si un patrón no compra ningún cambio que vaya a ocurrir, sobra.
+
+## Cómo leer cada ficha
+
+Las ocho páginas de patrón siguen exactamente la misma estructura, para que puedas saltarte lo que ya sepas: **el problema** (la situación de este proyecto que lo pedía) → **la idea** (cinco líneas, sin jerga) → **cómo se ve aquí** (código real, comentado pieza a pieza) → **recorrido de una ejecución** (una llamada seguida por los ficheros que atraviesa) → **qué pasaría sin el patrón** (contraejemplo hipotético, marcado como tal) → **otras apariciones** → **señales de alarma** → **ejercicio** con la solución plegada al final.
+
+<Callout kind="concepto" title="Tres etiquetas de origen que verás en cada patrón">
+
+- **Deliberado** — el equipo lo eligió. Hay una interfaz que nadie te obligó a escribir, o una decisión comentada en el propio código.
+- **Del framework** — aparece porque ASP.NET Core, EF Core o Wolverine lo imponen. Sigue siendo didáctico (es el patrón mejor implementado que vas a leer), pero no fue una decisión del proyecto.
+- **Emergente** — la estructura coincide con el patrón, pero probablemente nadie lo planteó así. Útil para reconocerlos en la naturaleza.
+
+</Callout>
+
+## Ruta de aprendizaje
+
+Ordenada de más simple a más complejo. Los tres primeros son el estilo de casa: si entiendes Factory, Repository y Command/Handler, ya puedes leer el 80 % de `Application` y `Domain` sin ayuda.
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/patrones/factory">
+        <span class="ddd-card-num">01</span>
+        <h3>Factory Method</h3>
+        <p>Constructor privado y <code>Create(...)</code> estático: por qué en este dominio es
+        <em>imposible</em> construir un objeto en estado inválido.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/repositorio">
+        <span class="ddd-card-num">02</span>
+        <h3>Repository + Unit of Work</h3>
+        <p>Cuatro interfaces en <code>Domain</code>, cuatro clases <code>internal</code> en
+        <code>Infrastructure</code>, y un <code>DbContext</code> que hace de las dos cosas.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/comandos">
+        <span class="ddd-card-num">03</span>
+        <h3>Command / Handler</h3>
+        <p>CQRS a mano, sin MediatR: un <code>record</code>, una clase y un registro explícito por cada
+        caso de uso. Qué se gana renunciando a la librería.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/resultado">
+        <span class="ddd-card-num">04</span>
+        <h3>Result object</h3>
+        <p><code>NotificationSendResult</code>: cuándo un fallo es un valor de retorno y cuándo es una
+        excepción. La regla que sigue este código y dónde se la salta.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/adaptador">
+        <span class="ddd-card-num">05</span>
+        <h3>Adapter + Anti-Corruption Layer</h3>
+        <p>Scriban, SMTP y protobuf entran al sistema envueltos. Ni <code>Application</code> ni
+        <code>Domain</code> saben que existen.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/estrategia">
+        <span class="ddd-card-num">06</span>
+        <h3>Strategy (roto)</h3>
+        <p>Cuatro interfaces idénticas y un <code>switch</code>. El patrón está a medio aplicar y se paga
+        su coste sin cobrar su beneficio. El capítulo más útil.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/gateway">
+        <span class="ddd-card-num">07</span>
+        <h3>Gateway</h3>
+        <p>Los cuatro <code>*ApiClient</code> del Blazor: una capa entera cuyo único trabajo es que las
+        páginas no vean <code>HttpClient</code>.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/framework">
+        <span class="ddd-card-num">08</span>
+        <h3>Los que pone el framework</h3>
+        <p>Chain of Responsibility, Template Method, Builder fluido, Options y registro por convención:
+        patrones que no elegiste pero que usas cada día.</p>
+    </a>
+</div>
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/patrones/casi-patrones">
+        <span class="ddd-card-num">09</span>
+        <h3>Casi-patrones y ausentes</h3>
+        <p>El Observer sin observadores, el Singleton que no lo es, el Null Object invertido a propósito y
+        los tres patrones que faltan y duelen.</p>
+    </a>
+    <a class="ddd-card" href="/patrones/ejercicios">
+        <span class="ddd-card-num">10</span>
+        <h3>Ejercicios</h3>
+        <p>Los ocho ejercicios de las fichas, reunidos y ordenados por dificultad, con un entregable
+        verificable cada uno.</p>
+    </a>
+</div>
+
+## Por dónde empezar según lo que vayas a tocar
+
+| Si vas a trabajar en… | Lee primero | Por qué |
+| --- | --- | --- |
+| `Domain/` — reglas de negocio, agregados nuevos | [01 Factory](/patrones/factory) → [02 Repository](/patrones/repositorio) | Todo agregado de aquí se crea con un estático y se guarda por una interfaz que él mismo define. |
+| `Application/` — un caso de uso nuevo | [03 Command/Handler](/patrones/comandos) | Hay una convención de carpeta y tres ficheros por caso de uso, y un registro manual que no puedes olvidar. |
+| `Infrastructure/Notifications/Sending/` — un canal nuevo | [06 Strategy](/patrones/estrategia) → [04 Result](/patrones/resultado) | Es donde el patrón está mal aplicado: añadir un canal hoy toca cuatro ficheros, y conviene saber por qué antes de tocarlos. |
+| `Infrastructure/Messaging/` — un mensaje nuevo | [05 Adapter + ACL](/patrones/adaptador) | La regla no negociable es que los tipos protobuf mueren en el consumer. |
+| `ApiService/` — un endpoint nuevo | [08 Framework](/patrones/framework) → [03 Command/Handler](/patrones/comandos) | El endpoint no tiene lógica: registra metadatos con un builder fluido y delega en un handler. |
+| `NotificationLog.Web/` — una página nueva | [07 Gateway](/patrones/gateway) | Las páginas nunca hablan HTTP: piden un `*ApiClient` por inyección y capturan `ApiException`. |
+
+<Callout kind="honesto" title="Qué NO vas a encontrar en esta guía">
+
+No hay ficha de Decorator, Observer completo, Builder de dominio, State, Visitor ni Specification, porque **no están en el código**. Inflar el catálogo con patrones forzados es la forma más rápida de que un equipo aprenda a verlos donde no están. Los que faltan y sí harían falta tienen su sitio en [la página 9](/patrones/casi-patrones), con el dolor concreto que aliviarían.
+
+Tampoco se repiten aquí los patrones tácticos de DDD —agregado, entidad, value object, servicio de dominio—: los cubre el [tutorial de DDD](/ddd). Y las decisiones de nivel arquitectónico —capas, mensajería, despliegue— están en [Arquitectura](/arquitectura). Esta guía se queda en el nivel de diseño de clases.
+
+</Callout>

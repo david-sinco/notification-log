@@ -1,0 +1,209 @@
+---
+title: "Fundamentos de diseño estructural"
+description: "Acoplamiento, cohesión y límites. Todo lo demás de esta guía deriva de aquí."
+sidebar:
+  order: 2
+  label: "2 · Fundamentos de diseño estructural"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Medir el acoplamiento de este sistema con un número, no con una impresión.
+- Distinguir los tipos de acoplamiento por gravedad — y ver cuál es invisible en el diagrama.
+- Entender por qué la inversión de dependencias es lo que hace posible hexagonal y clean.
+- Situar honestamente este repositorio entre "capas", "hexagonal" y "monolito modular".
+- Escribir un test que rompa el build cuando alguien cruce un límite.
+
+</Callout>
+
+## 2.1 · Cohesión dentro, acoplamiento fuera
+
+**Cohesión** es cuánto pertenecen juntos los elementos de un módulo. **Acoplamiento** es cuánto depende un módulo de otro. El objetivo es siempre el mismo — alta cohesión dentro, bajo acoplamiento fuera — y todos los patrones de esta guía son formas distintas de perseguirlo.
+
+Lo interesante es que el acoplamiento se puede medir sin herramientas: **¿cuántos módulos hay que tocar y desplegar para un cambio típico de negocio?** Ese número es tu medida real. Hagámoslo con un cambio concreto y trivial de este repositorio: añadir un campo `Category` a `NotificationTrigger` y mostrarlo en el panel.
+
+| Proyecto | Qué hay que tocar |
+| --- | --- |
+| `...NotificationService.Domain` | La propiedad en `NotificationTrigger` y su constante de longitud |
+| `...NotificationService.Application` | Comando, handler, validador y DTO de salida |
+| `...NotificationService.Infrastructure` | La configuración de EF Core y una migración nueva |
+| `NotificationLog.ApiService` | El *request*/*response* del endpoint |
+| `NotificationLog.Web` | El DTO del `ApiClient` y la página Razor |
+
+**Cinco proyectos y una migración** para un campo. Ese es el precio real de la arquitectura en capas de este sistema, y conviene decirlo sin adornos: es el coste que se paga a cambio de que el dominio sea sustituible, testeable y ajeno a la infraestructura. Un CRUD en un solo proyecto tocaría dos archivos. La pregunta correcta no es "¿cómo evito los cinco proyectos?" sino "¿qué me está comprando ese precio, y lo sigo necesitando?".
+
+### No todo el acoplamiento pesa lo mismo
+
+| Tipo | Gravedad | En este repositorio |
+| --- | --- | --- |
+| Por contrato estable | Aceptable | `NotificationLog.Web` depende de la API solo por HTTP + JSON; los `.proto` de `Contracts` |
+| Por implementación compartida | Malo | No lo hay: `Contracts` solo contiene mensajes, sin lógica ni cliente de mensajería |
+| Por base de datos compartida | El peor — e invisible en el diagrama | No lo hay: solo `apiservice` abre `NotificationDbContext` |
+
+<Callout kind="advertencia" title="El acoplamiento por base de datos no aparece en ningún diagrama">
+
+Es el más peligroso precisamente porque es invisible: dos servicios dibujados como cajas separadas y unidas por nada pueden estar acopladísimos si comparten tablas, porque un `ALTER TABLE` de uno rompe al otro sin que ninguna flecha lo anticipe. Aquí hay un caso limítrofe que conviene mirar de frente: el contenedor `sql-client` (DbGate) declarado en `AppHost.cs` abre la misma base de datos con el usuario `sa`. Es una herramienta de desarrollo, no un servicio — pero si alguien la usara para escribir datos saltándose los agregados, todas las invariantes del [módulo 6](/arquitectura/dominio) dejarían de valer.
+
+</Callout>
+
+## 2.2 · Límites y la regla de dependencia
+
+Un límite es un punto donde el código de un lado no sabe nada del otro. La regla que los hace útiles: **las dependencias apuntan hacia lo estable, no hacia lo volátil**. Las reglas de negocio son lo estable; el proveedor de SMS de este trimestre es lo volátil.
+
+La herramienta para dirigir la flecha es la inversión de dependencias — la D de SOLID. Si tu lógica necesita enviar un SMS, define *tú* la interfaz y que la implemente infraestructura. Así la dependencia de compilación apunta al revés que la de ejecución, y ese truco es lo único que hace posible hexagonal, clean y cualquier arquitectura con dominio protegido.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 820 220" role="img" aria-labelledby="invTitle">
+        <title id="invTitle">La dependencia de compilación apunta al revés que la de ejecución</title>
+        <defs>
+            <marker id="invArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#4f46e5" />
+            </marker>
+            <marker id="invArrowRun" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#f97316" />
+            </marker>
+        </defs>
+
+        <rect x="40" y="70" width="240" height="80" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="160" y="98" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">Application</text>
+        <text x="160" y="116" text-anchor="middle" font-size="8.5" fill="#14532d">NotificationDispatchService</text>
+        <text x="160" y="132" text-anchor="middle" font-size="8.5" fill="#14532d">declara ISmsNotificationSender</text>
+
+        <rect x="530" y="70" width="250" height="80" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="655" y="98" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Infrastructure</text>
+        <text x="655" y="116" text-anchor="middle" font-size="8.5" fill="#475569">HttpSmsNotificationSender</text>
+        <text x="655" y="132" text-anchor="middle" font-size="8.5" fill="#475569">implementa la interfaz</text>
+
+        <line x1="528" y1="100" x2="282" y2="100" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#invArrow)" />
+        <text x="405" y="92" text-anchor="middle" font-size="8.5" fill="#4f46e5">dependencia de compilación</text>
+
+        <line x1="282" y1="135" x2="528" y2="135" stroke="#f97316" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#invArrowRun)" />
+        <text x="405" y="155" text-anchor="middle" font-size="8.5" fill="#f97316">llamada en ejecución</text>
+
+        <text x="410" y="196" text-anchor="middle" font-size="8" fill="#94a3b8">Verificable: Infrastructure.csproj referencia a Application; Application.csproj no referencia a nadie salvo Domain.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        En ejecución, Application llama a Infrastructure. En compilación, Infrastructure depende de
+        Application. Esa contradicción aparente es exactamente el mecanismo.
+    </p>
+</div>
+
+En este repositorio la regla no se sostiene por convención de carpetas ni por buena voluntad: la sostiene el grafo de referencias de proyecto, que el compilador impone. Cuatro `.csproj` dicen la verdad completa:
+
+```csharp title="Referencias reales entre proyectos (leídas de los .csproj)"
+Domain.csproj          -> (nada)                       0 PackageReference, 0 ProjectReference
+Application.csproj     -> Domain                       + FluentValidation, Logging.Abstractions
+Infrastructure.csproj  -> Application, Domain,         + EF Core SqlServer, Wolverine, Scriban
+                          Contracts
+ApiService.csproj      -> Application, Infrastructure, + OpenApi, Scalar
+                          ServiceDefaults
+Web.csproj             -> ServiceDefaults              <- NO referencia Application ni Domain:
+                                                          solo habla HTTP con la API
+```
+
+## 2.3 · Arquitectura en capas
+
+Organización horizontal en niveles —presentación, aplicación, dominio, persistencia— con dependencia unidireccional hacia abajo. Es el estilo más común y el peor entendido. Su ventaja es real: es simple, familiar y cualquiera que llegue nuevo sabe dónde buscar.
+
+Sus dos problemas también son reales, y este repositorio los exhibe a la vista:
+
+- **Baja cohesión funcional:** un cambio de negocio toca todas las capas. Es la tabla de cinco proyectos de la sección 2.1 — el corte por tecnología reparte cada feature entre varios sitios.
+- **Capas sumidero:** niveles que solo reenvían llamadas sin transformar ni proteger nada.
+
+<Callout kind="honesto" title="¿Hay capas sumidero aquí? Dos candidatas, con veredictos distintos">
+
+**Los endpoints de `ApiService` no lo son.** Parecen finos —arman el comando y llaman al handler— pero hacen dos trabajos que nadie más haría: traducen a códigos HTTP y, vía `GlobalExceptionHandler`, convierten `DomainException` en un `422` con `ProblemDetails`. El dominio nunca supo que existía HTTP; alguien tenía que traducir.
+
+**Los `ApiClient` de `NotificationLog.Web` están más cerca de serlo.** `TriggersApiClient.ListAsync` construye la query, llama y deserializa: es casi puro reenvío. Lo que lo salva de ser sumidero es que concentra la traducción de errores HTTP a `ApiException` y aísla las páginas Razor del formato del contrato. Si mañana esos clientes solo pasaran datos sin aportar nada, la respuesta correcta sería eliminarlos, no defenderlos.
+
+</Callout>
+
+## 2.4 · Hexagonal: puertos y adaptadores
+
+Frente a las capas, hexagonal cambia el eje: en lugar de niveles horizontales, *dentro* y *fuera*. El núcleo de negocio no tiene dependencias salientes; todo lo externo entra por puertos que implementan adaptadores intercambiables.
+
+Este repositorio es hexagonal de verdad, y se puede enumerar sin ambigüedad. Los puertos que declara `Application`:
+
+- `IUnitOfWork` — un método, `SaveChangesAsync`. No expone `DbContext` ni transacciones.
+- Cuatro repositorios, uno por agregado, con métodos de negocio (`GetByEventKeyAsync`, no `GetAll`).
+- `ITemplateRenderer` — no sabe si detrás hay Scriban, Handlebars o interpolación manual.
+- `IEmailNotificationSender`, `ISmsNotificationSender`, `IPushNotificationSender`, `IWhatsAppNotificationSender`.
+
+Y los adaptadores que los cumplen, todos en `Infrastructure`: `NotificationDbContext`, los cuatro repositorios EF Core, `ScribanTemplateRenderer`, `SmtpEmailNotificationSender`, `HttpSmsNotificationSender`, `HttpPushNotificationSender` y el stub de WhatsApp.
+
+El beneficio principal es medible: el núcleo se testea sin infraestructura y sustituir un proveedor es escribir un adaptador. El coste también: más indirección y más archivos. En un CRUD sencillo esto sería sobreingeniería — aquí lo justifica que haya cuatro canales de envío externos y un bus de mensajería que ya está declarado como provisional.
+
+<Callout kind="concepto" title="La prueba más barata de que el hexágono está cerrado">
+
+`NotificationLog.NotificationService.Domain.csproj` no tiene **ni un** `PackageReference` ni `ProjectReference`. Cero. No es una aspiración escrita en un documento: es un archivo de doce líneas que puedes abrir ahora mismo, y cualquier intento de meterle Entity Framework al dominio tendría que empezar por modificarlo — un cambio visible en cualquier revisión de código.
+
+</Callout>
+
+## 2.5 · Monolito modular
+
+Un único desplegable con límites internos estrictos entre módulos, comunicándose por interfaces públicas explícitas y sin compartir tablas. Preséntalo como **la opción por defecto de la industria hoy**: da casi toda la modularidad de los microservicios sin su coste operativo, y deja abierta la extracción posterior de los módulos que realmente la necesiten.
+
+Es exactamente lo que es `apiservice`: un proceso que contiene `Application`, `Infrastructure` y `Domain`, con los límites impuestos por referencias de proyecto en vez de por convención. La condición para que siga siéndolo es disciplina — y sin barreras automatizadas, los límites se erosionan en meses. De ahí la sección siguiente.
+
+## 2.6 · Tests de arquitectura
+
+Un test de arquitectura verifica reglas estructurales: qué proyecto puede referenciar a cuál, qué tipos no pueden aparecer dónde. Convierte las normas de un acuerdo verbal en un build rojo. Herramientas: **NetArchTest** o **ArchUnitNET** en .NET, ArchUnit en Java, dependency-cruiser o ESLint boundaries en JS/TS, import-linter en Python.
+
+<Callout kind="honesto" title="Este repositorio no tiene ninguno — y el arnés de pruebas ni siquiera podría escribirlos">
+
+Hay exactamente un test en todo el proyecto: `WebTests.GetWebResourceRootReturnsOkStatusCode`, que levanta la aplicación distribuida completa y comprueba que `GET /` devuelve `200 OK`. Es un test de humo con valor real, pero no verifica ninguna regla estructural.
+
+Y hay un detalle que lo explica todo: `NotificationLog.Tests.csproj` tiene un único `ProjectReference`, a `NotificationLog.AppHost`. El proyecto de pruebas **no puede nombrar** a `NotificationTrigger` hoy, así que tampoco puede inspeccionar sus ensamblados. Añadir un test de arquitectura empieza por añadir esa referencia.
+
+</Callout>
+
+Ahora bien, una regla merece test *solo si puede romperse*. Aquí, "Domain no depende de EF Core" ya la garantiza el `.csproj` vacío: un test que la comprobara sería redundante. Las que sí se pueden violar mañana sin que nadie lo note:
+
+```csharp title="Tests de arquitectura que sí aportarían aquí (NetArchTest)"
+// Requiere añadir los ProjectReference correspondientes a NotificationLog.Tests.csproj
+// y el paquete NetArchTest.Rules.
+
+[TestMethod]
+public void Application_no_depende_de_Infrastructure()
+{
+    var result = Types.InAssembly(typeof(CreateTriggerHandler).Assembly)
+        .ShouldNot()
+        .HaveDependencyOn("NotificationLog.NotificationService.Infrastructure")
+        .GetResult();
+
+    Assert.IsTrue(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+}
+
+[TestMethod]
+public void Los_handlers_de_Application_no_conocen_ASP_NET_ni_EF_Core()
+{
+    var result = Types.InAssembly(typeof(CreateTriggerHandler).Assembly)
+        .That().HaveNameEndingWith("Handler")
+        .ShouldNot()
+        .HaveDependencyOnAny("Microsoft.AspNetCore", "Microsoft.EntityFrameworkCore")
+        .GetResult();
+
+    Assert.IsTrue(result.IsSuccessful, string.Join(", ", result.FailingTypeNames ?? []));
+}
+
+[TestMethod]
+public void Las_entidades_hijas_no_se_construyen_desde_fuera_del_agregado()
+{
+    // NotificationConfiguration.Create es internal a proposito: si alguien lo hiciera public,
+    // la invariante de canal unico de NotificationTrigger dejaria de estar protegida.
+    var create = typeof(NotificationConfiguration)
+        .GetMethod("Create", BindingFlags.Static | BindingFlags.NonPublic);
+
+    Assert.IsNotNull(create, "NotificationConfiguration.Create dejo de ser internal.");
+}
+```
+
+<Callout kind="ejercicio" title="Ejercicios de la sesión 2">
+
+1. Dibuja el C4 de Contexto y Contenedores de este sistema — el de Contenedores está en el [módulo 1](/arquitectura/fundamentos); falta el de Contexto, que es el que obliga a nombrar a los sistemas externos que aún no existen.
+2. Localiza los tres puntos de mayor acoplamiento y propón un límite para uno de ellos.
+3. Implementa el primero de los tests de arquitectura de arriba y comprueba que falla si lo violas a propósito.
+
+</Callout>

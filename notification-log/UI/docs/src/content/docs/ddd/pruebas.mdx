@@ -1,0 +1,284 @@
+---
+title: "Probar el dominio"
+description: "Sin base de datos, sin framework y casi sin dobles. Un dominio bien aislado hace los tests aburridos — y eso es exactamente el objetivo."
+sidebar:
+  order: 13
+  label: "13 · Probar el dominio"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Decidir qué se prueba en cada capa de este proyecto, y qué no vale la pena duplicar.
+- Escribir un test de invariante de agregado sin mocks, sin base de datos y sin arrancar la aplicación.
+- Entender por qué la encapsulación del módulo 6 te obliga a probar por la API pública — y por qué eso es una ventaja.
+- Reconocer cuándo un test que cuesta mucho escribir está señalando un problema de diseño, no de testing.
+
+</Callout>
+
+**Para quién es:** ya recorriste el modelado táctico (módulos 5 a 10) y sabes dónde vive cada regla de negocio de este dominio. Se asume que sabes ejecutar `dotnet test` y leer una aserción, pero no se asume ninguna opinión previa sobre pirámides de tests. La [Tarea 1](/ddd/tareas) del último módulo te pide escribir estos tests; este módulo es la parte que faltaba: *qué* probar y *por qué* esas reglas y no otras.
+
+## El problema: el módulo 11 prometió algo que nadie ha cobrado
+
+El [módulo de arquitectura](/ddd/arquitectura) presumía de un `.csproj` de dominio con cero `PackageReference`, y decía que el beneficio real de la regla de dependencia es que "el dominio se testea sin levantar nada". Es cierto — y hasta hoy, nadie lo ha aprovechado. Ese es el problema concreto que motiva este módulo: la arquitectura pagó por adelantado el coste de aislar el dominio, y el retorno de esa inversión todavía está sin cobrar.
+
+<Callout kind="honesto" title="El estado real de las pruebas de este repositorio">
+
+Hay exactamente **un** test en todo el proyecto: `WebTests.GetWebResourceRootReturnsOkStatusCode`, en `Services/Notification/NotificationLog.Tests/WebTests.cs`. Levanta la aplicación distribuida completa con `DistributedApplicationTestingBuilder`, espera a que el recurso `webfrontend` esté sano y comprueba que `GET /` devuelve `200 OK`.
+
+Es un test de humo de extremo a extremo, y tiene valor real: verifica que el cableado de Aspire, la cadena de conexión, las migraciones al arrancar y el registro de dependencias funcionan de verdad. Lo que no verifica es una sola regla de negocio. Ni una. Si mañana alguien borrara `EnsureChannelIsFree` del agregado `NotificationTrigger`, este test seguiría pasando en verde.
+
+Y hay un detalle todavía más revelador: `NotificationLog.Tests.csproj` tiene un único `ProjectReference`, a `NotificationLog.AppHost`. El proyecto de pruebas **no puede siquiera nombrar** a `NotificationTrigger` hoy. El arnés está cableado para probar el sistema por fuera, no el modelo por dentro.
+
+</Callout>
+
+## Qué probar en cada capa, y qué no duplicar
+
+La pregunta útil no es "¿cuántos tests?" sino "¿qué afirmación quiero poder hacer, y cuál es la forma más barata de sostenerla?". Con las cuatro capas de este proyecto, el reparto es bastante limpio:
+
+| Capa | Qué afirma un test aquí | Con qué se prueba | Qué NO probar aquí |
+| --- | --- | --- | --- |
+| **Domain** | "Esta regla de negocio se cumple siempre." | Nada. Objetos construidos con su propia fábrica. | Que EF guarde bien. Que el endpoint devuelva 422. |
+| **Application** | "El orquestador llama a lo correcto, en el orden correcto, y traduce los fallos." | Dobles en memoria de los repositorios; validadores reales. | Las reglas de negocio ya probadas en Domain. |
+| **Infrastructure** | "El mapeo, las conversiones y los índices funcionan contra un motor real." | Una base de datos de verdad (contenedor efímero). | Lógica de negocio. Si aparece aquí, está en el sitio equivocado. |
+| **API / Web** | "El sistema arranca y responde." | `WebTests`, el que ya existe. | Casos de negocio uno por uno: lentísimo y frágil. |
+
+La columna de la derecha es la más importante y la que casi nadie escribe. La mayoría de las suites de pruebas lentas y frágiles no son grandes porque prueben mucho: son grandes porque prueban lo mismo cuatro veces, a cuatro niveles de coste distintos.
+
+## El dominio: tres tests que no necesitan nada
+
+Estas son las reglas con mejor relación valor/coste de todo el repositorio, porque cada una es una invariante real que hoy no tiene ninguna red de seguridad. Los ejemplos usan MSTest, que es lo que ya trae el proyecto de pruebas (`MSTest 3.10.2` con `EnableMSTestRunner`), y `Assert.ThrowsExactly`, que es la forma vigente en esa versión.
+
+<Callout kind="honesto" title="Este código no existe todavía en el repositorio">
+
+Todo lo que sigue es código **que vas a escribir tú** — no un extracto de un archivo existente. Las clases, métodos y firmas que invoca sí son reales y puedes verificarlas abriendo `NotificationLog.NotificationService.Domain`; lo que no existe es el archivo de tests que las ejercita.
+
+</Callout>
+
+```csharp title="Tests que escribirías: la invariante de canal único (módulo 7)"
+using NotificationLog.NotificationService.Domain.Common;
+using NotificationLog.NotificationService.Domain.Shared;
+using NotificationLog.NotificationService.Domain.Triggers;
+
+[TestClass]
+public class NotificationTriggerTests
+{
+    [TestMethod]
+    public void AddConfiguration_RechazaUnSegundoCanalEmailActivo()
+    {
+        var trigger = NotificationTrigger.Create(
+            EventKey.Create("pedido.confirmado"), "Pedido confirmado");
+
+        trigger.AddConfiguration(Guid.NewGuid(), NotificationChannel.Email);
+
+        Assert.ThrowsExactly<DomainException>(
+            () => trigger.AddConfiguration(Guid.NewGuid(), NotificationChannel.Email));
+    }
+
+    [TestMethod]
+    public void AddConfiguration_PermiteReusarElCanalSiLaAnteriorEstaDesactivada()
+    {
+        var trigger = NotificationTrigger.Create(
+            EventKey.Create("pedido.confirmado"), "Pedido confirmado");
+
+        var primera = trigger.AddConfiguration(Guid.NewGuid(), NotificationChannel.Email);
+        trigger.DisableConfiguration(primera.Id);
+
+        // No lanza: EnsureChannelIsFree solo cuenta las configuraciones habilitadas.
+        var segunda = trigger.AddConfiguration(Guid.NewGuid(), NotificationChannel.Email);
+
+        Assert.AreEqual(2, trigger.Configurations.Count);
+        Assert.IsTrue(segunda.IsEnabled);
+    }
+
+    [TestMethod]
+    public void ResolveActiveConfigurations_DevuelveVacioSiElTriggerEstaDeshabilitado()
+    {
+        var trigger = NotificationTrigger.Create(
+            EventKey.Create("pedido.confirmado"), "Pedido confirmado");
+
+        trigger.AddConfiguration(Guid.NewGuid(), NotificationChannel.Email);
+        trigger.Disable();
+
+        // La regla vive en el agregado, no en NotificationDispatchService.
+        Assert.AreEqual(0, trigger.ResolveActiveConfigurations().Count);
+    }
+}
+```
+
+El segundo test de ese bloque es el interesante, y probablemente el que descubrirías tarde si no lo escribieras: la invariante no dice "un canal, una configuración", dice "un canal, una configuración **activa**". `EnsureChannelIsFree` filtra por `c.IsEnabled`, así que desactivar la primera libera el canal. Esa es una decisión de negocio deliberada — permite preparar una configuración de reemplazo antes de apagar la anterior — y sin un test que la fije, el próximo refactor la puede borrar sin que nadie se entere.
+
+```csharp title="Tests que escribirías: reglas de plantilla y de destinatario"
+[TestMethod]
+public void EventKey_ExigeElFormatoDominioPuntoAccion()
+{
+    Assert.ThrowsExactly<DomainException>(() => EventKey.Create("PedidoConfirmado"));
+    Assert.AreEqual("pedido.confirmado", EventKey.Create("  Pedido.Confirmado  ").Value);
+}
+
+[TestMethod]
+public void PlantillaDeSms_NoAdmiteAsunto()
+{
+    Assert.ThrowsExactly<DomainException>(() => NotificationTemplate.Create(
+        TemplateName.Create("pedido_confirmado"),
+        NotificationChannel.Sms,
+        subject: "Tu pedido",      // <- Sms no lleva asunto: la regla está en TemplateVersion
+        body: "Tu pedido fue confirmado."));
+}
+
+[TestMethod]
+public void Recipient_NoPuedeRecibirPorUnCanalSinDireccion()
+{
+    var sinTelefono = Recipient.Create(Guid.NewGuid(), "Ana", "ana@ejemplo.com", phone: null);
+
+    Assert.IsTrue(sinTelefono.CanReceive(NotificationChannel.Email));
+    Assert.IsFalse(sinTelefono.CanReceive(NotificationChannel.Sms));
+
+    sinTelefono.Deactivate();
+    Assert.IsFalse(sinTelefono.CanReceive(NotificationChannel.Email));   // inactivo: ningún canal
+}
+```
+
+Fíjate en lo que *no* hay en ninguno de esos tests: ni un `Mock<...>`, ni una cadena de conexión, ni un `IServiceProvider`, ni un `[TestInitialize]` que monte andamiaje. Un agregado que protege su estado con sus propias reglas no tiene colaboradores que simular, porque no depende de nadie. Si probar tu dominio te obliga a montar dobles, eso ya es información: la lógica que estás probando probablemente no está en el dominio.
+
+## La encapsulación te obliga a probar por la puerta principal
+
+Al escribir el primer test aparece una fricción que conviene entender en vez de sortear: `NotificationConfiguration.Create` y `TemplateVersion.Create` son `internal` ([módulo 6](/ddd/entidades)). Desde un proyecto de pruebas externo **no se pueden invocar**. No puedes fabricar una configuración suelta y metérsela al trigger para "preparar el escenario": estás obligado a llegar a ese estado llamando a `trigger.AddConfiguration(...)`, es decir, pasando por la misma puerta que usa el código de producción.
+
+<Callout kind="advertencia" title="La tentación de InternalsVisibleTo">
+
+La salida fácil es agregar `[assembly: InternalsVisibleTo("NotificationLog.Tests")]` al proyecto de dominio y construir el estado interno a mano. Antes de hacerlo, considera qué se pierde: un test que fabrica un estado imposible de alcanzar por la API pública comprueba una situación que no puede ocurrir en producción — y, peor, deja de detectar si la API pública dejó de poder alcanzar un estado que sí debería. Para *este* dominio no hace falta: cada estado que quieras probar es alcanzable con dos o tres llamadas públicas. Reserva `InternalsVisibleTo` para cuando el coste de la configuración por la puerta principal sea genuinamente prohibitivo, no para la primera incomodidad.
+
+</Callout>
+
+## Object mothers: el escenario legible, en un solo sitio
+
+<Callout kind="concepto" title="Concepto: object mother y builder">
+
+Una *object mother* es una fábrica de escenarios con nombre de negocio para tests (`UnTriggerHabilitado()`, `UnaPlantillaDeSms()`). Un *builder* es su variante encadenable, para cuando cada test necesita variar un par de datos (`UnTrigger().Deshabilitado().ConEmail()`). Ambos existen por la misma razón: el *arrange* de un test debería leerse como la frase de negocio que describe el caso, no como una lista de argumentos posicionales.
+
+</Callout>
+
+En este dominio la diferencia se nota rápido. `NotificationTrigger.Create(EventKey.Create("pedido.confirmado"), "Pedido confirmado")` repetido en quince tests es ruido que oculta lo que cada test realmente prueba; y cuando el día de mañana `Create` reciba un parámetro más, hay que tocar los quince.
+
+```csharp title="Object mother que escribirías, con el vocabulario del dominio"
+// TestSupport/TriggerMother.cs — escenarios con nombre de negocio, no listas de argumentos.
+internal static class TriggerMother
+{
+    public static NotificationTrigger Habilitado(string eventKey = "pedido.confirmado")
+        => NotificationTrigger.Create(EventKey.Create(eventKey), "Trigger de prueba");
+
+    public static NotificationTrigger ConEmailActivo(out NotificationConfiguration configuracion)
+    {
+        var trigger = Habilitado();
+        configuracion = trigger.AddConfiguration(Guid.NewGuid(), NotificationChannel.Email);
+        return trigger;
+    }
+
+    public static NotificationTrigger ConEmailDesactivado()
+    {
+        var trigger = ConEmailActivo(out var configuracion);
+        trigger.DisableConfiguration(configuracion.Id);
+        return trigger;
+    }
+}
+
+// El arrange del test pasa a leerse como la frase de negocio que describe el caso:
+var trigger = TriggerMother.ConEmailDesactivado();
+```
+
+## Capa de aplicación: dobles en memoria, no mocks
+
+Los handlers de este proyecto son delgados a propósito — el módulo 11 lo medía en líneas — así que la pregunta legítima es si merecen tests propios. La respuesta honesta: la mayoría no, pero algunos sí, porque contienen una decisión que el dominio no puede tomar. `CreateTriggerHandler` es el caso claro: la regla "no puede haber dos triggers con el mismo `EventKey`" cruza agregados, vive en el handler y se traduce a un `AppValidationException`. Ningún test de dominio la cubre.
+
+```csharp title="Doble en memoria que escribirías, en vez de un framework de mocks"
+// TestSupport/InMemoryTriggerRepository.cs — implementa la interfaz real del dominio.
+internal sealed class InMemoryTriggerRepository : INotificationTriggerRepository
+{
+    private readonly List<NotificationTrigger> _items = new();
+
+    public Task AddAsync(NotificationTrigger trigger, CancellationToken ct)
+    {
+        _items.Add(trigger);
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> ExistsAsync(EventKey eventKey, CancellationToken ct)
+        => Task.FromResult(_items.Any(t => t.EventKey == eventKey));
+
+    public Task<NotificationTrigger?> GetByIdAsync(Guid id, CancellationToken ct)
+        => Task.FromResult(_items.SingleOrDefault(t => t.Id == id));
+
+    // ...el resto de la interfaz, igual de simple.
+}
+
+// Y la unidad de trabajo, que en un test no tiene nada que confirmar:
+internal sealed class NoOpUnitOfWork : IUnitOfWork
+{
+    public Task<int> SaveChangesAsync(CancellationToken ct) => Task.FromResult(0);
+}
+
+[TestMethod]
+public async Task CreateTrigger_RechazaUnEventKeyYaExistente()
+{
+    var repositorio = new InMemoryTriggerRepository();
+    await repositorio.AddAsync(TriggerMother.Habilitado("pedido.confirmado"), default);
+
+    var handler = new CreateTriggerHandler(repositorio, new NoOpUnitOfWork(), validador);
+
+    await Assert.ThrowsExactlyAsync<AppValidationException>(
+        () => handler.HandleAsync(
+            new CreateTriggerCommand("pedido.confirmado", "Duplicado"), default));
+}
+```
+
+Un doble escrito a mano como ese suele ser mejor que un mock generado: se lee como una implementación de verdad, no obliga a describir expectativas de llamada, y no se rompe cuando alguien reordena las invocaciones sin cambiar el comportamiento. Un mock es útil cuando lo que quieres afirmar es *que se llamó* a algo (por ejemplo, que se envió por el canal correcto); para todo lo demás, un doble simple gana.
+
+<Callout kind="advertencia" title="Un detalle real: los validadores de este proyecto son internal">
+
+`CreateTriggerValidator` y sus hermanos son `internal sealed`, y se registran con `AddValidatorsFromAssembly(..., includeInternalTypes: true)` en `Application/DependencyInjection.cs`. Desde el proyecto de pruebas no puedes hacer `new CreateTriggerValidator()`. Tienes dos salidas limpias: resolver el validador desde un contenedor construido con `new ServiceCollection().AddApplication()` — lo que además verifica que el registro por escaneo funciona —, o pasarle al handler un `InlineValidator<CreateTriggerCommand>` vacío cuando el test no va sobre la validación de forma. La primera opción prueba más; la segunda aísla mejor. Elige según lo que estés afirmando.
+
+</Callout>
+
+## Cuando el test es difícil, el problema no es el test
+
+`NotificationDispatchService` recibe **once** dependencias por constructor: tres repositorios, un renderizador, cuatro remitentes (uno por canal), dos handlers de registro y un logger. Intenta escribir un test para él y lo primero que sentirás es el peso de construir once dobles para verificar una sola ramificación.
+
+Esa fricción es un mensaje de diseño, no un problema de herramientas. Los cuatro remitentes están ahí porque `SendAsync` resuelve el canal con un `switch` sobre el enum, lo que obliga a inyectar los cuatro aunque una invocación concreta use uno. Un `INotificationSenderFactory` — o un diccionario de remitentes indexado por canal — reduciría once dependencias a ocho y haría el test trivial. Ese es el valor menos publicitado de las pruebas: no encuentran bugs, encuentran diseños incómodos, y lo hacen antes de que sea caro cambiarlos.
+
+<Callout kind="antipatron" title="Cuatro formas de escribir tests que estorban">
+
+- **Levantar la base de datos para comprobar una regla de negocio.** Si el test de "no dos canales activos" necesita SQL Server, la regla no está en el agregado o no confías en que lo esté. Verifica cuál de las dos.
+- **Afirmar sobre el texto del mensaje de excepción.** `Assert.AreEqual("Ya existe una configuración activa para el canal Email.", ex.Message)` se rompe con cada corrección de redacción. Afirma el tipo (`DomainException`) y, si necesitas distinguir causas, es señal de que hacen falta tipos de excepción distintos, no comparaciones de cadenas.
+- **Un test por getter.** `Recipient.Name` devuelve lo que se le puso: eso no es una regla, es el lenguaje funcionando. Lo que sí es una regla es que `NormalizeName` recorta a 200 caracteres y rechaza el vacío.
+- **Probar la misma regla en las cuatro capas.** Si la invariante de canal único ya tiene su test de dominio, el test del handler no necesita repetirla: solo necesita comprobar que no la atrapa ni la enmascara.
+
+</Callout>
+
+## Lo que los tests de dominio no pueden decirte
+
+Conviene ser explícito sobre el límite, porque es exactamente donde la gente se confía. Todos los tests de este módulo se ejecutan sobre objetos en memoria, así que **no prueban absolutamente nada de la persistencia**. Toda la maquinaria del [módulo 12](/ddd/persistencia) queda fuera de su alcance: si alguien borra el `ValueComparer` de `_attributes` y los cambios de atributos dejan de guardarse, los tests de dominio siguen en verde. Si el `PropertyAccessMode.Field` desaparece y EF ya no puede rellenar `_configurations`, siguen en verde. Y la carrera de concurrencia del módulo 12 es, por definición, invisible para un test de un solo hilo sin base de datos.
+
+Eso no es un defecto del enfoque: es la división del trabajo. Esas afirmaciones se sostienen con un test de integración contra un motor real — el mismo contenedor efímero de SQL Server que ya levanta Aspire — y son pocos, lentos y valiosos. La pirámide no dice "solo tests unitarios": dice que cada afirmación se pague al precio más bajo que la sostenga de verdad.
+
+<Callout kind="ejercicio" title="Ejercicio 1 · El test que fija la decisión de negocio">
+
+`NotificationTemplate.PublishVersion` retira la versión vigente y añade la nueva. Escribe un test que afirme las tres cosas que deben cumplirse a la vez después de publicar: que `CurrentVersion.Number` es 2, que la versión 1 ya no es la vigente, y que `Versions` sigue conteniendo ambas. Después borra la línea `current.Retire();` del agregado y comprueba que tu test falla — y presta atención a *con qué error* falla, porque `CurrentVersion` lanza `DomainException` cuando encuentra dos vigentes. Un test que falla por la razón correcta vale el doble que uno que solo falla.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Ejercicio 2 · Autoevaluación">
+
+1. ¿Por qué un test del dominio de este proyecto no necesita ningún doble, y qué significaría que sí lo necesitara?
+2. `NotificationConfiguration.Create` es `internal`. ¿Cómo llevas un trigger al estado "una configuración de Email desactivada" desde un test externo?
+3. Nombra una afirmación que *solo* pueda sostener un test de integración con base de datos real en este repositorio.
+4. Un handler necesita once dobles para probarse. ¿Qué cambias: el test o el handler?
+
+</Callout>
+
+<Callout kind="honesto" title="El primer paso real, antes de escribir un solo Assert">
+
+`NotificationLog.Tests` no referencia el proyecto de dominio. Añadir ese `<ProjectReference>` — o crear un proyecto de pruebas nuevo, más pequeño y dedicado solo al dominio, que arranque en milisegundos en vez de levantar Aspire — es el trabajo previo. Esa elección ya es una decisión de diseño: mezclar tests de dominio instantáneos con un test de humo que levanta contenedores en el mismo proyecto significa esperar lo segundo cada vez que quieras comprobar lo primero. Es la [Tarea 1](/ddd/tareas), y ahora tienes el mapa completo para resolverla.
+
+</Callout>
