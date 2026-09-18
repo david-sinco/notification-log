@@ -1,3 +1,4 @@
+using Domain.Shared.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using NotificationLog.IdentityService.Api.Accounts;

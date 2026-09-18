@@ -1,4 +1,4 @@
-namespace NotificationLog.IdentityService.Api.Accounts;
+namespace Domain.Shared.Authorization;
 
 public enum UserRole
 {

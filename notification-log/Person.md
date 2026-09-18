@@ -18,11 +18,11 @@ tipo especial de usuario es el **asesor**.
 
 Servicios de la plataforma:
 
-| Servicio | Responsabilidad |
-|---|---|
-| **Identity** (este) | quién es cada persona, sus cuentas de acceso, sus perfiles de asesor y el inicio de sesión |
-| **Publicaciones** (futuro) | inmuebles, publicación, favoritos, búsquedas, visitas y el resto de lógica del portal |
-| **Notification** (existente) | envío de notificaciones por correo, SMS, push y WhatsApp |
+| Servicio                     | Responsabilidad                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------ |
+| **Identity** (este)          | quién es cada persona, sus cuentas de acceso, sus perfiles de asesor y el inicio de sesión |
+| **Publicaciones** (futuro)   | inmuebles, publicación, favoritos, búsquedas, visitas y el resto de lógica del portal      |
+| **Notification** (existente) | envío de notificaciones por correo, SMS, push y WhatsApp                                   |
 
 **Cada servicio tiene su propia base de datos.** Identity usa la base `identity` en PostgreSQL; ningún
 otro servicio la lee ni la escribe.
@@ -31,11 +31,11 @@ otro servicio la lee ni la escribe.
 
 Identity responde a una sola pregunta, **"¿quién es?"**, en tres niveles:
 
-| Nivel | Agregado | Responde |
-|---|---|---|
-| Identidad de los datos | `Person` | quién es esta persona y qué datos suyos están verificados |
-| Identidad de acceso | `User` | con qué cuenta entra, qué roles tiene y si puede iniciar sesión |
-| Identidad profesional | `Advisor` | si además es asesor y en qué condiciones trabaja |
+| Nivel                  | Agregado  | Responde                                                        |
+| ---------------------- | --------- | --------------------------------------------------------------- |
+| Identidad de los datos | `Person`  | quién es esta persona y qué datos suyos están verificados       |
+| Identidad de acceso    | `User`    | con qué cuenta entra, qué roles tiene y si puede iniciar sesión |
+| Identidad profesional  | `Advisor` | si además es asesor y en qué condiciones trabaja                |
 
 Además guarda la prueba de los consentimientos de tratamiento de datos (`ConsentLedger`) y es el
 **servidor de autorización** de la plataforma (OpenIddict): emite los tokens con los que la Web llama a
@@ -112,12 +112,12 @@ Además:
 
 **Costes asumidos:**
 
-| Coste | Cómo se resuelve |
-|---|---|
-| Los eventos viejos conservan datos personales | borrado criptográfico o enmascaramiento de Marten |
-| La unicidad no es un índice único | reservas en el repositorio de escritura |
-| Buscar por correo o listar usuarios | proyecciones |
-| OpenIddict no vive en los flujos | dos almacenes; rotar el stamp y revocar sesiones no es atómico, pero `ValidateSession` rechaza el stamp viejo aunque la revocación falle |
+| Coste                                         | Cómo se resuelve                                                                                                                         |
+| --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Los eventos viejos conservan datos personales | borrado criptográfico o enmascaramiento de Marten                                                                                        |
+| La unicidad no es un índice único             | reservas en el repositorio de escritura                                                                                                  |
+| Buscar por correo o listar usuarios           | proyecciones                                                                                                                             |
+| OpenIddict no vive en los flujos              | dos almacenes; rotar el stamp y revocar sesiones no es atómico, pero `ValidateSession` rechaza el stamp viejo aunque la revocación falle |
 
 **Alternativa descartada:** CRUD con EF Core, outbox de Wolverine y OpenIddict en el mismo `DbContext`.
 Es más simple y hace atómica la revocación, pero obliga a reinventar un historial append-only para los
@@ -187,15 +187,15 @@ consentimientos y una auditoría paralela para la seguridad.
 
 **Qué es cada pieza (equivalencias con IdentityServer4):**
 
-| IdentityServer4 | OpenIddict |
-|---|---|
-| `Client` | *Application* (`IOpenIddictApplicationManager`) |
-| `ApiScope` / `ApiResource` | *Scope* con *Resources* (`IOpenIddictScopeManager`) |
-| `PersistedGrant` | *Token* + *Authorization* |
-| `IProfileService` | los claims se arman en los endpoints *passthrough* |
-| Quickstart UI | páginas propias en `IdentityService.Api` |
-| `AddDeveloperSigningCredential` | `AddDevelopmentSigningCertificate()` |
-| `IdentityServer4.AccessTokenValidation` | `OpenIddict.Validation.AspNetCore` |
+| IdentityServer4                         | OpenIddict                                          |
+| --------------------------------------- | --------------------------------------------------- |
+| `Client`                                | *Application* (`IOpenIddictApplicationManager`)     |
+| `ApiScope` / `ApiResource`              | *Scope* con *Resources* (`IOpenIddictScopeManager`) |
+| `PersistedGrant`                        | *Token* + *Authorization*                           |
+| `IProfileService`                       | los claims se arman en los endpoints *passthrough*  |
+| Quickstart UI                           | páginas propias en `IdentityService.Api`            |
+| `AddDeveloperSigningCredential`         | `AddDevelopmentSigningCertificate()`                |
+| `IdentityServer4.AccessTokenValidation` | `OpenIddict.Validation.AspNetCore`                  |
 
 - **Passthrough:** OpenIddict valida que la petición cumpla el protocolo y la entrega a nuestro endpoint,
   que decide quién es el usuario y llama a `SignIn`. No se usa ASP.NET Core Identity.
@@ -205,14 +205,14 @@ consentimientos y una auditoría paralela para la seguridad.
 
 **Qué es stateless y qué no:**
 
-| Pieza | Stateless | Dónde vive |
-|---|---|---|
-| Access token (JWT firmado, sin cifrar, 5 a 15 min) | sí | lo validan las APIs con la clave pública |
-| Cookie de sesión de Identity (sesión SSO) | sí | navegador, cifrada |
-| Cookie de la Web | sí | navegador, cifrada; guarda los tokens |
-| Código de autorización (un solo uso) | no | store de OpenIddict |
-| Refresh token (revocable, rotativo) | no | store de OpenIddict |
-| Clientes y scopes | no | store de OpenIddict |
+| Pieza                                              | Stateless | Dónde vive                               |
+| -------------------------------------------------- | --------- | ---------------------------------------- |
+| Access token (JWT firmado, sin cifrar, 5 a 15 min) | sí        | lo validan las APIs con la clave pública |
+| Cookie de sesión de Identity (sesión SSO)          | sí        | navegador, cifrada                       |
+| Cookie de la Web                                   | sí        | navegador, cifrada; guarda los tokens    |
+| Código de autorización (un solo uso)               | no        | store de OpenIddict                      |
+| Refresh token (revocable, rotativo)                | no        | store de OpenIddict                      |
+| Clientes y scopes                                  | no        | store de OpenIddict                      |
 
 Por eso **las sesiones no van en Redis**: una sesión es una *authorization* de OpenIddict con su refresh
 token, y OpenIddict solo trae stores para EF Core y MongoDB. Se usa EF Core en la base `identity`.
@@ -239,13 +239,13 @@ Web → APIs con Authorization: Bearer <access_token>
 
 **Claims del token:**
 
-| Claim | Destino | Uso |
-|---|---|---|
-| `sub` | access, id | `UserId`; el actor en todas las APIs |
-| `person_id` | access | `PublisherId` en Rentals |
-| `name` | access, id | mostrar en la UI |
-| `role` | access, id | `administrador` |
-| `security_stamp` | ninguno | se compara en cada refresh |
+| Claim            | Destino    | Uso                                  |
+| ---------------- | ---------- | ------------------------------------ |
+| `sub`            | access, id | `UserId`; el actor en todas las APIs |
+| `person_id`      | access     | `PublisherId` en Rentals             |
+| `name`           | access, id | mostrar en la UI                     |
+| `role`           | access, id | `administrador`                      |
+| `security_stamp` | ninguno    | se compara en cada refresh           |
 
 El permiso de asesor y el nivel de verificación **no** se usan desde el token para decidir: Rentals los
 toma de su réplica, que está más al día que un token emitido hace minutos.
@@ -431,13 +431,13 @@ el origen y las fechas. Sin ningún dato personal.
 
 **Contratos que publica Identity:**
 
-| Contrato | Contenido | Consumidores |
-|---|---|---|
-| `UserAccountChanged` | user_id, person_id, nombre, estado, roles | Rentals |
-| `PersonContactUpdated` | direcciones verificadas y preferencias | Notification |
-| `PersonVerificationChanged` | teléfono y documento verificados | Rentals |
-| `AdvisorChanged` | estado, capacidad y zonas | Rentals |
-| `AlertsConsentChanged` | consentimiento de alertas | Rentals |
+| Contrato                    | Contenido                                 | Consumidores |
+| --------------------------- | ----------------------------------------- | ------------ |
+| `UserAccountChanged`        | user_id, person_id, nombre, estado, roles | Rentals      |
+| `PersonContactUpdated`      | direcciones verificadas y preferencias    | Notification |
+| `PersonVerificationChanged` | teléfono y documento verificados          | Rentals      |
+| `AdvisorChanged`            | estado, capacidad y zonas                 | Rentals      |
+| `AlertsConsentChanged`      | consentimiento de alertas                 | Rentals      |
 
 ## 7. Estructura de proyectos
 
@@ -460,27 +460,27 @@ Shared/
 
 **Referencias entre proyectos:**
 
-| Proyecto | Referencia a | No puede referenciar |
-|---|---|---|
-| Domain | Domain.Shared | nada más |
-| Application.Write | Domain, Application.Shared | nada de lectura |
-| Application.Read | Application.Shared, Domain (solo los eventos, para las proyecciones) | Application.Write |
-| Infrastructure.Write | Application.Write, Domain | nada de lectura |
-| Infrastructure.Read | Application.Read, Domain (solo los eventos) | Application.Write |
-| Api | todos | — |
-| Api.Read (futuro) | Application.Read, Infrastructure.Read | Application.Write, Infrastructure.Write |
+| Proyecto             | Referencia a                                                         | No puede referenciar                    |
+| -------------------- | -------------------------------------------------------------------- | --------------------------------------- |
+| Domain               | Domain.Shared                                                        | nada más                                |
+| Application.Write    | Domain, Application.Shared                                           | nada de lectura                         |
+| Application.Read     | Application.Shared, Domain (solo los eventos, para las proyecciones) | Application.Write                       |
+| Infrastructure.Write | Application.Write, Domain                                            | nada de lectura                         |
+| Infrastructure.Read  | Application.Read, Domain (solo los eventos)                          | Application.Write                       |
+| Api                  | todos                                                                | —                                       |
+| Api.Read (futuro)    | Application.Read, Infrastructure.Read                                | Application.Write, Infrastructure.Write |
 
 **Dónde queda OpenIddict:**
 
-| Proyecto | Paquete | Qué hace ahí |
-|---|---|---|
-| Domain | ninguno | cuenta, contraseña, estado, roles y security stamp |
-| Application.Write / Read | ninguno | casos de uso y puertos |
-| Infrastructure.Write | `OpenIddict.EntityFrameworkCore` | stores, managers, `DbContext`, seed de clientes, revocación |
-| Infrastructure.Read | `OpenIddict.Core` | listar las sesiones de un usuario |
-| Api | `OpenIddict.Server.AspNetCore` | `/connect/*`, certificados, cookie de Identity, páginas de login |
-| ServiceDefaults | `OpenIddict.Validation.AspNetCore`, `OpenIddict.Validation.SystemNetHttp` | validar tokens en cada API |
-| Web | `Microsoft.AspNetCore.Authentication.OpenIdConnect` | cliente OIDC |
+| Proyecto                 | Paquete                                                                   | Qué hace ahí                                                     |
+| ------------------------ | ------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| Domain                   | ninguno                                                                   | cuenta, contraseña, estado, roles y security stamp               |
+| Application.Write / Read | ninguno                                                                   | casos de uso y puertos                                           |
+| Infrastructure.Write     | `OpenIddict.EntityFrameworkCore`                                          | stores, managers, `DbContext`, seed de clientes, revocación      |
+| Infrastructure.Read      | `OpenIddict.Core`                                                         | listar las sesiones de un usuario                                |
+| Api                      | `OpenIddict.Server.AspNetCore`                                            | `/connect/*`, certificados, cookie de Identity, páginas de login |
+| ServiceDefaults          | `OpenIddict.Validation.AspNetCore`, `OpenIddict.Validation.SystemNetHttp` | validar tokens en cada API                                       |
+| Web                      | `Microsoft.AspNetCore.Authentication.OpenIdConnect`                       | cliente OIDC                                                     |
 
 **Core** es persistencia (Infrastructure), **Server** es protocolo HTTP (Api) y **Validation** es
 transversal a las APIs (ServiceDefaults).
@@ -901,21 +901,21 @@ Todavía no existen Infrastructure ni Api para este servicio.
 
 **Correspondencia con el diseño nuevo:**
 
-| Hoy | Pasa a |
-|---|---|
-| `Services/User/NotificationLog.UserService.*` | `Services/Identity/NotificationLog.IdentityService.*` |
-| agregado `User` (datos de la persona) | `Person` |
-| `Email`, `Phone`, `PersonName` | se conservan y se envuelven en `PersonIdentifier` |
-| `TryReserveEmailAsync`, `ReleaseEmailAsync` | `TryReserveIdentifierAsync`, `ReleaseIdentifierAsync` |
-| `UserRegistered`, `EmailChanged`, `EmailConfirmed`… | `PersonRegistered`, `IdentifierAdded`, `IdentifierVerified`… |
-| `RegisterUser` | `RegisterPerson` (y `SignUp` para crear persona y cuenta a la vez) |
-| `UpdateProfile` | `UpdatePersonProfile` + `AddIdentifier` / `ReplaceIdentifier` |
-| `ConfirmEmail`, `ConfirmPhone` | `VerifyIdentifier` |
-| `SetUserStatus` | se conserva, ahora sobre la cuenta (`User`) |
-| `Application` | `Application.Write` |
-| «Actuando como» y `ActorId` en el body | usuario autenticado y claim `sub` |
-| `DevIdentityEndpoints` | eventos reales publicados por Identity |
-| — | `User` (cuenta), `Advisor`, `ConsentLedger`, OpenIddict y todo el lado de lectura: nuevos |
+| Hoy                                                 | Pasa a                                                                                    |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `Services/User/NotificationLog.UserService.*`       | `Services/Identity/NotificationLog.IdentityService.*`                                     |
+| agregado `User` (datos de la persona)               | `Person`                                                                                  |
+| `Email`, `Phone`, `PersonName`                      | se conservan y se envuelven en `PersonIdentifier`                                         |
+| `TryReserveEmailAsync`, `ReleaseEmailAsync`         | `TryReserveIdentifierAsync`, `ReleaseIdentifierAsync`                                     |
+| `UserRegistered`, `EmailChanged`, `EmailConfirmed`… | `PersonRegistered`, `IdentifierAdded`, `IdentifierVerified`…                              |
+| `RegisterUser`                                      | `RegisterPerson` (y `SignUp` para crear persona y cuenta a la vez)                        |
+| `UpdateProfile`                                     | `UpdatePersonProfile` + `AddIdentifier` / `ReplaceIdentifier`                             |
+| `ConfirmEmail`, `ConfirmPhone`                      | `VerifyIdentifier`                                                                        |
+| `SetUserStatus`                                     | se conserva, ahora sobre la cuenta (`User`)                                               |
+| `Application`                                       | `Application.Write`                                                                       |
+| «Actuando como» y `ActorId` en el body              | usuario autenticado y claim `sub`                                                         |
+| `DevIdentityEndpoints`                              | eventos reales publicados por Identity                                                    |
+| —                                                   | `User` (cuenta), `Advisor`, `ConsentLedger`, OpenIddict y todo el lado de lectura: nuevos |
 
 Como todavía no hay eventos guardados en ninguna base de datos, renombrar eventos y namespaces ahora no
 tiene coste de migración.

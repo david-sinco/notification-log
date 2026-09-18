@@ -112,6 +112,8 @@ IResourceBuilder<ProjectResource> AddRental() =>
         .WaitFor(rentalsDb)
         .WithReference(rabbitmq)
         .WaitFor(rabbitmq)
+        .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])
+        .WithEnvironment("Oidc__Audiences__rentals", oidcConfig["Audiences:Rentals"])
         .WithDevUrls()
         .WithParentRelationship(apis);
 

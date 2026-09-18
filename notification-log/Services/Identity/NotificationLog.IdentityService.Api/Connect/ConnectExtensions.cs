@@ -1,4 +1,4 @@
-using NotificationLog.IdentityService.Api.Accounts;
+using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Api.Data;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;

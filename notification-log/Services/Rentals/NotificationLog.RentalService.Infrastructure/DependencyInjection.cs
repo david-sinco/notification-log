@@ -8,6 +8,7 @@ using NotificationLog.RentalService.Domain.Favorites;
 using NotificationLog.RentalService.Domain.Inquiries;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Offers;
+using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.SavedSearches;
 using NotificationLog.RentalService.Domain.Visits;
 using NotificationLog.RentalService.Infrastructure.DecisionProjections;
@@ -44,6 +45,7 @@ public static class DependencyInjection
         services.AddScoped<IInquiryRepository, MartenInquiryRepository>();
         services.AddScoped<IFavoriteListRepository, MartenFavoriteListRepository>();
         services.AddScoped<ISavedSearchListRepository, MartenSavedSearchListRepository>();
+        services.AddScoped<IOwnerRepository, MartenOwnerRepository>();
 
         services.AddScoped<ISoftRuleChecks, MartenSoftRuleChecks>();
         services.AddScoped<IProcessLookups, MartenProcessLookups>();
@@ -54,6 +56,7 @@ public static class DependencyInjection
         services.AddScoped<IVisitReadModel, MartenVisitReadModel>();
         services.AddScoped<IInquiryReadModel, MartenInquiryReadModel>();
         services.AddScoped<IUserCollectionsReadModel, MartenUserCollectionsReadModel>();
+        services.AddScoped<IOwnerReadModel, MartenOwnerReadModel>();
 
         services.AddScoped<ICommandScheduler, WolverineCommandScheduler>();
         services.AddScoped<INotificationDispatcher, WolverineNotificationDispatcher>();

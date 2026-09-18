@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Domain.Shared.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using NotificationLog.IdentityService.Api.Accounts;

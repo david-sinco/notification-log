@@ -1,4 +1,4 @@
-namespace NotificationLog.IdentityService.Api.Connect;
+namespace Domain.Shared.Authorization;
 
 public static class OidcScopes
 {

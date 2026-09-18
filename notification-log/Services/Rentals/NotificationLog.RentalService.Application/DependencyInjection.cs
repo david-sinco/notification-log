@@ -32,6 +32,8 @@ using NotificationLog.RentalService.Application.Offers.Commands.ExpireOffer;
 using NotificationLog.RentalService.Application.Offers.Commands.RejectOffer;
 using NotificationLog.RentalService.Application.Offers.Commands.SubmitOffer;
 using NotificationLog.RentalService.Application.Offers.Commands.WithdrawOffer;
+using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
+using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
 using NotificationLog.RentalService.Application.SavedSearches.Commands.CreateSavedSearch;
 using NotificationLog.RentalService.Application.SavedSearches.Commands.DeleteSavedSearch;
 using NotificationLog.RentalService.Application.SavedSearches.Commands.UpdateSavedSearch;
@@ -51,6 +53,8 @@ using NotificationLog.RentalService.Application.Listings.Queries.GetListingById;
 using NotificationLog.RentalService.Application.Listings.Queries.ListListings;
 using NotificationLog.RentalService.Application.Offers.Queries.GetOfferById;
 using NotificationLog.RentalService.Application.Offers.Queries.ListOffers;
+using NotificationLog.RentalService.Application.Owners.Queries.GetOwnerById;
+using NotificationLog.RentalService.Application.Owners.Queries.ListOwners;
 using NotificationLog.RentalService.Application.SavedSearches.Queries.GetSavedSearches;
 using NotificationLog.RentalService.Application.Visits.Queries.GetVisitById;
 using NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
@@ -104,6 +108,9 @@ public static class DependencyInjection
         services.AddScoped<SubmitOfferHandler>();
         services.AddScoped<WithdrawOfferHandler>();
 
+        services.AddScoped<RegisterCompanyOwnerHandler>();
+        services.AddScoped<RegisterNaturalOwnerHandler>();
+
         services.AddScoped<CreateSavedSearchHandler>();
         services.AddScoped<DeleteSavedSearchHandler>();
         services.AddScoped<UpdateSavedSearchHandler>();
@@ -121,6 +128,8 @@ public static class DependencyInjection
         services.AddScoped<GetListingByIdHandler>();
         services.AddScoped<ListOffersHandler>();
         services.AddScoped<GetOfferByIdHandler>();
+        services.AddScoped<GetOwnerByIdHandler>();
+        services.AddScoped<ListOwnersHandler>();
         services.AddScoped<ListVisitsHandler>();
         services.AddScoped<GetVisitByIdHandler>();
         services.AddScoped<ListInquiriesHandler>();

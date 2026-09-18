@@ -26,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\Domain.Shared\Domain.Shared.csproj" />
     <ProjectReference Include="..\..\..\Shared\NotificationLog.Contracts\NotificationLog.Contracts.csproj" />
     <ProjectReference Include="..\..\..\Shared\NotificationLog.ServiceDefaults\NotificationLog.ServiceDefaults.csproj" />
   </ItemGroup>

@@ -1,4 +1,4 @@
-using NotificationLog.IdentityService.Api.Accounts;
+using Domain.Shared.Authorization;
 
 namespace NotificationLog.IdentityService.Api.Users;
 

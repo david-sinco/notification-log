@@ -23,6 +23,13 @@ internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> log
 
             AppValidationException e => BuildValidationProblem(e),
 
+            ForbiddenException e => new ProblemDetails
+            {
+                Status = StatusCodes.Status403Forbidden,
+                Title = "Acceso denegado",
+                Detail = e.Message
+            },
+
             DomainException e => new ProblemDetails
             {
                 Status = StatusCodes.Status422UnprocessableEntity,
