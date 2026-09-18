@@ -1,4 +1,6 @@
 using NotificationLog.RentalService.Api.Authorization;
+using System.Security.Claims;
+using NotificationLog.RentalService.Api.Contracts.Listings;
 using NotificationLog.RentalService.Api.Contracts.Moderation;
 using NotificationLog.RentalService.Application.Listings.Commands.ReinstateListing;
 using NotificationLog.RentalService.Application.Listings.Commands.ReviewListing;
@@ -53,40 +55,43 @@ public static class ModerationEndpoints
     private static async Task<IResult> ReviewAsync(
         Guid id,
         ReviewListingRequest body,
+        ClaimsPrincipal user,
         ReviewListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new ReviewListingCommand(body.ModeratorId, id, body.Approve, body.Reasons), ct);
+        await handler.HandleAsync(new ReviewListingCommand(id, body.Approve, body.Reasons), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> SuspendAsync(
         Guid id,
         SuspendListingRequest body,
+        ClaimsPrincipal user,
         SuspendListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new SuspendListingCommand(body.ModeratorId, id, body.Reason), ct);
+        await handler.HandleAsync(new SuspendListingCommand(id, body.Reason), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> ReinstateAsync(
         Guid id,
-        ReinstateListingRequest body,
+        ClaimsPrincipal user,
         ReinstateListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new ReinstateListingCommand(body.ModeratorId, id), ct);
+        await handler.HandleAsync(new ReinstateListingCommand(id), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> WithdrawAsync(
         Guid id,
-        WithdrawListingByModeratorRequest body,
+        WithdrawListingRequest body,
+        ClaimsPrincipal user,
         WithdrawListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new WithdrawListingCommand(body.ModeratorId, id, body.Reason, ByModerator: true), ct);
+        await handler.HandleAsync(new WithdrawListingCommand(id, body.Reason), user, ct);
         return Results.NoContent();
     }
 }

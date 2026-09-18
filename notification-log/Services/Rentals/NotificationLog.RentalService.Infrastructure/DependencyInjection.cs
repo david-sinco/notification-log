@@ -5,7 +5,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Domain.Listings;
-using NotificationLog.RentalService.Domain.Offers;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Visits;
 using NotificationLog.RentalService.Infrastructure.DecisionProjections;
@@ -37,7 +36,6 @@ public static class DependencyInjection
         services.AddScoped<AggregateStreams>();
         services.AddScoped<IUnitOfWork, MartenUnitOfWork>();
         services.AddScoped<IListingRepository, MartenListingRepository>();
-        services.AddScoped<IOfferRepository, MartenOfferRepository>();
         services.AddScoped<IVisitRepository, MartenVisitRepository>();
         services.AddScoped<IOwnerRepository, MartenOwnerRepository>();
 
@@ -46,7 +44,6 @@ public static class DependencyInjection
         services.AddScoped<IIdentityReplica, MartenIdentityReplica>();
 
         services.AddScoped<IListingReadModel, MartenListingReadModel>();
-        services.AddScoped<IOfferReadModel, MartenOfferReadModel>();
         services.AddScoped<IVisitReadModel, MartenVisitReadModel>();
         services.AddScoped<IOwnerReadModel, MartenOwnerReadModel>();
 

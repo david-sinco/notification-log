@@ -13,10 +13,9 @@ public enum ListingStatus
     Published = 2,
     Paused = 3,
     Expired = 4,
-    Reserved = 5,
-    Closed = 6,
-    Withdrawn = 7,
-    Suspended = 8
+    Closed = 5,
+    Withdrawn = 6,
+    Suspended = 7
 }
 
 public enum PropertyType
@@ -34,25 +33,6 @@ public enum RejectionReason
     ProhibitedContent = 4
 }
 
-public enum ReportReason
-{
-    Fraud = 0,
-    NoLongerAvailable = 1,
-    FalseData = 2,
-    InappropriateContent = 3
-}
-
-public enum OfferStatus
-{
-    AwaitingPublisher = 0,
-    AwaitingOfferer = 1,
-    Accepted = 2,
-    Rejected = 3,
-    Withdrawn = 4,
-    Expired = 5,
-    FellThrough = 6
-}
-
 public enum VisitStatus
 {
     Requested = 0,
@@ -62,11 +42,4 @@ public enum VisitStatus
     Cancelled = 4,
     Completed = 5,
     NoShow = 6
-}
-
-public enum AlertFrequency
-{
-    Immediate = 0,
-    Daily = 1,
-    None = 2
 }

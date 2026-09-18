@@ -10,17 +10,14 @@ public sealed record ListingSummaryDto(
     long? Price,
     int? Bedrooms,
     decimal? Area,
-    Guid PublisherId,
+    Guid OwnerId,
     Guid CreatedBy,
-    Guid? AdvisorId,
-    int ReportCount,
     DateTimeOffset UpdatedAt);
 
 public sealed record ListingDto(
     Guid Id,
-    Guid PublisherId,
+    Guid OwnerId,
     Guid CreatedBy,
-    Guid? AdvisorId,
     string Operation,
     string Status,
     string? Type,
@@ -39,10 +36,6 @@ public sealed record ListingDto(
     long? Price,
     IReadOnlyList<string> Photos,
     DateTimeOffset? ExpiresAt,
-    Guid? ReservedOfferId,
-    DateTimeOffset? ReservedUntil,
-    bool IsReservationExtended,
-    int ReportCount,
     IReadOnlyList<string> RejectionReasons,
     string? StatusReason,
     long? FinalPrice,
@@ -50,10 +43,9 @@ public sealed record ListingDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
-public sealed record DraftListingRequest(Guid ActorId, Guid PublisherId, Guid? AdvisorId, Operation Operation);
+public sealed record DraftListingRequest(Guid OwnerId, Operation Operation);
 
 public sealed record UpdateListingDetailsRequest(
-    Guid ActorId,
     PropertyType Type,
     decimal Area,
     int Bedrooms,
@@ -68,27 +60,17 @@ public sealed record UpdateListingDetailsRequest(
     string Address,
     string Description);
 
-public sealed record UpdateListingPhotosRequest(Guid ActorId, IReadOnlyList<string> Photos);
+public sealed record UpdateListingPhotosRequest(IReadOnlyList<string> Photos);
 
-public sealed record ChangeListingPriceRequest(Guid ActorId, long Price);
+public sealed record ChangeListingPriceRequest(long Price);
 
-public sealed record ActorRequest(Guid ActorId);
+public sealed record SetListingAvailabilityRequest(bool IsAvailable);
 
-public sealed record SetListingAvailabilityRequest(Guid ActorId, bool IsAvailable);
+public sealed record ReasonRequest(string Reason);
 
-public sealed record AssignAdvisorRequest(Guid ActorId, Guid? AdvisorId);
+public sealed record CloseListingRequest(long FinalPrice, DateOnly SignedOn);
 
-public sealed record ReasonRequest(Guid ActorId, string Reason);
-
-public sealed record ReportListingRequest(Guid ReporterId, ReportReason Reason);
-
-public sealed record CloseListingRequest(Guid ActorId, long FinalPrice, DateOnly SignedOn);
-
-public sealed record ReviewListingRequest(Guid ModeratorId, bool Approve, IReadOnlyList<RejectionReason> Reasons);
-
-public sealed record ModeratorRequest(Guid ModeratorId);
-
-public sealed record ModeratorReasonRequest(Guid ModeratorId, string Reason);
+public sealed record ReviewListingRequest(bool Approve, IReadOnlyList<RejectionReason> Reasons);
 
 public static class ListingLimits
 {

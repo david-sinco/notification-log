@@ -6,7 +6,6 @@ using NotificationLog.Web.Api.Triggers;
 using NotificationLog.Web.Api.Rentals;
 using NotificationLog.Web.Api.Rentals.Identity;
 using NotificationLog.Web.Api.Rentals.Listings;
-using NotificationLog.Web.Api.Rentals.Offers;
 using NotificationLog.Web.Api.Rentals.Owners;
 using NotificationLog.Web.Api.Rentals.Visits;
 using NotificationLog.Web.Authentication;
@@ -32,9 +31,6 @@ builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress 
 builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://notification"));
 builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://notification"));
 
-builder.Services.AddHttpClient<ListingsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
-builder.Services.AddHttpClient<ModerationApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
-builder.Services.AddHttpClient<OffersApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
 builder.Services.AddHttpClient<VisitsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
 builder.Services.AddHttpClient<DevIdentityApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
 builder.Services.AddScoped<RentalsActor>();
@@ -44,6 +40,10 @@ builder.Services.AddTransient<AccessTokenHandler>();
 builder.Services.AddHttpClient<UsersApiClient>(client => client.BaseAddress = new("https+http://identity"))
     .AddHttpMessageHandler<AccessTokenHandler>();
 builder.Services.AddHttpClient<OwnersApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
+    .AddHttpMessageHandler<AccessTokenHandler>();
+builder.Services.AddHttpClient<ListingsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
+    .AddHttpMessageHandler<AccessTokenHandler>();
+builder.Services.AddHttpClient<ModerationApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
     .AddHttpMessageHandler<AccessTokenHandler>();
 
 var app = builder.Build();

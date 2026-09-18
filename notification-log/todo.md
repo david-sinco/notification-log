@@ -22,13 +22,13 @@
 ## Integración y negocio
 
 - [ ] **Log de eventos reproducible** (estilo Kafka) para reconstruir estado o alimentar servicios nuevos; hoy RabbitMQ solo garantiza la entrega.
-- [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, perfil de asesor, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
-- [ ] Responder 403 en lugar de 400 para "no es tuyo" en Rentals (`ForbiddenException`).
+- [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
+- [ ] Responder 403 en lugar de 400 para "no es tuyo" en las visitas de Rentals (`ForbiddenException`); publicaciones y propietarios ya lo hacen.
 
 ## Rentals
 
-- [ ] Ajustar Infrastructure, Api y Web al nuevo dominio y a la Application de `Listing` (sin ofertas, reservas, reportes ni asesor; `OwnerId` + `CreatedBy`; los comandos de publicaciones reciben el `ClaimsPrincipal` en lugar de `ActorId`/`ModeratorId`).
-- [ ] Quitar lo que queda del asesor: asignación en `ListingDetail.razor`, réplica `AdvisorDocument` / `AdvisorChanged` (Infrastructure, Contracts, endpoints dev e `IdentityReplica.razor`) y el `AdvisorId` de `DraftListingRequest`.
+- [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.
+- [ ] Reiniciar la base de Rentals (esquema `rentals` de Marten): los flujos guardados tienen eventos que ya no existen (ofertas, reservas, reportes, asesor, consultas, favoritos, búsquedas) y `ListingDrafted` cambió de forma, así que no se pueden reconstruir.
 - [ ] Rol `Asesor` en la base de Identity: el seeder crea `Moderador`, pero el rol viejo y sus asignaciones siguen ahí. Borrarlo o migrar a sus usuarios.
 - [ ] Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas futuras y avisar a los visitantes. Al cerrarlo o retirarlo ya se hace (`ListingLifecycleProcess.OnNoLongerAvailableAsync`).
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).

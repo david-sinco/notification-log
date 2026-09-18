@@ -13,7 +13,6 @@
     </div>
     <div class="d-flex gap-2 flex-wrap">
         <button class="btn btn-primary" @onclick="OpenPerson">+ Persona</button>
-        <button class="btn btn-outline-secondary" @onclick="OpenAdvisor">+ Asesor</button>
     </div>
 </div>
 
@@ -69,38 +68,6 @@
     }
 </div>
 
-<div class="table-card">
-    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Asesores (@(identity?.Advisors.Count ?? 0))</h2></div>
-    @if (identity is { Advisors.Count: 0 })
-    {
-        <EmptyState Text="No hay asesores." Icon="🧑‍💼" />
-    }
-    else if (identity is not null)
-    {
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead><tr><th>Asesor</th><th>Ciudades</th><th>Capacidad</th><th>Estado</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var a in identity.Advisors)
-                    {
-                        <tr>
-                            <td><ShortId Value="a.Id" /></td>
-                            <td>@string.Join(", ", a.ServiceCities)</td>
-                            <td>@a.Capacity</td>
-                            <td><StatusPill Text="@(a.IsActive ? "Activo" : "Inactivo")" Variant="@(a.IsActive ? "success" : "neutral")" /></td>
-                            <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary" @onclick="() => OpenAdvisor(a)">Editar</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
-
 <Modal Title="Persona" @bind-IsVisible="showPerson">
     <ChildContent>
         <div class="mb-3">
@@ -110,15 +77,14 @@
         <div class="mb-3">
             <label class="form-label">Identificador de usuario</label>
             <input class="form-control font-monospace" @bind="personUserId" placeholder="Vacío = persona sin usuario" />
-            <div class="form-hint">El usuario es quien actúa en la plataforma; la persona es el propietario de las publicaciones.</div>
         </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="phone" @bind="personPhone" />
-            <label class="form-check-label" for="phone">Teléfono verificado (necesario para visitas y consultas)</label>
+            <label class="form-check-label" for="phone">Teléfono verificado (necesario para pedir visitas)</label>
         </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="document" @bind="personDocument" />
-            <label class="form-check-label" for="document">Documento verificado (necesario para ofertar)</label>
+            <label class="form-check-label" for="document">Documento verificado</label>
         </div>
         @if (modalError is not null)
         {
@@ -128,35 +94,6 @@
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="() => showPerson = false">Cancelar</button>
         <button type="button" class="btn btn-primary" disabled="@(modalBusy || !Guid.TryParse(personId, out _))" @onclick="SavePersonAsync">Guardar</button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Asesor" @bind-IsVisible="showAdvisor">
-    <ChildContent>
-        <div class="mb-3">
-            <label class="form-label">Identificador del asesor</label>
-            <input class="form-control font-monospace" @bind="advisorId" disabled="@editingAdvisor" />
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Ciudades donde atiende</label>
-            <input class="form-control" placeholder="Separadas por coma" @bind="advisorCities" />
-        </div>
-        <div class="mb-3">
-            <label class="form-label">Capacidad (publicaciones activas)</label>
-            <input type="number" class="form-control" min="0" @bind="advisorCapacity" />
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="advisor-active" @bind="advisorActive" />
-            <label class="form-check-label" for="advisor-active">Activo</label>
-        </div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showAdvisor = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(modalBusy || !Guid.TryParse(advisorId, out _))" @onclick="SaveAdvisorAsync">Guardar</button>
     </FooterContent>
 </Modal>
 
@@ -174,13 +111,6 @@
     private string personUserId = "";
     private bool personPhone;
     private bool personDocument;
-
-    private bool showAdvisor;
-    private bool editingAdvisor;
-    private string advisorId = "";
-    private string advisorCities = "";
-    private int advisorCapacity;
-    private bool advisorActive;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -225,41 +155,6 @@
             Guid? userId = Guid.TryParse(personUserId, out var parsed) ? parsed : null;
             await Api.SetPersonAsync(Guid.Parse(personId), new SetPersonRequest(userId, personPhone, personDocument), CancellationToken.None);
             showPerson = false;
-            await LoadAsync();
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-        finally
-        {
-            modalBusy = false;
-        }
-    }
-
-    private void OpenAdvisor() => OpenAdvisor(new AdvisorDto(Guid.NewGuid(), true, ["Bogotá"], 20), editing: false);
-
-    private void OpenAdvisor(AdvisorDto advisor) => OpenAdvisor(advisor, editing: true);
-
-    private void OpenAdvisor(AdvisorDto advisor, bool editing)
-    {
-        editingAdvisor = editing;
-        advisorId = advisor.Id.ToString();
-        advisorCities = string.Join(", ", advisor.ServiceCities);
-        advisorCapacity = advisor.Capacity;
-        advisorActive = advisor.IsActive;
-        modalError = null;
-        showAdvisor = true;
-    }
-
-    private async Task SaveAdvisorAsync()
-    {
-        modalBusy = true;
-        try
-        {
-            var cities = advisorCities.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            await Api.SetAdvisorAsync(Guid.Parse(advisorId), new SetAdvisorRequest(advisorActive, cities, advisorCapacity), CancellationToken.None);
-            showAdvisor = false;
             await LoadAsync();
         }
         catch (ApiException ex)

@@ -44,7 +44,6 @@ app.MapDefaultEndpoints();
 
 app.MapListings();
 app.MapModeration();
-app.MapOffers();
 app.MapVisits();
 app.MapOwners();
 

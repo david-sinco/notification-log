@@ -33,7 +33,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
 
         if (query.ParticipantId is { } participant)
             listings = listings.Where(x =>
-                x.PublisherId == participant || x.CreatedBy == participant || x.AdvisorId == participant);
+                x.OwnerId == participant || x.CreatedBy == participant);
 
         var items = await ((IMartenQueryable<ListingView>)listings)
             .Stats(out QueryStatistics stats)
@@ -49,9 +49,8 @@ internal sealed class MartenListingReadModel : IListingReadModel
         => await _session.LoadAsync<ListingView>(id, ct) is { } x
             ? new ListingDto(
                 x.Id,
-                x.PublisherId,
+                x.OwnerId,
                 x.CreatedBy,
-                x.AdvisorId,
                 x.Operation.ToString(),
                 x.Status.ToString(),
                 x.Type?.ToString(),
@@ -70,10 +69,6 @@ internal sealed class MartenListingReadModel : IListingReadModel
                 x.Price,
                 x.Photos,
                 x.ExpiresAt,
-                x.ReservedOfferId,
-                x.ReservedUntil,
-                x.IsReservationExtended,
-                x.ReporterIds.Count,
                 x.RejectionReasons.Select(r => r.ToString()).ToList(),
                 x.StatusReason,
                 x.FinalPrice,
@@ -93,9 +88,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
             x.Price,
             x.Bedrooms,
             x.Area,
-            x.PublisherId,
+            x.OwnerId,
             x.CreatedBy,
-            x.AdvisorId,
-            x.ReporterIds.Count,
             x.UpdatedAt);
 }

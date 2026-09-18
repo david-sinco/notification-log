@@ -2,7 +2,6 @@
 @attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador}")]
 @inject ListingsApiClient ListingsApi
 @inject ModerationApiClient Api
-@inject RentalsActor Actor
 @inject NavigationManager Nav
 
 <PageTitle>Moderación · NotificationLog</PageTitle>
@@ -10,7 +9,7 @@
 <div class="page-header">
     <div>
         <h1>Moderación</h1>
-        <p>Revisión de publicaciones nuevas, reportes y suspensiones. Solo para administradores.</p>
+        <p>Revisión de publicaciones nuevas, suspensiones y retiros. Para administradores y moderadores.</p>
     </div>
 </div>
 
@@ -45,7 +44,7 @@
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" disabled="@busy"
-                                            @onclick="() => RunAsync(m => Api.ReviewAsync(l.Id, m, true, [], CancellationToken.None))">
+                                            @onclick="() => RunAsync(() => Api.ReviewAsync(l.Id, true, [], CancellationToken.None))">
                                         Aprobar
                                     </button>
                                     <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReject(l)">Rechazar…</button>
@@ -60,22 +59,21 @@
 </div>
 
 <div class="table-card mb-4">
-    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Visibles con reportes (@reported.Count)</h2></div>
-    @if (!loading && reported.Count == 0)
+    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Visibles (@visible.Count)</h2></div>
+    @if (!loading && visible.Count == 0)
     {
-        <EmptyState Text="Ninguna publicación visible tiene reportes." Icon="🚩" />
+        <EmptyState Text="No hay publicaciones publicadas ni pausadas." Icon="🏠" />
     }
     else if (!loading)
     {
         <div class="table-responsive-wrap">
             <table class="table">
-                <thead><tr><th>Inmueble</th><th>Reportes</th><th>Estado</th><th></th></tr></thead>
+                <thead><tr><th>Inmueble</th><th>Estado</th><th></th></tr></thead>
                 <tbody>
-                    @foreach (var l in reported)
+                    @foreach (var l in visible)
                     {
                         <tr>
                             <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
-                            <td>@l.ReportCount</td>
                             <td><RentalStatusPill Status="@l.Status" /></td>
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
@@ -111,7 +109,7 @@
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" disabled="@busy"
-                                            @onclick="() => RunAsync(m => Api.ReinstateAsync(l.Id, m, CancellationToken.None))">
+                                            @onclick="() => RunAsync(() => Api.ReinstateAsync(l.Id, CancellationToken.None))">
                                         Levantar suspensión
                                     </button>
                                     <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Withdraw)">Retirar…</button>
@@ -157,7 +155,7 @@
     private enum ModerationAction { Suspend, Withdraw }
 
     private IReadOnlyList<ListingSummaryDto> inReview = [];
-    private IReadOnlyList<ListingSummaryDto> reported = [];
+    private IReadOnlyList<ListingSummaryDto> visible = [];
     private IReadOnlyList<ListingSummaryDto> suspended = [];
     private bool loading = true;
     private bool busy;
@@ -187,9 +185,8 @@
             await Task.WhenAll(inReviewTask, publishedTask, pausedTask, suspendedTask);
 
             inReview = inReviewTask.Result.Items;
-            reported = publishedTask.Result.Items.Concat(pausedTask.Result.Items)
-                .Where(l => l.ReportCount > 0)
-                .OrderByDescending(l => l.ReportCount)
+            visible = publishedTask.Result.Items.Concat(pausedTask.Result.Items)
+                .OrderByDescending(l => l.UpdatedAt)
                 .ToList();
             suspended = suspendedTask.Result.Items;
         }
@@ -203,12 +200,12 @@
         }
     }
 
-    private async Task RunAsync(Func<Guid, Task> action)
+    private async Task RunAsync(Func<Task> action)
     {
         busy = true;
         try
         {
-            await action(Actor.Require());
+            await action();
             error = null;
             await LoadAsync();
         }
@@ -222,12 +219,12 @@
         }
     }
 
-    private async Task RunModalAsync(Func<Guid, Task> action, Action close)
+    private async Task RunModalAsync(Func<Task> action, Action close)
     {
         modalBusy = true;
         try
         {
-            await action(Actor.Require());
+            await action();
             close();
             modalError = null;
             await LoadAsync();
@@ -257,7 +254,7 @@
     }
 
     private Task RejectAsync() => RunModalAsync(
-        m => Api.ReviewAsync(target!.Id, m, false, rejectReasons.ToList(), CancellationToken.None),
+        () => Api.ReviewAsync(target!.Id, false, rejectReasons.ToList(), CancellationToken.None),
         () => showReject = false);
 
     private void OpenReason(ListingSummaryDto listing, ModerationAction action)
@@ -269,6 +266,6 @@
     }
 
     private Task ConfirmReasonAsync(string reason) => reasonAction == ModerationAction.Suspend
-        ? RunModalAsync(m => Api.SuspendAsync(target!.Id, m, reason, CancellationToken.None), () => showReason = false)
-        : RunModalAsync(m => Api.WithdrawAsync(target!.Id, m, reason, CancellationToken.None), () => showReason = false);
+        ? RunModalAsync(() => Api.SuspendAsync(target!.Id, reason, CancellationToken.None), () => showReason = false)
+        : RunModalAsync(() => Api.WithdrawAsync(target!.Id, reason, CancellationToken.None), () => showReason = false);
 }

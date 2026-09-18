@@ -43,7 +43,7 @@ public sealed class RequestVisitHandler
         if (ListingAccess.IsHost(listing, cmd.VisitorId))
             throw new AppValidationException("No puedes pedir una visita a tu propia publicación.");
 
-        await _access.RequireVerifiedUserAsync(cmd.VisitorId, requireDocument: false, ct);
+        await _access.RequireVerifiedUserAsync(cmd.VisitorId, ct);
 
         if (await _rules.CountPendingVisitsAsync(cmd.VisitorId, ct) >= VisitPolicy.MaxPendingVisits)
             throw new AppValidationException($"Ya tienes {VisitPolicy.MaxPendingVisits} visitas pendientes.");

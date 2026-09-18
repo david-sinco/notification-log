@@ -33,16 +33,13 @@ public sealed class ListingAccess
 
     public static Guid HostOf(Listing listing) => listing.OwnerId;
 
-    public async Task<PersonVerification> RequireVerifiedUserAsync(Guid userId, bool requireDocument, CancellationToken ct)
+    public async Task<PersonVerification> RequireVerifiedUserAsync(Guid userId, CancellationToken ct)
     {
         var person = await _identity.GetPersonByUserAsync(userId, ct)
             ?? throw new AppValidationException("El usuario no está registrado en la plataforma.");
 
         if (!person.IsPhoneVerified)
             throw new AppValidationException("Necesitas verificar tu teléfono para hacer esto.");
-
-        if (requireDocument && !person.IsDocumentVerified)
-            throw new AppValidationException("Necesitas verificar tu documento para hacer esto.");
 
         return person;
     }

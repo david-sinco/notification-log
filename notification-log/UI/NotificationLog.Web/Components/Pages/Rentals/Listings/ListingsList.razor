@@ -1,6 +1,6 @@
 @page "/rentals/listings"
 @inject ListingsApiClient Api
-@inject DevIdentityApiClient IdentityApi
+@inject OwnersApiClient OwnersApi
 @inject RentalsActor Actor
 @inject NavigationManager Nav
 
@@ -94,10 +94,6 @@
                             <td>@(l.Bedrooms is null ? "—" : $"{l.Bedrooms} hab · {l.Area:0.#} m²")</td>
                             <td>
                                 <RentalStatusPill Status="@l.Status" />
-                                @if (l.ReportCount > 0)
-                                {
-                                    <span class="chip">@l.ReportCount reporte@(l.ReportCount == 1 ? "" : "s")</span>
-                                }
                             </td>
                             <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
                         </tr>
@@ -122,16 +118,24 @@
                 }
             </select>
         </div>
-        <div class="mb-3">
-            <label class="form-label">Propietario (persona)</label>
-            <select class="form-select" @bind="createPublisherId">
-                <option value="">Seleccioná una persona…</option>
-                @foreach (var p in people)
-                {
-                    <option value="@p.Id">Persona @RentalsFormat.Short(p.Id)@(p.UserId is { } u ? $" · usuario {RentalsFormat.Short(u)}" : "")</option>
-                }
-            </select>
-        </div>
+        @if (Actor.IsStaff)
+        {
+            <div class="mb-3">
+                <label class="form-label">Propietario</label>
+                <select class="form-select" @bind="createOwnerId">
+                    <option value="">Seleccioná un propietario…</option>
+                    @foreach (var o in owners)
+                    {
+                        <option value="@o.Id">@OwnerName(o)</option>
+                    }
+                </select>
+                <div class="form-hint">La publicación queda a nombre del propietario; vos quedás como quien la creó.</div>
+            </div>
+        }
+        else
+        {
+            <div class="form-hint">La publicación queda a tu nombre como propietario.</div>
+        }
         @if (createError is not null)
         {
             <div class="mt-3">
@@ -141,7 +145,7 @@
     </ChildContent>
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="() => showCreate = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(creating || createPublisherId == Guid.Empty)" @onclick="CreateAsync">Crear borrador</button>
+        <button type="button" class="btn btn-primary" disabled="@(creating || createOwnerId == Guid.Empty)" @onclick="CreateAsync">Crear borrador</button>
     </FooterContent>
 </Modal>
 
@@ -160,8 +164,8 @@
     private bool creating;
     private ApiException? createError;
     private Operation createOperation = Operation.Rent;
-    private Guid createPublisherId = Guid.Empty;
-    private IReadOnlyList<PersonDto> people = [];
+    private Guid createOwnerId = Guid.Empty;
+    private IReadOnlyList<OwnerDto> owners = [];
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -207,12 +211,15 @@
     private async Task OpenCreateAsync()
     {
         createError = null;
-        createPublisherId = Actor.Id ?? Guid.Empty;
+        createOwnerId = Actor.IsStaff ? Guid.Empty : Actor.Id ?? Guid.Empty;
         showCreate = true;
+
+        if (!Actor.IsStaff)
+            return;
 
         try
         {
-            people = (await IdentityApi.GetAsync(CancellationToken.None)).People;
+            owners = (await OwnersApi.ListAsync(1, 100, CancellationToken.None)).Items;
         }
         catch (ApiException ex)
         {
@@ -225,10 +232,7 @@
         creating = true;
         try
         {
-            var actorId = Actor.Require();
-            var id = await Api.DraftAsync(
-                new DraftListingRequest(actorId, createPublisherId, null, createOperation),
-                CancellationToken.None);
+            var id = await Api.DraftAsync(new DraftListingRequest(createOwnerId, createOperation), CancellationToken.None);
             showCreate = false;
             Nav.NavigateTo($"/rentals/listings/{id}");
         }
@@ -242,4 +246,6 @@
         }
     }
 
+    private static string OwnerName(OwnerDto owner) =>
+        owner.LegalName ?? $"{owner.FirstNames} {owner.LastNames}";
 }

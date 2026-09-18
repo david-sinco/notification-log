@@ -1,8 +1,6 @@
 @page "/rentals/listings/{Id:guid}"
 @inject ListingsApiClient Api
 @inject VisitsApiClient VisitsApi
-@inject OffersApiClient OffersApi
-@inject DevIdentityApiClient IdentityApi
 @inject RentalsActor Actor
 @inject NavigationManager Nav
 
@@ -32,27 +30,24 @@ else if (listing is not null)
             @switch (listing.Status)
             {
                 case "Draft":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.SubmitForReviewAsync(Id, a, CancellationToken.None))">Enviar a revisión</button>
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.SubmitForReviewAsync(Id, CancellationToken.None))">Enviar a revisión</button>
                     break;
                 case "Published":
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.SetAvailabilityAsync(Id, a, false, CancellationToken.None))">Pausar</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.RenewAsync(Id, a, CancellationToken.None))">Renovar</button>
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.SetAvailabilityAsync(Id, false, CancellationToken.None))">Pausar</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar</button>
                     break;
                 case "Paused":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.SetAvailabilityAsync(Id, a, true, CancellationToken.None))">Reanudar</button>
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.SetAvailabilityAsync(Id, true, CancellationToken.None))">Reanudar</button>
                     break;
                 case "Expired":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.RenewAsync(Id, a, CancellationToken.None))">Renovar</button>
-                    break;
-                case "Reserved":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(busy || listing.IsReservationExtended)" @onclick="() => RunAsync(a => Api.ExtendReservationAsync(Id, a, CancellationToken.None))">Ampliar reserva</button>
-                    <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(ReasonAction.CancelReservation)">Cancelar reserva</button>
+                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar</button>
                     break;
             }
             @if (CanWithdraw)
             {
-                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(ReasonAction.Withdraw)">Retirar</button>
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="OpenWithdraw">Retirar</button>
             }
         </div>
     </div>
@@ -73,7 +68,7 @@ else if (listing is not null)
     @if (listing.StatusReason is not null)
     {
         <div class="alert alert-info-soft small">
-            <strong>@(listing.Status switch { "Suspended" => "Suspendida:", "Withdrawn" => "Retirada:", _ => "Reserva liberada:" })</strong>
+            <strong>@(listing.Status == "Suspended" ? "Suspendida:" : "Retirada:")</strong>
             @listing.StatusReason
         </div>
     }
@@ -176,32 +171,6 @@ else if (listing is not null)
                 }
             </div>
 
-            <div class="table-card mb-4">
-                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Ofertas</h2></div>
-                @if (offers.Count == 0)
-                {
-                    <EmptyState Text="Todavía no hay ofertas." Icon="🏷️" />
-                }
-                else
-                {
-                    <div class="table-responsive-wrap">
-                        <table class="table">
-                            <thead><tr><th>Oferente</th><th>Monto</th><th>Responder antes de</th><th>Estado</th></tr></thead>
-                            <tbody>
-                                @foreach (var o in offers)
-                                {
-                                    <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/offers/{o.Id}")'>
-                                        <td><ShortId Value="o.OffererId" /></td>
-                                        <td>@RentalsFormat.Money(o.Amount)</td>
-                                        <td class="text-muted small">@RentalsFormat.Date(o.RespondBy)</td>
-                                        <td><RentalStatusPill Status="@o.Status" /></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
         </div>
 
         <div class="col-lg-4">
@@ -218,31 +187,14 @@ else if (listing is not null)
             </div>
 
             <div class="surface-card mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="h6 mb-0">Participantes</h2>
-                    @if (listing.Status is not ("Closed" or "Withdrawn"))
-                    {
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenAdvisorAsync">Asesor</button>
-                    }
-                </div>
+                <h2 class="h6">Participantes</h2>
                 <dl class="kv-list mb-0">
                     <dt>Propietario</dt>
-                    <dd><ShortId Value="listing.PublisherId" /> <span class="form-hint">persona</span></dd>
+                    <dd><ShortId Value="listing.OwnerId" Href="@($"/rentals/owners/{listing.OwnerId}")" /></dd>
                     <dt>Creada por</dt>
                     <dd><ShortId Value="listing.CreatedBy" /></dd>
-                    <dt>Asesor</dt>
-                    <dd>
-                        @if (listing.AdvisorId is { } advisorId)
-                        {
-                            <ShortId Value="advisorId" />
-                        }
-                        else
-                        {
-                            <span class="text-muted">Sin asesor</span>
-                        }
-                    </dd>
                 </dl>
-                <div class="form-hint mt-2">El anfitrión de las visitas es el asesor o, si no hay, quien la creó.</div>
+                <div class="form-hint mt-2">El anfitrión de las visitas es el propietario.</div>
             </div>
 
             <div class="surface-card mb-4">
@@ -252,13 +204,6 @@ else if (listing is not null)
                     <dd>@RentalsFormat.Date(listing.CreatedAt)</dd>
                     <dt>Vence</dt>
                     <dd>@RentalsFormat.Date(listing.ExpiresAt)</dd>
-                    @if (listing.ReservedOfferId is { } reservedOfferId)
-                    {
-                        <dt>Reservada hasta</dt>
-                        <dd>@RentalsFormat.Date(listing.ReservedUntil)@(listing.IsReservationExtended ? " (ampliada)" : "")</dd>
-                        <dt>Oferta aceptada</dt>
-                        <dd><ShortId Value="reservedOfferId" Href="@($"/rentals/offers/{reservedOfferId}")" /></dd>
-                    }
                     @if (listing.FinalPrice is not null)
                     {
                         <dt>Valor final</dt>
@@ -266,29 +211,25 @@ else if (listing is not null)
                         <dt>Firmada el</dt>
                         <dd>@RentalsFormat.Date(listing.SignedOn)</dd>
                     }
-                    <dt>Reportes</dt>
-                    <dd>@listing.ReportCount</dd>
                 </dl>
             </div>
 
             <div class="surface-card">
                 <h2 class="h6">Como interesado</h2>
-                <p class="form-hint">Actuá con un usuario distinto al propietario o al asesor.</p>
+                <p class="form-hint">Actuá con un usuario distinto al propietario.</p>
                 <div class="d-grid gap-2">
                     <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenVisit">Solicitar visita</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenOffer">Hacer oferta</button>
-                    <button class="btn btn-outline-danger btn-sm" disabled="@(listing.Status is not ("Published" or "Paused"))" @onclick="OpenReport">Reportar</button>
                 </div>
             </div>
         </div>
     </div>
 }
 
-<ReasonModal Title="@(reasonAction == ReasonAction.Withdraw ? "Retirar publicación" : "Cancelar reserva")"
-             Description="@(reasonAction == ReasonAction.Withdraw ? "La publicación deja de estar disponible y se cancelan sus visitas y consultas abiertas." : "La publicación vuelve a estar disponible y la oferta aceptada se cae.")"
-             ConfirmText="@(reasonAction == ReasonAction.Withdraw ? "Retirar" : "Cancelar reserva")"
+<ReasonModal Title="Retirar publicación"
+             Description="La publicación deja de estar disponible y se cancelan sus visitas futuras."
+             ConfirmText="Retirar"
              Danger="true" Busy="modalBusy" Error="modalError"
-             @bind-IsVisible="showReason" OnConfirm="ConfirmReasonAsync" />
+             @bind-IsVisible="showWithdraw" OnConfirm="WithdrawAsync" />
 
 <Modal Title="Datos del inmueble" Large="true" @bind-IsVisible="showDetails">
     <ChildContent>
@@ -395,57 +336,8 @@ else if (listing is not null)
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="() => showPrice = false">Cancelar</button>
         <button type="button" class="btn btn-primary" disabled="@(modalBusy || priceDraft <= 0)"
-                @onclick="() => RunModalAsync(a => Api.ChangePriceAsync(Id, new ChangeListingPriceRequest(a, priceDraft), CancellationToken.None), () => showPrice = false)">
+                @onclick="() => RunModalAsync(() => Api.ChangePriceAsync(Id, new ChangeListingPriceRequest(priceDraft), CancellationToken.None), () => showPrice = false)">
             Guardar
-        </button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Asesor de la publicación" @bind-IsVisible="showAdvisor">
-    <ChildContent>
-        <label class="form-label">Asesor</label>
-        <select class="form-select" @bind="advisorDraft">
-            <option value="">Sin asesor</option>
-            @foreach (var a in advisors)
-            {
-                <option value="@a.Id">Asesor @RentalsFormat.Short(a.Id) · @string.Join(", ", a.ServiceCities)@(a.IsActive ? "" : " (inactivo)")</option>
-            }
-        </select>
-        <div class="form-hint">Solo el propietario o el asesor actual pueden cambiarlo. El asesor debe estar activo y atender la ciudad.</div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showAdvisor = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@modalBusy"
-                @onclick="() => RunModalAsync(a => Api.AssignAdvisorAsync(Id, a, advisorDraft, CancellationToken.None), () => showAdvisor = false)">
-            Guardar
-        </button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Reportar publicación" @bind-IsVisible="showReport">
-    <ChildContent>
-        <label class="form-label">Motivo</label>
-        <select class="form-select" @bind="reportReason">
-            @foreach (var r in RentalsFormat.Values<ReportReason>())
-            {
-                <option value="@r">@RentalsFormat.Term(r)</option>
-            }
-        </select>
-        <div class="form-hint">Con 3 reportes de usuarios distintos la publicación se suspende automáticamente.</div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showReport = false">Cancelar</button>
-        <button type="button" class="btn btn-danger" disabled="@modalBusy"
-                @onclick="() => RunModalAsync(a => Api.ReportAsync(Id, a, reportReason, CancellationToken.None), () => showReport = false)">
-            Reportar
         </button>
     </FooterContent>
 </Modal>
@@ -469,7 +361,7 @@ else if (listing is not null)
     <FooterContent>
         <button type="button" class="btn btn-outline-secondary" @onclick="() => showClose = false">Cancelar</button>
         <button type="button" class="btn btn-primary" disabled="@(modalBusy || closeFinalPrice <= 0)"
-                @onclick="() => RunModalAsync(a => Api.CloseAsync(Id, new CloseListingRequest(a, closeFinalPrice, closeSignedOn), CancellationToken.None), () => showClose = false)">
+                @onclick="() => RunModalAsync(() => Api.CloseAsync(Id, new CloseListingRequest(closeFinalPrice, closeSignedOn), CancellationToken.None), () => showClose = false)">
             Cerrar negocio
         </button>
     </FooterContent>
@@ -500,47 +392,11 @@ else if (listing is not null)
     </FooterContent>
 </Modal>
 
-<Modal Title="Hacer oferta" @bind-IsVisible="showOffer">
-    <ChildContent>
-        <div class="mb-3">
-            <label class="form-label">Monto (COP)</label>
-            <input type="number" class="form-control" min="0" step="10000" @bind="offerAmount" />
-            <div class="form-hint">Al menos el 80% del precio publicado (@RentalsFormat.Money(listing?.Price)). Requiere teléfono y documento verificados y una visita realizada.</div>
-        </div>
-        @if (listing?.Operation == "Rent")
-        {
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <label class="form-label">Inicio del arriendo</label>
-                    <input type="date" class="form-control" @bind="offerStart" />
-                    <div class="form-hint">Entre 7 y 90 días desde hoy.</div>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Duración (meses)</label>
-                    <input type="number" class="form-control" min="@OfferLimits.MinRentMonths" max="@OfferLimits.MaxRentMonths" @bind="offerMonths" />
-                </div>
-            </div>
-        }
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showOffer = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(modalBusy || offerAmount <= 0)" @onclick="SubmitOfferAsync">Ofertar</button>
-    </FooterContent>
-</Modal>
-
 @code {
     [Parameter] public Guid Id { get; set; }
 
-    private enum ReasonAction { Withdraw, CancelReservation }
-
     private ListingDto? listing;
     private IReadOnlyList<VisitSummaryDto> visits = [];
-    private IReadOnlyList<OfferSummaryDto> offers = [];
-    private IReadOnlyList<AdvisorDto> advisors = [];
     private bool loading = true;
     private ApiException? loadError;
     private ApiException? actionError;
@@ -549,33 +405,24 @@ else if (listing is not null)
     private bool modalBusy;
     private ApiException? modalError;
 
-    private bool showReason;
-    private ReasonAction reasonAction;
+    private bool showWithdraw;
     private bool showDetails;
     private DetailsForm details = new();
     private bool showPhotos;
     private string photosDraft = "";
     private bool showPrice;
     private long priceDraft;
-    private bool showAdvisor;
-    private Guid? advisorDraft;
-    private bool showReport;
-    private ReportReason reportReason;
     private bool showClose;
     private long closeFinalPrice;
     private DateOnly closeSignedOn;
     private bool showVisit;
     private DateTime?[] slotDrafts = new DateTime?[VisitLimits.MaxSlots];
-    private bool showOffer;
-    private long offerAmount;
-    private DateOnly offerStart;
-    private int offerMonths = 12;
 
     private bool CanEdit => listing?.Status is "Draft" or "InReview" or "Published" or "Paused";
 
     private bool CanChangePrice => listing?.Status is "Draft" or "InReview" or "Published" or "Paused" or "Expired";
 
-    private bool CanWithdraw => listing?.Status is not ("Closed" or "Withdrawn" or "Reserved");
+    private bool CanWithdraw => listing?.Status is not ("Closed" or "Withdrawn");
 
     protected override Task OnParametersSetAsync() => LoadAsync();
 
@@ -586,12 +433,10 @@ else if (listing is not null)
         {
             var listingTask = Api.GetByIdAsync(Id, CancellationToken.None);
             var visitsTask = VisitsApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
-            var offersTask = OffersApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
-            await Task.WhenAll(listingTask, visitsTask, offersTask);
+            await Task.WhenAll(listingTask, visitsTask);
 
             listing = listingTask.Result;
             visits = visitsTask.Result.Items;
-            offers = offersTask.Result.Items;
             loadError = null;
         }
         catch (ApiException ex)
@@ -604,12 +449,12 @@ else if (listing is not null)
         }
     }
 
-    private async Task RunAsync(Func<Guid, Task> action)
+    private async Task RunAsync(Func<Task> action)
     {
         busy = true;
         try
         {
-            await action(Actor.Require());
+            await action();
             actionError = null;
             await LoadAsync();
         }
@@ -623,12 +468,12 @@ else if (listing is not null)
         }
     }
 
-    private async Task RunModalAsync(Func<Guid, Task> action, Action close)
+    private async Task RunModalAsync(Func<Task> action, Action close)
     {
         modalBusy = true;
         try
         {
-            await action(Actor.Require());
+            await action();
             close();
             modalError = null;
             await LoadAsync();
@@ -645,16 +490,14 @@ else if (listing is not null)
 
     private static string Check(bool ok) => ok ? "✓" : "pendiente";
 
-    private void OpenReason(ReasonAction action)
+    private void OpenWithdraw()
     {
-        reasonAction = action;
         modalError = null;
-        showReason = true;
+        showWithdraw = true;
     }
 
-    private Task ConfirmReasonAsync(string reason) => reasonAction == ReasonAction.Withdraw
-        ? RunModalAsync(a => Api.WithdrawAsync(Id, a, reason, CancellationToken.None), () => showReason = false)
-        : RunModalAsync(a => Api.CancelReservationAsync(Id, a, reason, CancellationToken.None), () => showReason = false);
+    private Task WithdrawAsync(string reason) =>
+        RunModalAsync(() => Api.WithdrawAsync(Id, reason, CancellationToken.None), () => showWithdraw = false);
 
     private void OpenDetails()
     {
@@ -664,7 +507,7 @@ else if (listing is not null)
     }
 
     private Task SaveDetailsAsync() => RunModalAsync(
-        a => Api.UpdateDetailsAsync(Id, details.ToRequest(a), CancellationToken.None),
+        () => Api.UpdateDetailsAsync(Id, details.ToRequest(), CancellationToken.None),
         () => showDetails = false);
 
     private void OpenPhotos()
@@ -680,7 +523,7 @@ else if (listing is not null)
     private Task SavePhotosAsync()
     {
         var photos = photosDraft.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return RunModalAsync(a => Api.UpdatePhotosAsync(Id, new UpdateListingPhotosRequest(a, photos), CancellationToken.None), () => showPhotos = false);
+        return RunModalAsync(() => Api.UpdatePhotosAsync(Id, new UpdateListingPhotosRequest(photos), CancellationToken.None), () => showPhotos = false);
     }
 
     private void OpenPrice()
@@ -690,31 +533,9 @@ else if (listing is not null)
         showPrice = true;
     }
 
-    private async Task OpenAdvisorAsync()
-    {
-        advisorDraft = listing!.AdvisorId;
-        modalError = null;
-        showAdvisor = true;
-        try
-        {
-            advisors = (await IdentityApi.GetAsync(CancellationToken.None)).Advisors;
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-    }
-
-    private void OpenReport()
-    {
-        reportReason = ReportReason.Fraud;
-        modalError = null;
-        showReport = true;
-    }
-
     private void OpenClose()
     {
-        closeFinalPrice = offers.FirstOrDefault(o => o.Id == listing!.ReservedOfferId)?.Amount ?? listing!.Price ?? 0;
+        closeFinalPrice = listing!.Price ?? 0;
         closeSignedOn = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date);
         modalError = null;
         showClose = true;
@@ -737,37 +558,6 @@ else if (listing is not null)
             var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Actor.Require(), Id, slots), CancellationToken.None);
             showVisit = false;
             Nav.NavigateTo($"/rentals/visits/{visitId}");
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-        finally
-        {
-            modalBusy = false;
-        }
-    }
-
-    private void OpenOffer()
-    {
-        offerAmount = listing!.Price ?? 0;
-        offerStart = DateOnly.FromDateTime(DateTime.Today.AddDays(15));
-        offerMonths = 12;
-        modalError = null;
-        showOffer = true;
-    }
-
-    private async Task SubmitOfferAsync()
-    {
-        modalBusy = true;
-        try
-        {
-            var isRent = listing!.Operation == "Rent";
-            var offerId = await OffersApi.SubmitAsync(
-                new SubmitOfferRequest(Actor.Require(), Id, offerAmount, isRent ? offerStart : null, isRent ? offerMonths : null),
-                CancellationToken.None);
-            showOffer = false;
-            Nav.NavigateTo($"/rentals/offers/{offerId}");
         }
         catch (ApiException ex)
         {
@@ -814,8 +604,8 @@ else if (listing is not null)
                 Description = l.Description ?? ""
             };
 
-        public UpdateListingDetailsRequest ToRequest(Guid actorId) =>
-            new(actorId, Type, Area, Bedrooms, Bathrooms, ParkingSpots, Stratum, Floor, HasElevator, AdministrationFee,
+        public UpdateListingDetailsRequest ToRequest() =>
+            new(Type, Area, Bedrooms, Bathrooms, ParkingSpots, Stratum, Floor, HasElevator, AdministrationFee,
                 City, Neighborhood, Address, Description);
     }
 }

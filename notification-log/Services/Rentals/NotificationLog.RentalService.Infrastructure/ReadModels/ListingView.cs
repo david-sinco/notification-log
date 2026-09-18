@@ -6,9 +6,8 @@ namespace NotificationLog.RentalService.Infrastructure.ReadModels;
 public sealed class ListingView
 {
     public Guid Id { get; set; }
-    public Guid PublisherId { get; set; }
+    public Guid OwnerId { get; set; }
     public Guid CreatedBy { get; set; }
-    public Guid? AdvisorId { get; set; }
     public Operation Operation { get; set; }
     public ListingStatus Status { get; set; }
     public PropertyType? Type { get; set; }
@@ -27,10 +26,6 @@ public sealed class ListingView
     public long? Price { get; set; }
     public List<string> Photos { get; set; } = [];
     public DateTimeOffset? ExpiresAt { get; set; }
-    public Guid? ReservedOfferId { get; set; }
-    public DateTimeOffset? ReservedUntil { get; set; }
-    public bool IsReservationExtended { get; set; }
-    public List<Guid> ReporterIds { get; set; } = [];
     public List<RejectionReason> RejectionReasons { get; set; } = [];
     public string? StatusReason { get; set; }
     public long? FinalPrice { get; set; }

@@ -1,6 +1,5 @@
 @page "/rentals"
 @inject ListingsApiClient ListingsApi
-@inject OffersApiClient OffersApi
 @inject VisitsApiClient VisitsApi
 @inject NavigationManager Nav
 
@@ -9,7 +8,7 @@
 <div class="page-header">
     <div>
         <h1>Arriendos</h1>
-        <p>Estado general del portal: publicar → visitar → ofertar → cerrar.</p>
+        <p>Estado general del portal: registrar propietarios → publicar → visitar → cerrar.</p>
     </div>
 </div>
 
@@ -41,10 +40,10 @@
         </a>
     </div>
     <div class="col-6 col-lg-3">
-        <a class="stat-card" href="rentals/offers">
-            <span class="stat-icon">🏷️</span>
-            <span class="stat-label">Ofertas abiertas</span>
-            <span class="stat-value">@(openOffers?.ToString() ?? "—")</span>
+        <a class="stat-card" href="rentals/listings">
+            <span class="stat-icon">🤝</span>
+            <span class="stat-label">Cerradas</span>
+            <span class="stat-value">@(closed?.ToString() ?? "—")</span>
         </a>
     </div>
 </div>
@@ -98,13 +97,13 @@
         <div class="surface-card">
             <h2 class="h6">Para empezar</h2>
             <ol class="small mb-0 ps-3">
-                <li class="mb-2">
-                    Registrá personas y asesores en <a href="rentals/identity">Identidades</a>: la réplica local de lo que
-                    publicaría el servicio de Identity.
-                </li>
-                <li class="mb-2">Elegí arriba con quién actuar. Cada acción viaja con ese identificador.</li>
+                <li class="mb-2">Registrá el propietario en <a href="rentals/owners">Propietarios</a>.</li>
                 <li class="mb-2">Creá una publicación, completala y enviala a revisión.</li>
-                <li>Aprobala como moderador y probá visitas y ofertas con otro usuario.</li>
+                <li class="mb-2">Aprobala como moderador.</li>
+                <li class="mb-2">
+                    Para pedir visitas con otro usuario, verificá su teléfono en <a href="rentals/identity">Identidades</a>.
+                </li>
+                <li>Cuando se arriende o se venda, cerrala.</li>
             </ol>
         </div>
     </div>
@@ -116,7 +115,7 @@
     private int? inReview;
     private int? published;
     private int? requestedVisits;
-    private int? openOffers;
+    private int? closed;
     private IReadOnlyList<ListingSummaryDto>? recent;
 
     protected override async Task OnInitializedAsync()
@@ -127,16 +126,15 @@
             var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 1, CancellationToken.None);
             var recentTask = ListingsApi.ListAsync(null, null, null, null, 1, 6, CancellationToken.None);
             var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.Requested, 1, 1, CancellationToken.None);
-            var awaitingPublisherTask = OffersApi.ListAsync(null, null, OfferStatus.AwaitingPublisher, 1, 1, CancellationToken.None);
-            var awaitingOffererTask = OffersApi.ListAsync(null, null, OfferStatus.AwaitingOfferer, 1, 1, CancellationToken.None);
+            var closedTask = ListingsApi.ListAsync(null, ListingStatus.Closed, null, null, 1, 1, CancellationToken.None);
 
-            await Task.WhenAll(inReviewTask, publishedTask, recentTask, visitsTask, awaitingPublisherTask, awaitingOffererTask);
+            await Task.WhenAll(inReviewTask, publishedTask, recentTask, visitsTask, closedTask);
 
             inReview = inReviewTask.Result.TotalCount;
             published = publishedTask.Result.TotalCount;
             recent = recentTask.Result.Items;
             requestedVisits = visitsTask.Result.TotalCount;
-            openOffers = awaitingPublisherTask.Result.TotalCount + awaitingOffererTask.Result.TotalCount;
+            closed = closedTask.Result.TotalCount;
         }
         catch (ApiException ex)
         {

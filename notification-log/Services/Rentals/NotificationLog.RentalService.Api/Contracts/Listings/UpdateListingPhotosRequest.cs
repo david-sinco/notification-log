@@ -1,3 +1,3 @@
 namespace NotificationLog.RentalService.Api.Contracts.Listings;
 
-public sealed record UpdateListingPhotosRequest(Guid ActorId, IReadOnlyList<string> Photos);
+public sealed record UpdateListingPhotosRequest(IReadOnlyList<string> Photos);

@@ -1,16 +1,14 @@
+using System.Security.Claims;
+using NotificationLog.RentalService.Api.Authorization;
 using NotificationLog.RentalService.Api.Contracts.Listings;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Listings.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.GetListingById;
 using NotificationLog.RentalService.Application.Listings.Queries.ListListings;
-using NotificationLog.RentalService.Application.Listings.Commands.AssignAdvisor;
-using NotificationLog.RentalService.Application.Listings.Commands.CancelReservation;
 using NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 using NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
 using NotificationLog.RentalService.Application.Listings.Commands.DraftListing;
-using NotificationLog.RentalService.Application.Listings.Commands.ExtendReservation;
 using NotificationLog.RentalService.Application.Listings.Commands.RenewListing;
-using NotificationLog.RentalService.Application.Listings.Commands.ReportListing;
 using NotificationLog.RentalService.Application.Listings.Commands.SetListingAvailability;
 using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingForReview;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
@@ -23,7 +21,9 @@ public static class ListingEndpoints
 {
     public static IEndpointRouteBuilder MapListings(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/listings").WithTags("Listings");
+        var group = app.MapGroup("/api/listings")
+            .WithTags("Listings")
+            .RequireAuthorization(AuthorizationExtensions.RentalsScopePolicy);
 
         group.MapPost("/", DraftAsync)
             .WithName("DraftListing")
@@ -91,14 +91,6 @@ public static class ListingEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
-        group.MapPut("/{id:guid}/advisor", AssignAdvisorAsync)
-            .WithName("AssignAdvisor")
-            .WithSummary("Asigna o quita el asesor de la publicación")
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
         group.MapPost("/{id:guid}/withdraw", WithdrawAsync)
             .WithName("WithdrawListing")
             .WithSummary("Retira la publicación")
@@ -107,33 +99,9 @@ public static class ListingEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
-        group.MapPost("/{id:guid}/reports", ReportAsync)
-            .WithName("ReportListing")
-            .WithSummary("Reporta la publicación")
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
-        group.MapPost("/{id:guid}/reservation/extend", ExtendReservationAsync)
-            .WithName("ExtendReservation")
-            .WithSummary("Amplía la reserva de la publicación")
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
-        group.MapPost("/{id:guid}/reservation/cancel", CancelReservationAsync)
-            .WithName("CancelReservation")
-            .WithSummary("Cancela la reserva y la publicación vuelve a estar disponible")
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
         group.MapPost("/{id:guid}/close", CloseAsync)
             .WithName("CloseListing")
-            .WithSummary("Cierra la publicación con la firma del contrato")
+            .WithSummary("Cierra la publicación porque se arrendó o se vendió")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -144,11 +112,11 @@ public static class ListingEndpoints
 
     private static async Task<IResult> DraftAsync(
         DraftListingRequest body,
+        ClaimsPrincipal user,
         DraftListingHandler handler,
         CancellationToken ct)
     {
-        var id = await handler.HandleAsync(
-            new DraftListingCommand(body.ActorId, body.PublisherId, body.AdvisorId, body.Operation), ct);
+        var id = await handler.HandleAsync(new DraftListingCommand(body.OwnerId, body.Operation), user, ct);
 
         return Results.Created($"/api/listings/{id}", new CreatedListingResponse(id));
     }
@@ -168,11 +136,11 @@ public static class ListingEndpoints
     private static async Task<IResult> UpdateDetailsAsync(
         Guid id,
         UpdateListingDetailsRequest body,
+        ClaimsPrincipal user,
         UpdateListingDetailsHandler handler,
         CancellationToken ct)
     {
         await handler.HandleAsync(new UpdateListingDetailsCommand(
-            body.ActorId,
             id,
             body.Type,
             body.Area,
@@ -186,7 +154,7 @@ public static class ListingEndpoints
             body.City,
             body.Neighborhood,
             body.Address,
-            body.Description), ct);
+            body.Description), user, ct);
 
         return Results.NoContent();
     }
@@ -194,110 +162,75 @@ public static class ListingEndpoints
     private static async Task<IResult> UpdatePhotosAsync(
         Guid id,
         UpdateListingPhotosRequest body,
+        ClaimsPrincipal user,
         UpdateListingPhotosHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new UpdateListingPhotosCommand(body.ActorId, id, body.Photos), ct);
+        await handler.HandleAsync(new UpdateListingPhotosCommand(id, body.Photos), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> ChangePriceAsync(
         Guid id,
         ChangeListingPriceRequest body,
+        ClaimsPrincipal user,
         ChangeListingPriceHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new ChangeListingPriceCommand(body.ActorId, id, body.Price), ct);
+        await handler.HandleAsync(new ChangeListingPriceCommand(id, body.Price), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> SubmitForReviewAsync(
         Guid id,
-        SubmitListingForReviewRequest body,
+        ClaimsPrincipal user,
         SubmitListingForReviewHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new SubmitListingForReviewCommand(body.ActorId, id), ct);
+        await handler.HandleAsync(new SubmitListingForReviewCommand(id), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> SetAvailabilityAsync(
         Guid id,
         SetListingAvailabilityRequest body,
+        ClaimsPrincipal user,
         SetListingAvailabilityHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new SetListingAvailabilityCommand(body.ActorId, id, body.IsAvailable), ct);
+        await handler.HandleAsync(new SetListingAvailabilityCommand(id, body.IsAvailable), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> RenewAsync(
         Guid id,
-        RenewListingRequest body,
+        ClaimsPrincipal user,
         RenewListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new RenewListingCommand(body.ActorId, id), ct);
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> AssignAdvisorAsync(
-        Guid id,
-        AssignAdvisorRequest body,
-        AssignAdvisorHandler handler,
-        CancellationToken ct)
-    {
-        await handler.HandleAsync(new AssignAdvisorCommand(body.ActorId, id, body.AdvisorId), ct);
+        await handler.HandleAsync(new RenewListingCommand(id), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> WithdrawAsync(
         Guid id,
         WithdrawListingRequest body,
+        ClaimsPrincipal user,
         WithdrawListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new WithdrawListingCommand(body.ActorId, id, body.Reason, ByModerator: false), ct);
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> ReportAsync(
-        Guid id,
-        ReportListingRequest body,
-        ReportListingHandler handler,
-        CancellationToken ct)
-    {
-        await handler.HandleAsync(new ReportListingCommand(body.ReporterId, id, body.Reason), ct);
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> ExtendReservationAsync(
-        Guid id,
-        ExtendReservationRequest body,
-        ExtendReservationHandler handler,
-        CancellationToken ct)
-    {
-        await handler.HandleAsync(new ExtendReservationCommand(body.ActorId, id), ct);
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> CancelReservationAsync(
-        Guid id,
-        CancelReservationRequest body,
-        CancelReservationHandler handler,
-        CancellationToken ct)
-    {
-        await handler.HandleAsync(new CancelReservationCommand(body.ActorId, id, body.Reason), ct);
+        await handler.HandleAsync(new WithdrawListingCommand(id, body.Reason), user, ct);
         return Results.NoContent();
     }
 
     private static async Task<IResult> CloseAsync(
         Guid id,
         CloseListingRequest body,
+        ClaimsPrincipal user,
         CloseListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new CloseListingCommand(body.ActorId, id, body.FinalPrice, body.SignedOn), ct);
+        await handler.HandleAsync(new CloseListingCommand(id, body.FinalPrice, body.SignedOn), user, ct);
         return Results.NoContent();
     }
 }

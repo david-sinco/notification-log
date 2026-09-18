@@ -28,10 +28,6 @@ public static class RabbitMqMessagingExtensions
                 .DefaultIncomingMessage<PersonVerificationChanged>()
                 .UseProtobufSerialization();
 
-            opts.ListenToRabbitQueue("rentals-advisors")
-                .DefaultIncomingMessage<AdvisorChanged>()
-                .UseProtobufSerialization();
-
             opts.PublishMessage<NotificationDispatchRequested>()
                 .ToRabbitQueue("notification-dispatch")
                 .UseProtobufSerialization();
