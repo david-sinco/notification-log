@@ -6,7 +6,6 @@ internal sealed class CloseListingValidator : AbstractValidator<CloseListingComm
 {
     public CloseListingValidator()
     {
-        RuleFor(x => x.ActorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.FinalPrice).GreaterThan(0);
     }

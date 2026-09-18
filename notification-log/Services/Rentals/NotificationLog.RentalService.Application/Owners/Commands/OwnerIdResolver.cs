@@ -9,11 +9,11 @@ internal static class OwnerIdResolver
 {
     public static async Task<Guid> ResolveAsync(IOwnerRepository owners, ClaimsPrincipal user, CancellationToken ct)
     {
-        if (user.IsAdministrador() || user.IsAsesor())
+        if (user.IsAdministrador() || user.IsModerador())
             return Guid.NewGuid();
 
         if (!user.IsPropietario())
-            throw new ForbiddenException("Solo un administrador, un asesor o un propietario pueden registrar propietarios.");
+            throw new ForbiddenException("Solo un administrador, un moderador o un propietario pueden registrar propietarios.");
 
         var userId = user.GetUserId();
 

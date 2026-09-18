@@ -9,7 +9,6 @@ internal sealed class UpdateListingDetailsValidator : AbstractValidator<UpdateLi
 {
     public UpdateListingDetailsValidator()
     {
-        RuleFor(x => x.ActorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.Type).IsInEnum();
         RuleFor(x => x.Area).GreaterThanOrEqualTo(ListingPolicy.MinArea);

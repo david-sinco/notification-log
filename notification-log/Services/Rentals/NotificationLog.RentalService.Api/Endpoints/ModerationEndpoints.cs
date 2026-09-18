@@ -1,3 +1,4 @@
+using NotificationLog.RentalService.Api.Authorization;
 using NotificationLog.RentalService.Api.Contracts.Moderation;
 using NotificationLog.RentalService.Application.Listings.Commands.ReinstateListing;
 using NotificationLog.RentalService.Application.Listings.Commands.ReviewListing;
@@ -10,7 +11,9 @@ public static class ModerationEndpoints
 {
     public static IEndpointRouteBuilder MapModeration(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/moderation/listings").WithTags("Moderation");
+        var group = app.MapGroup("/api/moderation/listings")
+            .WithTags("Moderation")
+            .RequireAuthorization(AuthorizationExtensions.ModeracionPolicy);
 
         group.MapPost("/{id:guid}/review", ReviewAsync)
             .WithName("ReviewListing")

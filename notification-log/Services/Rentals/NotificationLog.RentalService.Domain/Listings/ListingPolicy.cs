@@ -12,17 +12,14 @@ public static class ListingPolicy
     public const decimal MinArea = 20m;
     public const long MinRentPrice = 300_000;
     public const long MinSalePrice = 30_000_000;
-    public const int ReportsToSuspend = 3;
-    public const int MaxActiveListingsPerOwner = 3;
-    public const decimal PriceDropNoticeThreshold = 0.03m;
+    public const int ValidityMonths = 1;
 
-    public static readonly TimeSpan Validity = TimeSpan.FromDays(60);
     public static readonly TimeSpan ExpiryNotice = TimeSpan.FromDays(7);
     public static readonly TimeSpan RenewalWindow = TimeSpan.FromDays(7);
     public static readonly TimeSpan PriceChangeCooldown = TimeSpan.FromHours(24);
-    public static readonly TimeSpan ReservationDuration = TimeSpan.FromDays(10);
-    public static readonly TimeSpan ReservationExtension = TimeSpan.FromDays(5);
 
     public static long MinimumPriceFor(Operation operation)
         => operation == Operation.Rent ? MinRentPrice : MinSalePrice;
+
+    public static DateTimeOffset ExpiryFrom(DateTimeOffset now) => now.AddMonths(ValidityMonths);
 }

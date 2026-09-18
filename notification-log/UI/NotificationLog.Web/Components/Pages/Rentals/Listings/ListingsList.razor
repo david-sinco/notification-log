@@ -131,11 +131,6 @@
                     <option value="@p.Id">Persona @RentalsFormat.Short(p.Id)@(p.UserId is { } u ? $" · usuario {RentalsFormat.Short(u)}" : "")</option>
                 }
             </select>
-            <div class="form-hint">El propietario solo puede crear sus propias publicaciones; un asesor puede crearlas a nombre de otro.</div>
-        </div>
-        <div class="form-check mb-1">
-            <input class="form-check-input" type="checkbox" id="as-advisor" @bind="createAsAdvisor" />
-            <label class="form-check-label" for="as-advisor">La creo como asesor (quien actúa queda asignado)</label>
         </div>
         @if (createError is not null)
         {
@@ -166,7 +161,6 @@
     private ApiException? createError;
     private Operation createOperation = Operation.Rent;
     private Guid createPublisherId = Guid.Empty;
-    private bool createAsAdvisor;
     private IReadOnlyList<PersonDto> people = [];
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -213,8 +207,7 @@
     private async Task OpenCreateAsync()
     {
         createError = null;
-        createAsAdvisor = Actor.IsAdvisor;
-        createPublisherId = createAsAdvisor ? Guid.Empty : Actor.Id ?? Guid.Empty;
+        createPublisherId = Actor.Id ?? Guid.Empty;
         showCreate = true;
 
         try
@@ -234,7 +227,7 @@
         {
             var actorId = Actor.Require();
             var id = await Api.DraftAsync(
-                new DraftListingRequest(actorId, createPublisherId, createAsAdvisor ? actorId : null, createOperation),
+                new DraftListingRequest(actorId, createPublisherId, null, createOperation),
                 CancellationToken.None);
             showCreate = false;
             Nav.NavigateTo($"/rentals/listings/{id}");

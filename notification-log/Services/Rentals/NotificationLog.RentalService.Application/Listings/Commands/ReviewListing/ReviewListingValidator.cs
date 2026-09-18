@@ -6,7 +6,6 @@ internal sealed class ReviewListingValidator : AbstractValidator<ReviewListingCo
 {
     public ReviewListingValidator()
     {
-        RuleFor(x => x.ModeratorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.Reasons).NotEmpty().When(x => !x.Approve);
         RuleForEach(x => x.Reasons).IsInEnum();

@@ -1,5 +1,5 @@
 @page "/rentals/owners"
-@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Asesor},{IdentityRoles.Propietario}")]
+@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}")]
 @using System.Net
 @inject OwnersApiClient Api
 @inject NavigationManager Nav
@@ -26,7 +26,7 @@
 {
     <div class="p-4 text-center text-muted">Cargando…</div>
 }
-else if (isOwnerOnly)
+else if (!canSeeAll)
 {
     @if (ownRecord is null)
     {
@@ -57,7 +57,7 @@ else if (page is not null)
 
 <Modal Title="Nuevo propietario" @bind-IsVisible="showCreate">
     <ChildContent>
-        @if (isOwnerOnly)
+        @if (!canSeeAll)
         {
             <div class="form-hint mb-3">Te registras a ti mismo como propietario.</div>
         }
@@ -125,9 +125,7 @@ else if (page is not null)
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
     private Guid currentUserId;
-    private bool isAdmin;
-    private bool isAdvisor;
-    private bool isOwnerOnly;
+    private bool canSeeAll;
 
     private PagedResult<OwnerDto>? page;
     private OwnerDto? ownRecord;
@@ -146,21 +144,17 @@ else if (page is not null)
     private string legalName = "";
     private string nit = "";
 
-    private string Subtitle => isAdmin
+    private string Subtitle => canSeeAll
         ? "Todos los propietarios registrados en Arriendos."
-        : isAdvisor
-            ? "Los propietarios que registraste."
-            : "Tu registro como propietario.";
+        : "Tu registro como propietario.";
 
-    private bool CanRegister => !loading && (!isOwnerOnly || ownRecord is null);
+    private bool CanRegister => !loading && (canSeeAll || ownRecord is null);
 
     protected override async Task OnInitializedAsync()
     {
         var user = (await AuthState).User;
         currentUserId = Guid.TryParse(user.FindFirst(IdentityClaims.Subject)?.Value, out var sub) ? sub : Guid.Empty;
-        isAdmin = user.IsInRole(IdentityRoles.Administrador);
-        isAdvisor = user.IsInRole(IdentityRoles.Asesor);
-        isOwnerOnly = !isAdmin && !isAdvisor;
+        canSeeAll = user.IsInRole(IdentityRoles.Administrador) || user.IsInRole(IdentityRoles.Moderador);
 
         await LoadAsync();
     }
@@ -170,10 +164,8 @@ else if (page is not null)
         loading = true;
         try
         {
-            if (isAdmin)
+            if (canSeeAll)
                 page = await Api.ListAsync(currentPage, PageSize, CancellationToken.None);
-            else if (isAdvisor)
-                page = await Api.ListMineAsync(currentPage, PageSize, CancellationToken.None);
             else
                 ownRecord = await LoadOwnRecordAsync();
 

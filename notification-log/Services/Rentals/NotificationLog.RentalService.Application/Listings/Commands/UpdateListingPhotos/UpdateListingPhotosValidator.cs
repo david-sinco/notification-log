@@ -8,7 +8,6 @@ internal sealed class UpdateListingPhotosValidator : AbstractValidator<UpdateLis
 {
     public UpdateListingPhotosValidator()
     {
-        RuleFor(x => x.ActorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.Photos).NotNull().Must(photos => photos.Count <= ListingPolicy.MaxPhotos)
             .WithMessage($"Una publicación no puede tener más de {ListingPolicy.MaxPhotos} fotos.");

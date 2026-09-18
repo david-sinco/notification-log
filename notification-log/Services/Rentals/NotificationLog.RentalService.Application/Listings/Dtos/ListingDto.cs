@@ -2,9 +2,8 @@ namespace NotificationLog.RentalService.Application.Listings.Dtos;
 
 public sealed record ListingDto(
     Guid Id,
-    Guid PublisherId,
+    Guid OwnerId,
     Guid CreatedBy,
-    Guid? AdvisorId,
     string Operation,
     string Status,
     string? Type,
@@ -23,10 +22,6 @@ public sealed record ListingDto(
     long? Price,
     IReadOnlyList<string> Photos,
     DateTimeOffset? ExpiresAt,
-    Guid? ReservedOfferId,
-    DateTimeOffset? ReservedUntil,
-    bool IsReservationExtended,
-    int ReportCount,
     IReadOnlyList<string> RejectionReasons,
     string? StatusReason,
     long? FinalPrice,

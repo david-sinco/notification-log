@@ -36,20 +36,14 @@ public static class OwnerEndpoints
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
         group.MapGet("/", ListAsync)
-            .RequireAuthorization(AuthorizationExtensions.AdministradorPolicy)
+            .RequireAuthorization(AuthorizationExtensions.ModeracionPolicy)
             .WithName("ListOwners")
             .WithSummary("Lista todos los propietarios")
             .Produces<PagedResult<OwnerDto>>();
 
-        group.MapGet("/mine", ListMineAsync)
-            .RequireAuthorization(AuthorizationExtensions.AsesorPolicy)
-            .WithName("ListMyOwners")
-            .WithSummary("Lista los propietarios que registró el asesor")
-            .Produces<PagedResult<OwnerDto>>();
-
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetOwnerById")
-            .WithSummary("Obtiene un propietario que registraste, o cualquiera si eres administrador")
+            .WithSummary("Obtiene un propietario que registraste, o cualquiera si eres administrador o moderador")
             .Produces<OwnerDto>()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
@@ -85,14 +79,6 @@ public static class OwnerEndpoints
         ListOwnersHandler handler,
         CancellationToken ct)
         => Results.Ok(await handler.HandleAsync(query, ct));
-
-    private static async Task<IResult> ListMineAsync(
-        ClaimsPrincipal user,
-        ListOwnersHandler handler,
-        CancellationToken ct,
-        int page = 1,
-        int pageSize = 20)
-        => Results.Ok(await handler.HandleAsync(new ListOwnersQuery(user.GetUserId(), page, pageSize), ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,

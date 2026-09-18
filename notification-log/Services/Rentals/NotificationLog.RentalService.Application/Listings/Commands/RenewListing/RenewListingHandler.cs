@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Listings;
@@ -7,17 +8,17 @@ namespace NotificationLog.RentalService.Application.Listings.Commands.RenewListi
 public sealed class RenewListingHandler
 {
     private readonly IListingRepository _listings;
-    private readonly ListingAccess _access;
     private readonly IUnitOfWork _uow;
     private readonly TimeProvider _time;
 
-    public RenewListingHandler(IListingRepository listings, ListingAccess access, IUnitOfWork uow, TimeProvider time)
-        => (_listings, _access, _uow, _time) = (listings, access, uow, time);
+    public RenewListingHandler(
+        IListingRepository listings, IUnitOfWork uow, TimeProvider time)
+        => (_listings, _uow, _time) = (listings, uow, time);
 
-    public async Task HandleAsync(RenewListingCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(RenewListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        await _access.EnsureCanManageAsync(listing, cmd.ActorId, ct);
+        ListingAccess.EnsureCanManage(listing, user);
 
         listing.Renew(_time.GetUtcNow());
 

@@ -25,6 +25,35 @@
 - [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, perfil de asesor, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
 - [ ] Responder 403 en lugar de 400 para "no es tuyo" en Rentals (`ForbiddenException`).
 
+## Rentals
+
+- [ ] Ajustar Infrastructure, Api y Web al nuevo dominio y a la Application de `Listing` (sin ofertas, reservas, reportes ni asesor; `OwnerId` + `CreatedBy`; los comandos de publicaciones reciben el `ClaimsPrincipal` en lugar de `ActorId`/`ModeratorId`).
+- [ ] Quitar lo que queda del asesor: asignación en `ListingDetail.razor`, réplica `AdvisorDocument` / `AdvisorChanged` (Infrastructure, Contracts, endpoints dev e `IdentityReplica.razor`) y el `AdvisorId` de `DraftListingRequest`.
+- [ ] Rol `Asesor` en la base de Identity: el seeder crea `Moderador`, pero el rol viejo y sus asignaciones siguen ahí. Borrarlo o migrar a sus usuarios.
+- [ ] Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas futuras y avisar a los visitantes. Al cerrarlo o retirarlo ya se hace (`ListingLifecycleProcess.OnNoLongerAvailableAsync`).
+- [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).
+- [ ] Publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`).
+- [ ] **Usuario por cada `Owner`.** Al registrar un propietario (también si lo registra un moderador), crear su usuario en Identity para confirmar correo o teléfono y poder enviarle notificaciones. Mientras tanto, un `Owner` sin cuenta no recibe las notificaciones de sus avisos ni puede atender visitas (el anfitrión es `OwnerId`).
+- [ ] **Consultas** (`Inquiry`, un flujo por par publicación–interesado, id UUID v5 de `ListingId + SeekerId`).
+  - Una sola conversación por interesado y publicación; un mensaje nuevo se añade a la existente.
+  - Mensajes de 1 a 1.000 caracteres, sin teléfonos, correos ni enlaces: el contacto pasa por la plataforma.
+  - Máximo 10 consultas nuevas por interesado al día (regla blanda, contra una proyección).
+  - Solo en publicaciones publicadas; el dueño no puede consultar la suya; el interesado necesita teléfono verificado.
+  - Solo el propietario responde. Se cierran cuando la publicación se cierra, se retira o vence.
+  - Eventos: `InquiryOpened(InquiryId, ListingId, SeekerId, Message)`, `InquiryMessagePosted(AuthorId, Text)`, `InquiryClosed(Reason)`.
+  - Notificaciones `consulta.nueva` (al propietario) y `consulta.respuesta` (al interesado).
+  - Mostrar públicamente el tiempo de respuesta del propietario (solo lado de lectura).
+- [ ] **Favoritos** (`FavoriteList`, un flujo por usuario).
+  - Máximo 100 por usuario; solo se agregan publicaciones publicadas; si cambian de estado siguen en la lista mostrando el estado actual.
+  - Agregar o quitar dos veces lo mismo no genera evento. Eventos: `ListingFavorited(ListingId)`, `ListingUnfavorited(ListingId)`.
+  - Avisar a quienes la tienen en favoritos cuando el precio baja 3% o más (`favorito.precio.baja`) y cuando deja de estar disponible (`favorito.no.disponible`).
+  - Mostrar el número de favoritos en la ficha.
+- [ ] **Búsquedas guardadas** (`SavedSearchList`, un flujo por usuario, con `SavedSearch` como entidad hija).
+  - Máximo 10 por usuario. Cada una tiene nombre, criterios (operación, tipo, ciudad, barrio, rango de precio, habitaciones…) y frecuencia de alertas: inmediata, diaria (7:00 hora del usuario) o ninguna.
+  - Eventos: `SavedSearchCreated(SearchId, Name, Criteria, Frequency)`, `SavedSearchUpdated(...)`, `SavedSearchDeleted(SearchId)`.
+  - Alertas inmediatas al aprobar una publicación o bajar su precio (`busqueda.coincidencia`); resumen diario con las publicaciones nuevas que coinciden (`busqueda.resumen`), con una tarea recurrente.
+  - Solo se envían alertas con el consentimiento `Alertas` vigente en Identity (se quitó la réplica `AlertsConsentChanged`; hay que volver a publicarla desde Identity).
+
 ## Configuración y limpieza
 
 - [ ] Buggregator: quitar `localhost:1025` y `localhost:8000` fijos del appsettings de Notification y tomarlos de Aspire.

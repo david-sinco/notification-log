@@ -106,18 +106,6 @@
             </div>
 
             <div class="nav-item">
-                <NavLink class="nav-link" href="rentals/inquiries">
-                    <span class="bi bi-chat-fill" aria-hidden="true"></span> Consultas
-                </NavLink>
-            </div>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="rentals/me">
-                    <span class="bi bi-heart-fill" aria-hidden="true"></span> Favoritos y búsquedas
-                </NavLink>
-            </div>
-
-            <div class="nav-item">
                 <NavLink class="nav-link" href="rentals/identity">
                     <span class="bi bi-person-fill" aria-hidden="true"></span> Identidades (dev)
                 </NavLink>
@@ -127,7 +115,7 @@
 </div>
 
 @code {
-    private const string OwnerRoles = $"{IdentityRoles.Administrador},{IdentityRoles.Asesor},{IdentityRoles.Propietario}";
+    private const string OwnerRoles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}";
 
     private bool IsUsersRoute => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("users", StringComparison.OrdinalIgnoreCase);
 

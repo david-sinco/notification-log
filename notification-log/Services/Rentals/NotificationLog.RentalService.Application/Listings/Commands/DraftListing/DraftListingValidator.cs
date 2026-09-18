@@ -6,9 +6,7 @@ internal sealed class DraftListingValidator : AbstractValidator<DraftListingComm
 {
     public DraftListingValidator()
     {
-        RuleFor(x => x.ActorId).NotEmpty();
-        RuleFor(x => x.PublisherId).NotEmpty();
-        RuleFor(x => x.AdvisorId).NotEqual(Guid.Empty).When(x => x.AdvisorId.HasValue);
+        RuleFor(x => x.OwnerId).NotEmpty();
         RuleFor(x => x.Operation).IsInEnum();
     }
 }

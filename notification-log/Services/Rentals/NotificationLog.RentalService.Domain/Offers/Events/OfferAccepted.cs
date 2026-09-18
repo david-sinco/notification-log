@@ -1,6 +1,0 @@
-using Domain.Shared.EventSourcing;
-using NotificationLog.RentalService.Domain.Offers.Enums;
-
-namespace NotificationLog.RentalService.Domain.Offers.Events;
-
-public sealed record OfferAccepted(OfferParty By) : DomainEvent;

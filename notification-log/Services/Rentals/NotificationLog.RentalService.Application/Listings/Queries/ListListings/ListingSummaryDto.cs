@@ -10,8 +10,6 @@ public sealed record ListingSummaryDto(
     long? Price,
     int? Bedrooms,
     decimal? Area,
-    Guid PublisherId,
+    Guid OwnerId,
     Guid CreatedBy,
-    Guid? AdvisorId,
-    int ReportCount,
     DateTimeOffset UpdatedAt);

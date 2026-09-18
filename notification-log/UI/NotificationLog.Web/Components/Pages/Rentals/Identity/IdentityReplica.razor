@@ -37,7 +37,7 @@
         <div class="table-responsive-wrap">
             <table class="table">
                 <thead>
-                    <tr><th>Persona</th><th>Usuario</th><th>Teléfono</th><th>Documento</th><th>Alertas</th><th></th></tr>
+                    <tr><th>Persona</th><th>Usuario</th><th>Teléfono</th><th>Documento</th><th></th></tr>
                 </thead>
                 <tbody>
                     @foreach (var p in identity.People)
@@ -56,16 +56,6 @@
                             </td>
                             <td><StatusPill Text="@(p.IsPhoneVerified ? "Verificado" : "Sin verificar")" Variant="@(p.IsPhoneVerified ? "success" : "neutral")" /></td>
                             <td><StatusPill Text="@(p.IsDocumentVerified ? "Verificado" : "Sin verificar")" Variant="@(p.IsDocumentVerified ? "success" : "neutral")" /></td>
-                            <td>
-                                @if (p.UserId is { } consentUser)
-                                {
-                                    var granted = HasConsent(consentUser);
-                                    <button class="btn btn-sm btn-outline-secondary" disabled="@busy"
-                                            @onclick="() => RunAsync(() => Api.SetAlertsConsentAsync(consentUser, !granted, CancellationToken.None))">
-                                        @(granted ? "Acepta · revocar" : "No acepta · otorgar")
-                                    </button>
-                                }
-                            </td>
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" @onclick="() => OpenPerson(p)">Editar</button>
@@ -173,7 +163,6 @@
 @code {
     private IdentitySnapshotDto? identity;
     private bool loading = true;
-    private bool busy;
     private ApiException? error;
 
     private bool modalBusy;
@@ -210,27 +199,6 @@
         finally
         {
             loading = false;
-        }
-    }
-
-    private bool HasConsent(Guid userId) => identity!.AlertsConsents.Any(c => c.Id == userId && c.IsGranted);
-
-    private async Task RunAsync(Func<Task> action)
-    {
-        busy = true;
-        try
-        {
-            await action();
-            error = null;
-            await LoadAsync();
-        }
-        catch (ApiException ex)
-        {
-            error = ex;
-        }
-        finally
-        {
-            busy = false;
         }
     }
 

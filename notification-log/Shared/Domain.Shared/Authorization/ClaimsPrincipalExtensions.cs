@@ -13,7 +13,7 @@ public static class ClaimsPrincipalExtensions
 
     public static bool IsAdministrador(this ClaimsPrincipal principal) => principal.IsInRole(nameof(UserRole.Administrador));
 
-    public static bool IsAsesor(this ClaimsPrincipal principal) => principal.IsInRole(nameof(UserRole.Asesor));
+    public static bool IsModerador(this ClaimsPrincipal principal) => principal.IsInRole(nameof(UserRole.Moderador));
 
     public static bool IsPropietario(this ClaimsPrincipal principal) => principal.IsInRole(nameof(UserRole.Propietario));
 }

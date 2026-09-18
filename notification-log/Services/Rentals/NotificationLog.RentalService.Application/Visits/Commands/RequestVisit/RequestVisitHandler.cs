@@ -40,7 +40,7 @@ public sealed class RequestVisitHandler
         if (listing.Status != ListingStatus.Published)
             throw new AppValidationException("La publicación no está disponible para visitas.");
 
-        if (await _access.CanManageAsync(listing, cmd.VisitorId, ct))
+        if (ListingAccess.IsHost(listing, cmd.VisitorId))
             throw new AppValidationException("No puedes pedir una visita a tu propia publicación.");
 
         await _access.RequireVerifiedUserAsync(cmd.VisitorId, requireDocument: false, ct);

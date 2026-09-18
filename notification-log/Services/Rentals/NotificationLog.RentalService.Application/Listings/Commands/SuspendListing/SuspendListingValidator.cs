@@ -7,7 +7,6 @@ internal sealed class SuspendListingValidator : AbstractValidator<SuspendListing
 {
     public SuspendListingValidator()
     {
-        RuleFor(x => x.ModeratorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.Reason).NotEmpty().MaximumLength(ListingPolicy.MaxReasonLength);
     }

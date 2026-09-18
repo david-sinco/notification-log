@@ -6,7 +6,6 @@ internal sealed class ChangeListingPriceValidator : AbstractValidator<ChangeList
 {
     public ChangeListingPriceValidator()
     {
-        RuleFor(x => x.ActorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.Price).GreaterThan(0);
     }

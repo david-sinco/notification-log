@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using FluentValidation;
@@ -12,14 +13,18 @@ public sealed class SuspendListingHandler
     private readonly IUnitOfWork _uow;
     private readonly IValidator<SuspendListingCommand> _validator;
 
-    public SuspendListingHandler(IListingRepository listings, IUnitOfWork uow, IValidator<SuspendListingCommand> validator)
+    public SuspendListingHandler(
+        IListingRepository listings, IUnitOfWork uow, IValidator<SuspendListingCommand> validator)
         => (_listings, _uow, _validator) = (listings, uow, validator);
 
-    public async Task HandleAsync(SuspendListingCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(SuspendListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
+        ListingAccess.EnsureStaff(user);
+
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
+
         listing.Suspend(cmd.Reason);
 
         await _listings.AppendAsync(listing, ct);

@@ -2,8 +2,6 @@
 @inject ListingsApiClient Api
 @inject VisitsApiClient VisitsApi
 @inject OffersApiClient OffersApi
-@inject InquiriesApiClient InquiriesApi
-@inject UserCollectionsApiClient CollectionsApi
 @inject DevIdentityApiClient IdentityApi
 @inject RentalsActor Actor
 @inject NavigationManager Nav
@@ -204,32 +202,6 @@ else if (listing is not null)
                     </div>
                 }
             </div>
-
-            <div class="table-card">
-                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Consultas</h2></div>
-                @if (inquiries.Count == 0)
-                {
-                    <EmptyState Text="Todavía no hay consultas." Icon="💬" />
-                }
-                else
-                {
-                    <div class="table-responsive-wrap">
-                        <table class="table">
-                            <thead><tr><th>Interesado</th><th>Último mensaje</th><th>Estado</th></tr></thead>
-                            <tbody>
-                                @foreach (var i in inquiries)
-                                {
-                                    <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/inquiries/{i.Id}")'>
-                                        <td><ShortId Value="i.SeekerId" /></td>
-                                        <td class="small">@i.LastMessage</td>
-                                        <td><StatusPill Text="@(i.IsClosed ? "Cerrada" : "Abierta")" Variant="@(i.IsClosed ? "neutral" : "success")" /></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
         </div>
 
         <div class="col-lg-4">
@@ -304,12 +276,7 @@ else if (listing is not null)
                 <p class="form-hint">Actuá con un usuario distinto al propietario o al asesor.</p>
                 <div class="d-grid gap-2">
                     <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenVisit">Solicitar visita</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenInquiry">Enviar consulta</button>
                     <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenOffer">Hacer oferta</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(busy || listing.Status != "Published")"
-                            @onclick="() => RunAsync(a => CollectionsApi.AddFavoriteAsync(a, Id, CancellationToken.None))">
-                        Guardar en favoritos
-                    </button>
                     <button class="btn btn-outline-danger btn-sm" disabled="@(listing.Status is not ("Published" or "Paused"))" @onclick="OpenReport">Reportar</button>
                 </div>
             </div>
@@ -533,22 +500,6 @@ else if (listing is not null)
     </FooterContent>
 </Modal>
 
-<Modal Title="Enviar consulta" @bind-IsVisible="showInquiry">
-    <ChildContent>
-        <label class="form-label">Mensaje</label>
-        <textarea class="form-control" rows="4" maxlength="@InquiryLimits.MaxMessageLength" @bind="inquiryDraft" @bind:event="oninput"></textarea>
-        <div class="form-hint">No se permiten teléfonos, correos ni enlaces: el contacto pasa por la plataforma.</div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showInquiry = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(modalBusy || string.IsNullOrWhiteSpace(inquiryDraft))" @onclick="SendInquiryAsync">Enviar</button>
-    </FooterContent>
-</Modal>
-
 <Modal Title="Hacer oferta" @bind-IsVisible="showOffer">
     <ChildContent>
         <div class="mb-3">
@@ -589,7 +540,6 @@ else if (listing is not null)
     private ListingDto? listing;
     private IReadOnlyList<VisitSummaryDto> visits = [];
     private IReadOnlyList<OfferSummaryDto> offers = [];
-    private IReadOnlyList<InquirySummaryDto> inquiries = [];
     private IReadOnlyList<AdvisorDto> advisors = [];
     private bool loading = true;
     private ApiException? loadError;
@@ -616,8 +566,6 @@ else if (listing is not null)
     private DateOnly closeSignedOn;
     private bool showVisit;
     private DateTime?[] slotDrafts = new DateTime?[VisitLimits.MaxSlots];
-    private bool showInquiry;
-    private string inquiryDraft = "";
     private bool showOffer;
     private long offerAmount;
     private DateOnly offerStart;
@@ -639,13 +587,11 @@ else if (listing is not null)
             var listingTask = Api.GetByIdAsync(Id, CancellationToken.None);
             var visitsTask = VisitsApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
             var offersTask = OffersApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
-            var inquiriesTask = InquiriesApi.ListAsync(Id, null, null, 1, 50, CancellationToken.None);
-            await Task.WhenAll(listingTask, visitsTask, offersTask, inquiriesTask);
+            await Task.WhenAll(listingTask, visitsTask, offersTask);
 
             listing = listingTask.Result;
             visits = visitsTask.Result.Items;
             offers = offersTask.Result.Items;
-            inquiries = inquiriesTask.Result.Items;
             loadError = null;
         }
         catch (ApiException ex)
@@ -791,33 +737,6 @@ else if (listing is not null)
             var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Actor.Require(), Id, slots), CancellationToken.None);
             showVisit = false;
             Nav.NavigateTo($"/rentals/visits/{visitId}");
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-        finally
-        {
-            modalBusy = false;
-        }
-    }
-
-    private void OpenInquiry()
-    {
-        inquiryDraft = "";
-        modalError = null;
-        showInquiry = true;
-    }
-
-    private async Task SendInquiryAsync()
-    {
-        modalBusy = true;
-        try
-        {
-            var inquiryId = await InquiriesApi.SendMessageAsync(
-                new SendInquiryMessageRequest(Actor.Require(), Id, inquiryDraft), CancellationToken.None);
-            showInquiry = false;
-            Nav.NavigateTo($"/rentals/inquiries/{inquiryId}");
         }
         catch (ApiException ex)
         {

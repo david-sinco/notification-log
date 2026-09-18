@@ -5,8 +5,7 @@ namespace NotificationLog.RentalService.Domain.Listings.Events;
 
 public sealed record ListingDrafted(
     Guid ListingId,
-    Guid PublisherId,
+    Guid OwnerId,
     Guid CreatedBy,
-    Guid? AdvisorId,
     Operation Operation
 ) : DomainEvent;

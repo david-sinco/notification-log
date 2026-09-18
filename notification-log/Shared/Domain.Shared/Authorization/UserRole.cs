@@ -4,5 +4,5 @@ public enum UserRole
 {
     Administrador,
     Propietario,
-    Asesor
+    Moderador
 }

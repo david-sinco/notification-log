@@ -23,18 +23,13 @@ internal static class MartenStoreConfiguration
         options.Projections.Add(new ListingDecisionProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new OfferDecisionProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitDecisionProjection(), ProjectionLifecycle.Inline);
-        options.Projections.Add(new InquiryDecisionProjection(), ProjectionLifecycle.Inline);
-        options.Projections.Add(new FavoriteListDecisionProjection(), ProjectionLifecycle.Inline);
-        options.Projections.Add(new SavedSearchListDecisionProjection(), ProjectionLifecycle.Inline);
 
         options.Projections.Add(new ListingViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new OfferViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitViewProjection(), ProjectionLifecycle.Inline);
-        options.Projections.Add(new InquiryViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new OwnerViewProjection(), ProjectionLifecycle.Inline);
 
         options.Schema.For<PersonVerificationDocument>().Index(x => x.UserId);
         options.Schema.For<AdvisorDocument>();
-        options.Schema.For<AlertsConsentDocument>();
     }
 }

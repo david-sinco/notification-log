@@ -8,7 +8,7 @@ public static class AuthorizationExtensions
 {
     public const string RentalsScopePolicy = OidcScopes.Rentals;
     public const string AdministradorPolicy = nameof(UserRole.Administrador);
-    public const string AsesorPolicy = nameof(UserRole.Asesor);
+    public const string ModeracionPolicy = "Moderacion";
 
     public static IServiceCollection AddRentalsAuthorization(this IServiceCollection services, IConfiguration configuration)
     {
@@ -36,9 +36,9 @@ public static class AuthorizationExtensions
             .AddPolicy(AdministradorPolicy, policy => policy
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => context.User.IsAdministrador()))
-            .AddPolicy(AsesorPolicy, policy => policy
+            .AddPolicy(ModeracionPolicy, policy => policy
                 .RequireAuthenticatedUser()
-                .RequireAssertion(context => context.User.IsAsesor()));
+                .RequireAssertion(context => context.User.IsAdministrador() || context.User.IsModerador()));
 
         return services;
     }

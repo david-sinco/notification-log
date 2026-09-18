@@ -1,3 +1,3 @@
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
 
-public sealed record UpdateListingPhotosCommand(Guid ActorId, Guid ListingId, IReadOnlyList<string> Photos);
+public sealed record UpdateListingPhotosCommand(Guid ListingId, IReadOnlyList<string> Photos);

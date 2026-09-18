@@ -2,7 +2,6 @@
 @inject ListingsApiClient ListingsApi
 @inject OffersApiClient OffersApi
 @inject VisitsApiClient VisitsApi
-@inject InquiriesApiClient InquiriesApi
 @inject NavigationManager Nav
 
 <PageTitle>Arriendos · NotificationLog</PageTitle>
@@ -105,15 +104,8 @@
                 </li>
                 <li class="mb-2">Elegí arriba con quién actuar. Cada acción viaja con ese identificador.</li>
                 <li class="mb-2">Creá una publicación, completala y enviala a revisión.</li>
-                <li>Aprobala como moderador y probá visitas, consultas y ofertas con otro usuario.</li>
+                <li>Aprobala como moderador y probá visitas y ofertas con otro usuario.</li>
             </ol>
-        </div>
-        <div class="surface-card mt-3">
-            <h2 class="h6">Consultas abiertas</h2>
-            <div class="d-flex align-items-baseline justify-content-between">
-                <span class="stat-value fs-3 fw-bold">@(openInquiries?.ToString() ?? "—")</span>
-                <a href="rentals/inquiries" class="small">Ver consultas →</a>
-            </div>
         </div>
     </div>
 </div>
@@ -125,7 +117,6 @@
     private int? published;
     private int? requestedVisits;
     private int? openOffers;
-    private int? openInquiries;
     private IReadOnlyList<ListingSummaryDto>? recent;
 
     protected override async Task OnInitializedAsync()
@@ -138,16 +129,14 @@
             var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.Requested, 1, 1, CancellationToken.None);
             var awaitingPublisherTask = OffersApi.ListAsync(null, null, OfferStatus.AwaitingPublisher, 1, 1, CancellationToken.None);
             var awaitingOffererTask = OffersApi.ListAsync(null, null, OfferStatus.AwaitingOfferer, 1, 1, CancellationToken.None);
-            var inquiriesTask = InquiriesApi.ListAsync(null, null, false, 1, 1, CancellationToken.None);
 
-            await Task.WhenAll(inReviewTask, publishedTask, recentTask, visitsTask, awaitingPublisherTask, awaitingOffererTask, inquiriesTask);
+            await Task.WhenAll(inReviewTask, publishedTask, recentTask, visitsTask, awaitingPublisherTask, awaitingOffererTask);
 
             inReview = inReviewTask.Result.TotalCount;
             published = publishedTask.Result.TotalCount;
             recent = recentTask.Result.Items;
             requestedVisits = visitsTask.Result.TotalCount;
             openOffers = awaitingPublisherTask.Result.TotalCount + awaitingOffererTask.Result.TotalCount;
-            openInquiries = inquiriesTask.Result.TotalCount;
         }
         catch (ApiException ex)
         {

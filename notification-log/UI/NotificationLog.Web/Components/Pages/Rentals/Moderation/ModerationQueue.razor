@@ -1,5 +1,5 @@
 @page "/rentals/moderation"
-@attribute [Authorize(Roles = "Administrador")]
+@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador}")]
 @inject ListingsApiClient ListingsApi
 @inject ModerationApiClient Api
 @inject RentalsActor Actor

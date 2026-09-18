@@ -14,8 +14,6 @@ public sealed class RentalsActor
 
     public Guid? Id => Guid.TryParse(User.FindFirstValue(IdentityClaims.Subject), out var id) ? id : null;
 
-    public bool IsAdvisor => User.IsInRole(IdentityRoles.Asesor);
-
     public Guid Require() =>
         Id ?? throw new ApiException(
             HttpStatusCode.Unauthorized,

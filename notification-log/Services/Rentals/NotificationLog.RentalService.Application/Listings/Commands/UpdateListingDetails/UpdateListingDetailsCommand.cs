@@ -3,7 +3,6 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 
 public sealed record UpdateListingDetailsCommand(
-    Guid ActorId,
     Guid ListingId,
     PropertyType Type,
     decimal Area,

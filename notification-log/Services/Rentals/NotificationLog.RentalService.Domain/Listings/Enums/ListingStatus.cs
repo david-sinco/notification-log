@@ -7,7 +7,6 @@ public enum ListingStatus
     Published,
     Paused,
     Expired,
-    Reserved,
     Closed,
     Withdrawn,
     Suspended

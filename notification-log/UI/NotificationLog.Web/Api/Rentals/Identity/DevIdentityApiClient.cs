@@ -10,8 +10,4 @@ public sealed class DevIdentityApiClient(HttpClient http)
 
     public Task SetAdvisorAsync(Guid advisorId, SetAdvisorRequest request, CancellationToken ct)
         => http.SendJsonAsync(HttpMethod.Put, $"/api/dev/identity/advisors/{advisorId}", request, ct);
-
-    public Task SetAlertsConsentAsync(Guid userId, bool isGranted, CancellationToken ct)
-        => http.SendJsonAsync(
-            HttpMethod.Put, $"/api/dev/identity/users/{userId}/alerts-consent", new SetAlertsConsentRequest(isGranted), ct);
 }

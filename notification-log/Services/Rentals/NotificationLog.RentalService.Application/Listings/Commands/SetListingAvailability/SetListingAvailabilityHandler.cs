@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Listings;
@@ -7,16 +8,16 @@ namespace NotificationLog.RentalService.Application.Listings.Commands.SetListing
 public sealed class SetListingAvailabilityHandler
 {
     private readonly IListingRepository _listings;
-    private readonly ListingAccess _access;
     private readonly IUnitOfWork _uow;
 
-    public SetListingAvailabilityHandler(IListingRepository listings, ListingAccess access, IUnitOfWork uow)
-        => (_listings, _access, _uow) = (listings, access, uow);
+    public SetListingAvailabilityHandler(
+        IListingRepository listings, IUnitOfWork uow)
+        => (_listings, _uow) = (listings, uow);
 
-    public async Task HandleAsync(SetListingAvailabilityCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(SetListingAvailabilityCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        await _access.EnsureCanManageAsync(listing, cmd.ActorId, ct);
+        ListingAccess.EnsureCanManage(listing, user);
 
         if (cmd.IsAvailable) listing.Resume();
         else listing.Pause();

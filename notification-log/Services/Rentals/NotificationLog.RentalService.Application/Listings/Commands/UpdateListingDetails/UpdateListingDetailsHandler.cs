@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using FluentValidation;
@@ -11,20 +12,19 @@ namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateList
 public sealed class UpdateListingDetailsHandler
 {
     private readonly IListingRepository _listings;
-    private readonly ListingAccess _access;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<UpdateListingDetailsCommand> _validator;
 
     public UpdateListingDetailsHandler(
-        IListingRepository listings, ListingAccess access, IUnitOfWork uow, IValidator<UpdateListingDetailsCommand> validator)
-        => (_listings, _access, _uow, _validator) = (listings, access, uow, validator);
+        IListingRepository listings, IUnitOfWork uow, IValidator<UpdateListingDetailsCommand> validator)
+        => (_listings, _uow, _validator) = (listings, uow, validator);
 
-    public async Task HandleAsync(UpdateListingDetailsCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(UpdateListingDetailsCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        await _access.EnsureCanManageAsync(listing, cmd.ActorId, ct);
+        ListingAccess.EnsureCanManage(listing, user);
 
         var details = PropertyDetails.Create(
             cmd.Type,

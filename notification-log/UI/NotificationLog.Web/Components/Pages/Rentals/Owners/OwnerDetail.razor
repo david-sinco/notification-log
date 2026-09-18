@@ -1,5 +1,5 @@
 @page "/rentals/owners/{Id:guid}"
-@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Asesor},{IdentityRoles.Propietario}")]
+@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}")]
 @inject OwnersApiClient Api
 
 <PageTitle>Propietario · NotificationLog</PageTitle>

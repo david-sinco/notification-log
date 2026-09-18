@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using FluentValidation;
@@ -10,25 +11,20 @@ namespace NotificationLog.RentalService.Application.Listings.Commands.ChangeList
 public sealed class ChangeListingPriceHandler
 {
     private readonly IListingRepository _listings;
-    private readonly ListingAccess _access;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<ChangeListingPriceCommand> _validator;
     private readonly TimeProvider _time;
 
     public ChangeListingPriceHandler(
-        IListingRepository listings,
-        ListingAccess access,
-        IUnitOfWork uow,
-        IValidator<ChangeListingPriceCommand> validator,
-        TimeProvider time)
-        => (_listings, _access, _uow, _validator, _time) = (listings, access, uow, validator, time);
+        IListingRepository listings, IUnitOfWork uow, IValidator<ChangeListingPriceCommand> validator, TimeProvider time)
+        => (_listings, _uow, _validator, _time) = (listings, uow, validator, time);
 
-    public async Task HandleAsync(ChangeListingPriceCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(ChangeListingPriceCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        await _access.EnsureCanManageAsync(listing, cmd.ActorId, ct);
+        ListingAccess.EnsureCanManage(listing, user);
 
         listing.ChangePrice(Money.Create(cmd.Price), _time.GetUtcNow());
 

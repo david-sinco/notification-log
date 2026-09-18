@@ -7,7 +7,6 @@ internal sealed class WithdrawListingValidator : AbstractValidator<WithdrawListi
 {
     public WithdrawListingValidator()
     {
-        RuleFor(x => x.ActorId).NotEmpty();
         RuleFor(x => x.ListingId).NotEmpty();
         RuleFor(x => x.Reason).NotEmpty().MaximumLength(ListingPolicy.MaxReasonLength);
     }

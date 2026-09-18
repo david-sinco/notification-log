@@ -1,40 +1,38 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using Application.Shared.Common;
+using Domain.Shared.Authorization;
 using FluentValidation;
-using NotificationLog.RentalService.Application.Abstractions;
+using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Listings;
+using NotificationLog.RentalService.Domain.Owners;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.DraftListing;
 
 public sealed class DraftListingHandler
 {
     private readonly IListingRepository _listings;
-    private readonly IIdentityReplica _identity;
+    private readonly IOwnerRepository _owners;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<DraftListingCommand> _validator;
 
     public DraftListingHandler(
-        IListingRepository listings, IIdentityReplica identity, IUnitOfWork uow, IValidator<DraftListingCommand> validator)
-        => (_listings, _identity, _uow, _validator) = (listings, identity, uow, validator);
+        IListingRepository listings, IOwnerRepository owners, IUnitOfWork uow, IValidator<DraftListingCommand> validator)
+        => (_listings, _owners, _uow, _validator) = (listings, owners, uow, validator);
 
-    public async Task<Guid> HandleAsync(DraftListingCommand cmd, CancellationToken ct)
+    public async Task<Guid> HandleAsync(DraftListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
-        if (cmd.AdvisorId is { } advisorId)
-        {
-            if (advisorId != cmd.ActorId)
-                throw new AppValidationException("Solo el propio asesor puede crear publicaciones a su nombre.");
+        var userId = user.GetUserId();
 
-            if (await _identity.GetAdvisorAsync(advisorId, ct) is not { IsActive: true })
-                throw new AppValidationException("El asesor no está activo.");
-        }
-        else if (await _identity.GetPersonByUserAsync(cmd.ActorId, ct) is not { } person || person.PersonId != cmd.PublisherId)
-        {
-            throw new AppValidationException("Solo el propietario o su asesor pueden crear la publicación.");
-        }
+        if (!ListingAccess.IsStaff(user) && (!user.IsPropietario() || cmd.OwnerId != userId))
+            throw new ForbiddenException("Un propietario solo puede crear publicaciones a su nombre.");
 
-        var listing = Listing.Draft(Guid.NewGuid(), cmd.PublisherId, cmd.ActorId, cmd.AdvisorId, cmd.Operation);
+        if (await _owners.LoadAsync(cmd.OwnerId, ct) is null)
+            throw new AppValidationException("El propietario no está registrado.");
+
+        var listing = Listing.Draft(Guid.NewGuid(), cmd.OwnerId, userId, cmd.Operation);
 
         await _listings.AppendAsync(listing, ct);
         await _uow.SaveChangesAsync(ct);

@@ -32,10 +32,6 @@ public static class RabbitMqMessagingExtensions
                 .DefaultIncomingMessage<AdvisorChanged>()
                 .UseProtobufSerialization();
 
-            opts.ListenToRabbitQueue("rentals-alerts-consents")
-                .DefaultIncomingMessage<AlertsConsentChanged>()
-                .UseProtobufSerialization();
-
             opts.PublishMessage<NotificationDispatchRequested>()
                 .ToRabbitQueue("notification-dispatch")
                 .UseProtobufSerialization();

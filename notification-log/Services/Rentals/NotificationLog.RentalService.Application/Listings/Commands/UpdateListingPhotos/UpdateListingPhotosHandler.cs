@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using FluentValidation;
@@ -10,20 +11,19 @@ namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateList
 public sealed class UpdateListingPhotosHandler
 {
     private readonly IListingRepository _listings;
-    private readonly ListingAccess _access;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<UpdateListingPhotosCommand> _validator;
 
     public UpdateListingPhotosHandler(
-        IListingRepository listings, ListingAccess access, IUnitOfWork uow, IValidator<UpdateListingPhotosCommand> validator)
-        => (_listings, _access, _uow, _validator) = (listings, access, uow, validator);
+        IListingRepository listings, IUnitOfWork uow, IValidator<UpdateListingPhotosCommand> validator)
+        => (_listings, _uow, _validator) = (listings, uow, validator);
 
-    public async Task HandleAsync(UpdateListingPhotosCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(UpdateListingPhotosCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        await _access.EnsureCanManageAsync(listing, cmd.ActorId, ct);
+        ListingAccess.EnsureCanManage(listing, user);
 
         listing.UpdatePhotos(cmd.Photos.Select(Photo.Create).ToList());
 
