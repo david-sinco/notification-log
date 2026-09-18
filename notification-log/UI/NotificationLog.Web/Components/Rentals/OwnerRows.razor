@@ -1,0 +1,31 @@
+<div class="table-responsive-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>Tipo</th>
+                <th>Documento</th>
+                <th>Registrado</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var owner in Owners)
+            {
+                <tr class="row-link" @onclick="() => OnSelect.InvokeAsync(owner)">
+                    <td>
+                        <div>@OwnerLabels.Name(owner)</div>
+                        <ShortId Value="owner.Id" />
+                    </td>
+                    <td>@OwnerLabels.Type(owner.Type)</td>
+                    <td>@OwnerLabels.Identification(owner)</td>
+                    <td class="text-muted small">@RentalsFormat.Date(owner.RegisteredAt)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<OwnerDto> Owners { get; set; } = [];
+    [Parameter] public EventCallback<OwnerDto> OnSelect { get; set; }
+}

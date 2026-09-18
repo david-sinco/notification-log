@@ -73,6 +73,14 @@
                 </NavLink>
             </div>
 
+            <AuthorizeView Roles="@OwnerRoles">
+                <div class="nav-item">
+                    <NavLink class="nav-link" href="rentals/owners">
+                        <span class="bi bi-people-fill" aria-hidden="true"></span> Propietarios
+                    </NavLink>
+                </div>
+            </AuthorizeView>
+
             <div class="nav-item">
                 <NavLink class="nav-link" href="rentals/listings">
                     <span class="bi bi-building-fill" aria-hidden="true"></span> Publicaciones
@@ -119,6 +127,8 @@
 </div>
 
 @code {
+    private const string OwnerRoles = $"{IdentityRoles.Administrador},{IdentityRoles.Asesor},{IdentityRoles.Propietario}";
+
     private bool IsUsersRoute => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("users", StringComparison.OrdinalIgnoreCase);
 
     private bool IsRentalsRoute =>Nav.ToBaseRelativePath(Nav.Uri).StartsWith("rentals", StringComparison.OrdinalIgnoreCase);

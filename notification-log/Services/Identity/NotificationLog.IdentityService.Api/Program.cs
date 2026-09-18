@@ -23,6 +23,11 @@ builder.Services.AddRazorPages();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
+builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
+    .WithOrigins(builder.Configuration.GetSection("Cors:Origins").Get<string[]>() ?? [])
+    .AllowAnyHeader()
+    .AllowAnyMethod()));
+
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
 
@@ -41,6 +46,8 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+app.UseCors();
 
 app.UseAuthentication();
 app.UseAuthorization();

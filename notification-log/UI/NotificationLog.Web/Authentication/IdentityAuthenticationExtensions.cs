@@ -23,7 +23,6 @@ public static class IdentityAuthenticationExtensions
             {
                 options.Authority = identity["Authority"]
                     ?? throw new InvalidOperationException("Falta la configuración 'Identity:Authority'.");
-                options.BackchannelHttpHandler = LocalhostSubdomainHandler.Create();
                 options.ClientId = identity["ClientId"];
                 options.ClientSecret = identity["ClientSecret"];
 
@@ -34,7 +33,7 @@ public static class IdentityAuthenticationExtensions
                 options.GetClaimsFromUserInfoEndpoint = false;
 
                 options.Scope.Clear();
-                foreach (var scope in new[] { "openid", "email", "phone", "roles", "offline_access", "identity" })
+                foreach (var scope in new[] { "openid", "email", "phone", "roles", "offline_access", "identity", "rentals" })
                     options.Scope.Add(scope);
 
                 options.TokenValidationParameters.NameClaimType = IdentityClaims.Name;

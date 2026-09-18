@@ -1,6 +1,8 @@
+using Domain.Shared.Authorization;
 using NotificationLog.RentalService.Api.Authorization;
 using NotificationLog.RentalService.Api.Endpoints;
 using NotificationLog.RentalService.Api.Exceptions;
+using NotificationLog.RentalService.Api.OpenApi;
 using NotificationLog.RentalService.Application;
 using NotificationLog.RentalService.Infrastructure;
 using Scalar.AspNetCore;
@@ -16,7 +18,7 @@ builder.Services.AddRentalsAuthorization(builder.Configuration);
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddDocumentTransformer<OAuthSecuritySchemeTransformer>());
 
 var app = builder.Build();
 
@@ -28,7 +30,13 @@ app.UseAuthorization();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
-    app.MapScalarApiReference();
+    app.MapScalarApiReference((options, context) => options
+        .AddPreferredSecuritySchemes(OAuthSecuritySchemeTransformer.SchemeName)
+        .AddAuthorizationCodeFlow(OAuthSecuritySchemeTransformer.SchemeName, flow => flow
+            .WithClientId(builder.Configuration["Scalar:ClientId"])
+            .WithPkce(Pkce.Sha256)
+            .WithRedirectUri($"{context.Request.Scheme}://{context.Request.Host}/scalar/")
+            .WithSelectedScopes(["openid", "roles", OidcScopes.Rentals])));
     app.MapDevIdentity();
 }
 

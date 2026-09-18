@@ -43,6 +43,7 @@ var webClientSecret = builder.AddParameter(
 
 var oidcConfig = builder.Configuration.GetSection("Oidc");
 var webClientConfig = builder.Configuration.GetSection("WebClient");
+var scalarClientConfig = builder.Configuration.GetSection("ScalarClient");
 
 var notification = AddNotification();
 var identity = AddIdentity();
@@ -70,18 +71,17 @@ void AddSqlClient() =>
         .WithEnvironment("ENGINE_postgres", "postgres@dbgate-plugin-postgres")
         .WaitFor(sql)
         .WaitFor(postgres)
-        .WithDevUrls()
         .WithParentRelationship(databases);
 
 IResourceBuilder<ProjectResource> AddNotification() =>
-    builder.AddProject<Projects.NotificationLog_ApiService>("notification")
+    builder.AddProject<Projects.NotificationLog_ApiService>("notification", launchProfileName: "https")
         .WithHttpHealthCheck("/health")
         .WithReference(notificationDb)
         .WaitFor(notificationDb)
         .WithReference(rabbitmq)
         .WaitFor(rabbitmq)
         .WaitFor(buggregator)
-        .WithDevUrls()
+        .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 
 IResourceBuilder<ProjectResource> AddIdentity() =>
@@ -97,16 +97,21 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Oidc__Audiences__notifications", oidcConfig["Audiences:Notifications"])
         .WithEnvironment("Seed__Clients__0__ClientId", webClientConfig["ClientId"])
         .WithEnvironment("Seed__Clients__0__ClientSecret", webClientSecret)
-        .WithEnvironment("Seed__Clients__0__Scopes__0", "identity")
+        .WithEnvironment("Seed__Clients__0__Scopes__0", webClientConfig["Scopes:0"])
+        .WithEnvironment("Seed__Clients__0__Scopes__1", webClientConfig["Scopes:1"])
         .WithEnvironment("Seed__Clients__0__RedirectUris__0", webClientConfig["RedirectUris:0"])
-        .WithEnvironment("Seed__Clients__0__RedirectUris__1", webClientConfig["RedirectUris:1"])
         .WithEnvironment("Seed__Clients__0__PostLogoutRedirectUris__0", webClientConfig["PostLogoutRedirectUris:0"])
-        .WithEnvironment("Seed__Clients__0__PostLogoutRedirectUris__1", webClientConfig["PostLogoutRedirectUris:1"])
-        .WithDevUrls()
+        .WithEnvironment("Seed__Clients__1__ClientId", scalarClientConfig["ClientId"])
+        .WithEnvironment("Seed__Clients__1__Scopes__0", scalarClientConfig["Scopes:0"])
+        .WithEnvironment("Seed__Clients__1__Scopes__1", scalarClientConfig["Scopes:1"])
+        .WithEnvironment("Seed__Clients__1__Scopes__2", scalarClientConfig["Scopes:2"])
+        .WithEnvironment("Seed__Clients__1__RedirectUris__0", scalarClientConfig["RedirectUris:0"])
+        .WithEnvironment("Cors__Origins__0", scalarClientConfig["Origins:0"])
+        .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 
 IResourceBuilder<ProjectResource> AddRental() =>
-    builder.AddProject<Projects.NotificationLog_RentalService_Api>("rental")
+    builder.AddProject<Projects.NotificationLog_RentalService_Api>("rental", launchProfileName: "https")
         .WithHttpHealthCheck("/health")
         .WithReference(rentalsDb)
         .WaitFor(rentalsDb)
@@ -114,7 +119,8 @@ IResourceBuilder<ProjectResource> AddRental() =>
         .WaitFor(rabbitmq)
         .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])
         .WithEnvironment("Oidc__Audiences__rentals", oidcConfig["Audiences:Rentals"])
-        .WithDevUrls()
+        .WithEnvironment("Scalar__ClientId", scalarClientConfig["ClientId"])
+        .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 
 void AddWeb() =>
@@ -130,14 +136,13 @@ void AddWeb() =>
         .WithEnvironment("Identity__Authority", oidcConfig["Issuer"])
         .WithEnvironment("Identity__ClientId", webClientConfig["ClientId"])
         .WithEnvironment("Identity__ClientSecret", webClientSecret)
-        .WithDevUrls()
+        .WithHttpsUrlsOnly()
         .WithParentRelationship(ui);
 
 void AddDocs() =>
     builder.AddViteApp("docs", "../UI/docs")
         .WithNpm()
         .WithExternalHttpEndpoints()
-        .WithDevUrls()
         .WithParentRelationship(ui);
 
 IResourceBuilder<ResourceGroup> AddGroup(string name) =>

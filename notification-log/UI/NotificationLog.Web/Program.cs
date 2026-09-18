@@ -8,6 +8,7 @@ using NotificationLog.Web.Api.Rentals.Identity;
 using NotificationLog.Web.Api.Rentals.Inquiries;
 using NotificationLog.Web.Api.Rentals.Listings;
 using NotificationLog.Web.Api.Rentals.Offers;
+using NotificationLog.Web.Api.Rentals.Owners;
 using NotificationLog.Web.Api.Rentals.Users;
 using NotificationLog.Web.Api.Rentals.Visits;
 using NotificationLog.Web.Authentication;
@@ -45,6 +46,8 @@ builder.Services.AddScoped<RentalsActor>();
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<AccessTokenHandler>();
 builder.Services.AddHttpClient<UsersApiClient>(client => client.BaseAddress = new("https+http://identity"))
+    .AddHttpMessageHandler<AccessTokenHandler>();
+builder.Services.AddHttpClient<OwnersApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
     .AddHttpMessageHandler<AccessTokenHandler>();
 
 var app = builder.Build();

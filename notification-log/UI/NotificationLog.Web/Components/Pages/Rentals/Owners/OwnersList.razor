@@ -1,0 +1,241 @@
+@page "/rentals/owners"
+@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Asesor},{IdentityRoles.Propietario}")]
+@using System.Net
+@inject OwnersApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Propietarios · NotificationLog</PageTitle>
+
+<div class="page-header">
+    <div>
+        <h1>Propietarios</h1>
+        <p>@Subtitle</p>
+    </div>
+    @if (CanRegister)
+    {
+        <button class="btn btn-primary" @onclick="OpenCreate">+ Nuevo propietario</button>
+    }
+</div>
+
+@if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+
+@if (loading)
+{
+    <div class="p-4 text-center text-muted">Cargando…</div>
+}
+else if (isOwnerOnly)
+{
+    @if (ownRecord is null)
+    {
+        <EmptyState Text="Aún no estás registrado como propietario." Icon="🔑" />
+    }
+    else
+    {
+        <div class="table-card">
+            <OwnerRows Owners="[ownRecord]" OnSelect="Open" />
+        </div>
+    }
+}
+else if (page is { Items.Count: 0 })
+{
+    <div class="table-card">
+        <EmptyState Text="No se encontraron propietarios." Icon="🔑" />
+    </div>
+}
+else if (page is not null)
+{
+    <div class="table-card">
+        <OwnerRows Owners="page.Items" OnSelect="Open" />
+        <div class="px-3 pb-3">
+            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
+        </div>
+    </div>
+}
+
+<Modal Title="Nuevo propietario" @bind-IsVisible="showCreate">
+    <ChildContent>
+        @if (isOwnerOnly)
+        {
+            <div class="form-hint mb-3">Te registras a ti mismo como propietario.</div>
+        }
+        <div class="mb-3">
+            <label class="form-label">Tipo de persona</label>
+            <select class="form-select" @bind="createCompany">
+                <option value="false">Persona natural</option>
+                <option value="true">Persona jurídica</option>
+            </select>
+        </div>
+        @if (createCompany)
+        {
+            <div class="mb-3">
+                <label class="form-label">Razón social</label>
+                <input class="form-control" @bind="legalName" />
+            </div>
+            <div class="mb-3">
+                <label class="form-label">NIT</label>
+                <input class="form-control" placeholder="900123456-7" @bind="nit" />
+                <div class="form-hint">Con el dígito de verificación después del guion.</div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-md-6">
+                    <label class="form-label">Nombres</label>
+                    <input class="form-control" @bind="firstNames" />
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Apellidos</label>
+                    <input class="form-control" @bind="lastNames" />
+                </div>
+            </div>
+            <div class="row g-2 mb-3">
+                <div class="col-md-5">
+                    <label class="form-label">Tipo de documento</label>
+                    <select class="form-select" @bind="documentType">
+                        @foreach (var type in Enum.GetValues<DocumentType>())
+                        {
+                            <option value="@type">@OwnerLabels.Document(type.ToString())</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-7">
+                    <label class="form-label">Número</label>
+                    <input class="form-control" @bind="documentNumber" />
+                </div>
+            </div>
+        }
+        @if (createError is not null)
+        {
+            <ErrorAlert Exception="createError" />
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showCreate = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@creating" @onclick="CreateAsync">Registrar</button>
+    </FooterContent>
+</Modal>
+
+@code {
+    private const int PageSize = 20;
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    private Guid currentUserId;
+    private bool isAdmin;
+    private bool isAdvisor;
+    private bool isOwnerOnly;
+
+    private PagedResult<OwnerDto>? page;
+    private OwnerDto? ownRecord;
+    private bool loading = true;
+    private ApiException? error;
+    private int currentPage = 1;
+
+    private bool showCreate;
+    private bool creating;
+    private ApiException? createError;
+    private bool createCompany;
+    private string firstNames = "";
+    private string lastNames = "";
+    private DocumentType documentType = DocumentType.CitizenshipCard;
+    private string documentNumber = "";
+    private string legalName = "";
+    private string nit = "";
+
+    private string Subtitle => isAdmin
+        ? "Todos los propietarios registrados en Arriendos."
+        : isAdvisor
+            ? "Los propietarios que registraste."
+            : "Tu registro como propietario.";
+
+    private bool CanRegister => !loading && (!isOwnerOnly || ownRecord is null);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var user = (await AuthState).User;
+        currentUserId = Guid.TryParse(user.FindFirst(IdentityClaims.Subject)?.Value, out var sub) ? sub : Guid.Empty;
+        isAdmin = user.IsInRole(IdentityRoles.Administrador);
+        isAdvisor = user.IsInRole(IdentityRoles.Asesor);
+        isOwnerOnly = !isAdmin && !isAdvisor;
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            if (isAdmin)
+                page = await Api.ListAsync(currentPage, PageSize, CancellationToken.None);
+            else if (isAdvisor)
+                page = await Api.ListMineAsync(currentPage, PageSize, CancellationToken.None);
+            else
+                ownRecord = await LoadOwnRecordAsync();
+
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task<OwnerDto?> LoadOwnRecordAsync()
+    {
+        try
+        {
+            return await Api.GetByIdAsync(currentUserId, CancellationToken.None);
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
+        }
+    }
+
+    private Task GoToPage(int p)
+    {
+        currentPage = p;
+        return LoadAsync();
+    }
+
+    private void Open(OwnerDto owner) => Nav.NavigateTo($"/rentals/owners/{owner.Id}");
+
+    private void OpenCreate()
+    {
+        createError = null;
+        showCreate = true;
+    }
+
+    private async Task CreateAsync()
+    {
+        creating = true;
+        try
+        {
+            var id = createCompany
+                ? await Api.RegisterCompanyAsync(new RegisterCompanyOwnerRequest(legalName, nit), CancellationToken.None)
+                : await Api.RegisterNaturalAsync(
+                    new RegisterNaturalOwnerRequest(firstNames, lastNames, documentType, documentNumber),
+                    CancellationToken.None);
+
+            showCreate = false;
+            Nav.NavigateTo($"/rentals/owners/{id}");
+        }
+        catch (ApiException ex)
+        {
+            createError = ex;
+        }
+        finally
+        {
+            creating = false;
+        }
+    }
+}

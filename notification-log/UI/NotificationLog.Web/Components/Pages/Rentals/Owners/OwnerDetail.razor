@@ -1,0 +1,94 @@
+@page "/rentals/owners/{Id:guid}"
+@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Asesor},{IdentityRoles.Propietario}")]
+@inject OwnersApiClient Api
+
+<PageTitle>Propietario · NotificationLog</PageTitle>
+
+<div class="mb-3">
+    <a href="/rentals/owners" class="small">← Volver a propietarios</a>
+</div>
+
+@if (loading)
+{
+    <div class="p-5 text-center text-muted">Cargando…</div>
+}
+else if (error is not null)
+{
+    <ErrorAlert Exception="error" />
+}
+else if (owner is not null)
+{
+    <div class="page-header">
+        <div>
+            <h1>@OwnerLabels.Name(owner)</h1>
+            <p class="font-monospace small">@owner.Id</p>
+        </div>
+        <div>
+            <span class="chip">@OwnerLabels.Type(owner.Type)</span>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-6">
+            <div class="surface-card">
+                <h2 class="h6">Datos del propietario</h2>
+                <dl class="kv-list">
+                    @if (owner.Nit is not null)
+                    {
+                        <dt>Razón social</dt>
+                        <dd>@owner.LegalName</dd>
+                        <dt>NIT</dt>
+                        <dd>@owner.Nit</dd>
+                    }
+                    else
+                    {
+                        <dt>Nombres</dt>
+                        <dd>@owner.FirstNames</dd>
+                        <dt>Apellidos</dt>
+                        <dd>@owner.LastNames</dd>
+                        <dt>Documento</dt>
+                        <dd>@OwnerLabels.Document(owner.DocumentType) @owner.DocumentNumber</dd>
+                    }
+                </dl>
+            </div>
+        </div>
+
+        <div class="col-lg-6">
+            <div class="surface-card">
+                <h2 class="h6">Registro</h2>
+                <dl class="kv-list">
+                    <dt>Registrado por</dt>
+                    <dd><ShortId Value="owner.CreatedBy" /></dd>
+                    <dt>Fecha</dt>
+                    <dd>@RentalsFormat.Date(owner.RegisteredAt)</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private OwnerDto? owner;
+    private bool loading = true;
+    private ApiException? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        try
+        {
+            owner = await Api.GetByIdAsync(Id, CancellationToken.None);
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}
