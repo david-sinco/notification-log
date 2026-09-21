@@ -1,16 +1,19 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
-using NotificationLog.IdentityService.Api.Accounts;
 using NotificationLog.IdentityService.Api.Connect;
+using NotificationLog.IdentityService.Application.Users.Commands.ResendVerificationCode;
+using NotificationLog.IdentityService.Application.Users.Commands.SignIn;
+using NotificationLog.IdentityService.Application.Users.Dtos;
 
 namespace NotificationLog.IdentityService.Api.Pages.Account;
 
 public sealed class LoginModel : PageModel
 {
-    private readonly AccountService _accounts;
+    private readonly SignInHandler _signIn;
+    private readonly ResendVerificationCodeHandler _codes;
 
-    public LoginModel(AccountService accounts) => _accounts = accounts;
+    public LoginModel(SignInHandler signIn, ResendVerificationCodeHandler codes) => (_signIn, _codes) = (signIn, codes);
 
     [BindProperty]
     public string Identifier { get; set; } = string.Empty;
@@ -30,7 +33,7 @@ public sealed class LoginModel : PageModel
 
     public async Task<IActionResult> OnPostAsync(CancellationToken ct)
     {
-        var attempt = await _accounts.SignInAsync(Identifier, Password, ct);
+        var attempt = await _signIn.HandleAsync(new SignInCommand(Identifier, Password), ct);
 
         switch (attempt.Status)
         {
@@ -39,7 +42,7 @@ public sealed class LoginModel : PageModel
                 return LocalRedirect(Url.IsLocalUrl(ReturnUrl) ? ReturnUrl : "/");
 
             case SignInStatus.NotVerified:
-                await _accounts.ResendCodeAsync(Identifier, ct);
+                await _codes.HandleAsync(new ResendVerificationCodeCommand(Identifier), ct);
                 return RedirectToPage("Verify", new { identifier = Identifier, returnUrl = ReturnUrl });
 
             case SignInStatus.LockedOut:

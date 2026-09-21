@@ -1,5 +1,5 @@
 using Domain.Shared.Authorization;
-using NotificationLog.IdentityService.Api.Data;
+using NotificationLog.IdentityService.Infrastructure.Security;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -13,13 +13,10 @@ public static class ConnectExtensions
 
     public static IServiceCollection AddConnect(this IServiceCollection services, IConfiguration configuration)
     {
-        var oidcSection = configuration.GetSection(OidcOptions.SectionName);
-        var oidc = oidcSection.Get<OidcOptions>();
+        var oidc = configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>();
 
         if (string.IsNullOrWhiteSpace(oidc?.Issuer) || !oidc.Audiences.TryGetValue(OidcScopes.Identity, out var identityAudience))
             throw new InvalidOperationException("Faltan 'Oidc:Issuer' y 'Oidc:Audiences:identity' en la configuración.");
-
-        services.Configure<OidcOptions>(oidcSection);
 
         services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
             .AddCookie(SessionCookie.Scheme, options =>
@@ -31,9 +28,6 @@ public static class ConnectExtensions
             });
 
         services.AddOpenIddict()
-            .AddCore(options => options
-                .UseEntityFrameworkCore()
-                .UseDbContext<IdentityServiceDbContext>())
             .AddServer(options =>
             {
                 options.SetIssuer(new Uri(oidc.Issuer));
@@ -81,8 +75,6 @@ public static class ConnectExtensions
             .AddPolicy(AdministradorPolicy, policy => policy
                 .RequireAuthenticatedUser()
                 .RequireRole(nameof(UserRole.Administrador)));
-
-        services.AddScoped<SessionRevoker>();
 
         return services;
     }

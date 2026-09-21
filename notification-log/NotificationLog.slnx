@@ -2,6 +2,9 @@
   <Folder Name="/Services/" />
   <Folder Name="/Services/Identity/">
     <Project Path="Services/Identity/NotificationLog.IdentityService.Api/NotificationLog.IdentityService.Api.csproj" />
+    <Project Path="Services/Identity/NotificationLog.IdentityService.Application/NotificationLog.IdentityService.Application.csproj" Id="99f12f85-1f6f-4459-8edb-25c1f4e8b9dd" />
+    <Project Path="Services/Identity/NotificationLog.IdentityService.Domain/NotificationLog.IdentityService.Domain.csproj" Id="3db18355-acb4-43c1-a9a7-f3eb26201b18" />
+    <Project Path="Services/Identity/NotificationLog.IdentityService.Infrastructure/NotificationLog.IdentityService.Infrastructure.csproj" Id="6f3062f4-d527-4613-bb9b-3de27afc11ee" />
   </Folder>
   <Folder Name="/Services/Notification/">
     <Project Path="Services/Notification/NotificationLog.ApiService/NotificationLog.ApiService.csproj" />

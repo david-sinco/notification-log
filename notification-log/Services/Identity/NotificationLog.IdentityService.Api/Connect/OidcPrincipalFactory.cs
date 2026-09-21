@@ -1,7 +1,7 @@
 using System.Collections.Immutable;
 using System.Security.Claims;
 using Microsoft.IdentityModel.Tokens;
-using NotificationLog.IdentityService.Api.Accounts;
+using NotificationLog.IdentityService.Application.Users.Dtos;
 using OpenIddict.Abstractions;
 using static OpenIddict.Abstractions.OpenIddictConstants;
 

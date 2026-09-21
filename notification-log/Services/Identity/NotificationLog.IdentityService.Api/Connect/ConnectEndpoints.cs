@@ -1,7 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
-using NotificationLog.IdentityService.Api.Accounts;
+using NotificationLog.IdentityService.Application.Users.Dtos;
+using NotificationLog.IdentityService.Application.Users.Queries.ValidateSession;
 using OpenIddict.Abstractions;
 using OpenIddict.Server.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -26,7 +27,7 @@ public static class ConnectEndpoints
 
     private static async Task<IResult> AuthorizeAsync(
         HttpContext context,
-        AccountService accounts,
+        ValidateSessionHandler sessions,
         IOpenIddictScopeManager scopes,
         CancellationToken ct)
     {
@@ -34,7 +35,7 @@ public static class ConnectEndpoints
             ?? throw new InvalidOperationException("La solicitud OpenID Connect no es válida.");
 
         var session = await context.AuthenticateAsync(SessionCookie.Scheme);
-        var user = session.Succeeded ? await ValidateAsync(session.Principal, accounts, ct) : null;
+        var user = session.Succeeded ? await ValidateAsync(session.Principal, sessions, ct) : null;
 
         if (user is null)
         {
@@ -60,11 +61,11 @@ public static class ConnectEndpoints
 
     private static async Task<IResult> ExchangeAsync(
         HttpContext context,
-        AccountService accounts,
+        ValidateSessionHandler sessions,
         CancellationToken ct)
     {
         var principal = (await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
-        var user = principal is null ? null : await ValidateAsync(principal, accounts, ct);
+        var user = principal is null ? null : await ValidateAsync(principal, sessions, ct);
 
         if (principal is null || user is null)
             return Forbid(Errors.InvalidGrant, "La sesión ya no es válida.");
@@ -83,14 +84,17 @@ public static class ConnectEndpoints
             [OpenIddictServerAspNetCoreDefaults.AuthenticationScheme]);
     }
 
-    private static async Task<SignedInUser?> ValidateAsync(ClaimsPrincipal principal, AccountService accounts, CancellationToken ct)
+    private static async Task<SignedInUser?> ValidateAsync(
+        ClaimsPrincipal principal,
+        ValidateSessionHandler sessions,
+        CancellationToken ct)
     {
         var stamp = principal.GetClaim(OidcClaims.SecurityStamp);
 
         if (!Guid.TryParse(principal.GetClaim(Claims.Subject), out var userId) || string.IsNullOrEmpty(stamp))
             return null;
 
-        return await accounts.ValidateSessionAsync(userId, stamp, ct);
+        return await sessions.HandleAsync(new ValidateSessionQuery(userId, stamp), ct);
     }
 
     private static IResult Forbid(string error, string description) =>

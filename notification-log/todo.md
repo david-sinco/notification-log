@@ -12,6 +12,7 @@
 
 ## Identity
 
+- [ ] **Reiniciar la base de Identity.** Las migraciones se rehicieron desde cero al pasar el servicio a capas (`InitialIdentity` vive ahora en Infrastructure), así que la base `identity` que ya exista tiene un historial de migraciones que no coincide: hay que borrarla para que arranque.
 - [ ] UI de administración de usuarios en la Web: listado, roles, bloquear y desbloquear.
 - [ ] Agregar o cambiar el correo o el celular de una cuenta existente, con código y evento `UserContactChanged`.
 - [ ] Recuperar y cambiar la contraseña.
