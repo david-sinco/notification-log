@@ -7,50 +7,52 @@ sidebar:
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, span } from '../../../lib/code';
+import recipientSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Recipients/Recipient.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
 - Definir un Bounded Context y la regla práctica para detectar cuándo se está violando.
 - Comparar dos modelos legítimos y distintos del mismo concepto de negocio ("usuario").
-- Ubicar las fronteras internas que ya existen dentro de este mismo servicio.
+- Distinguir un Bounded Context de un Módulo, que es lo que casi siempre se confunde.
 
 </Callout>
 
+<div class="ddd-frase">
+<strong>En una frase:</strong> el mismo término de negocio puede significar cosas distintas en dos
+sitios, y eso está bien; el error es un único modelo con sesenta campos que intente servir a todos.
+</div>
+
 ## Concepto
 
-Un Bounded Context es una frontera explícita dentro de la cual un modelo y su lenguaje son consistentes. El mismo término de negocio puede significar cosas distintas fuera de esa frontera, y eso está bien: el error es construir un único modelo con sesenta campos que intente servir a todos los contextos a la vez. Regla práctica: si al añadir un campo a una clase tienes que preguntar "¿pero para qué caso se usa?", probablemente estás mezclando contextos.
+Un Bounded Context es una frontera explícita dentro de la cual un modelo y su lenguaje son consistentes.
+
+**Regla práctica para detectarlo:** si al añadir un campo a una clase tienes que preguntar *"¿pero para qué caso se usa?"*, probablemente estás mezclando contextos.
 
 ## "Usuario" no es lo mismo en todos lados
 
-NotificationLog no modela "el usuario". Modela exactamente lo que su propio contexto — notificar — necesita saber de una persona para poder contactarla y respetar sus preferencias. El sistema productor (el que gestiona identidad, autenticación, verificación de email o teléfono) tiene su propio modelo de usuario, mucho más rico, que nunca cruza la frontera completo:
+NotificationLog no modela "el usuario". Modela exactamente lo que su propio contexto —notificar— necesita saber de una persona para poder contactarla y respetar sus preferencias. El servicio de Identity tiene su propio modelo de usuario, mucho más rico, que nunca cruza la frontera completo.
 
-```csharp title="Domain/Recipients/Recipient.cs"
-public sealed class Recipient : AggregateRoot
-{
-    public string Name { get; private set; } = default!;
-    public string? Email { get; private set; }
-    public string? Phone { get; private set; }
-    public string Locale { get; private set; } = "es-CO";
-    public string TimeZone { get; private set; } = "America/Bogota";
-    public bool IsActive { get; private set; }
+Estos son todos los datos que `Recipient` guarda. La lista completa, sin recortar:
 
-    private readonly Dictionary<string, string> _attributes = new();
-    // atributos libres: solo lo que este contexto necesita para renderizar/filtrar,
-    // nunca contraseñas, roles, historial de sesiones, etc.
+<Code
+    code={span(recipientSource, 'public string Name', 'Attributes => _attributes')}
+    lang="csharp"
+    title="Services/Notification/NotificationLog.NotificationService.Domain/Recipients/Recipient.cs · el estado completo"
+/>
 
-    public string? AddressFor(NotificationChannel channel) => channel switch
-    {
-        NotificationChannel.Email => Email,
-        NotificationChannel.Sms or NotificationChannel.WhatsApp => Phone,
-        _ => null
-    };
+Nombre, email, teléfono, idioma, zona horaria, si está activo, si aceptó notificaciones, y un diccionario de atributos libres para las plantillas. **Nada de contraseñas, roles, permisos, historial de sesiones ni códigos de verificación pendientes** — porque a *este* contexto no le importan.
 
-    public bool CanReceive(NotificationChannel channel)
-        => IsActive && !string.IsNullOrWhiteSpace(AddressFor(channel));
-}
-```
+Y el comportamiento del agregado confirma para qué existe: no tiene métodos sobre autenticación ni sobre permisos, solo sobre contactabilidad.
 
-Compáralo con lo que el contrato de integración entre servicios (`user_contact_updated.proto`, que verás en detalle en el [módulo 4](/ddd/context-map)) trae del lado del productor: nombre, email, teléfono, locale, zona horaria, activo/inactivo y atributos libres. Nada de contraseñas, roles, permisos ni historial de sesiones — porque a *este* contexto no le importa. `Recipient` es un modelo deliberadamente delgado: "alguien a quien se le puede enviar algo, por un canal, si está activo".
+<Code
+    code={member(recipientSource, 'public bool CanReceive')}
+    lang="csharp"
+    title="Services/Notification/NotificationLog.NotificationService.Domain/Recipients/Recipient.cs · CanReceive"
+/>
+
+`Recipient` es un modelo deliberadamente delgado: *"alguien a quien se le puede enviar algo, por un canal, si está activo y lo aceptó"*. Nada más.
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 800 300" role="img" aria-labelledby="bcTitle">
@@ -62,26 +64,26 @@ Compáralo con lo que el contrato de integración entre servicios (`user_contact
         </defs>
 
         <rect x="30" y="30" width="330" height="240" rx="12" fill="#f8fafc" stroke="#e5e9f2" stroke-dasharray="5,4" />
-        <text x="195" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Contexto: Identidad / Usuarios (productor)</text>
+        <text x="195" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Contexto: Identity (productor)</text>
         <rect x="60" y="75" width="270" height="170" rx="8" fill="#fff" stroke="#c7d2fe" />
         <text x="195" y="95" text-anchor="middle" font-size="11" font-weight="600" fill="#4338ca">"Usuario"</text>
         <text x="80" y="115" font-size="9.5" fill="#334155">• credenciales, hash de contraseña</text>
         <text x="80" y="132" font-size="9.5" fill="#334155">• email/teléfono pendientes de verificar</text>
-        <text x="80" y="149" font-size="9.5" fill="#334155">• intentos de verificación fallidos</text>
-        <text x="80" y="166" font-size="9.5" fill="#334155">• roles, permisos, sesiones</text>
-        <text x="80" y="183" font-size="9.5" fill="#334155">• preferencias de notificación</text>
+        <text x="80" y="149" font-size="9.5" fill="#334155">• códigos de verificación e intentos</text>
+        <text x="80" y="166" font-size="9.5" fill="#334155">• roles, permisos, sesiones, tokens</text>
+        <text x="80" y="183" font-size="9.5" fill="#334155">• consentimientos</text>
         <text x="80" y="200" font-size="9.5" fill="#334155">• nombre, locale, zona horaria</text>
         <text x="80" y="217" font-size="9.5" fill="#334155">• activo / inactivo</text>
 
         <rect x="440" y="30" width="330" height="240" rx="12" fill="#f8fafc" stroke="#e5e9f2" stroke-dasharray="5,4" />
-        <text x="605" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Contexto: Notificaciones (NotificationLog)</text>
-        <rect x="470" y="75" width="270" height="120" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="605" y="55" text-anchor="middle" font-size="12" font-weight="700" fill="#334155">Contexto: Notifications</text>
+        <rect x="470" y="75" width="270" height="135" rx="8" fill="#fff" stroke="#bbf7d0" />
         <text x="605" y="95" text-anchor="middle" font-size="11" font-weight="600" fill="#14532d">"Recipient"</text>
         <text x="490" y="115" font-size="9.5" fill="#334155">• nombre, email, teléfono</text>
         <text x="490" y="132" font-size="9.5" fill="#334155">• locale, zona horaria</text>
-        <text x="490" y="149" font-size="9.5" fill="#334155">• activo / inactivo</text>
+        <text x="490" y="149" font-size="9.5" fill="#334155">• activo / acepta notificaciones</text>
         <text x="490" y="166" font-size="9.5" fill="#334155">• atributos libres (para plantillas)</text>
-        <text x="605" y="215" text-anchor="middle" font-size="9.5" fill="#64748b" font-style="italic">nada de contraseñas, roles ni sesiones</text>
+        <text x="605" y="230" text-anchor="middle" font-size="9.5" fill="#64748b" font-style="italic">nada de contraseñas, roles ni sesiones</text>
 
         <line x1="360" y1="150" x2="435" y2="150" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#bcArrow)" />
         <text x="398" y="140" text-anchor="middle" font-size="9" fill="#64748b">solo lo</text>
@@ -95,28 +97,45 @@ Compáralo con lo que el contrato de integración entre servicios (`user_contact
 
 ## Dentro del mismo contexto hay Módulos, no más contextos
 
-Es cierto que un Bounded Context no siempre es un microservicio aparte: puede ser un módulo dentro del mismo proceso. Pero cuidado con la conclusión fácil, porque aquí está el error más común al aprender este patrón. Las carpetas `Triggers`, `Templates`, `Recipients` y `Notifications` de `NotificationLog.NotificationService.Domain` **no son cuatro bounded contexts**. Son cuatro agregados dentro de uno solo.
+Un Bounded Context no siempre es un servicio aparte: puede ser un módulo dentro del mismo proceso. Pero cuidado con la conclusión fácil, porque aquí está el error más común al aprender este patrón.
 
-La prueba está en un archivo concreto: `Domain/Shared/NotificationChannel.cs`. Las cuatro carpetas comparten ese enum con el mismo significado exacto — "canal Email" quiere decir lo mismo en `Templates` que en `Triggers` que en `Notification`. Cuando el mismo término significa lo mismo a ambos lados de una línea, esa línea no es una frontera de contexto: es un **Módulo** (el patrón que Evans llama *Modules*), una división para organizar el modelo y controlar el acoplamiento, no para cambiar de lenguaje.
+Las carpetas `Triggers`, `Templates`, `Recipients` y `Notifications` de `NotificationLog.NotificationService.Domain` **no son cuatro bounded contexts**. Son cuatro agregados dentro de uno solo.
 
-La frontera de contexto real de este repositorio es la del diagrama de arriba: entre Identidad y Notificaciones. Ahí sí "usuario" y `Recipient` son modelos distintos del mismo concepto, ahí sí hay que traducir — y por eso ahí, y solo ahí, existe un Anti-Corruption Layer ([módulo 4](/ddd/context-map)). Entre `Triggers` y `Templates` no hay ningún ACL, precisamente porque no hay nada que traducir.
+La prueba está en un archivo concreto: `Domain/Shared/NotificationChannel.cs`. Las cuatro carpetas comparten ese `enum` con el mismo significado exacto — "canal Email" quiere decir lo mismo en `Templates` que en `Triggers` que en `Notification`.
 
-Lo que sí comparten esas cuatro carpetas es la disciplina táctica que verás en el [módulo 7](/ddd/agregados): cada una tiene su propio agregado raíz y su propio repositorio, y nadie navega de un agregado a otro por referencia de objeto, solo por `Guid`. Eso es la Regla 3 de Vernon sobre agregados, que aplica *dentro* de un mismo contexto — no es evidencia de fronteras de contexto, y conviene no confundir una cosa con la otra.
+Cuando el mismo término significa lo mismo a ambos lados de una línea, esa línea no es una frontera de contexto: es un **Módulo** (el patrón que Evans llama *Modules*), una división para organizar el modelo y controlar el acoplamiento, no para cambiar de lenguaje.
 
 <Callout kind="advertencia" title="Cómo distinguirlos en dos segundos">
 
-Si puedes mover un tipo de una carpeta a otra y lo único que se rompe son los `using`, es un **Módulo**. Si además tendrías que decidir qué significa cada campo al otro lado, es un **Bounded Context**. Confundirlos tiene un coste real y caro: lleva a partir en microservicios lo que solo necesitaba carpetas.
+Si puedes mover un tipo de una carpeta a otra y lo único que se rompe son los `using`, es un **Módulo**.
+
+Si además tendrías que decidir qué significa cada campo al otro lado, es un **Bounded Context**.
+
+Confundirlos tiene un coste real y caro: lleva a partir en servicios lo que solo necesitaba carpetas.
 
 </Callout>
 
-<Callout kind="advertencia" title="La señal de alarma">
+Las fronteras de contexto reales de este repositorio son tres, y se ven en la solución antes que en el código: `Services/Identity`, `Services/Notification` y `Services/Rentals`. Ahí sí "usuario" significa cosas distintas a cada lado, ahí sí hay que traducir — y por eso ahí, y solo ahí, existen Anti-Corruption Layers ([módulo 4](/ddd/context-map)). Entre `Triggers` y `Templates` no hay ningún ACL, precisamente porque no hay nada que traducir.
 
-Si alguna vez sientes la tentación de fusionar `Recipient` con un futuro modelo de "cliente" de facturación porque "total, es la misma persona", detente y pregúntate: ¿el campo nuevo que quiero agregar tiene sentido en *ambos* casos de uso, o solo en uno? Si solo en uno, el modelo fusionado va a terminar sirviendo mal a los dos.
+<Callout kind="honesto" title="Lo que sí comparten las cuatro carpetas">
+
+Disciplina táctica, no lenguaje: cada una tiene su propio agregado raíz y su propio repositorio, y nadie navega de un agregado a otro por referencia de objeto, solo por `Guid`. Eso es la Regla 3 de Vernon sobre agregados ([módulo 7](/ddd/agregados)), que aplica *dentro* de un mismo contexto. No es evidencia de fronteras de contexto, y conviene no confundir una cosa con la otra.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+<Callout kind="resumen" title="Para recordar">
 
-Toma un término que uses a diario en tu equipo (por ejemplo, "cliente", "producto" o "cuenta") y pregunta a dos personas de áreas distintas qué campos esperarían encontrar en ese objeto. Si las listas no coinciden, probablemente ya tienes dos Bounded Contexts sin nombrar formalmente — y un modelo único que, sin saberlo, ya está sirviendo mal a uno de los dos.
+- Un Bounded Context es una frontera donde **un modelo y su lenguaje son consistentes**.
+- `Recipient` no es "el usuario": es "alguien contactable". Esa delgadez es la decisión, no una carencia.
+- Carpeta ≠ contexto. Si el vocabulario no cambia al cruzar la línea, es un **Módulo**.
+- En este repo los contextos reales son tres servicios; los módulos, cuatro carpetas de un dominio.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Identity guarda `AcceptsNotifications` y Notifications también. ¿Es duplicación que haya que eliminar, o dos modelos legítimos del mismo dato? Justifica con la regla del módulo.
+2. Si alguien propone fusionar `Recipient` con un futuro "cliente" de facturación porque "total, es la misma persona", ¿qué pregunta haces antes de aceptar?
+3. Toma un término que uses a diario en tu equipo ("cliente", "producto", "cuenta") y pide a dos personas de áreas distintas la lista de campos que esperarían. Si no coinciden, ya tienes dos contextos sin nombrar.
 
 </Callout>

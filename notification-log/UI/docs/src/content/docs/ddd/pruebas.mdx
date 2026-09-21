@@ -7,6 +7,10 @@ sidebar:
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole } from '../../../lib/code';
+import webTestsSource from '@code/Services/Notification/NotificationLog.Tests/WebTests.cs?raw';
+import testsCsproj from '@code/Services/Notification/NotificationLog.Tests/NotificationLog.Tests.csproj?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
@@ -17,7 +21,12 @@ import Callout from '../../../components/Callout.astro';
 
 </Callout>
 
-**Para quién es:** ya recorriste el modelado táctico (módulos 5 a 10) y sabes dónde vive cada regla de negocio de este dominio. Se asume que sabes ejecutar `dotnet test` y leer una aserción, pero no se asume ninguna opinión previa sobre pirámides de tests. La [Tarea 1](/ddd/tareas) del último módulo te pide escribir estos tests; este módulo es la parte que faltaba: *qué* probar y *por qué* esas reglas y no otras.
+<div class="ddd-frase">
+<strong>En una frase:</strong> un dominio bien aislado hace los tests aburridos — y cuando un test
+cuesta escribirlo, casi nunca es culpa del test.
+</div>
+
+**Para quién es:** ya recorriste el modelado táctico (módulos 5 a 10) y sabes dónde vive cada regla de negocio de este dominio. Se asume que sabes ejecutar `dotnet test` y leer una aserción, pero no se asume ninguna opinión previa sobre pirámides de tests. Las [tareas](/ddd/tareas) del último módulo son de modelado, no de testing — este módulo se lee como material de apoyo: sirve para entender *dónde vive cada regla*, que es la misma pregunta que responde un buen test.
 
 ## El problema: el módulo 11 prometió algo que nadie ha cobrado
 
@@ -25,13 +34,30 @@ El [módulo de arquitectura](/ddd/arquitectura) presumía de un `.csproj` de dom
 
 <Callout kind="honesto" title="El estado real de las pruebas de este repositorio">
 
-Hay exactamente **un** test en todo el proyecto: `WebTests.GetWebResourceRootReturnsOkStatusCode`, en `Services/Notification/NotificationLog.Tests/WebTests.cs`. Levanta la aplicación distribuida completa con `DistributedApplicationTestingBuilder`, espera a que el recurso `webfrontend` esté sano y comprueba que `GET /` devuelve `200 OK`.
-
-Es un test de humo de extremo a extremo, y tiene valor real: verifica que el cableado de Aspire, la cadena de conexión, las migraciones al arrancar y el registro de dependencias funcionan de verdad. Lo que no verifica es una sola regla de negocio. Ni una. Si mañana alguien borrara `EnsureChannelIsFree` del agregado `NotificationTrigger`, este test seguiría pasando en verde.
-
-Y hay un detalle todavía más revelador: `NotificationLog.Tests.csproj` tiene un único `ProjectReference`, a `NotificationLog.AppHost`. El proyecto de pruebas **no puede siquiera nombrar** a `NotificationTrigger` hoy. El arnés está cableado para probar el sistema por fuera, no el modelo por dentro.
+Hay exactamente **un** test en todo el proyecto. Este:
 
 </Callout>
+
+<Code
+    code={whole(webTestsSource)}
+    lang="csharp"
+    title="Services/Notification/NotificationLog.Tests/WebTests.cs — el único test que existe"
+/>
+
+Levanta la aplicación distribuida completa con `DistributedApplicationTestingBuilder`, espera a que el recurso `web` esté sano y comprueba que `GET /` devuelve `200 OK`.
+
+Es un test de humo de extremo a extremo, y tiene valor real: verifica que el cableado de Aspire, la cadena de conexión, las migraciones al arrancar y el registro de dependencias funcionan de verdad. Lo que no verifica es una sola regla de negocio. Ni una. **Si mañana alguien borrara `EnsureChannelIsFree` del agregado `NotificationTrigger`, este test seguiría pasando en verde.**
+
+Y hay un detalle todavía más revelador en el archivo de proyecto:
+
+<Code
+    code={whole(testsCsproj)}
+    lang="xml"
+    title="Services/Notification/NotificationLog.Tests/NotificationLog.Tests.csproj"
+    mark={['NotificationLog.AppHost.csproj']}
+/>
+
+Un único `ProjectReference`, y apunta a `NotificationLog.AppHost`. El proyecto de pruebas **no puede siquiera nombrar** a `NotificationTrigger` hoy: el arnés está cableado para probar el sistema por fuera, no el modelo por dentro.
 
 ## Qué probar en cada capa, y qué no duplicar
 
@@ -57,7 +83,7 @@ Todo lo que sigue es código **que vas a escribir tú** — no un extracto de un
 </Callout>
 
 ```csharp title="Tests que escribirías: la invariante de canal único (módulo 7)"
-using NotificationLog.NotificationService.Domain.Common;
+using Domain.Shared.Exceptions;
 using NotificationLog.NotificationService.Domain.Shared;
 using NotificationLog.NotificationService.Domain.Triggers;
 
@@ -130,7 +156,7 @@ public void PlantillaDeSms_NoAdmiteAsunto()
 [TestMethod]
 public void Recipient_NoPuedeRecibirPorUnCanalSinDireccion()
 {
-    var sinTelefono = Recipient.Create(Guid.NewGuid(), "Ana", "ana@ejemplo.com", phone: null);
+    var sinTelefono = Recipient.Create(Guid.NewGuid(), "Ana", "ana@ejemplo.com", phone: null, acceptsNotifications: true);
 
     Assert.IsTrue(sinTelefono.CanReceive(NotificationChannel.Email));
     Assert.IsFalse(sinTelefono.CanReceive(NotificationChannel.Sms));
@@ -268,6 +294,17 @@ Eso no es un defecto del enfoque: es la división del trabajo. Esas afirmaciones
 
 </Callout>
 
+<Callout kind="resumen" title="Para recordar">
+
+- La pregunta no es "¿cuántos tests?" sino **"¿cuál es la forma más barata de sostener esta afirmación?"**.
+- Cada capa afirma una cosa distinta. Probar la misma regla cuatro veces es lo que hace lenta una suite.
+- Un test de dominio **no necesita dobles**. Si los necesita, la lógica no estaba en el dominio.
+- `internal` te obliga a llegar a cada estado **por la API pública** — incómodo al principio, correcto siempre.
+- Un handler que necesita once dobles no tiene un problema de testing: tiene un problema de diseño.
+- Ningún test en memoria prueba la persistencia. Eso se paga con integración, y son pocos y valiosos.
+
+</Callout>
+
 <Callout kind="ejercicio" title="Ejercicio 2 · Autoevaluación">
 
 1. ¿Por qué un test del dominio de este proyecto no necesita ningún doble, y qué significaría que sí lo necesitara?
@@ -279,6 +316,6 @@ Eso no es un defecto del enfoque: es la división del trabajo. Esas afirmaciones
 
 <Callout kind="honesto" title="El primer paso real, antes de escribir un solo Assert">
 
-`NotificationLog.Tests` no referencia el proyecto de dominio. Añadir ese `<ProjectReference>` — o crear un proyecto de pruebas nuevo, más pequeño y dedicado solo al dominio, que arranque en milisegundos en vez de levantar Aspire — es el trabajo previo. Esa elección ya es una decisión de diseño: mezclar tests de dominio instantáneos con un test de humo que levanta contenedores en el mismo proyecto significa esperar lo segundo cada vez que quieras comprobar lo primero. Es la [Tarea 1](/ddd/tareas), y ahora tienes el mapa completo para resolverla.
+`NotificationLog.Tests` no referencia el proyecto de dominio. Añadir ese `<ProjectReference>` — o crear un proyecto de pruebas nuevo, más pequeño y dedicado solo al dominio, que arranque en milisegundos en vez de levantar Aspire — es el trabajo previo. Esa elección ya es una decisión de diseño: mezclar tests de dominio instantáneos con un test de humo que levanta contenedores en el mismo proyecto significa esperar lo segundo cada vez que quieras comprobar lo primero. No es ninguna de las tareas de este tutorial —que son de modelado— pero es el primer paso si algún día quieres cobrar la inversión que hizo la arquitectura.
 
 </Callout>

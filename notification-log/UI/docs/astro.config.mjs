@@ -22,6 +22,7 @@ export default defineConfig({
             sidebar: [
                 { label: 'Proyecto', items: [{ autogenerate: { directory: 'proyecto' } }] },
                 { label: 'DDD', items: [{ autogenerate: { directory: 'ddd' } }] },
+                { label: 'Event Sourcing', items: [{ autogenerate: { directory: 'event-sourcing' } }] },
                 { label: 'Arquitectura', items: [{ autogenerate: { directory: 'arquitectura' } }] },
                 { label: 'Patrones', items: [{ autogenerate: { directory: 'patrones' } }] }
             ]

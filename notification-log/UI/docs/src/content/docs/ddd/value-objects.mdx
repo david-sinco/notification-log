@@ -8,38 +8,74 @@ sidebar:
 
 import Callout from '../../../components/Callout.astro';
 import { Code } from '@astrojs/starlight/components';
-import { whole } from '../../../lib/code';
+import { lineWith, member, whole } from '../../../lib/code';
 import templateNameSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Templates/TemplateName.cs?raw';
+import eventKeySource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/EventKey.cs?raw';
+import notificationSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Notifications/Notification.cs?raw';
+import recipientSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Recipients/Recipient.cs?raw';
+import moneySource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Shared/Money.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
 - Definir un Value Object y las tres ganancias que produce.
 - Leer dos implementaciones reales, casi gemelas, del mismo molde.
 - Saber cuándo un `enum` ya resuelve el problema sin necesitar un VO completo.
+- Detectar obsesión primitiva incluso dentro de un dominio que, por lo demás, está bien modelado.
 
 </Callout>
 
+<div class="ddd-frase">
+<strong>En una frase:</strong> un Value Object convierte "este string podría ser inválido" en
+"este tipo no puede existir con un valor inválido", y esa diferencia se cobra en cada línea posterior.
+</div>
+
 ## Concepto
 
-Un Value Object es un objeto definido por sus atributos, sin identidad propia, inmutable y auto-validado. Dos instancias con el mismo valor son intercambiables: no importa *cuál* es, importa *cuánto* vale. Sus tres ganancias prácticas: elimina la validación duplicada (un valor inválido no puede llegar a existir), elimina errores de confundir dos primitivos del mismo tipo, y da un sitio natural donde colgar comportamiento relacionado con ese valor.
+Un Value Object es un objeto definido por sus atributos, sin identidad propia, inmutable y auto-validado. Dos instancias con el mismo valor son intercambiables: no importa *cuál* es, importa *cuánto* vale.
 
-## Dos Value Objects reales, lado a lado
+Sus tres ganancias prácticas:
 
-Este dominio tiene dos ejemplos casi gemelos: `EventKey` (identifica un hecho de negocio, formato `dominio.accion`, ya lo viste en el [módulo 1](/ddd/lenguaje-ubicuo)) y `TemplateName` (identifica una plantilla, formato `snake_case`). Ambos siguen exactamente la misma forma: `sealed record`, constructor privado, y un método estático `Create` que es la única puerta de entrada.
+<ol class="ddd-steps">
+    <li><strong>Elimina la validación duplicada.</strong> Un valor inválido no puede llegar a existir, así que nadie tiene que volver a comprobarlo.</li>
+    <li><strong>Elimina el error de confundir dos primitivos del mismo tipo.</strong> El compilador no deja pasar un <code>EventKey</code> donde va un <code>TemplateName</code>.</li>
+    <li><strong>Da un sitio natural donde colgar comportamiento</strong> relacionado con ese valor (normalizar, formatear, comparar).</li>
+</ol>
+
+## El molde, en un archivo entero
+
+`TemplateName` identifica una plantilla con formato `snake_case`. Léelo completo: es corto a propósito, y todo lo que hace cabe en la cabeza de una vez.
 
 <Code
     code={whole(templateNameSource)}
     lang="csharp"
     title="Services/Notification/NotificationLog.NotificationService.Domain/Templates/TemplateName.cs"
+    mark={['private TemplateName(string value)', 'public static TemplateName Create']}
 />
 
-Compara ese constructor privado con la firma pública: no existe manera de obtener un `TemplateName` sin pasar por `Create`, y `Create` nunca devuelve un valor a medio validar. Una vez que tienes un `TemplateName` en la mano, sabes con certeza — sin volver a comprobar nada — que está en minúsculas, tiene el formato correcto y no supera los 100 caracteres. Esa garantía es el valor real del patrón.
+Las dos líneas marcadas son el patrón entero:
 
-## Por qué "record" y no "class"
+- **Constructor privado.** No existe manera de obtener un `TemplateName` sin pasar por `Create`.
+- **`Create` estático.** Nunca devuelve un valor a medio validar: o lanza `DomainException`, o devuelve algo correcto.
 
-`TemplateName` y `EventKey` son `record`, no `class`: los records de C# generan automáticamente igualdad por valor (dos instancias con el mismo `Value` son iguales) y son inmutables por convención con propiedades `{ get; }`. Es el tipo de dato del lenguaje que más se parece a la definición de libro de un Value Object, sin escribir `Equals`/`GetHashCode` a mano.
+Una vez que tienes un `TemplateName` en la mano, sabes con certeza —sin volver a comprobar nada— que está en minúsculas, tiene el formato correcto y no supera los 100 caracteres. **Esa garantía es el valor real del patrón.**
 
-Queda una pregunta natural: SQL Server no sabe qué es un `TemplateName`, así que ¿cómo se guarda? La respuesta —una conversión declarada fuera del dominio, que además *revalida* el valor al leerlo de la base de datos— está en el [módulo 12](/ddd/persistencia), junto con el coste que esa conversión tiene sobre las consultas.
+## Dos value objects gemelos
+
+`EventKey` sigue exactamente el mismo molde con otra regla de formato. Compara las dos validaciones lado a lado:
+
+<Code
+    code={member(eventKeySource, 'private static readonly Regex Format') + '\n\n' + member(templateNameSource, 'private static readonly Regex Format')}
+    lang="csharp"
+    title="EventKey.cs y TemplateName.cs · dos formatos, un mismo molde"
+/>
+
+`dominio.accion` para el hecho de negocio, `snake_case` para el nombre de la plantilla. Mismo diseño, distinta regla — y eso es lo que hace útil tener el molde: el segundo value object cuesta diez minutos.
+
+## Por qué `record` y no `class`
+
+Ambos son `sealed record`, no `class`. Los *records* de C# generan automáticamente igualdad por valor (dos instancias con el mismo `Value` son iguales) y son inmutables por convención con propiedades `{ get; }`.
+
+Es el tipo de dato del lenguaje que más se parece a la definición de libro de un Value Object, sin escribir `Equals` ni `GetHashCode` a mano. Compáralo con [`Entity`](/ddd/entidades), que compara por `Id` precisamente porque es lo contrario.
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 780 240" role="img" aria-labelledby="voTitle">
@@ -73,20 +109,87 @@ Queda una pregunta natural: SQL Server no sabe qué es un `TemplateName`, así q
     </p>
 </div>
 
-## Otros candidatos en este dominio, y uno que ya resolvió el problema de otra forma
+## Un value object con comportamiento, no solo validación
 
-No todo lo que podría ser un Value Object lo es todavía — y eso también es información útil. `NotificationChannel` es un `enum` simple (`Email`, `Sms`, `Push`, `WhatsApp`): una forma legítima y más liviana de resolver el mismo problema (evitar strings mágicos) cuando el conjunto de valores es cerrado y no necesita validación de formato. Un mejor candidato pendiente es el teléfono de `Recipient`: hoy es un `string?` normalizado a mano con `NormalizePhone` (quita espacios y guiones) dentro de la propia entidad — funciona, pero esa normalización solo vive ahí, no reutilizable ni reforzada por el compilador si mañana aparece otro punto de entrada para un teléfono. Volverás sobre este caso concreto en el [módulo de tareas](/ddd/tareas).
+Las ganancias 1 y 2 se ven en `EventKey`. La tercera —dar un sitio donde colgar comportamiento— se ve mejor en el otro servicio de este repositorio. `Money`, en Rentals, además de impedir importes negativos sabe **cómo se escribe un valor en pesos colombianos**:
 
-<Callout kind="honesto" title="Y un caso peor, dentro de un agregado que este tutorial presenta como ejemplar">
+<Code
+    code={whole(moneySource)}
+    lang="csharp"
+    title="Services/Rentals/NotificationLog.RentalService.Domain/Shared/Money.cs"
+    mark={['public override string ToString()']}
+/>
 
-Abre `Domain/Notifications/Notification.cs`. El agregado guarda `public string EventKey { get; private set; }` — un `string`, no el value object `EventKey` que acabas de ver — y declara su propia constante `public const int EventKeyMaxLength = 200;`, que **duplica** `EventKey.MaxLength`. Dos constantes independientes para el mismo concepto, libres de divergir el día que alguien cambie una sola de las dos.
+Ese `ToString` es la diferencia entre un value object y una simple validación: el mensaje de error *"El canon mínimo de arriendo es $300.000"* sale gratis en cualquier parte del dominio, porque el tipo sabe presentarse a sí mismo.
 
-Es obsesión primitiva de manual, y está dentro del dominio, no en el borde. Merece la pena verlo porque enseña algo incómodo: adoptar el patrón no es una decisión que se toma una vez, es una disciplina que se sostiene archivo por archivo. El [módulo 12](/ddd/persistencia) celebra —con razón— que `EventKey.MaxLength` mande sobre el esquema en la tabla de triggers; en la tabla de notificaciones, esa misma regla se escribió a mano por segunda vez.
+Fíjate también en `FromStorage`, que es `internal` y **no valida**: es la puerta que usa la persistencia para reconstruir un valor que ya se validó cuando entró. Dos puertas, dos propósitos, y solo una pública.
+
+## Cuándo NO hace falta un Value Object
+
+No todo lo que podría ser un Value Object lo es —y eso también es información útil.
+
+`NotificationChannel` es un `enum` simple (`Email`, `Sms`, `Push`, `WhatsApp`): una forma legítima y más liviana de resolver el mismo problema (evitar strings mágicos) cuando el conjunto de valores es **cerrado** y no necesita validación de formato. Un value object ahí sería ceremonia sin beneficio.
+
+La regla práctica: si el conjunto de valores válidos se puede enumerar, un `enum` gana. Si hay que validar una *forma*, hace falta un value object.
+
+## Dos deudas reales, dentro de este mismo dominio
+
+<Callout kind="honesto" title="1 · El teléfono de Recipient sigue siendo un string">
+
+`Recipient.Phone` es un `string?` normalizado a mano por un método privado:
 
 </Callout>
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+<Code
+    code={member(recipientSource, 'private static string? NormalizePhone')}
+    lang="csharp"
+    title="Services/Notification/.../Recipients/Recipient.cs · NormalizePhone"
+/>
 
-Busca en tu propio código tres parámetros `string` o `decimal` consecutivos en la misma firma de método (por ejemplo, `Transferir(string origen, string destino, decimal importe)`). Esa firma es una bomba: nada impide invertir `origen` y `destino` en la llamada, y el compilador no te va a avisar. Diseña, aunque sea en papel, los Value Objects que la reemplazarían siguiendo el mismo molde que `TemplateName`: constructor privado + `Create` estático que valida.
+Funciona, pero esa normalización **solo vive ahí**: no es reutilizable, y el compilador no la impone si mañana aparece otro punto de entrada para un teléfono. Es el candidato más claro a value object de todo el dominio, y es la [Tarea 1](/ddd/tareas) del último módulo.
+
+<Callout kind="antipatron" title="2 · Y un caso peor, dentro de un agregado que este tutorial presenta como ejemplar">
+
+`Notification` guarda el event key como **`string`**, no como el value object `EventKey` que acabas de ver — y declara su propia constante que **duplica** `EventKey.MaxLength`:
+
+</Callout>
+
+<Code
+    code={[
+        lineWith(notificationSource, 'public const int EventKeyMaxLength'),
+        lineWith(notificationSource, 'public string EventKey')
+    ].join('\n')}
+    lang="csharp"
+    title="Services/Notification/.../Notifications/Notification.cs · la duplicación"
+/>
+
+Dos constantes independientes para el mismo concepto, libres de divergir el día que alguien cambie una sola de las dos. Es obsesión primitiva de manual, y está **dentro del dominio**, no en el borde.
+
+Merece la pena verlo porque enseña algo incómodo: adoptar el patrón no es una decisión que se toma una vez, es una disciplina que se sostiene archivo por archivo. El [módulo 12](/ddd/persistencia) celebra —con razón— que `EventKey.MaxLength` mande sobre el esquema en la tabla de triggers; en la tabla de notificaciones, esa misma regla se escribió a mano por segunda vez.
+
+<Callout kind="advertencia" title="Dónde sí es correcto que haya un string">
+
+Cuidado con la conclusión demasiado entusiasta. `BusinessEvent.EventKey` **también** es un `string`, y ahí está bien: es el dato que entra desde fuera, todavía sin validar. El borde del sistema es exactamente el sitio donde un primitivo es honesto, y `EventKey.Create` es la puerta que lo convierte en un valor confiable.
+
+La regla: **primitivo antes de la puerta, value object después**. El defecto de `Notification` es que está después de la puerta y sigue siendo primitivo.
+
+</Callout>
+
+<Callout kind="resumen" title="Para recordar">
+
+- El molde es siempre el mismo: **`sealed record` + constructor privado + `Create` estático que valida**.
+- La ganancia no es "validar": es que **después de `Create` nadie tiene que volver a validar**.
+- `record` da igualdad por valor gratis. Eso es exactamente lo que distingue un VO de una entidad.
+- Si el conjunto de valores es cerrado y enumerable, un **`enum` basta**. No todo merece un tipo.
+- Un VO también es el sitio natural para el comportamiento del valor (`Money.ToString`).
+- **Primitivo antes de la puerta de entrada, value object después.**
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. ¿Por qué `Money.FromStorage` es `internal` y no valida, mientras `Money.Create` es público y sí valida? ¿Qué se rompería si `FromStorage` fuera público?
+2. `NotificationChannel` es un `enum` y `EventKey` es un value object. Escribe la regla que decide cuál usar, en una frase.
+3. Busca en tu código tres parámetros `string` o `decimal` consecutivos en la misma firma (`Transferir(string origen, string destino, decimal importe)`). Nada impide invertir los dos primeros en la llamada. Diseña, aunque sea en papel, los VO que la arreglarían.
 
 </Callout>

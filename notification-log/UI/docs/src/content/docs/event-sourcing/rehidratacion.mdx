@@ -1,0 +1,261 @@
+---
+title: "Rehidratación: el estado como cálculo"
+description: "Quince líneas en el dominio convierten una lista de hechos en un agregado listo para decidir."
+sidebar:
+  order: 4
+  label: "4 · Rehidratación"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, whole } from '../../../lib/code';
+import aggregateRootSource from '@code/Shared/Domain.Shared/Common/AggregateRoot.cs?raw';
+import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
+import visitSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Visit.cs?raw';
+import streamsSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/AggregateStreams.cs?raw';
+import listingRepoSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenListingRepository.cs?raw';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Leer el método que convierte una historia en un agregado, línea por línea.
+- Entender por qué vive en `Domain` y no en `Infrastructure`.
+- Saber qué hace el constructor privado aquí, y en qué se parece al truco de EF Core.
+- Reconocer los dos problemas de rendimiento del patrón y sus dos soluciones.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un agregado event-sourced no se carga, se <em>calcula</em> — empieza
+vacío y se le aplican sus hechos en orden hasta llegar al presente.
+</div>
+
+## El método entero
+
+<Code
+    code={member(aggregateRootSource, 'public static TAggregate Rehydrate')}
+    lang="csharp"
+    title="Shared/Domain.Shared/Common/AggregateRoot.cs · Rehydrate"
+    mark={['aggregate.Apply(domainEvent);']}
+/>
+
+Tres pasos, y todos merecen explicación:
+
+<ol class="ddd-steps">
+    <li>
+        <strong>Rechazar la historia vacía.</strong> Un flujo sin eventos no es un agregado en estado
+        inicial: es un agregado que <em>no existe</em>. El mensaje de error lo dice explícitamente — el
+        repositorio debe devolver <code>null</code>, no rehidratar.
+    </li>
+    <li>
+        <strong>Crear la instancia con <code>Activator.CreateInstance(..., nonPublic: true)</code></strong>,
+        que invoca el constructor privado sin parámetros. Es exactamente el mismo truco que usa EF Core en
+        el <a href="/ddd/persistencia">otro servicio</a>: un camino de creación reservado para la
+        reconstrucción, que el negocio no puede usar.
+    </li>
+    <li>
+        <strong>Aplicar los eventos en orden.</strong> Nada más. Sin validación, sin transacción, sin
+        reloj. Al salir del bucle, el agregado está en el presente.
+    </li>
+</ol>
+
+<Callout kind="honesto" title="Por qué esto vive en Domain y no en Infrastructure">
+
+`Rehydrate` no sabe qué es Marten, ni PostgreSQL, ni JSON. Recibe una `IReadOnlyCollection<IDomainEvent>` y devuelve un agregado. **Es una función pura del dominio**, y por eso vive en `Domain.Shared` — que, recordemos, tiene [cero dependencias](/ddd/arquitectura).
+
+La consecuencia práctica es grande: puedes reconstruir un agregado desde una lista de eventos escrita a mano, sin base de datos y sin contenedor de DI. Si mañana se cambia Marten por otro event store, este método no se toca.
+
+</Callout>
+
+## La línea que hace posible todo: el constructor privado
+
+<Code
+    code={[
+        'private Listing() { }        // Listing.cs',
+        'private Visit() { }          // Visit.cs',
+        'private Owner() { }          // Owner.cs'
+    ].join('\n')}
+    lang="csharp"
+    title="Los tres constructores privados de Rentals"
+/>
+
+Sin ese constructor, `Rehydrate` no tendría de dónde partir. Con él, la única forma pública de obtener un `Listing` nuevo es la fábrica `Draft`, que valida y levanta `ListingDrafted`:
+
+<Code
+    code={member(listingSource, 'public static Listing Draft')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · Draft"
+    mark={['var listing = new Listing();', 'listing.Raise(new ListingDrafted(id, ownerId, createdBy, operation));']}
+/>
+
+Mira el orden con atención, porque es el corazón del patrón:
+
+1. Se valida **antes** de crear nada.
+2. Se crea un `Listing` **completamente vacío** — sin `Id`, sin `OwnerId`, sin `Status`.
+3. Se levanta `ListingDrafted`, y es `Apply` quien rellena todos esos campos.
+
+Es decir: **incluso al crear, el estado viene del evento.** Ni la fábrica asigna un solo campo directamente. El `When` correspondiente es el único sitio del código donde `Listing.Id` recibe un valor:
+
+<Code
+    code={member(listingSource, 'private void When(ListingDrafted e)')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · el estado nace del evento"
+/>
+
+Esa simetría tiene un efecto verificable: un agregado recién creado en memoria y el mismo agregado rehidratado desde la base tienen **exactamente** el mismo estado, porque recorrieron el mismo camino.
+
+## Quién llama a Rehydrate
+
+El dominio no sabe de dónde salen los eventos. Quien los trae es la infraestructura:
+
+<Code
+    code={member(streamsSource, 'public async Task<TAggregate?> LoadAsync')}
+    lang="csharp"
+    title="Services/Rentals/.../Persistence/AggregateStreams.cs · LoadAsync"
+    mark={['if (events.Count == 0)', 'AggregateRoot.Rehydrate<TAggregate>(id, events.Select(e => (IDomainEvent)e.Data).ToList());']}
+/>
+
+Cuatro líneas de trabajo real:
+
+- `FetchStreamAsync` pide a Marten **todos** los eventos del flujo, ordenados por versión.
+- Si no hay ninguno, devuelve `null` — el contrato que `Rehydrate` exige.
+- Guarda la última versión en un diccionario (eso es para el [módulo 5](/event-sourcing/persistencia): es la base del control de concurrencia).
+- Desempaqueta `e.Data` —el envoltorio de Marten trae metadatos además del evento— y llama a `Rehydrate`.
+
+Y el repositorio que ve la capa de aplicación es una fachada de tres líneas:
+
+<Code
+    code={whole(listingRepoSource)}
+    lang="csharp"
+    title="Services/Rentals/.../Persistence/MartenListingRepository.cs"
+/>
+
+Comparado con [el repositorio de EF Core del otro servicio](/ddd/repositorios-y-factories), aquí no hay `Include`, ni `AsNoTracking`, ni proyecciones. **No hay forma de cargar un agregado a medias**: o tienes toda su historia o no tienes nada. La preocupación del módulo 9 de DDD —"un agregado cargado a medias no puede defender su invariante"— aquí simplemente no puede ocurrir.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 260" role="img" aria-labelledby="rehydrateTitle">
+        <title id="rehydrateTitle">De las filas del event store al agregado en memoria</title>
+        <defs>
+            <marker id="reArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="40" width="220" height="180" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="130" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">rentals.mt_events</text>
+        <text x="130" y="80" text-anchor="middle" font-size="8.5" fill="#9a3412">stream_id = 7a1f...</text>
+        <rect x="36" y="92" width="188" height="22" rx="4" fill="#fff" stroke="#fed7aa" />
+        <text x="130" y="107" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">v1 ListingDrafted</text>
+        <rect x="36" y="118" width="188" height="22" rx="4" fill="#fff" stroke="#fed7aa" />
+        <text x="130" y="133" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">v2 ListingDetailsUpdated</text>
+        <rect x="36" y="144" width="188" height="22" rx="4" fill="#fff" stroke="#fed7aa" />
+        <text x="130" y="159" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">v3 ListingPriceChanged</text>
+        <rect x="36" y="170" width="188" height="22" rx="4" fill="#fff" stroke="#fed7aa" />
+        <text x="130" y="185" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">v4 ListingApproved</text>
+        <text x="130" y="209" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">append-only, ordenado por versión</text>
+
+        <line x1="242" y1="130" x2="288" y2="130" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#reArrow)" />
+        <text x="265" y="122" text-anchor="middle" font-size="7.5" fill="#64748b">FetchStream</text>
+
+        <rect x="292" y="60" width="200" height="140" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="392" y="84" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">AggregateStreams</text>
+        <text x="392" y="104" text-anchor="middle" font-size="8.5" fill="#334155">¿0 eventos? → null</text>
+        <text x="392" y="122" text-anchor="middle" font-size="8.5" fill="#334155">recuerda la versión (v4)</text>
+        <text x="392" y="140" text-anchor="middle" font-size="8.5" fill="#334155">desempaqueta e.Data</text>
+        <text x="392" y="172" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">única capa que sabe de Marten</text>
+
+        <line x1="494" y1="130" x2="540" y2="130" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#reArrow)" />
+
+        <rect x="544" y="40" width="300" height="180" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="694" y="64" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">AggregateRoot.Rehydrate</text>
+        <rect x="562" y="78" width="264" height="26" rx="5" fill="#fff" stroke="#c7d2fe" />
+        <text x="694" y="95" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">new Listing()  · todo vacío</text>
+        <rect x="562" y="108" width="264" height="26" rx="5" fill="#fff" stroke="#c7d2fe" />
+        <text x="694" y="125" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">Apply(v1) → Apply(v2) → ...</text>
+        <rect x="562" y="138" width="264" height="42" rx="5" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="694" y="155" text-anchor="middle" font-size="8.5" font-weight="600" fill="#14532d">Listing en el presente</text>
+        <text x="694" y="170" text-anchor="middle" font-size="8" font-family="monospace" fill="#14532d">Status=Published · ExpiresAt=...</text>
+        <text x="694" y="204" text-anchor="middle" font-size="8" fill="#4338ca" font-style="italic">Domain puro: ni una referencia a Marten</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        La frontera está en <code>AggregateStreams</code>: a su izquierda hay un event store concreto; a su
+        derecha, solo eventos de dominio y un método estático que los suma.
+    </p>
+</div>
+
+## Los dos problemas de rendimiento, y sus dos respuestas
+
+### Problema 1 — Flujos largos
+
+Cargar un agregado cuesta **O(número de eventos)**. Un `Listing` con cuatro eventos se rehidrata en microsegundos; uno con cuarenta mil, no.
+
+**La respuesta estándar son los *snapshots*:** guardar cada N eventos una foto del estado, y rehidratar desde la foto más reciente aplicando solo los eventos posteriores. Marten los soporta.
+
+<Callout kind="honesto" title="Rentals no usa snapshots, y hace bien">
+
+Ningún agregado de este servicio tiene un flujo largo por diseño:
+
+- `Listing` — unos quince eventos en toda su vida (borrador, revisión, publicación, renovaciones, cierre).
+- `Visit` — entre dos y cuatro.
+- `Owner` — exactamente uno.
+
+Añadir snapshots aquí sería complejidad sin beneficio: más código, más invalidación que mantener, y un modo de fallo nuevo (un snapshot desfasado tras cambiar `Apply`). **Los snapshots son una optimización, no parte del patrón**, y como toda optimización se añaden cuando se mide el problema.
+
+El agregado que cambiaría esta respuesta está pendiente en `todo.md`: `FavoriteList`, un flujo por usuario con hasta cien publicaciones favoritas que se agregan y se quitan durante años. Ahí sí habría que medir.
+
+</Callout>
+
+### Problema 2 — Leer para mostrar
+
+Si cada consulta tuviera que rehidratar un agregado, listar cien publicaciones costaría cien flujos completos. Sería absurdo — y por eso **las consultas de este servicio no pasan por aquí**: van contra proyecciones ([módulo 7](/event-sourcing/proyecciones)).
+
+Fíjate en la asimetría: `IListingRepository` solo lo usan los **comandos**. `ListListingsHandler` ni siquiera lo conoce.
+
+## El caso que más enseña: Visit
+
+<Code
+    code={member(visitSource, 'private void When(VisitRequested e)')}
+    lang="csharp"
+    title="Services/Rentals/.../Visits/Visit.cs · When(VisitRequested)"
+    mark={['_slotDuration = e.SlotDuration;']}
+/>
+
+`_slotDuration` es un campo **privado** que no aparece en ninguna propiedad pública. Existe solo para que un evento posterior pueda usarlo:
+
+<Code
+    code={member(visitSource, 'private void When(VisitConfirmed e)')}
+    lang="csharp"
+    title="Services/Rentals/.../Visits/Visit.cs · When(VisitConfirmed)"
+    mark={['_slotDuration']}
+/>
+
+`VisitConfirmed` solo lleva `SlotStart`. Para calcular el final de la franja hace falta la duración, que llegó en `VisitRequested` — dos eventos antes.
+
+Esa es una propiedad que solo tiene la rehidratación: **al aplicar un evento, el agregado ya tiene todo el contexto de los eventos anteriores**. Por eso `VisitConfirmed` puede permitirse ser mínimo, y no necesita repetir un dato que el flujo ya contiene.
+
+<Callout kind="advertencia" title="Y el límite de esa propiedad">
+
+Solo funciona **dentro del mismo flujo**. Si `VisitConfirmed` necesitara un dato de la publicación, no podría sacarlo de ahí: tendría que venir en el propio evento, puesto por quien decidió (el método público, con el dato que le pasó el handler).
+
+Esta es la versión event-sourced de la Regla 3 de Vernon: **un flujo no navega a otro flujo**.
+
+</Callout>
+
+<Callout kind="resumen" title="Para recordar">
+
+- Rehidratar = crear vacío + aplicar los eventos en orden. Nada más.
+- Historia vacía ⇒ el agregado **no existe**: el repositorio devuelve `null`, no un objeto en blanco.
+- El **constructor privado** es el mismo truco que usa EF Core: un camino de creación solo para reconstruir.
+- Incluso la fábrica crea vacío y deja que `Apply` rellene: **un solo camino hacia el estado**.
+- `Rehydrate` vive en `Domain` porque es una función pura de eventos. Marten se queda en `AggregateStreams`.
+- No hay agregados a medias. El coste es O(eventos); los **snapshots** son la optimización, no el patrón.
+- Un `When` puede usar datos que dejó un evento anterior — pero solo del **mismo flujo**.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `Rehydrate` lanza `ArgumentException` si la historia está vacía, en vez de devolver un agregado nuevo. ¿Qué bug concreto evita esa decisión?
+2. `Listing.Draft` crea `new Listing()` y no asigna ni un campo: todo lo pone `When(ListingDrafted)`. ¿Qué se rompería si `Draft` asignara `Id` directamente además de levantar el evento?
+3. `Visit._slotDuration` es privado y no tiene propiedad pública. Si `VisitConfirmed` necesitara además la ciudad de la publicación, ¿de dónde tendría que salir ese dato y por qué no del flujo?
+
+</Callout>

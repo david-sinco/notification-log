@@ -7,6 +7,11 @@ sidebar:
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, members, whole } from '../../../lib/code';
+import entitySource from '@code/Shared/Domain.Shared/Common/Entity.cs?raw';
+import recipientSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Recipients/Recipient.cs?raw';
+import templateVersionSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Templates/TemplateVersion.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
@@ -16,96 +21,72 @@ import Callout from '../../../components/Callout.astro';
 
 </Callout>
 
+<div class="ddd-frase">
+<strong>En una frase:</strong> una entidad es aquella cosa que el negocio sigue considerando
+"la misma" después de haberle cambiado absolutamente todos los datos.
+</div>
+
 ## Concepto
 
-Una entidad es un objeto con identidad propia que persiste a lo largo del tiempo, aunque cambien todos sus atributos. Un pedido sigue siendo el mismo pedido tras cambiar de estado, dirección e importe. La identidad no es "tiene un id en base de datos": es que el negocio distingue a *ese* individuo de cualquier otro con los mismos datos. La entidad protege sus propias reglas; no expone setters públicos, expone comportamiento con nombre de negocio.
+Una entidad es un objeto con identidad propia que persiste a lo largo del tiempo, aunque cambien todos sus atributos. Un pedido sigue siendo el mismo pedido tras cambiar de estado, dirección e importe.
+
+La identidad **no** es "tiene un id en base de datos": es que el negocio distingue a *ese* individuo de cualquier otro con los mismos datos. Y la entidad protege sus propias reglas: no expone setters públicos, expone comportamiento con nombre de negocio.
+
+| | Value Object | Entidad |
+| --- | --- | --- |
+| **Igualdad** | Por valores | Por identidad (`Id`) |
+| **Mutabilidad** | Inmutable | Cambia con el tiempo |
+| **Tipo en C#** | `sealed record` | `class` que hereda de `Entity` |
+| **Pregunta clave** | "¿cuánto vale?" | "¿cuál es?" |
 
 ## Igualdad por identidad, no por valores
 
-La forma más precisa de ver la diferencia entre una entidad y un value object es leer cómo cada uno implementa la igualdad. Todas las entidades del dominio heredan de `Entity`, que sobreescribe `Equals` para comparar solo por `Id` — nunca por los demás campos:
+La forma más precisa de ver la diferencia es leer cómo cada uno implementa la igualdad. Todas las entidades de los dos servicios de este repositorio heredan de la misma clase base compartida:
 
-```csharp title="Domain/Common/Entity.cs"
-public abstract class Entity
-{
-    public Guid Id { get; protected set; }
+<Code
+    code={whole(entitySource)}
+    lang="csharp"
+    title="Shared/Domain.Shared/Common/Entity.cs"
+    mark={['return Id == other.Id;']}
+/>
 
-    protected Entity() { }
-    protected Entity(Guid id) => Id = id;
+La última línea es la definición entera del patrón: dos entidades son iguales **si y solo si tienen el mismo `Id`**, sin mirar un solo campo más.
 
-    public override bool Equals(object? obj)
-    {
-        if (obj is not Entity other) return false;
-        if (ReferenceEquals(this, other)) return true;
-        if (GetType() != other.GetType()) return false;
+Repara además en el comentario del código: *"dos entidades sin persistir nunca son iguales entre sí"*. Es una decisión deliberada — tratar como iguales a dos objetos sin identidad asignada, solo porque coinciden sus atributos, sería mezclar identidad con valores, que es exactamente lo que una entidad existe para evitar.
 
-        // Dos entidades sin persistir nunca son iguales entre sí
-        if (Id == Guid.Empty || other.Id == Guid.Empty) return false;
+<Callout kind="honesto" title="Esa guarda, hoy, no llega a dispararse en el dominio de Notifications">
 
-        return Id == other.Id;
-    }
+Si intentas provocar el caso, no podrás: ningún agregado de Notifications llega nunca a existir con `Id == Guid.Empty`. `Recipient.Create` exige el `userId` y lo rechaza si viene vacío; `NotificationTrigger.Create`, `NotificationTemplate.Create` y `Notification` asignan `Guid.NewGuid()` en la propia fábrica. **La identidad se decide en el dominio, no la genera la base de datos.**
 
-    public override int GetHashCode() => (GetType(), Id).GetHashCode();
+La guarda existe para el caso general —entidades cuyo id asigna el motor al insertar, donde sí hay una ventana con `Id` vacío— y aquí funciona como red de seguridad, no como caso vivo. Es un buen ejemplo de código defensivo heredado de una clase base genérica: correcto, pero no ejercitado por este modelo concreto.
 
-    public static bool operator ==(Entity? left, Entity? right) => Equals(left, right);
-    public static bool operator !=(Entity? left, Entity? right) => !Equals(left, right);
-}
-```
+</Callout>
 
-Repara en el comentario del código: *"dos entidades sin persistir nunca son iguales entre sí"*. Es una decisión deliberada: tratar como iguales a dos objetos sin identidad asignada, solo porque coinciden sus atributos, sería mezclar identidad con valores — exactamente lo que una entidad existe para evitar.
+<Callout kind="honesto" title="Esa clase base es compartida — y eso tiene nombre">
 
-<Callout kind="honesto" title="Esa guarda, hoy, no llega a dispararse en este dominio">
+`Entity` vive en `Shared/Domain.Shared`, y la usan tanto Notifications como Rentals. Eso es un **Shared Kernel** ([módulo 4](/ddd/context-map)): código de dominio compartido entre dos bounded contexts.
 
-Si intentas provocar el caso, no podrás: ningún agregado de este repositorio llega nunca a existir con `Id == Guid.Empty`. `Recipient.Create` exige el `userId` y lo rechaza si viene vacío; `NotificationTrigger.Create`, `NotificationTemplate.Create` y `Notification` asignan `Guid.NewGuid()` en la propia fábrica. La identidad se decide *en el dominio*, no la genera la base de datos.
-
-La guarda existe para el caso general —entidades cuyo id lo asigna el motor al insertar, donde sí hay una ventana con `Id` vacío— y aquí funciona como red de seguridad, no como caso vivo. Vale la pena saberlo: es un buen ejemplo de código defensivo heredado de una clase base genérica, correcto pero no ejercitado por este modelo concreto.
+Es el patrón más peligroso del Context Map, porque cualquier cambio ahí afecta a los dos contextos a la vez. Aquí está justificado por lo que contiene: **conceptos estructurales de DDD** (`Entity`, `AggregateRoot`, `DomainException`, `IDomainEvent`), no reglas de negocio. Si algún día alguien mete una regla de notificaciones en `Domain.Shared`, ese será el momento de partirlo.
 
 </Callout>
 
 ## Recipient: mismo Id, atributos que cambian
 
-`Recipient` (que ya viste en el [módulo 3](/ddd/bounded-context)) es el ejemplo más claro de entidad-como-raíz: su `Id` es el mismo `userId` que llega del contexto de Usuarios, y a lo largo de su vida cambia de nombre, de email, de teléfono, de zona horaria, se activa y se desactiva — pero sigue siendo el mismo `Recipient` para el negocio. Ningún método permite reemplazar el `Id`; todos los métodos mutan atributos manteniendo la identidad fija.
+`Recipient` es el ejemplo más claro de entidad-como-raíz: su `Id` es el mismo `userId` que llega del contexto de Identity, y a lo largo de su vida cambia de nombre, de email, de teléfono, de zona horaria, se activa y se desactiva — pero sigue siendo el mismo `Recipient` para el negocio.
 
-```csharp title="Domain/Recipients/Recipient.cs (extracto de comportamiento)"
-public void ChangeEmail(string? email) => Email = NormalizeEmail(email);
+<Code
+    code={members(recipientSource, [
+        'public void ChangeName',
+        'public void ChangeEmail',
+        'public void ChangePhone',
+        'public void Activate',
+        'public void Deactivate'
+    ])}
+    lang="csharp"
+    title="Services/Notification/.../Recipients/Recipient.cs · comportamiento que muta atributos"
+/>
 
-public void ChangePhone(string? phone) => Phone = NormalizePhone(phone);
-
-public void Activate() => IsActive = true;
-
-public void Deactivate() => IsActive = false;
-
-// El Id nunca cambia: no existe ChangeId() ni un setter público sobre Id.
-// La identidad del Recipient es fija desde Create(userId, ...).
-```
-
-## Entidades que no son la raíz: TemplateVersion
-
-No toda entidad es un agregado raíz. `TemplateVersion` también hereda de `Entity` — tiene su propio `Id`, distinto en cada versión — pero solo se puede crear y retirar *a través de* `NotificationTemplate`, nunca de forma independiente. El modificador `internal` en sus métodos de fábrica y de mutación no es un detalle estilístico: es el compilador de C# impidiendo que código de `Application` o `Infrastructure` cree o mute una versión suelta. Dentro del propio ensamblado `Domain` la garantía es de convención, no del compilador — hoy solo `NotificationTemplate` la invoca, pero nada impediría que otra clase del mismo ensamblado lo hiciera. Esa es, de hecho, la frontera real que protege `internal`: entre capas, no dentro de una misma capa.
-
-Ese modificador tiene una consecuencia práctica que se siente al escribir el primer test: un proyecto de pruebas externo tampoco puede llamar a `TemplateVersion.Create`, así que está obligado a llegar a cualquier estado por la misma API pública que usa el código de producción. Es una restricción incómoda al principio y una ventaja después — el [módulo 13](/ddd/pruebas) explica por qué, y por qué la salida fácil (`InternalsVisibleTo`) suele costar más de lo que ahorra.
-
-```csharp title="Domain/Templates/TemplateVersion.cs (fábrica y mutación)"
-public sealed class TemplateVersion : Entity
-{
-    internal static TemplateVersion Create(
-        int number, string? subject, string body, NotificationChannel channel)
-        => new()
-        {
-            Id = Guid.NewGuid(),
-            Number = number,
-            Subject = NormalizeSubject(subject, channel),
-            Body = NormalizeBody(body),
-            IsCurrent = true,
-            CreatedAt = DateTime.UtcNow
-        };
-
-    internal void Retire() => IsCurrent = false;
-
-    // Create y Retire son 'internal': solo código del mismo ensamblado (Domain) puede
-    // invocarlos, y en la práctica solo NotificationTemplate lo hace. El compilador
-    // impide crear una versión "suelta", fuera del agregado que la posee.
-}
-```
+Ningún método permite reemplazar el `Id`. No existe `ChangeId()` ni un setter público sobre `Id`: la identidad es fija desde `Create(userId, ...)`.
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 700 230" role="img" aria-labelledby="entTitle">
@@ -138,21 +119,50 @@ public sealed class TemplateVersion : Entity
         <text x="575" y="118" text-anchor="middle" font-size="9.5" fill="#14532d">Email: ana@nuevo.com</text>
         <text x="575" y="136" text-anchor="middle" font-size="9.5" fill="#14532d">Activo: false</text>
 
-        <text x="350" y="205" text-anchor="middle" font-size="10" fill="#64748b">Es el mismo Recipient en los tres momentos: `Equals` solo mira el Id.</text>
+        <text x="350" y="205" text-anchor="middle" font-size="10" fill="#64748b">Es el mismo Recipient en los tres momentos: Equals solo mira el Id.</text>
     </svg>
     <p class="ddd-diagram-caption">
         Todos los atributos cambiaron; la identidad —lo único que <code>Entity.Equals</code> compara— no.
     </p>
 </div>
 
+## Entidades que no son la raíz: TemplateVersion
+
+No toda entidad es un agregado raíz. `TemplateVersion` también hereda de `Entity` —tiene su propio `Id`, distinto en cada versión— pero solo se puede crear y retirar *a través de* `NotificationTemplate`, nunca de forma independiente.
+
+<Code
+    code={member(templateVersionSource, 'internal static TemplateVersion Create') + '\n\n' + member(templateVersionSource, 'internal void Retire')}
+    lang="csharp"
+    title="Services/Notification/.../Templates/TemplateVersion.cs · fábrica y mutación, ambas internal"
+    mark={['internal static TemplateVersion Create', 'internal void Retire']}
+/>
+
+El modificador `internal` no es un detalle estilístico: es **el compilador de C# impidiendo** que código de `Application` o `Infrastructure` cree o mute una versión suelta. Dentro del propio ensamblado `Domain` la garantía es de convención, no del compilador — hoy solo `NotificationTemplate` la invoca, pero nada impediría que otra clase del mismo ensamblado lo hiciera.
+
+Esa es, de hecho, la frontera real que protege `internal`: **entre capas, no dentro de una misma capa**.
+
 <Callout kind="advertencia" title="Entidad no es sinónimo de 'tabla con Id'">
 
-El error clásico (antipatrón "Entidad = tabla") es pensar que cualquier fila con clave primaria es una entidad de dominio. La prueba real es otra: ¿el negocio distingue este individuo de otro con los mismos valores, y le importa su ciclo de vida? Un `TemplateVersion` lo cumple (versión 2 no es lo mismo que versión 3, aunque tuvieran el mismo texto). Una fila de una tabla de configuración estática de códigos de país, probablemente no — ahí un value object o un simple `enum` alcanza.
+El error clásico (antipatrón "Entidad = tabla") es pensar que cualquier fila con clave primaria es una entidad de dominio.
+
+La prueba real es otra: **¿el negocio distingue este individuo de otro con los mismos valores, y le importa su ciclo de vida?** `TemplateVersion` lo cumple (la versión 2 no es lo mismo que la 3, aunque tuvieran el mismo texto). Una fila de una tabla de códigos de país, probablemente no — ahí un value object o un `enum` alcanza.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+<Callout kind="resumen" title="Para recordar">
 
-Para cada clase de tu propio dominio que hoy tenga un `Id`, pregúntate: si dos instancias tuvieran exactamente los mismos valores en todos los demás campos, ¿el negocio las trataría como la misma cosa o como dos cosas distintas? Si la respuesta es "dos cosas distintas", es una entidad y necesita `Equals` por identidad, no por valores — igual que `Entity` en este repositorio.
+- Entidad = **igualdad por `Id`**. Value object = igualdad por valores. Todo lo demás se deriva de ahí.
+- La identidad de este dominio **se decide en la fábrica**, no la genera la base de datos.
+- Una entidad no expone setters: expone **métodos con nombre de negocio** que mutan su estado.
+- No toda entidad es raíz. `TemplateVersion` existe solo dentro de `NotificationTemplate`, y `internal` lo hace cumplir entre capas.
+- `Entity` en `Domain.Shared` es un **Shared Kernel** justificado porque contiene estructura, no reglas.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Dos `TemplateVersion` distintas tienen exactamente el mismo `Subject` y `Body`. ¿`Equals` devuelve `true`? ¿Y dos `TemplateName` con el mismo texto?
+2. `TemplateVersion.Create` es `internal`. Desde un proyecto externo, ¿cómo llegas a una plantilla con dos versiones? (Pista: solo hay un camino, y es el bueno.)
+3. Para cada clase de tu dominio que hoy tenga un `Id`: si dos instancias tuvieran los mismos valores en todos los demás campos, ¿el negocio las trataría como la misma cosa o como dos? Si es "dos", necesita `Equals` por identidad.
 
 </Callout>

@@ -7,80 +7,78 @@ sidebar:
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, span } from '../../../lib/code';
+import dispatchSource from '@code/Services/Notification/NotificationLog.NotificationService.Application/Notifications/Services/Dispatch/NotificationDispatchService.cs?raw';
+import triggerSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/NotificationTrigger.cs?raw';
+import addConfigurationHandler from '@code/Services/Notification/NotificationLog.NotificationService.Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs?raw';
+import listingPolicySource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/ListingPolicy.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
 - Definir cuándo una operación merece salir de un agregado hacia un Domain Service.
 - Distinguir Domain Service de Application Service con un ejemplo real de cada lado.
-- Entender por qué este dominio, hoy, no necesita ninguno.
+- Entender por qué este dominio, hoy, no necesita ninguno — y qué hace en su lugar.
 
 </Callout>
 
+<div class="ddd-frase">
+<strong>En una frase:</strong> un Domain Service es la excepción, no la norma; si tu dominio tiene
+muchos, probablemente tus entidades están anémicas.
+</div>
+
 ## Concepto
 
-Un Domain Service es una operación de dominio significativa que no pertenece naturalmente a ninguna entidad ni value object — típicamente porque involucra varios agregados o requiere una política externa, como un servicio de transferencia entre dos cuentas. Su abuso produce el antipatrón de modelo anémico: toda la lógica en servicios, entidades reducidas a bolsas de datos con getters y setters.
+Un Domain Service es una operación de dominio significativa que **no pertenece naturalmente a ninguna entidad ni value object** — típicamente porque involucra varios agregados o requiere una política externa. El ejemplo de libro es la transferencia entre dos cuentas: no es de la cuenta origen ni de la destino.
+
+Su abuso produce el antipatrón de **modelo anémico**: toda la lógica en servicios, entidades reducidas a bolsas de datos con getters y setters.
+
+## Los tres sitios donde puede vivir una regla
+
+La confusión habitual se resuelve con esta tabla, que es el resumen del módulo:
+
+| | Dónde vive | Qué puede conocer | Ejemplo en este repo |
+| --- | --- | --- | --- |
+| **Regla de un agregado** | Dentro del agregado | Solo su propio estado | `EnsureChannelIsFree` |
+| **Domain Service** | En `Domain`, sin dependencias externas | Varios agregados, nada de infraestructura | *(ninguno todavía)* |
+| **Application Service** | En `Application` | Repositorios, puertos, transacción | `NotificationDispatchService` |
 
 <Callout kind="honesto" title="Este dominio no tiene ni un solo Domain Service — y eso es información útil">
 
-`NotificationLog.NotificationService.Domain` no tiene ninguna clase de servicio. Todo el comportamiento de negocio cabe dentro de sus cuatro agregados (`NotificationTrigger`, `NotificationTemplate`, `Recipient`, `Notification`). Ninguna regla necesitó todavía "salirse" de un agregado — y por eso no se creó ningún servicio de dominio para forzarla a existir.
+`NotificationLog.NotificationService.Domain` no tiene ninguna clase de servicio. Todo el comportamiento cabe dentro de sus cuatro agregados. Ninguna regla necesitó todavía "salirse" de un agregado — y por eso no se creó ningún servicio de dominio para forzarla a existir.
+
+Que un patrón del catálogo no aparezca en un código real no es una carencia. Casi siempre es la respuesta correcta.
 
 </Callout>
 
 ## Lo que sí existe: Application Services, que no son lo mismo
 
-Hay varias clases que *suenan* a servicio de dominio pero no lo son — `NotificationDispatchService` y `RecipientSyncService`. Viven en `NotificationLog.NotificationService.Application`, no en `Domain`, y esa ubicación no es casualidad: dependen de repositorios, de un renderizador de plantillas y de remitentes por canal — todo interfaces de infraestructura (puertos) que un Domain Service, por definición, no debería conocer.
+Hay clases que *suenan* a servicio de dominio pero no lo son: `NotificationDispatchService` y `RecipientSyncService`. Viven en `Application`, no en `Domain`, y esa ubicación no es casualidad — mira de qué dependen:
 
-```csharp title="Application/Notifications/Services/Dispatch/NotificationDispatchService.cs (firma)"
-// Notifications/Services/Dispatch — vive en Application, no en Domain.
-public sealed class NotificationDispatchService
-{
-    private readonly INotificationTriggerRepository _triggers;
-    private readonly IRecipientRepository _recipients;
-    private readonly INotificationTemplateRepository _templates;
-    private readonly ITemplateRenderer _renderer;              // puerto de infraestructura
-    private readonly IEmailNotificationSender _emailSender;    // puerto de infraestructura
-    private readonly ISmsNotificationSender _smsSender;        // puerto de infraestructura
-    // ...un servicio de dominio real nunca depende de puertos de envío o renderizado.
-}
-```
+<Code
+    code={span(dispatchSource, 'private readonly INotificationTriggerRepository _triggers;', 'private readonly ILogger<NotificationDispatchService> _log;')}
+    lang="csharp"
+    title="Services/Notification/.../Dispatch/NotificationDispatchService.cs · las dependencias"
+/>
 
-Mira con atención qué hace y qué *no* hace este método. Las decisiones de negocio reales — "¿este trigger está habilitado?", "¿qué configuraciones están activas?", "¿puede este destinatario recibir por este canal?" — están delegadas a los propios agregados (`trigger.ResolveActiveConfigurations()`, `recipient.CanReceive(channel)`). Lo que hace `NotificationDispatchService` es orquestar: buscar, renderizar, enviar, registrar el resultado. Eso es el trabajo de una capa de aplicación, no de un servicio de dominio.
+Repositorios, un renderizador, cuatro remitentes por canal, dos handlers y un logger. Todo eso son **puertos de infraestructura** que un Domain Service, por definición, no debería conocer.
 
-```csharp title="Application/Notifications/Services/Dispatch/NotificationDispatchService.cs (orquestación)"
-public async Task DispatchAsync(BusinessEvent businessEvent, CancellationToken ct)
-{
-    var trigger = await _triggers.GetByEventKeyAsync(EventKey.Create(businessEvent.EventKey), ct);
+Ahora mira qué hace —y sobre todo qué *no* hace— el método principal:
 
-    if (trigger is null || !trigger.IsEnabled)
-        return;   // decisión ya resuelta por el estado del agregado
+<Code
+    code={member(dispatchSource, 'public async Task DispatchAsync')}
+    lang="csharp"
+    title="Services/Notification/.../Dispatch/NotificationDispatchService.cs · DispatchAsync"
+    mark={['trigger.ResolveActiveConfigurations()', '!trigger.IsEnabled']}
+/>
 
-    var recipient = await _recipients.GetByIdAsync(businessEvent.RecipientId, ct);
-    if (recipient is null) return;
+Las decisiones de negocio reales —*"¿este trigger está habilitado?"*, *"¿qué configuraciones están activas?"*— están **delegadas al agregado** (`trigger.IsEnabled`, `trigger.ResolveActiveConfigurations()`). Lo mismo pasa un nivel más abajo con `recipient.CanReceive(channel)`.
 
-    // trigger decide QUÉ configuraciones aplican; el servicio solo itera sobre la respuesta.
-    foreach (var configuration in trigger.ResolveActiveConfigurations())
-        await DispatchConfigurationAsync(businessEvent, trigger.EventKey.Value, configuration, recipient, ct);
-}
-
-private async Task DispatchConfigurationAsync(/* ... */)
-{
-    // recipient decide si puede recibir; el servicio solo actúa según la respuesta.
-    if (!recipient.CanReceive(configuration.Channel))
-        return;
-
-    // desde aquí: buscar plantilla, renderizar, enviar, registrar. Pura orquestación.
-}
-```
+Lo que hace `NotificationDispatchService` es orquestar: buscar, renderizar, enviar, registrar el resultado. Eso es trabajo de capa de aplicación, no de dominio.
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 780 220" role="img" aria-labelledby="dsTitle">
         <title id="dsTitle">Dónde vive cada decisión: agregado, domain service (ausente) o application service</title>
-        <defs>
-            <marker id="dsArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
-            </marker>
-        </defs>
-
         <rect x="30" y="30" width="220" height="160" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
         <text x="140" y="52" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Agregados (Domain)</text>
         <text x="140" y="75" text-anchor="middle" font-size="9.5" fill="#334155">trigger.IsEnabled</text>
@@ -115,19 +113,37 @@ private async Task DispatchConfigurationAsync(/* ... */)
 
 ## Antes de extraer nada: la misma regla ya está en dos sitios
 
-<Callout kind="honesto" title="Una regla de negocio, dos ubicaciones y dos tipos de excepción">
+<Callout kind="antipatron" title="Una regla de negocio, dos ubicaciones y dos tipos de excepción">
 
-Antes de plantear un Domain Service, conviene mirar lo que ya hay. La regla "la configuración y la plantilla deben ser del mismo canal" **ya vive en el dominio**: `NotificationTrigger.ChangeConfigurationTemplate` la comprueba y lanza `DomainException`. Pero en el camino de alta, `AddConfigurationHandler` la comprueba otra vez y lanza `AppValidationException`.
-
-Misma regla de negocio, dos ubicaciones, dos tipos de excepción y — vía `GlobalExceptionHandler` ([módulo 11](/ddd/arquitectura)) — dos códigos HTTP distintos para el mismo error, según por dónde entres. Es el tipo de duplicación que no se ve en una revisión de código porque cada mitad, por separado, parece razonable.
+La regla *"la configuración y la plantilla deben ser del mismo canal"* **ya vive en el dominio**:
 
 </Callout>
 
-El arreglo no es un Domain Service: es darle a `AddConfiguration` la misma firma que ya tiene su hermana, y dejar que el agregado juzgue.
+<Code
+    code={member(triggerSource, 'public void ChangeConfigurationTemplate')}
+    lang="csharp"
+    title="Domain · NotificationTrigger.ChangeConfigurationTemplate — lanza DomainException"
+    mark={['throw new DomainException(']}
+/>
 
-```csharp title="El arreglo real, antes de pensar en extraer nada"
-// Domain/Triggers/NotificationTrigger.cs — misma forma que ChangeConfigurationTemplate,
-// que ya comprobaba exactamente esta regla y lanzaba DomainException.
+Pero en el camino de alta, el handler la comprueba **otra vez** y lanza otra excepción distinta:
+
+<Code
+    code={span(addConfigurationHandler, 'if (template.Channel != cmd.Channel)', '$"La plantilla es de canal {template.Channel}, no {cmd.Channel}.");')}
+    lang="csharp"
+    title="Application · AddConfigurationHandler — lanza AppValidationException"
+/>
+
+Misma regla de negocio, dos ubicaciones, dos tipos de excepción y —vía `GlobalExceptionHandler` ([módulo 11](/ddd/arquitectura))— **dos códigos HTTP distintos para el mismo error**, según por dónde entres: `422` si pasas por el agregado, `400` si pasas por el handler.
+
+Es el tipo de duplicación que no se ve en una revisión de código porque cada mitad, por separado, parece razonable.
+
+### El arreglo no es un Domain Service
+
+Es darle a `AddConfiguration` la misma firma que ya tiene su hermana, y dejar que el agregado juzgue:
+
+```csharp title="Propuesta — así quedaría (es la Tarea 4)"
+// Domain/Triggers/NotificationTrigger.cs
 public NotificationConfiguration AddConfiguration(
     Guid templateId, NotificationChannel templateChannel, NotificationChannel channel)
 {
@@ -143,38 +159,61 @@ public NotificationConfiguration AddConfiguration(
     return configuration;
 }
 
-// Application/.../AddConfigurationHandler.cs — el handler deja de juzgar el canal.
-if (!template.IsEnabled)   // estado de OTRO agregado: esta comprobación sí se queda aquí
-    throw new AppValidationException($"La plantilla '{template.Name}' está desactivada.");
+// Application/.../AddConfigurationHandler.cs — el handler deja de juzgar el canal,
+// pero SÍ se queda con las comprobaciones sobre el estado de OTRO agregado.
+if (!template.IsEnabled) throw new AppValidationException(...);
+if (template.IsSystem)  throw new AppValidationException(...);
 
 var configuration = trigger.AddConfiguration(template.Id, template.Channel, cmd.Channel);
 ```
 
-El handler sigue leyendo el `template` —sigue cumpliendo la Regla 4 del [módulo 7](/ddd/agregados), porque solo escribe `trigger`— pero ya no *decide*: le pasa el dato al agregado. En cambio la comprobación `!template.IsEnabled` **sí** se queda en el handler: "esta plantilla está publicada" es estado de *otro* agregado, y `NotificationTrigger` no tiene por qué conocerlo ni podría comprobarlo por sí mismo. Esa distinción — qué dato le pasas al agregado y qué decisión te quedas — es la parte genuinamente difícil de la Regla 4.
+El handler sigue leyendo el `template` —sigue cumpliendo la Regla 4 del [módulo 7](/ddd/agregados), porque solo escribe `trigger`— pero ya no *decide*: le pasa el dato al agregado.
+
+En cambio `!template.IsEnabled` y `template.IsSystem` **sí** se quedan en el handler: son estado de *otro* agregado, y `NotificationTrigger` no tiene por qué conocerlo ni podría comprobarlo por sí mismo. Esa distinción —**qué dato le pasas al agregado y qué decisión te quedas**— es la parte genuinamente difícil de la Regla 4.
+
+## Lo que este repositorio usa en lugar de Domain Services
+
+Hay una alternativa más ligera que aparece dos veces en el otro servicio, y conviene conocerla antes de alcanzar el martillo del Domain Service: **una clase de política, estática y sin dependencias**.
+
+<Code
+    code={span(listingPolicySource, 'public static class ListingPolicy', 'public static DateTimeOffset ExpiryFrom')}
+    lang="csharp"
+    title="Services/Rentals/NotificationLog.RentalService.Domain/Listings/ListingPolicy.cs"
+/>
+
+`ListingPolicy` reúne en un solo archivo los números y plazos que el negocio decidió (mínimo de fotos, precio mínimo por operación, ventana de renovación, enfriamiento entre cambios de precio). El agregado `Listing` los consulta; nadie los duplica.
+
+No es un Domain Service —no orquesta nada entre agregados— pero resuelve el mismo problema que la gente suele resolver con uno: *dónde poner una regla que no es de una instancia concreta*. Y no necesita interfaz, ni registro en DI, ni mock en un test.
 
 ## ¿Cuándo aparecería un Domain Service real aquí?
 
-Con el arreglo anterior aplicado, la pregunta del Domain Service se puede plantear bien. Si esa política de compatibilidad creciera — por ejemplo, si empezaran a existir reglas más elaboradas sobre qué plantillas son compatibles con qué triggers, con excepciones y casos especiales que ya no cupieran dentro de `NotificationTrigger` porque necesitaran datos de varios agregados a la vez — ahí sí valdría la pena extraerla a un Domain Service explícito, algo como:
-
-```csharp title="Así se vería (hipotético, no existe en el repo)"
-// Domain/Triggers/ITemplateCompatibilityPolicy.cs — HIPOTÉTICO, no existe en este repo.
-// Solo tendría sentido si la regla de compatibilidad creciera más allá de dos condiciones.
-public interface ITemplateCompatibilityPolicy
-{
-    void EnsureCompatible(NotificationTrigger trigger, NotificationTemplate template, NotificationChannel channel);
-}
-```
+Con el arreglo de arriba aplicado, la pregunta se puede plantear bien. Si la política de compatibilidad creciera —reglas elaboradas sobre qué plantillas son compatibles con qué triggers, con excepciones que necesitaran datos de varios agregados a la vez— ahí sí valdría la pena extraerla.
 
 <Callout kind="advertencia" title="Por qué NO se hizo todavía">
 
-Con dos condiciones simples ("¿está habilitada?", "¿coincide el canal?") —una de las cuales, tras el arreglo de arriba, ya vive dentro del agregado— envolver lo que queda en una clase de servicio de dominio sería sobreingeniería: una interfaz, una implementación y un registro en el contenedor de DI para un solo `if`. Esa es exactamente la advertencia clásica sobre el abuso de Domain Services: produce entidades anémicas y una capa de servicios inflada. La regla práctica es dejar la lógica donde vive hasta que el dolor de tenerla ahí sea mayor que el coste de extraerla.
+Con dos condiciones simples, envolver lo que queda en una clase de servicio sería sobreingeniería: una interfaz, una implementación y un registro en el contenedor de DI para un solo `if`. Esa es exactamente la advertencia clásica sobre el abuso de Domain Services.
 
-Y una precisión sobre dónde viviría si algún día se extrajera: un Domain Service que no depende de nada externo **no necesita interfaz ni registro en DI**. Es una clase del dominio, sin más. Reserva la interfaz para cuando la política dependa de algo que el dominio no puede conocer — y en ese momento vuelve a preguntarte si sigue siendo un servicio *de dominio*.
+**La regla práctica:** deja la lógica donde vive hasta que el dolor de tenerla ahí sea mayor que el coste de extraerla.
+
+Y una precisión sobre dónde viviría si algún día se extrajera: un Domain Service que no depende de nada externo **no necesita interfaz ni registro en DI**. Es una clase del dominio, sin más — como `ListingPolicy`. Reserva la interfaz para cuando la política dependa de algo que el dominio no puede conocer, y en ese momento vuelve a preguntarte si sigue siendo un servicio *de dominio*.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+<Callout kind="resumen" title="Para recordar">
 
-Busca en tu propio código una clase que termine en "Service" o "Manager" y lista sus métodos públicos. Para cada uno, pregúntate: ¿esta lógica podría vivir dentro de una sola entidad, o necesita datos y agregados que ninguna entidad individual conoce? Los que caen en el primer grupo probablemente deberían moverse dentro del agregado correspondiente.
+- Un Domain Service solo se justifica cuando la regla **no cabe en ningún agregado** y **no depende de infraestructura**.
+- Si depende de repositorios o puertos, es un **Application Service**, y va en `Application`.
+- Este dominio no tiene ninguno, y eso es correcto: todas sus reglas caben en sus agregados.
+- Antes de extraer, **busca si la regla ya está escrita en otro sitio**. Aquí lo estaba, dos veces.
+- Una clase de política estática (`ListingPolicy`) resuelve muchos casos sin interfaz ni DI.
+- Un Domain Service sin dependencias **no necesita interfaz**.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. ¿Por qué `!template.IsEnabled` debe quedarse en el handler mientras `template.Channel != cmd.Channel` debe bajar al agregado? Escribe la regla general que lo decide.
+2. `ListingPolicy` es `static` y no se registra en DI. ¿Qué ganarías y qué perderías convirtiéndolo en `IListingPolicy` inyectable?
+3. Busca en tu código una clase que termine en `Service` o `Manager` y lista sus métodos públicos. Para cada uno: ¿podría vivir dentro de una entidad, o necesita datos que ninguna entidad conoce? Los del primer grupo deben mudarse.
 
 </Callout>

@@ -1,135 +1,205 @@
 ---
 title: "Domain Events"
-description: "El mecanismo ya está construido. Todavía nadie se ha subido."
+description: "El mismo mecanismo, sin usar en un servicio y llevado al extremo en el otro."
 sidebar:
   order: 10
   label: "10 · Domain Events"
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, whole } from '../../../lib/code';
+import aggregateRootSource from '@code/Shared/Domain.Shared/Common/AggregateRoot.cs?raw';
+import domainEventSource from '@code/Shared/Domain.Shared/EventSourcing/DomainEvent.cs?raw';
+import listingApproved from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Events/ListingApproved.cs?raw';
+import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
 - Definir un evento de dominio y para qué problema existe.
-- Verificar, buscando en el código, que el mecanismo existe pero no se usa todavía.
-- No confundir un evento de dominio (interno) con un evento de integración (público).
+- Leer el mecanismo compartido y ver los dos usos opuestos que tiene en este repositorio.
+- No confundir un evento de dominio (interno) con uno de integración (público).
+- Saber por qué un evento se nombra por el hecho, no por el método que lo produjo.
 
 </Callout>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un evento de dominio es un hecho de negocio ya ocurrido, en pasado,
+que el agregado anuncia sin saber quién reaccionará.
+</div>
 
 ## Concepto
 
-Un evento de dominio es un hecho relevante para el negocio que ya ocurrió, expresado en pasado: `PedidoConfirmado`, `PagoRechazado`. Es el pegamento entre agregados **dentro del mismo contexto**: permite cumplir la regla de "una transacción, un agregado" — el agregado A cambia y publica un evento; un handler reacciona y modifica B, en el mismo servicio. Cruzar la frontera de un bounded context es un problema distinto, que resuelve un evento de **integración**, no uno de dominio — es justo la distinción que cierra este módulo.
+Un evento de dominio es un hecho relevante para el negocio que **ya ocurrió**, expresado en pasado: `PedidoConfirmado`, `PagoRechazado`, `ListingApproved`.
 
-<Callout kind="honesto" title="El mecanismo existe. El uso, todavía no.">
+Es el pegamento entre agregados **dentro del mismo contexto**: permite cumplir la regla de "una transacción, un agregado" — el agregado A cambia y publica un evento; un handler reacciona y modifica B.
 
-`AggregateRoot` ya trae todo lo necesario para levantar eventos de dominio: `Raise`, `DomainEvents` y `ClearDomainEvents`. Pero si buscas en todo el proyecto quién llama a `Raise(...)`, la respuesta es: nadie todavía. Ningún agregado de este dominio levanta un solo evento hoy. Vale la pena decirlo así de directo, porque es exactamente el tipo de detalle que este tutorial se propuso no esconder.
+Cruzar la frontera de un bounded context es un problema distinto, que resuelve un evento de **integración** — y es la distinción que cierra este módulo.
+
+## El mecanismo compartido
+
+Los dos servicios de este repositorio heredan del mismo `AggregateRoot`:
+
+<Code
+    code={whole(aggregateRootSource)}
+    lang="csharp"
+    title="Shared/Domain.Shared/Common/AggregateRoot.cs"
+    mark={['protected void Raise(IDomainEvent domainEvent)', 'public virtual void Apply(IDomainEvent domainEvent) { }']}
+/>
+
+Y el evento base aporta lo mínimo que todo hecho necesita: una identidad y un momento.
+
+<Code
+    code={whole(domainEventSource)}
+    lang="csharp"
+    title="Shared/Domain.Shared/EventSourcing/DomainEvent.cs"
+/>
+
+Fíjate en `Raise`: hace **dos cosas**, y esa doble responsabilidad es la clave de todo el módulo.
+
+<ol class="ddd-steps">
+    <li><code>Apply(domainEvent)</code> — aplica el hecho al estado del agregado <em>ahora mismo</em>.</li>
+    <li><code>_domainEvents.Add(domainEvent)</code> — lo guarda para que alguien lo recoja después.</li>
+</ol>
+
+## El mismo mecanismo, dos usos opuestos
+
+Aquí está lo interesante de este repositorio: **tiene los dos extremos del patrón**, lado a lado.
+
+| | Notifications | Rentals |
+| --- | --- | --- |
+| ¿Llama a `Raise`? | Nunca | En cada operación de negocio |
+| ¿Sobrescribe `Apply`? | No | Sí, en `Listing`, `Visit` y `Owner` |
+| ¿Quién despacha los eventos? | Nadie | `AggregateStreams` los persiste; `DomainEventsSubscription` los reparte |
+| Fuente de verdad | El estado en tablas | **Los eventos** |
+
+<Callout kind="honesto" title="En Notifications el mecanismo existe y nadie lo usa">
+
+Busca `Raise(` en `Services/Notification`: no hay ni una llamada. Ningún agregado de ese dominio levanta un solo evento.
+
+Y hay una razón, no un olvido: repasa el [módulo 7](/ddd/agregados). La única operación que toca dos agregados a la vez (`AddConfigurationHandler`) solo *lee* el segundo, nunca lo muta. Los eventos de dominio resuelven un problema —desacoplar la reacción en cascada entre agregados— que ese dominio, en su estado actual, no tiene.
 
 </Callout>
 
-```csharp title="Domain/Common/AggregateRoot.cs (completo)"
-public abstract class AggregateRoot : Entity
-{
-    private readonly List<IDomainEvent> _domainEvents = new();
+## Cómo se ve cuando sí se usa: Rentals
 
-    public IReadOnlyCollection<IDomainEvent> DomainEvents => _domainEvents.AsReadOnly();
+En el otro servicio, un evento de dominio es un `record` diminuto que nombra el hecho:
 
-    protected void Raise(IDomainEvent domainEvent) => _domainEvents.Add(domainEvent);
+<Code
+    code={whole(listingApproved)}
+    lang="csharp"
+    title="Services/Rentals/NotificationLog.RentalService.Domain/Listings/Events/ListingApproved.cs"
+/>
 
-    public void ClearDomainEvents() => _domainEvents.Clear();
-}
+Y el método del agregado no muta nada directamente: **valida y levanta el hecho**.
 
-// Búsqueda en todo el repo de `Raise(`: solo aparece aquí, en la definición.
-// Ningún NotificationTrigger, NotificationTemplate, Recipient o Notification lo invoca.
-```
+<Code
+    code={member(listingSource, 'public void Approve')}
+    lang="csharp"
+    title="Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs · Approve"
+    mark={['Raise(new ListingApproved(moderatorId, ListingPolicy.ExpiryFrom(now)), now);']}
+/>
 
-## ¿Por qué no hacía falta todavía?
+El cambio de estado ocurre en otro sitio, en respuesta al evento:
 
-Repasa el [módulo de agregados](/ddd/agregados): la única operación de este dominio que toca dos agregados a la vez (`AddConfigurationHandler` leyendo `NotificationTrigger` y `NotificationTemplate`) solo *lee* el segundo, nunca lo muta. No hay, todavía, ningún caso real en el código donde cambiar un agregado deba disparar una mutación de otro. Los eventos de dominio resuelven un problema — desacoplar la reacción en cascada entre agregados — que este dominio, en su estado actual, no tiene.
+<Code
+    code={member(listingSource, 'private void MarkPublished')}
+    lang="csharp"
+    title="Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs · el efecto del evento"
+/>
 
-## Así se vería si lo necesitaras
+Esa separación —*decidir* en el método público, *cambiar el estado* al aplicar el evento— es la base del event sourcing, y tiene su propia sección completa: [Event Sourcing](/event-sourcing).
 
-Imagina que el negocio pidiera: "cuando se agregue una configuración a un trigger, hay que notificar a un sistema externo de auditoría". Hoy eso obligaría a inyectar ese sistema externo directo en `AddConfigurationHandler`, mezclando dos responsabilidades. Con el mecanismo que ya existe, la solución sería levantar un evento desde el agregado y reaccionar fuera de la transacción principal:
+## El nombre importa más de lo que parece
 
-```csharp title="Hipotético: cómo se vería usando el mecanismo existente"
-// HIPOTÉTICO — así se vería, no está implementado en el repo actual.
+<Callout kind="antipatron" title="El vicio más común: eventos CRUD disfrazados">
 
-// 1) El agregado levanta el hecho, en pasado, sin saber quién reaccionará:
-public sealed record ConfigurationAdded(Guid TriggerId, Guid ConfigurationId, NotificationChannel Channel)
-    : DomainEvent;
+Imagina que alguien añadiera a Notifications un evento llamado `ConfigurationAdded`. Suena razonable, y está mal: es **el nombre del método en pasado**, no un hecho de negocio. Nadie de negocio dice *"se añadió una configuración"*.
 
-public NotificationConfiguration AddConfiguration(Guid templateId, NotificationChannel channel)
-{
-    EnsureChannelIsFree(channel);
-    var configuration = NotificationConfiguration.Create(templateId, channel);
-    _configurations.Add(configuration);
+Compáralo con los nombres de Rentals: `ListingApproved`, `ListingRejected`, `VisitNoShow`, `VisitRequestExpired`. Cada uno es algo que alguien del negocio contaría en una frase — "la publicación se aprobó", "el interesado no se presentó".
 
-    Raise(new ConfigurationAdded(Id, configuration.Id, channel));   // <- la línea que falta hoy
+En Notifications el candidato con lenguaje ubicuo de verdad está en la ruta de envío: **`NotificacionFallida`** es un hecho que negocio querría conocer y sobre el que querría reaccionar. "Se añadió una configuración", no.
 
-    return configuration;
-}
+</Callout>
 
-// 2) Algo (un interceptor de EF Core, o el propio handler) despacha trigger.DomainEvents
-//    después de SaveChangesAsync, y limpia con ClearDomainEvents(). El handler de auditoría
-//    externo se suscribe a ConfigurationAdded sin que AddConfigurationHandler sepa que existe.
-```
+<Callout kind="advertencia" title="Y el segundo problema: cuándo se despacha">
 
-<Callout kind="advertencia" title="Dos trampas del ejemplo de arriba, puestas a propósito">
+Despachar los eventos *después* de `SaveChangesAsync` significa que el efecto secundario ocurre **fuera** de la transacción: si el proceso muere entre el commit y el despacho, el evento se pierde sin rastro. Y despacharlo dentro te devuelve el problema de consistencia que intentabas evitar.
 
-**El nombre.** `ConfigurationAdded` es el nombre del método en pasado, no un hecho de negocio: nadie de negocio dice "se añadió una configuración". Compáralo con `PedidoConfirmado` o `PagoRechazado` del inicio del módulo. Es el vicio más común al adoptar este patrón — eventos CRUD disfrazados de eventos de dominio, que nombran la operación técnica en vez del hecho que le importa a alguien. En este dominio el candidato con lenguaje ubicuo de verdad está en la ruta de envío: `NotificacionFallida` es un hecho que negocio querría conocer y sobre el que querría reaccionar; "se añadió una configuración", no.
-
-**El momento del despacho.** Despachar después de `SaveChangesAsync` significa que el efecto secundario ocurre *fuera* de la transacción: si el proceso muere entre el commit y el despacho, el evento se pierde sin rastro. Y despacharlo dentro te devuelve el problema de consistencia que intentabas evitar. La salida real es un **outbox** — persistir el evento en la misma transacción que el cambio, y publicarlo después desde un proceso aparte — y es justo la conversación que abre `notification_dispatch_requested.proto`.
+La salida real es un **outbox**: persistir el evento en la misma transacción que el cambio, y publicarlo después desde un proceso aparte. Rentals lo resuelve de la forma más radical posible — el evento *es* el dato persistido, así que no puede perderse — y sobre eso construye su [suscripción de procesos](/event-sourcing/procesos).
 
 </Callout>
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 800 240" role="img" aria-labelledby="deTitle">
-        <title id="deTitle">Domain event interno (hipotético) frente a integration event real (mensajería)</title>
+        <title id="deTitle">Domain event interno frente a integration event entre servicios</title>
         <defs>
             <marker id="deArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
                 <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
             </marker>
         </defs>
 
-        <rect x="30" y="20" width="330" height="190" rx="10" fill="#f8fafc" stroke="#e5e9f2" stroke-dasharray="5,4" />
-        <text x="195" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#334155">Domain event — HIPOTÉTICO, no existe hoy</text>
-        <rect x="55" y="60" width="130" height="50" rx="6" fill="#fff" stroke="#e5e9f2" />
-        <text x="120" y="82" text-anchor="middle" font-size="9.5" fill="#334155">NotificationTrigger</text>
-        <text x="120" y="96" text-anchor="middle" font-size="8.5" fill="#64748b">.Raise(ConfigurationAdded)</text>
-        <line x1="185" y1="85" x2="235" y2="85" stroke="#94a3b8" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#deArrow)" />
-        <rect x="235" y="60" width="110" height="50" rx="6" fill="#fff" stroke="#e5e9f2" />
-        <text x="290" y="82" text-anchor="middle" font-size="9" fill="#334155">handler interno</text>
-        <text x="290" y="96" text-anchor="middle" font-size="8" fill="#64748b">mismo proceso</text>
-        <text x="195" y="140" text-anchor="middle" font-size="9" fill="#64748b">privado a este bounded context</text>
-        <text x="195" y="156" text-anchor="middle" font-size="9" fill="#64748b">nunca cruza a otro servicio</text>
-        <text x="195" y="180" text-anchor="middle" font-size="9" fill="#64748b" font-style="italic">— aún no usado en este repo —</text>
+        <rect x="30" y="20" width="340" height="190" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="200" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">Domain event — real, en Rentals</text>
+        <rect x="55" y="60" width="130" height="50" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="120" y="82" text-anchor="middle" font-size="9.5" fill="#334155">Listing.Approve()</text>
+        <text x="120" y="96" text-anchor="middle" font-size="8.5" fill="#64748b">Raise(ListingApproved)</text>
+        <line x1="185" y1="85" x2="235" y2="85" stroke="#16a34a" stroke-width="1.5" marker-end="url(#deArrow)" />
+        <rect x="235" y="60" width="115" height="50" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="292" y="82" text-anchor="middle" font-size="9" fill="#334155">ProcessRouter</text>
+        <text x="292" y="96" text-anchor="middle" font-size="8" fill="#64748b">mismo servicio</text>
+        <text x="200" y="145" text-anchor="middle" font-size="9" fill="#14532d">privado a este bounded context</text>
+        <text x="200" y="161" text-anchor="middle" font-size="9" fill="#14532d">sin versión de esquema</text>
+        <text x="200" y="185" text-anchor="middle" font-size="9" fill="#14532d" font-style="italic">programa recordatorios, cancela visitas</text>
 
         <rect x="420" y="20" width="350" height="190" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
         <text x="595" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Integration event — real (módulo 4)</text>
         <rect x="440" y="60" width="140" height="50" rx="6" fill="#fff" stroke="#c7d2fe" />
-        <text x="510" y="80" text-anchor="middle" font-size="9" fill="#334155">Contexto Usuarios</text>
+        <text x="510" y="80" text-anchor="middle" font-size="9" fill="#334155">Contexto Identity</text>
         <text x="510" y="94" text-anchor="middle" font-size="8" fill="#64748b">productor</text>
         <line x1="580" y1="85" x2="625" y2="85" stroke="#4f46e5" stroke-width="1.7" marker-end="url(#deArrow)" />
         <rect x="625" y="60" width="130" height="50" rx="6" fill="#fff" stroke="#c7d2fe" />
-        <text x="690" y="80" text-anchor="middle" font-size="9" fill="#334155">users.contact</text>
-        <text x="690" y="94" text-anchor="middle" font-size="8" fill="#64748b">versionado</text>
-        <text x="595" y="140" text-anchor="middle" font-size="9" fill="#4338ca">público, entre servicios distintos</text>
-        <text x="595" y="156" text-anchor="middle" font-size="9" fill="#4338ca">Published Language + schema_version</text>
-        <text x="595" y="180" text-anchor="middle" font-size="9" fill="#4338ca" font-style="italic">esto SÍ existe y lo consume el ACL</text>
+        <text x="690" y="80" text-anchor="middle" font-size="9" fill="#334155">identity.users</text>
+        <text x="690" y="94" text-anchor="middle" font-size="8" fill="#64748b">protobuf versionado</text>
+        <text x="595" y="145" text-anchor="middle" font-size="9" fill="#4338ca">público, entre servicios distintos</text>
+        <text x="595" y="161" text-anchor="middle" font-size="9" fill="#4338ca">Published Language + schema_version</text>
+        <text x="595" y="185" text-anchor="middle" font-size="9" fill="#4338ca" font-style="italic">lo consume el ACL, nunca el dominio</text>
     </svg>
     <p class="ddd-diagram-caption">
-        Mismo espíritu — "algo pasó, reacciona" — pero alcance y mecanismo completamente distintos. Confundir
-        ambos conceptos es un error común al aprender este patrón.
+        Mismo espíritu — "algo pasó, reacciona" — pero alcance y mecanismo completamente distintos.
+        Confundir ambos conceptos es el error más común al aprender este patrón.
     </p>
 </div>
 
 <Callout kind="advertencia" title="No confundas las dos cosas">
 
-`UserContactUpdated` (que ya viste en el [módulo de Context Map](/ddd/context-map)) es un **evento de integración**: cruza la frontera de dos servicios, viaja por un bus de mensajería, está versionado con `schema_version` y usa event-carried state transfer. Un **evento de dominio** como el `ConfigurationAdded` hipotético de arriba sería interno a este único servicio, no necesita versión de esquema ni tolerar pérdida de mensajes, y probablemente se procesaría en la misma unidad de trabajo o inmediatamente después. Son herramientas para problemas distintos — este repo ya resuelve el primero; todavía no ha necesitado el segundo.
+| | Evento de dominio | Evento de integración |
+| --- | --- | --- |
+| **Alcance** | Un bounded context | Entre servicios |
+| **Tipo** | Clase de C# interna | Contrato publicado (`.proto`) |
+| **Versionado** | No hace falta | Obligatorio (`schema_version`) |
+| **Quién lo ve** | Solo este código | Cualquier consumidor |
+| **Ejemplo aquí** | `ListingApproved` | `UserCreated` |
+
+Un evento de dominio **puede** convertirse en uno de integración —`ListingNotificationsProcess` hace exactamente eso: traduce hechos internos de Rentals a mensajes `NotificationDispatchRequested`— pero esa traducción es explícita, y es el sitio donde decides qué parte de tu modelo haces pública.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+<Callout kind="resumen" title="Para recordar">
 
-Busca en tu propio código un lugar donde, después de guardar algo, el mismo método sigue trabajando para actualizar una segunda cosa no relacionada directamente ("guardar el pedido y también actualizar el inventario y también mandar un correo"). Esa cadena de responsabilidades mezcladas en un solo método es exactamente lo que un evento de dominio permitiría separar.
+- Un evento de dominio nombra **un hecho ocurrido**, en pasado, con vocabulario de negocio.
+- `Raise` hace dos cosas: **aplica** el hecho al estado y lo **guarda** para que alguien reaccione.
+- Que un dominio no levante eventos no es un defecto: es que todavía no ha necesitado reacciones en cascada.
+- Nombrar el evento como el método (`ConfigurationAdded`) es el vicio más común: nombra el hecho, no la operación.
+- Despachar fuera de la transacción **pierde eventos**. La respuesta es un outbox — o, como en Rentals, que el evento *sea* el dato guardado.
+- Dominio ≠ integración. Uno es interno y libre; el otro es público y versionado.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `Raise` llama a `Apply` antes de guardar el evento en la lista. ¿Qué pasaría si lo hiciera al revés? ¿Y si no llamara a `Apply` en absoluto?
+2. Propón tres nombres de evento de dominio para el dominio de Notifications que **no** sean el nombre de un método en pasado.
+3. Busca en tu código un método que, después de guardar, siga trabajando para actualizar una segunda cosa ("guardar el pedido y también el inventario y también mandar un correo"). Esa cadena es exactamente lo que un evento de dominio permitiría separar.
 
 </Callout>

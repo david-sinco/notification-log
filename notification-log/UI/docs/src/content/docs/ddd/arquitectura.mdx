@@ -3,44 +3,62 @@ title: "Arquitectura: Clean Architecture + puertos y adaptadores + CQRS"
 description: "Cuatro capas, dependencias hacia adentro, y comandos separados de consultas."
 sidebar:
   order: 11
-  label: "11 · Arquitectura: Clean Architecture + puertos y adaptadores + CQRS"
+  label: "11 · Arquitectura: capas y CQRS"
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, whole } from '../../../lib/code';
+import domainCsproj from '@code/Services/Notification/NotificationLog.NotificationService.Domain/NotificationLog.NotificationService.Domain.csproj?raw';
+import sharedCsproj from '@code/Shared/Domain.Shared/Domain.Shared.csproj?raw';
+import exceptionHandler from '@code/Services/Notification/NotificationLog.ApiService/Exceptions/GlobalExceptionHandler.cs?raw';
+import triggerEndpoints from '@code/Services/Notification/NotificationLog.ApiService/Endpoints/TriggerEndpoints.cs?raw';
+import createTriggerHandler from '@code/Services/Notification/NotificationLog.NotificationService.Application/Triggers/Commands/CreateTrigger/CreateTriggerHandler.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
 - Verificar la regla de dependencia leyendo un `.csproj`, no confiando en un diagrama.
-- Seguir un mensaje de mensajería desde su entrada hasta el dominio, capa por capa.
+- Seguir una petición desde su entrada hasta el dominio, capa por capa.
 - Entender por qué este proyecto separa comandos de consultas sin usar un mediador.
+- Localizar la única regla de negocio que legítimamente vive fuera de un agregado.
 
 </Callout>
 
-<Callout kind="concepto" title="Concepto: dos nombres para la misma familia">
+<div class="ddd-frase">
+<strong>En una frase:</strong> la regla de dependencia no se verifica mirando un diagrama, se
+verifica contando las referencias del <code>.csproj</code> del dominio.
+</div>
 
-El dominio ocupa el centro y no depende de nada. Todo lo externo (HTTP, base de datos, colas) entra o sale por interfaces implementadas fuera del dominio. La regla operativa es la **regla de dependencia**: las dependencias apuntan hacia dentro. Beneficio real: el dominio se testea sin levantar nada.
+## Concepto: dos nombres para la misma familia
 
-Esa idea tiene dos nombres históricos casi intercambiables. **Hexagonal / Puertos y Adaptadores** (Cockburn, 2005) llama *puertos* a las interfaces del núcleo y *adaptadores* a sus implementaciones externas, sin capas internas nombradas. **Clean Architecture** (Robert C. Martin, 2012) — que el propio autor describe como una síntesis posterior de Hexagonal, Onion Architecture y DCI — sí nombra capas concéntricas explícitas: *Entities*, *Use Cases*, *Interface Adapters*, *Frameworks & Drivers*. Este proyecto, con capas nombradas `Domain`/`Application`/`Infrastructure`/`API`, se parece más a la segunda; sus repositorios e interfaces de envío usan el vocabulario de la primera. Vale la pena conocer ambos nombres en vez de tratarlos como sinónimos sin más.
+El dominio ocupa el centro y no depende de nada. Todo lo externo (HTTP, base de datos, colas) entra o sale por interfaces implementadas fuera del dominio. La regla operativa es la **regla de dependencia**: las dependencias apuntan hacia dentro.
 
-</Callout>
+Esa idea tiene dos nombres históricos casi intercambiables:
+
+- **Hexagonal / Puertos y Adaptadores** (Cockburn, 2005) llama *puertos* a las interfaces del núcleo y *adaptadores* a sus implementaciones externas, sin capas internas nombradas.
+- **Clean Architecture** (Robert C. Martin, 2012) —que el propio autor describe como una síntesis de Hexagonal, Onion y DCI— sí nombra capas concéntricas explícitas.
+
+Este proyecto, con capas `Domain` / `Application` / `Infrastructure` / `API`, se parece más a la segunda; sus repositorios e interfaces de envío usan el vocabulario de la primera. Vale la pena conocer ambos nombres en vez de tratarlos como sinónimos sin más.
 
 ## Cuatro capas, verificables en segundos
 
-No hace falta confiar en un diagrama para saber si un proyecto realmente respeta la regla de dependencia: se abre el `.csproj` del dominio y se cuentan sus referencias.
+No hace falta confiar en un diagrama: se abre el `.csproj` del dominio y se cuentan sus referencias.
 
-```csharp title="NotificationLog.NotificationService.Domain.csproj (completo)"
-<Project Sdk="Microsoft.NET.Sdk">
+<Code
+    code={whole(domainCsproj)}
+    lang="xml"
+    title="Services/Notification/.../NotificationLog.NotificationService.Domain.csproj"
+/>
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
+Cero `PackageReference`. Sin Entity Framework, sin FluentValidation, sin ASP.NET, sin Protobuf. Y la única `ProjectReference` apunta a un proyecto que, a su vez, tampoco depende de nada:
 
-</Project>
-```
+<Code
+    code={whole(sharedCsproj)}
+    lang="xml"
+    title="Shared/Domain.Shared/Domain.Shared.csproj"
+/>
 
-Sin Entity Framework, sin FluentValidation, sin ASP.NET, sin Protobuf. Solo el SDK base de .NET. Esa es la regla de dependencia hecha archivo de proyecto, no solo convención de carpetas: el propio compilador impediría que `Domain` referenciara `Infrastructure` aunque alguien lo intentara por error.
+Esa es la regla de dependencia hecha archivo de proyecto, no convención de carpetas: **el propio compilador impediría que `Domain` referenciara `Infrastructure`** aunque alguien lo intentara por error.
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 780 320" role="img" aria-labelledby="hexTitle">
@@ -56,7 +74,7 @@ Sin Entity Framework, sin FluentValidation, sin ASP.NET, sin Protobuf. Solo el S
         <circle cx="390" cy="165" r="74" fill="#f0fdf4" stroke="#bbf7d0" />
         <circle cx="390" cy="165" r="38" fill="#eef2ff" stroke="#c7d2fe" />
 
-        <text x="390" y="30" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">API (Endpoints Minimal API)</text>
+        <text x="390" y="30" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">API (Minimal API)</text>
         <text x="390" y="68" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Infrastructure (EF Core, mensajería, DI)</text>
         <text x="390" y="106" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Application (Commands/Queries)</text>
         <text x="390" y="163" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Domain</text>
@@ -74,58 +92,52 @@ Sin Entity Framework, sin FluentValidation, sin ASP.NET, sin Protobuf. Solo el S
 
 ## La mensajería no existe en el dominio
 
-La prueba más contundente de la regla de dependencia está en cómo entra un mensaje del bus de mensajería al sistema. No hay ningún tipo Protobuf ni ninguna referencia al cliente de mensajería dentro de `Domain`. El consumer vive en `Infrastructure`, traduce el mensaje a un comando de `Application`, y **solo entonces** se llama al dominio — con tipos propios (`UserChange`), no con el mensaje crudo. Ya viste el detalle completo en el [módulo de Context Map](/ddd/context-map); aquí es la misma historia contada desde el ángulo de la arquitectura, no de la integración.
+La prueba más contundente de la regla está en cómo entra un mensaje del bus. No hay ningún tipo Protobuf ni ninguna referencia al cliente de mensajería dentro de `Domain`.
+
+El consumer vive en `Infrastructure`, traduce el mensaje a un comando de `Application`, y **solo entonces** se llama al dominio. Ya viste el detalle completo en el [módulo 4](/ddd/context-map); aquí es la misma historia contada desde el ángulo de la arquitectura.
 
 ## El borde exterior también traduce: DomainException → HTTP
 
-La regla de dependencia también se cumple en la dirección contraria: el dominio no sabe qué es un código de estado HTTP. Es `GlobalExceptionHandler`, en la capa API, quien traduce `DomainException` a un `422` con el título "Regla de negocio violada" — el dominio nunca decide cómo se comunica su propio error al mundo exterior.
+La regla se cumple también en la dirección contraria: el dominio no sabe qué es un código de estado HTTP.
 
-```csharp title="ApiService/Exceptions/GlobalExceptionHandler.cs (extracto)"
-public async ValueTask<bool> TryHandleAsync(HttpContext context, Exception exception, CancellationToken ct)
-{
-    var problem = exception switch
-    {
-        NotFoundException e => new ProblemDetails { Status = 404, Title = "Recurso no encontrado", Detail = e.Message },
-        AppValidationException e => BuildValidationProblem(e),
+<Code
+    code={member(exceptionHandler, 'public async ValueTask<bool> TryHandleAsync')}
+    lang="csharp"
+    title="Services/Notification/NotificationLog.ApiService/Exceptions/GlobalExceptionHandler.cs"
+    mark={['Status = StatusCodes.Status422UnprocessableEntity,']}
+/>
 
-        DomainException e => new ProblemDetails
-        {
-            Status = StatusCodes.Status422UnprocessableEntity,
-            Title = "Regla de negocio violada",   // <- el dominio nunca supo que esto sería un 422
-            Detail = e.Message
-        },
+Este archivo **es el contrato de errores de la API**, y conviene memorizarlo porque los módulos anteriores se refieren a él constantemente:
 
-        _ => null
-    };
-    // ...
-}
-```
+| Excepción | Código | Significado |
+| --- | --- | --- |
+| `NotFoundException` | `404` | El recurso no existe. |
+| `AppValidationException` | `400` | La petición está mal formada, o rompe una regla que cruza agregados. |
+| `DomainException` | **`422`** | La petición está bien formada pero **viola una regla de negocio**. |
+| cualquier otra | `500` | No controlada: se registra y se deja caer. |
+
+El `422` es la traducción clave: el dominio lanzó *"Ya existe una configuración activa para el canal Email"* sin saber nunca que eso se convertiría en un código HTTP. Y por eso duele la duplicación del [módulo 8](/ddd/domain-services): la misma regla devuelve `422` por un camino y `400` por otro.
 
 ## CQRS: comandos y consultas, sin mediador
 
-<Callout kind="concepto" title="Concepto: CQRS">
+**CQRS** es separar el modelo de escritura (agregados, invariantes) del modelo de lectura (proyecciones optimizadas para consultas). No requiere event sourcing ni dos bases de datos: empezar separando comandos de queries en el mismo esquema ya aporta.
 
-Separar el modelo de escritura (agregados, invariantes) del modelo de lectura (proyecciones optimizadas para consultas). No requiere event sourcing ni dos bases de datos: empezar separando comandos de queries en el mismo esquema ya aporta.
+Cada operación vive en su propia carpeta con su comando y su handler — no hay una clase `TriggerService` con quince métodos. Tampoco hay un mediador: cada endpoint inyecta directamente el handler que necesita.
+
+<Code
+    code={member(triggerEndpoints, 'private static async Task<IResult> CreateAsync')}
+    lang="csharp"
+    title="Services/Notification/NotificationLog.ApiService/Endpoints/TriggerEndpoints.cs · el handler llega por DI"
+    mark={['CreateTriggerHandler handler,']}
+/>
+
+<Callout kind="honesto" title="Por qué no hay MediatR">
+
+Un mediador aporta *pipeline behaviors* (validación, logging, transacciones transversales) y desacopla emisor de handler. Este proyecto no necesita lo primero —la validación se llama explícitamente en cada handler— y no valora lo segundo: un endpoint que pide `CreateTriggerHandler` por constructor dice **exactamente qué hace** al leerlo, sin indirección.
+
+El coste de no tenerlo: si mañana quisieras logging o transacciones alrededor de todos los comandos, habría que escribirlo a mano o introducir el mediador entonces. Es una decisión reversible, y esa reversibilidad es justo lo que la hace razonable hoy.
 
 </Callout>
-
-Cada operación de `Triggers` vive en su propia carpeta con su propio comando y su propio handler — no hay una clase `TriggerService` con quince métodos. Tampoco hay un mediador de por medio: cada endpoint inyecta directamente el handler que necesita.
-
-```csharp title="Endpoints/TriggerEndpoints.cs (comando inyectado directo)"
-group.MapPost("/", CreateAsync)
-    .WithName("CreateTrigger")
-    .Produces<CreatedTriggerResponse>(StatusCodes.Status201Created)
-    .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
-private static async Task<IResult> CreateAsync(
-    CreateTriggerRequest body,
-    CreateTriggerHandler handler,     // <- inyectado directo, sin mediador
-    CancellationToken ct)
-{
-    var id = await handler.HandleAsync(new CreateTriggerCommand(body.EventKey, body.Description), ct);
-    return Results.CreatedAtRoute("GetTriggerById", new { id }, new CreatedTriggerResponse(id));
-}
-```
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 760 210" role="img" aria-labelledby="cqrsTitle">
@@ -136,19 +148,18 @@ private static async Task<IResult> CreateAsync(
             </marker>
         </defs>
 
-        <text x="190" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Escritura</text>
+        <text x="115" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Escritura</text>
         <rect x="40" y="36" width="150" height="40" rx="6" fill="#fff" stroke="#c7d2fe" />
         <text x="115" y="60" text-anchor="middle" font-size="9.5" fill="#334155">CreateTriggerCommand</text>
-        <line x1="190" y1="76" x2="190" y2="106" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cqrsArrow)" />
+        <line x1="115" y1="76" x2="115" y2="106" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cqrsArrow)" />
         <rect x="40" y="106" width="150" height="40" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
         <text x="115" y="130" text-anchor="middle" font-size="9.5" fill="#4338ca">NotificationTrigger</text>
         <text x="115" y="170" text-anchor="middle" font-size="9" fill="#64748b">agregado + invariantes</text>
 
-        <line x1="230" y1="90" x2="290" y2="90" stroke="#e5e9f2" stroke-width="1" />
-        <text x="260" y="80" text-anchor="middle" font-size="9" fill="#94a3b8">separado, no</text>
-        <text x="260" y="105" text-anchor="middle" font-size="9" fill="#94a3b8">reutilizado</text>
+        <text x="330" y="80" text-anchor="middle" font-size="9" fill="#94a3b8">separado, no</text>
+        <text x="330" y="105" text-anchor="middle" font-size="9" fill="#94a3b8">reutilizado</text>
 
-        <text x="590" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">Lectura</text>
+        <text x="515" y="24" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">Lectura</text>
         <rect x="440" y="36" width="150" height="40" rx="6" fill="#fff" stroke="#bbf7d0" />
         <text x="515" y="60" text-anchor="middle" font-size="9.5" fill="#334155">ListTriggersQuery</text>
         <line x1="515" y1="76" x2="515" y2="106" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cqrsArrow)" />
@@ -158,46 +169,52 @@ private static async Task<IResult> CreateAsync(
     </svg>
     <p class="ddd-diagram-caption">
         <code>TriggerSummaryDto</code> no es <code>NotificationTrigger</code> serializado: es una forma de
-        lectura propia, libre de arrastrar reglas de negocio que una pantalla de listado no necesita.
+        lectura propia, libre de arrastrar reglas que una pantalla de listado no necesita.
     </p>
 </div>
 
-## Capa de aplicación: orquesta, no decide
+<Callout kind="honesto" title="Este CQRS se queda a medio camino, a propósito">
 
-<Callout kind="concepto" title="Concepto: capa de aplicación">
+La separación es real en la capa de aplicación (comandos y queries en carpetas distintas, DTOs propios) pero **no llega a la capa de datos**: las consultas pasan por los mismos repositorios de agregados que las escrituras ([módulo 9](/ddd/repositorios-y-factories)).
 
-Orquesta: carga agregados, invoca comportamiento de dominio, gestiona la transacción. No contiene reglas de negocio. Un application service ideal tiene entre 5 y 15 líneas. Si tiene condicionales de negocio, esa lógica pertenece al dominio.
+El otro servicio de este repositorio sí la lleva hasta el final, porque no tiene más remedio: en [Rentals](/event-sourcing/proyecciones) el modelo de escritura son eventos y el de lectura son proyecciones separadas. Comparar los dos es la mejor forma de ver qué aporta y qué cuesta cada nivel de CQRS.
 
 </Callout>
 
-`CreateTriggerHandler` cumple esa métrica casi al pie de la letra: valida la forma del comando, construye el value object `EventKey`, comprueba unicidad contra el repositorio, delega la creación real al agregado (`NotificationTrigger.Create`) y guarda. Casi ningún `if` propio: el formato del event key lo impone `EventKey.Create` y la descripción, `NotificationTrigger.Create`.
+## Capa de aplicación: orquesta, no decide
 
-Queda uno, y conviene no barrerlo bajo la alfombra: la comprobación de unicidad (`ExistsAsync`) **sí es una regla de negocio**, y vive en el handler. No puede vivir en el agregado, porque ningún `NotificationTrigger` conoce a los demás triggers — y esa imposibilidad es exactamente la señal que identifica una regla que cruza agregados. El [módulo 13](/ddd/pruebas) la retoma como el caso claro de test de capa de aplicación, y el [módulo 12](/ddd/persistencia) muestra por qué, además, necesita un índice único detrás para sobrevivir a dos peticiones simultáneas.
+Una capa de aplicación carga agregados, invoca comportamiento de dominio y gestiona la transacción. **No contiene reglas de negocio.** Un application service ideal tiene entre 5 y 15 líneas; si tiene condicionales de negocio, esa lógica pertenece al dominio.
 
-```csharp title="Application/Triggers/Commands/CreateTrigger/CreateTriggerHandler.cs"
-public sealed class CreateTriggerHandler
-{
-    public async Task<Guid> HandleAsync(CreateTriggerCommand cmd, CancellationToken ct)
-    {
-        await _validator.ValidateAndThrowAppAsync(cmd, ct);           // forma del mensaje
+<Code
+    code={member(createTriggerHandler, 'public async Task<Guid> HandleAsync')}
+    lang="csharp"
+    title="Services/Notification/.../Triggers/Commands/CreateTrigger/CreateTriggerHandler.cs"
+    mark={['if (await _triggers.ExistsAsync(eventKey, ct))']}
+/>
 
-        var eventKey = EventKey.Create(cmd.EventKey);                 // regla del value object
+Cuatro pasos y un `return`: valida la forma del comando, construye el value object, comprueba unicidad, delega la creación al agregado y guarda. Casi ningún `if` propio — el formato del event key lo impone `EventKey.Create`, la descripción la impone `NotificationTrigger.Create`.
 
-        if (await _triggers.ExistsAsync(eventKey, ct))                // regla entre agregados (unicidad)
-            throw new AppValidationException($"Ya existe un trigger para '{eventKey}'.");
+Queda uno, y conviene no barrerlo bajo la alfombra: **la comprobación de unicidad sí es una regla de negocio**, y vive en el handler. No puede vivir en el agregado, porque ningún `NotificationTrigger` conoce a los demás triggers.
 
-        var trigger = NotificationTrigger.Create(eventKey, cmd.Description);  // regla del agregado
+> Esa imposibilidad es exactamente la señal que identifica una regla que cruza agregados.
 
-        await _triggers.AddAsync(trigger, ct);
-        await _uow.SaveChangesAsync(ct);
+El [módulo 12](/ddd/persistencia) muestra por qué, además, necesita un índice único detrás para sobrevivir a dos peticiones simultáneas.
 
-        return trigger.Id;
-    }
-}
-```
+<Callout kind="resumen" title="Para recordar">
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+- La regla de dependencia se **verifica en el `.csproj`**, no en un diagrama. Cero paquetes en `Domain`.
+- Todo lo externo entra traducido: Protobuf muere en el consumer, HTTP muere en el endpoint.
+- `GlobalExceptionHandler` es el **contrato de errores**: `DomainException` → `422` es la traducción clave.
+- CQRS no exige mediador ni dos bases de datos. Aquí cada endpoint inyecta su handler directamente.
+- Un handler que crece en `if` de negocio está señalando lógica que debería bajar al agregado.
+- La excepción legítima: una regla que **necesita conocer a los demás agregados** (unicidad) vive en el handler.
 
-Cuenta las líneas de `CreateTriggerHandler.HandleAsync` sin contar llaves ni líneas en blanco. Después haz lo mismo con el método más largo de tu propia capa de aplicación. Si el tuyo supera ampliamente esa cifra, casi seguro hay una regla de negocio escondida ahí que debería vivir dentro de un agregado.
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Una petición crea un trigger con `EventKey` `"Pedido Confirmado"`. ¿Qué excepción se lanza, dónde, y con qué código HTTP llega al cliente? Traza el camino completo.
+2. Repite el ejercicio con un `EventKey` correcto pero ya existente. ¿Cambia el código HTTP? ¿Por qué?
+3. Cuenta las líneas de `CreateTriggerHandler.HandleAsync` sin llaves ni líneas en blanco. Haz lo mismo con el método más largo de tu capa de aplicación. Si el tuyo supera ampliamente esa cifra, casi seguro hay una regla de negocio escondida ahí.
 
 </Callout>

@@ -1,0 +1,248 @@
+---
+title: "Evolución del esquema: cuando el evento cambia"
+description: "El único problema de verdad del event sourcing, contado con el caso real de este repositorio: hoy la base de Rentals no se puede reconstruir."
+sidebar:
+  order: 10
+  label: "10 · Evolución del esquema"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, span } from '../../../lib/code';
+import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
+import storeConfigSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenStoreConfiguration.cs?raw';
+import listingDrafted from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Events/ListingDrafted.cs?raw';
+import listingProjectionSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/ReadModels/ListingViewProjection.cs?raw';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Entender por qué cambiar un evento es distinto de cambiar una tabla.
+- Clasificar los cambios en compatibles, traducibles e imposibles.
+- Diagnosticar un event store roto a partir de un caso real de este repositorio.
+- Conocer las cuatro estrategias de evolución y cuándo usa cada una.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un event store no tiene migraciones — tiene un contrato de lectura
+que debe seguir funcionando para todos los eventos escritos desde el primer día.
+</div>
+
+## Por qué esto es distinto
+
+Con un modelo de estado, cambiar de forma es un trámite: `dotnet ef migrations add`, un `ALTER TABLE`, y la tabla queda en la forma nueva. **Los datos viejos se transforman una vez y desaparecen en su forma antigua.**
+
+Con eventos no hay nada que transformar, porque no hay una forma "actual": hay eventos de 2024 escritos como se escribían en 2024, y eventos de hoy. Todos tienen que poder leerse.
+
+<Callout kind="advertencia" title="Y la comprobación no la hace el compilador">
+
+El código compila perfectamente aunque `Apply` ya no sepa leer un evento de hace dos años. El fallo aparece **en tiempo de ejecución**, al cargar ese agregado concreto — probablemente en producción, probablemente con un dato que nadie miraba desde hace meses.
+
+Esa asimetría (compila bien, falla tarde) es lo que hace peligroso este tema.
+
+</Callout>
+
+## Cómo se reconoce un tipo guardado
+
+<Code
+    code={span(storeConfigSource, 'options.Events.AddEventTypes', '.Where(type => type is { IsAbstract: false, IsClass: true } && typeof(IDomainEvent).IsAssignableFrom(type)));')}
+    lang="csharp"
+    title="Services/Rentals/.../Persistence/MartenStoreConfiguration.cs · el registro de tipos"
+/>
+
+Marten guarda, junto a cada evento, **el nombre de su tipo**. Al leer, busca en este registro la clase correspondiente y deserializa el JSON sobre ella.
+
+De ahí salen las dos formas de romper la historia:
+
+<ol class="ddd-steps">
+    <li>
+        <strong>El tipo ya no existe.</strong> Se borró o se renombró la clase. Marten encuentra un nombre
+        que no está en el registro y no puede materializar el evento.
+    </li>
+    <li>
+        <strong>El tipo existe pero el JSON no encaja.</strong> Se añadió, quitó o renombró una propiedad.
+        La deserialización produce un objeto con valores por defecto, <strong>sin avisar</strong>.
+    </li>
+</ol>
+
+La segunda es peor. La primera falla ruidosamente; la segunda deja un `Guid.Empty` donde había un identificador, y el error aparece mucho más tarde y muy lejos.
+
+## El caso real de este repositorio
+
+<Callout kind="honesto" title="La base de Rentals, hoy, no se puede reconstruir">
+
+De `notification-log/todo.md`, literal:
+
+> *Reiniciar la base de Rentals (esquema `rentals` de Marten): los flujos guardados tienen eventos que ya no existen (ofertas, reservas, reportes, asesor, consultas, favoritos, búsquedas) y `ListingDrafted` cambió de forma, así que no se pueden reconstruir.*
+
+Dos problemas distintos, uno de cada tipo:
+
+**1 · Eventos huérfanos.** El proyecto tuvo funcionalidades que se quitaron. Sus eventos siguen guardados, y sus clases ya no existen.
+
+**2 · `ListingDrafted` cambió de forma.** El evento que **abre** todos los flujos de publicación. Hay eventos guardados con la forma antigua y una clase con la nueva.
+
+</Callout>
+
+Mira lo que pasa hoy al intentar cargar uno de esos flujos:
+
+<Code
+    code={span(listingSource, 'default:', '$"El evento \'{domainEvent.GetType().Name}\' no pertenece al agregado Listing.");')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · el default del switch"
+/>
+
+Ese `default` es una **buena** guarda —detecta que algo no encaja en lugar de ignorarlo en silencio— pero aquí se dispara contra datos legítimos: eventos que un día fueron correctos y cuyo agregado ya no sabe leer.
+
+Y el segundo problema es más sutil, porque no lanza nada:
+
+<Code
+    code={member(listingSource, 'private void When(ListingDrafted e)')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · When(ListingDrafted)"
+    mark={['Id = e.ListingId;']}
+/>
+
+Si el JSON guardado no tiene `ListingId` con ese nombre, `e.ListingId` es `Guid.Empty`. El agregado se carga **sin fallar**, con un `Id` vacío, y el error aparece después: una `ForeignKey` que no cuadra, una comparación de identidad que falla, una notificación enviada a nadie.
+
+<Callout kind="antipatron" title="La lección, que es la que importa">
+
+Esto no pasó por incompetencia: pasó porque **durante el desarrollo se trató el event store como una base de datos normal**. Se cambiaban clases, se borraban funcionalidades, y se asumía que los datos viejos daban igual porque eran "de pruebas".
+
+Y en desarrollo eso es correcto — reiniciar el esquema es la respuesta adecuada aquí. El problema es que ese hábito no avisa cuando deja de ser aceptable. **El día que el primer usuario real crea una publicación, el coste de cambiar un evento se multiplica por mil, y no hay nada en el código que marque esa frontera.**
+
+La regla práctica: decide explícitamente en qué momento el event store pasa a ser inmutable, escríbelo, y a partir de ahí trata cada cambio de evento como lo que es — un cambio de contrato público.
+
+</Callout>
+
+## Los tres tipos de cambio
+
+### 1 · Compatible: añadir un campo opcional
+
+Añadir una propiedad nueva a un evento existente. Los eventos viejos se deserializan con el valor por defecto, y `Apply` tiene que saber qué hacer con él.
+
+```csharp
+// Antes
+public sealed record ListingPriceChanged(long OldPrice, long NewPrice) : DomainEvent;
+
+// Después — compatible
+public sealed record ListingPriceChanged(
+    long OldPrice,
+    long NewPrice,
+    Guid? ChangedBy = null      // los eventos viejos traerán null
+) : DomainEvent;
+```
+
+**Regla:** el campo nuevo tiene que ser opcional **y** `Apply` tiene que tratar la ausencia como un caso legítimo, no como un error. Si el campo es obligatorio para la lógica, no es un cambio compatible.
+
+### 2 · Traducible: renombrar, dividir, cambiar de tipo
+
+Aquí hace falta una traducción explícita. Las opciones, de menor a mayor esfuerzo:
+
+<ol class="ddd-steps">
+    <li>
+        <strong>Alias de tipo.</strong> Si solo cambió el nombre de la clase, Marten permite registrar el
+        nombre antiguo apuntando al tipo nuevo. Es la solución más barata y cubre el caso más común.
+    </li>
+    <li>
+        <strong><em>Upcasting</em>.</strong> Una función que recibe el JSON viejo y devuelve el evento
+        nuevo. El dominio solo conoce la versión nueva; la traducción vive en <code>Infrastructure</code>,
+        que es donde debe estar.
+    </li>
+    <li>
+        <strong>Versionar el tipo.</strong> Dejar <code>ListingDraftedV1</code> y añadir
+        <code>ListingDraftedV2</code>, con <code>Apply</code> manejando los dos. Honesto y explícito, pero
+        el <code>switch</code> crece para siempre. Se reserva para cuando la semántica cambió, no solo la
+        forma.
+    </li>
+</ol>
+
+### 3 · Imposible: información que nunca se guardó
+
+Si el evento nuevo necesita un dato que los viejos **no contienen**, no hay traducción posible. Solo quedan tres salidas, y todas son decisiones de negocio:
+
+- Un valor por defecto documentado ("las publicaciones anteriores a marzo cuentan como arriendo").
+- Aceptar que el campo sea nulo para siempre y que las reglas lo contemplen.
+- Un proceso de migración único que reescriba la historia — con todo lo que eso implica, empezando por que deja de ser un registro fiel de lo que pasó.
+
+<Callout kind="advertencia" title="Reescribir la historia: el último recurso">
+
+Técnicamente se puede: leer todos los eventos, transformarlos y escribir un flujo nuevo. Y a veces es lo correcto — sobre todo antes de salir a producción, que es justo la situación de este repositorio.
+
+Pero conviene ser consciente de lo que se pierde: **un event store reescrito ya no es una fuente de verdad auditable**. Si su valor era poder decir "esto fue exactamente lo que pasó", reescribirlo lo anula. En dominios regulados, directamente no es una opción.
+
+</Callout>
+
+## Cómo se protege el código que ya existe
+
+Sin haberlo buscado, este repositorio tiene dos defensas contra este problema y una que le falta.
+
+**Defensa 1 — La proyección tolera lo que no entiende:**
+
+<Code
+    code={span(listingProjectionSource, 'case ListingWithdrawn w:', 'snapshot.UpdatedAt = at;')}
+    lang="csharp"
+    title="Services/Rentals/.../ReadModels/ListingViewProjection.cs · el switch cierra sin default"
+/>
+
+El `switch` de `Evolve` **no tiene `default`**. Un evento desconocido simplemente no hace nada, y la vista sigue construyéndose. Es lo contrario de `Apply`, y las dos decisiones son correctas: una vista incompleta es aceptable, un agregado incompleto no.
+
+**Defensa 2 — Los enums se guardan como texto.** `EnumStorage.AsString` ([módulo 5](/event-sourcing/persistencia)) evita el peor error silencioso de todos: reordenar un `enum` y reinterpretar toda la historia.
+
+**Lo que falta — no hay versión en los eventos de dominio.** `DomainEvent` tiene `EventId` y `OccurredOn`, nada más. Los contratos de integración sí llevan `schema_version` ([módulo 4 de DDD](/ddd/context-map)); los internos, no.
+
+<Callout kind="honesto" title="¿Habría que añadirla? No necesariamente">
+
+Es una decisión abierta, y hay argumentos de los dos lados.
+
+**A favor:** un `SchemaVersion` explícito hace posible decidir en `Apply` cómo interpretar un evento viejo, y documenta que el evento *tiene* versión.
+
+**En contra:** el nombre del tipo ya es la versión. Renombrar a `ListingDraftedV2` es más explícito que un entero dentro del JSON, y el *upcasting* resuelve el caso sin tocar el dominio. Muchos sistemas maduros no llevan número de versión en el evento.
+
+Lo que **no** es defendible es no haberlo pensado. Esta página existe para que la decisión sea consciente.
+
+</Callout>
+
+## Las cuatro reglas para no llegar aquí
+
+<ol class="ddd-steps">
+    <li>
+        <strong>Trata un evento como un contrato público desde el primer día.</strong> Nómbralo y dale
+        forma como si fueras a vivir con él diez años. Es lo que dice el
+        <a href="/event-sourcing/eventos">módulo 2</a>, y este módulo es la razón.
+    </li>
+    <li>
+        <strong>Añade, no cambies.</strong> Un campo opcional nuevo es casi siempre gratis; renombrar uno,
+        casi nunca.
+    </li>
+    <li>
+        <strong>Nunca borres un tipo de evento.</strong> Aunque dejes de emitirlo, la clase tiene que seguir
+        existiendo y <code>Apply</code> tiene que saber ignorarlo. Es el error número uno de este
+        repositorio.
+    </li>
+    <li>
+        <strong>Reconstruye las proyecciones a menudo, en desarrollo.</strong> Reproyectar desde cero es la
+        prueba de que la historia sigue siendo legible. Si un día falla, te enteras ese día — no seis meses
+        después.
+    </li>
+</ol>
+
+<Callout kind="resumen" title="Para recordar">
+
+- Un event store **no tiene migraciones**: tiene un contrato de lectura que debe valer para toda la historia.
+- El compilador no te avisa. El fallo llega en ejecución, al cargar un flujo viejo.
+- Borrar un tipo de evento rompe **ruidosamente**; cambiar su forma rompe **en silencio**, que es peor.
+- Cambios: **compatible** (campo opcional), **traducible** (alias o upcasting), **imposible** (el dato nunca existió).
+- Reescribir la historia es posible y a veces correcto, pero anula el valor de auditoría del event store.
+- Un `switch` sin `default` está bien en una proyección y mal en un agregado. Las dos decisiones son deliberadas.
+- **Reproyecta a menudo en desarrollo**: es la única prueba real de que la historia sigue viva.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `Apply` tiene `default: throw` y `Evolve` no tiene `default`. Justifica las dos decisiones en una frase cada una.
+2. El negocio pide guardar **quién** cambió el precio. Diseña el cambio a `ListingPriceChanged` de forma compatible, y di qué tiene que hacer `Apply` con los eventos anteriores.
+3. Hay que renombrar `VisitNoShow` a `VisitorDidNotAttend`. ¿Cuál de las tres estrategias de traducción usarías y por qué? ¿Qué pasaría si simplemente renombraras la clase?
+4. Escribe, en tres frases, la política de evolución de eventos que pondrías en el `CLAUDE.md` de este repositorio antes de que Rentals tenga usuarios reales.
+
+</Callout>

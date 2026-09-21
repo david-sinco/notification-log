@@ -1,17 +1,34 @@
 ---
 title: NotificationLog
-description: Tutorial de DDD y arquitectura sobre un contexto de Notificaciones real.
+description: Tutorial de DDD, Event Sourcing y arquitectura sobre dos servicios reales.
 ---
 
-Tutorial construido sobre el código real del repositorio: un contexto acotado de
-**Notificaciones** en arquitectura por capas, y un portal de arriendos (**Llave**) encima.
+Tutorial construido sobre el código real del repositorio: un contexto acotado de **Notificaciones**
+en arquitectura por capas con EF Core, y un portal de arriendos (**Llave**) modelado con
+**event sourcing** sobre Marten.
 
 Los fragmentos de código de estas páginas se importan directamente de los archivos `.cs` del
-repositorio, así que no pueden quedar desactualizados respecto al código que documentan.
+repositorio, recortados por firma de método o por anclas de texto. No pueden quedar desactualizados
+respecto al código que documentan: si un método se renombra, falla la compilación del sitio.
 
 ## Secciones
 
-- **Proyecto** — qué hace la aplicación, cómo se levanta y cómo fluye una notificación.
-- **DDD** — lenguaje ubicuo, value objects, entidades, agregados, repositorios y pruebas.
-- **Arquitectura** — capas, estilos, decisiones tomadas y su evolución.
-- **Patrones** — los patrones de diseño que aparecen en este código.
+- **[Proyecto](/proyecto)** — qué hace la aplicación, cómo se levanta y cómo fluye una notificación.
+- **[DDD](/ddd)** — lenguaje ubicuo, subdominios, value objects, entidades, agregados, repositorios y
+  persistencia, sobre el servicio de Notificaciones.
+- **[Event Sourcing](/event-sourcing)** — eventos como fuente de verdad, rehidratación, flujos,
+  proyecciones y procesos, sobre el servicio de Arriendos.
+- **[Arquitectura](/arquitectura)** — capas, estilos, decisiones tomadas y su evolución.
+- **[Patrones](/patrones)** — los patrones de diseño que aparecen en este código.
+
+## Por dónde empezar
+
+Si vienes a **aprender modelado**, el orden es [DDD](/ddd) → [Event Sourcing](/event-sourcing): la
+segunda guía da por sabidos los conceptos tácticos de la primera y los aplica a un modelo donde el
+estado se calcula en lugar de guardarse.
+
+Si vienes a **entender este sistema**, empieza por [Proyecto](/proyecto) y sigue por
+[Arquitectura](/arquitectura).
+
+Las dos guías de modelado terminan en una página de **tareas** sobre el propio repositorio, que es
+donde se comprueba de verdad si el resto se entendió.

@@ -1,0 +1,253 @@
+---
+title: "Un comando de punta a punta"
+description: "De una petición HTTP a una fila nueva en el event store, pasando por las cuatro capas."
+sidebar:
+  order: 6
+  label: "6 · Un comando completo"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, whole } from '../../../lib/code';
+import visitEndpoints from '@code/Services/Rentals/NotificationLog.RentalService.Api/Endpoints/VisitEndpoints.cs?raw';
+import confirmCommand from '@code/Services/Rentals/NotificationLog.RentalService.Application/Visits/Commands/ConfirmVisit/ConfirmVisitCommand.cs?raw';
+import confirmHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Visits/Commands/ConfirmVisit/ConfirmVisitHandler.cs?raw';
+import visitSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Visit.cs?raw';
+import repoExtensions from '@code/Services/Rentals/NotificationLog.RentalService.Application/Common/RepositoryExtensions.cs?raw';
+import exceptionHandler from '@code/Services/Rentals/NotificationLog.RentalService.Api/Exceptions/GlobalExceptionHandler.cs?raw';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Seguir una petición real desde el endpoint hasta el evento guardado, sin saltarse una capa.
+- Distinguir los cuatro tipos de comprobación que ocurren y dónde vive cada una.
+- Ver cómo se traducen los errores del dominio a códigos HTTP en este servicio.
+- Comparar la forma de un handler event-sourced con la del otro servicio.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un handler event-sourced tiene siempre la misma forma —validar,
+cargar, decidir, añadir, guardar— y la única diferencia con uno de estado es que "añadir" no
+sobrescribe nada.
+</div>
+
+## El caso: confirmar una visita
+
+El anfitrión recibió una solicitud de visita con tres franjas propuestas y elige una:
+
+```http
+POST /api/visits/8c3e.../confirm
+Content-Type: application/json
+
+{ "actorId": "5f21...", "slotStart": "2026-03-12T15:00:00-05:00" }
+```
+
+## Capa 1 · El endpoint
+
+<Code
+    code={member(visitEndpoints, 'private static async Task<IResult> ConfirmAsync')}
+    lang="csharp"
+    title="Services/Rentals/.../Api/Endpoints/VisitEndpoints.cs"
+/>
+
+Cinco líneas. El endpoint **no decide nada**: traduce la ruta y el cuerpo a un comando, lo pasa, y convierte el retorno en un `204 No Content`. Igual que en el [otro servicio](/ddd/arquitectura), el handler llega por inyección directa, sin mediador.
+
+Y el comando es un `record` sin comportamiento:
+
+<Code
+    code={whole(confirmCommand)}
+    lang="csharp"
+    title="Services/Rentals/.../Application/Visits/Commands/ConfirmVisit/ConfirmVisitCommand.cs"
+/>
+
+<Callout kind="honesto" title="ActorId viene en el cuerpo, y es una deuda anotada">
+
+`body.ActorId` significa que el cliente dice **quién es él mismo**. En visitas todavía es así; en publicaciones y propietarios ya se toma del token (`user.GetUserId()`), como hace `DraftListingHandler`.
+
+Está en `todo.md` como pendiente: *"Visitas con el usuario del token en lugar de `ActorId` en el body"*. Conviene verlo porque muestra cómo se migra un servicio de un modelo de identidad a otro: agregado por agregado, no de golpe.
+
+</Callout>
+
+## Capa 2 · El handler
+
+<Code
+    code={member(confirmHandler, 'public async Task HandleAsync')}
+    lang="csharp"
+    title="Services/Rentals/.../Application/Visits/Commands/ConfirmVisit/ConfirmVisitHandler.cs"
+    mark={['visit.Confirm(cmd.SlotStart, _time.GetUtcNow());', 'await _visits.AppendAsync(visit, ct);', 'await _uow.SaveChangesAsync(ct);']}
+/>
+
+Siete líneas de trabajo, y cada una es un tipo de comprobación distinto. Esta es la tabla que conviene memorizar:
+
+| Línea | Qué comprueba | Por qué ahí |
+| --- | --- | --- |
+| `ValidateAndThrowAppAsync` | **Forma del mensaje.** ¿Vienen los `Guid`? | No es negocio, es higiene de entrada. |
+| `visit.HostId != cmd.ActorId` | **Autorización.** ¿Es el anfitrión? | Necesita el agregado cargado, pero no es una regla del negocio de visitas. |
+| `_rules.HostHasOverlapAsync` | **Regla blanda que cruza agregados.** ¿Tiene otra visita a esa hora? | El agregado `Visit` no conoce las demás visitas. Va contra una [proyección de decisión](/event-sourcing/decisiones). |
+| `visit.Confirm(...)` | **Invariante del agregado.** ¿Está solicitada? ¿No venció el plazo? ¿Es una de las franjas propuestas? | Solo el agregado lo sabe, mirando su propia historia. |
+
+Esa cuarta fila es la clave del modelo: el handler **no sabe** qué condiciones impone `Confirm`. Las comprobará el agregado, con el estado que le dejaron sus propios eventos:
+
+<Code
+    code={member(visitSource, 'public void Confirm')}
+    lang="csharp"
+    title="Services/Rentals/.../Domain/Visits/Visit.cs · Confirm"
+    mark={['Raise(new VisitConfirmed(slot.Start));']}
+/>
+
+<Callout kind="advertencia" title="La distinción que más cuesta: regla dura contra regla blanda">
+
+- **`now >= RespondBy`** es una regla **dura**: el dato vive en el propio flujo, se comprueba dentro del agregado, y es imposible violarla — el [control de versión](/event-sourcing/persistencia) garantiza que nadie confirme dos veces la misma visita.
+- **`HostHasOverlapAsync`** es una regla **blanda**: mira *otros* flujos a través de una proyección. Dos confirmaciones simultáneas del mismo anfitrión, en la misma franja, podrían pasar las dos.
+
+Ese solapamiento es un riesgo **aceptado**, no un descuido: cerrarlo exigiría meter todas las visitas de un anfitrión en el mismo agregado, lo que violaría la Regla 2 de Vernon (agregados pequeños) para proteger una regla que, si falla, se arregla con una llamada de teléfono.
+
+Saber nombrar esa diferencia es más valioso que cualquier línea de código de esta página.
+
+</Callout>
+
+## Capa 3 · El `GetAsync` que convierte `null` en `404`
+
+<Code
+    code={whole(repoExtensions)}
+    lang="csharp"
+    title="Services/Rentals/.../Application/Common/RepositoryExtensions.cs"
+/>
+
+El repositorio devuelve `Visit?` porque "no existe" es una respuesta legítima ([módulo 4](/event-sourcing/rehidratacion)). Pero casi todos los handlers quieren el agregado o un error, así que esta extensión hace la traducción una sola vez, en `Application`.
+
+Pequeño, y evita quince `?? throw new NotFoundException(...)` repetidos.
+
+## Capa 4 · El evento llega al flujo
+
+`AppendAsync` entrega los eventos pendientes a la sesión con la versión esperada, y `SaveChangesAsync` los escribe. Es lo que viste en el [módulo 5](/event-sourcing/persistencia).
+
+El resultado en PostgreSQL es **una fila nueva**:
+
+| stream_id | version | type | data |
+| --- | --- | --- | --- |
+| `8c3e...` | 1 | `VisitRequested` | `{...}` |
+| `8c3e...` | **2** | **`VisitConfirmed`** | `{"SlotStart":"2026-03-12T20:00:00Z", ...}` |
+
+Ninguna fila anterior se tocó. Y en la misma transacción se actualizaron `VisitView` y `VisitDecision`, las dos proyecciones *inline* de este agregado.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 300" role="img" aria-labelledby="cmdTitle">
+        <title id="cmdTitle">Recorrido completo de un comando</title>
+        <defs>
+            <marker id="cmdArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="30" width="180" height="70" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="110" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">API</text>
+        <text x="110" y="72" text-anchor="middle" font-size="8.5" fill="#334155">POST /visits/:id/confirm</text>
+        <text x="110" y="88" text-anchor="middle" font-size="8" fill="#64748b">→ ConfirmVisitCommand</text>
+
+        <line x1="202" y1="65" x2="238" y2="65" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmdArrow)" />
+
+        <rect x="240" y="30" width="200" height="130" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="340" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Application</text>
+        <text x="340" y="74" text-anchor="middle" font-size="8.5" fill="#334155">1 · validar forma</text>
+        <text x="340" y="91" text-anchor="middle" font-size="8.5" fill="#334155">2 · cargar (rehidratar)</text>
+        <text x="340" y="108" text-anchor="middle" font-size="8.5" fill="#334155">3 · autorizar</text>
+        <text x="340" y="125" text-anchor="middle" font-size="8.5" fill="#334155">4 · regla blanda</text>
+        <text x="340" y="146" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">orquesta, no decide</text>
+
+        <line x1="442" y1="95" x2="478" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmdArrow)" />
+
+        <rect x="480" y="30" width="190" height="130" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="575" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">Domain</text>
+        <text x="575" y="74" text-anchor="middle" font-size="8.5" fill="#334155">Visit.Confirm(slot, now)</text>
+        <text x="575" y="92" text-anchor="middle" font-size="8" fill="#64748b">¿solicitada? ¿en plazo?</text>
+        <text x="575" y="108" text-anchor="middle" font-size="8" fill="#64748b">¿franja propuesta?</text>
+        <rect x="496" y="118" width="158" height="26" rx="5" fill="#fff" stroke="#c7d2fe" />
+        <text x="575" y="135" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">Raise(VisitConfirmed)</text>
+
+        <line x1="672" y1="95" x2="708" y2="95" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#cmdArrow)" />
+
+        <rect x="710" y="30" width="150" height="130" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="785" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">Infrastructure</text>
+        <text x="785" y="76" text-anchor="middle" font-size="8.5" fill="#334155">Append(v2)</text>
+        <text x="785" y="94" text-anchor="middle" font-size="8.5" fill="#334155">SaveChanges</text>
+        <text x="785" y="118" text-anchor="middle" font-size="8" fill="#14532d">1 fila nueva</text>
+        <text x="785" y="134" text-anchor="middle" font-size="8" fill="#14532d">+ 2 proyecciones</text>
+        <text x="785" y="150" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">misma transacción</text>
+
+        <rect x="240" y="190" width="620" height="80" rx="10" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="550" y="214" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9d174d">Después del commit, de forma asíncrona</text>
+        <text x="550" y="236" text-anchor="middle" font-size="9" fill="#334155">DomainEventsSubscription lee VisitConfirmed → ProcessRouter</text>
+        <text x="550" y="254" text-anchor="middle" font-size="9" fill="#334155">programa recordatorios y autocompletado · avisa al interesado (módulo 9)</text>
+
+        <line x1="785" y1="162" x2="700" y2="188" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4,3" marker-end="url(#cmdArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Las cuatro capas son las mismas que en el otro servicio. Lo que cambia es la última caja: no se
+        actualiza una fila, se añade un hecho — y de ese hecho cuelga todo lo que viene después.
+    </p>
+</div>
+
+## Cuando algo falla: la traducción a HTTP
+
+<Code
+    code={member(exceptionHandler, 'public async ValueTask<bool> TryHandleAsync')}
+    lang="csharp"
+    title="Services/Rentals/.../Api/Exceptions/GlobalExceptionHandler.cs"
+    mark={['ForbiddenException e => new ProblemDetails']}
+/>
+
+Es el mismo contrato que el [de Notifications](/ddd/arquitectura), con un caso más: `ForbiddenException` → `403`.
+
+Aplicado a nuestro comando:
+
+| Qué pasó | Excepción | Código |
+| --- | --- | --- |
+| La visita no existe | `NotFoundException` | `404` |
+| No eres el anfitrión | `AppValidationException` | `400` |
+| Ya tienes otra visita a esa hora | `AppValidationException` | `400` |
+| La visita ya no está solicitada, o venció el plazo | **`DomainException`** | **`422`** |
+
+<Callout kind="honesto" title="Una incoherencia real, anotada en todo.md">
+
+"No eres el anfitrión" devuelve `400`, no `403`, porque `ConfirmVisitHandler` lanza `AppValidationException` en vez de `ForbiddenException`. Publicaciones y propietarios ya lo hacen bien (`ListingAccess.EnsureCanManage` lanza `ForbiddenException`); visitas todavía no.
+
+Está en `todo.md`: *"Responder 403 en lugar de 400 para «no es tuyo» en las visitas de Rentals"*. Es exactamente el tipo de deriva que aparece cuando un contrato de errores no se revisa: cada handler, por separado, parece razonable.
+
+</Callout>
+
+## La comparación que cierra el módulo
+
+Pon este handler al lado de [`AddConfigurationHandler`](/ddd/agregados) del otro servicio. La forma es idéntica:
+
+1. Validar el comando.
+2. Cargar el agregado.
+3. Comprobar lo que el agregado no puede saber.
+4. Llamar a un método de negocio.
+5. `SaveChangesAsync`.
+
+**Las diferencias son solo dos**, y ninguna está en la capa de aplicación:
+
+- Cargar significa *rehidratar* en vez de hacer `SELECT` con `Include`.
+- Guardar significa *añadir eventos con versión esperada* en vez de `UPDATE`.
+
+Esa es la mejor noticia de esta guía: **event sourcing cambia el dominio y la persistencia, no la forma de escribir casos de uso.** Si sabes escribir un handler, ya sabes escribirlo aquí.
+
+<Callout kind="resumen" title="Para recordar">
+
+- El handler siempre tiene la misma forma: **validar, cargar, comprobar lo externo, decidir, guardar**.
+- Cuatro tipos de comprobación, cuatro sitios: forma (validador), autorización (handler), regla blanda (proyección), invariante (**agregado**).
+- Una **regla dura** vive en el flujo y es inviolable; una **regla blanda** cruza flujos y puede fallar bajo concurrencia. Saber cuál es cuál es la decisión.
+- El endpoint traduce y no decide; `GetAsync` convierte `null` en `404` una sola vez.
+- `DomainException` → `422` es la traducción que conecta el dominio con el contrato HTTP.
+- La capa de aplicación **no cambia** respecto a un modelo de estado. Cambian cargar y guardar.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Clasifica estas tres comprobaciones en dura o blanda, y di dónde vive cada una: *"la franja elegida ya pasó"*, *"ya tienes tres visitas pendientes"*, *"no puedes pedir una visita a tu propia publicación"*.
+2. `ConfirmVisitHandler` recibe `TimeProvider` y le pasa `now` al agregado. ¿Qué ganarías y qué perderías si `Visit.Confirm` llamara a `DateTimeOffset.UtcNow` directamente?
+3. Sigue el comando `DraftListing` con el mismo método: endpoint, handler, agregado, evento. ¿En cuál de los cuatro pasos se diferencia más de `ConfirmVisit`, y por qué?
+
+</Callout>

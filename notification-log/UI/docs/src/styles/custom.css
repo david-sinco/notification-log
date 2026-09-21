@@ -35,6 +35,32 @@
     border-color: var(--sl-color-red);
 }
 
+.ddd-box-codigo {
+    background: var(--sl-color-purple-low);
+    border-color: var(--sl-color-purple);
+}
+
+.ddd-box-honesto {
+    background: var(--sl-color-gray-6);
+    border-color: var(--sl-color-gray-4);
+}
+
+.ddd-box-resumen {
+    background: var(--sl-color-accent-low);
+    border-color: var(--sl-color-accent);
+}
+
+.ddd-frase {
+    border-left: 3px solid var(--sl-color-accent);
+    padding: 0.15rem 0 0.15rem 1rem;
+    margin: 1.25rem 0;
+    font-size: 1.05rem;
+}
+
+.ddd-frase strong {
+    color: var(--sl-color-accent-high);
+}
+
 .ddd-diagram {
     margin: 1.5rem 0;
 }

@@ -7,6 +7,12 @@ sidebar:
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, members, span } from '../../../lib/code';
+import triggerSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/NotificationTrigger.cs?raw';
+import configurationSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/NotificationConfiguration.cs?raw';
+import notificationSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Notifications/Notification.cs?raw';
+import addConfigurationHandler from '@code/Services/Notification/NotificationLog.NotificationService.Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs?raw';
 
 <Callout kind="concepto" title="Objetivos de este módulo">
 
@@ -16,74 +22,74 @@ import Callout from '../../../components/Callout.astro';
 
 </Callout>
 
+<div class="ddd-frase">
+<strong>En una frase:</strong> un agregado responde a una sola pregunta —<em>¿qué tiene que ser
+consistente en la misma transacción?</em>— y su límite es la respuesta.
+</div>
+
 ## Concepto
 
-Un agregado es un conjunto de entidades y value objects tratado como una unidad de consistencia. Se accede solo a través de la raíz (aggregate root), que garantiza las invariantes. Responde a la pregunta: *¿qué debe ser consistente en la misma transacción?* Todo lo demás puede ser eventualmente consistente.
+Un agregado es un conjunto de entidades y value objects tratado como una **unidad de consistencia**. Se accede solo a través de la raíz (*aggregate root*), que garantiza las invariantes. Todo lo que queda fuera puede ser eventualmente consistente.
 
 Las cuatro reglas de diseño de Vernon:
 
-1. Protege invariantes de negocio verdaderas dentro del límite del agregado.
-2. Diseña agregados pequeños. Grande = contención, bloqueos y memoria.
-3. Referencia otros agregados **por identidad**, no por objeto.
-4. Una transacción modifica **un solo agregado**. Coordina el resto con eventos.
+<ol class="ddd-steps">
+    <li><strong>Protege invariantes de negocio verdaderas</strong> dentro del límite del agregado.</li>
+    <li><strong>Diseña agregados pequeños.</strong> Grande = contención, bloqueos y memoria.</li>
+    <li><strong>Referencia otros agregados por identidad</strong>, no por objeto.</li>
+    <li><strong>Una transacción modifica un solo agregado.</strong> Coordina el resto con eventos.</li>
+</ol>
 
 ## El agregado real: NotificationTrigger
 
-`NotificationTrigger` es la raíz; `NotificationConfiguration` es su entidad hija. Comparten una invariante real: **no puede haber dos configuraciones activas del mismo canal para el mismo trigger** (no tendría sentido tener dos plantillas de email compitiendo por el mismo evento). Esa regla no vive en el handler de la aplicación ni en una restricción de base de datos — vive dentro del agregado, que es el único lugar donde queda **expresada una sola vez** y donde ningún camino de la API pública puede esquivarla.
+`NotificationTrigger` es la raíz; `NotificationConfiguration` es su entidad hija. Comparten una invariante real:
 
-Ojo con distinguir lo que eso garantiza de lo que no, porque es la confusión más cara de este patrón: el agregado *define* el límite de consistencia, pero *hacerlo cumplir* bajo concurrencia necesita además una defensa en la persistencia. El [módulo 12](/ddd/persistencia) muestra el escenario exacto en que esta misma invariante se rompe hoy con dos peticiones simultáneas.
+> **No puede haber dos configuraciones activas del mismo canal para el mismo trigger.**
 
-```csharp title="Domain/Triggers/NotificationTrigger.cs (invariante de canal único)"
-public class NotificationTrigger : AggregateRoot
-{
-    private readonly List<NotificationConfiguration> _configurations = new();
+(No tendría sentido tener dos plantillas de email compitiendo por el mismo evento.)
 
-    public NotificationConfiguration AddConfiguration(Guid templateId, NotificationChannel channel)
-    {
-        EnsureChannelIsFree(channel);
+Esa regla no vive en el handler de la aplicación ni en una restricción de base de datos. Vive dentro del agregado, que es el único lugar donde queda **expresada una sola vez** y donde ningún camino de la API pública puede esquivarla.
 
-        var configuration = NotificationConfiguration.Create(templateId, channel);
-        _configurations.Add(configuration);
-
-        return configuration;
-    }
-
-    public void EnableConfiguration(Guid configurationId)
-    {
-        var configuration = RequireConfiguration(configurationId);
-        if (configuration.IsEnabled) return;
-
-        EnsureChannelIsFree(configuration.Channel, exceptId: configurationId);
-        configuration.Enable();
-    }
-
-    private void EnsureChannelIsFree(NotificationChannel channel, Guid? exceptId = null)
-    {
-        var occupied = _configurations.Any(c =>
-            c.IsEnabled && c.Channel == channel && c.Id != exceptId);
-
-        if (occupied)
-            throw new DomainException(
-                $"Ya existe una configuración activa para el canal {channel}.");
-    }
-}
-```
+<Code
+    code={members(triggerSource, [
+        'public NotificationConfiguration AddConfiguration',
+        'public void EnableConfiguration',
+        'private void EnsureChannelIsFree'
+    ])}
+    lang="csharp"
+    title="Services/Notification/.../Triggers/NotificationTrigger.cs · la invariante de canal único"
+    mark={['EnsureChannelIsFree(channel);', 'EnsureChannelIsFree(configuration.Channel, exceptId: configurationId);']}
+/>
 
 ## Regla 1 — Protege invariantes verdaderas
 
-`AddConfiguration` y `EnableConfiguration` llaman a `EnsureChannelIsFree` antes de mutar nada. No hay forma de crear el estado inválido "dos configuraciones de Email activas" pasando por la API pública del agregado — y esa es justamente la definición de invariante protegida: no es una validación que *podrías* olvidar llamar, es imposible de saltarte.
+`AddConfiguration` y `EnableConfiguration` llaman a `EnsureChannelIsFree` **antes** de mutar nada. Son los dos únicos caminos que pueden crear el estado "una configuración de Email activa", y ambos pasan por la misma puerta.
+
+Esa es justamente la definición de invariante protegida: no es una validación que *podrías* olvidar llamar, es **imposible de saltarte** desde fuera.
 
 <Callout kind="honesto" title="Una grieta real que este código ya cerró">
 
-Hasta hace poco, `EventKey`, `Description` e `IsEnabled` de `NotificationTrigger` tenían setter público — el único de los cuatro agregados con esa grieta. Con setter público, la Regla 1 no se cumplía del todo: `trigger.IsEnabled = true` saltaba `Enable()` sin pasar por ninguna comprobación, y nada impedía reasignar `trigger.EventKey` después de creado, rompiendo en silencio la unicidad que `CreateTriggerHandler` solo verifica una vez, al crear. El arreglo fue mínimo — los tres a `{ get; private set; }` — precisamente porque ningún código fuera de la clase dependía del setter público. Es el mismo tipo de auditoría que puedes hacerle a tu propio código: un setter público en un agregado no es un detalle menor, es una invariante que dejó de estar protegida.
+Hasta hace poco, `EventKey`, `Description` e `IsEnabled` tenían setter público — el único de los cuatro agregados con esa grieta. Con setter público, la Regla 1 no se cumplía del todo: `trigger.IsEnabled = true` saltaba `Enable()` sin pasar por ninguna comprobación, y nada impedía reasignar `trigger.EventKey` después de creado, rompiendo en silencio la unicidad que `CreateTriggerHandler` solo verifica al crear.
+
+El arreglo fue mínimo —los tres a `{ get; private set; }`— precisamente porque ningún código fuera de la clase dependía del setter. Es el tipo de auditoría que puedes hacerle a tu propio código: **un setter público en un agregado es una invariante que dejó de estar protegida**.
+
+</Callout>
+
+<Callout kind="advertencia" title="Lo que el agregado NO garantiza">
+
+El agregado *define* el límite de consistencia, pero *hacerlo cumplir bajo concurrencia* necesita además una defensa en la persistencia. El [módulo 12](/ddd/persistencia) muestra el escenario exacto en que esta misma invariante se rompe hoy con dos peticiones simultáneas. Léelo antes de dar por protegida cualquier invariante de este tipo en un sistema real.
 
 </Callout>
 
 ## Regla 2 — Agregados pequeños
 
-El agregado `NotificationTrigger` contiene únicamente sus `NotificationConfiguration` — no arrastra la plantilla completa, ni el destinatario, ni el historial de notificaciones enviadas. Ese es exactamente el motivo por el que este dominio tiene **cuatro** agregados raíz (`NotificationTrigger`, `NotificationTemplate`, `Recipient`, `Notification`) en vez de uno solo gigante. Cada uno protege su propia invariante y nada más.
+`NotificationTrigger` contiene únicamente sus `NotificationConfiguration` — no arrastra la plantilla completa, ni el destinatario, ni el historial de notificaciones enviadas. Ese es exactamente el motivo por el que este dominio tiene **cuatro** agregados raíz en vez de uno gigante.
 
-Ahora bien, "pequeño" no es una intuición: es una pregunta concreta que conviene hacerse siempre — **¿la colección de hijos está acotada?** Un agregado cuya lista de hijos crece sin techo se convierte, tarde o temprano, en un problema de memoria y de bloqueos, porque hay que cargarla entera para validar cualquier invariante. Aplícalo a este código: `_configurations` está acotada de hecho (hay cuatro canales), pero nada en el modelo lo impone, y `GetByIdAsync` carga la colección completa con `Include` para comprobar un solo canal. Aquí el techo real hace que la decisión sea correcta; en un agregado "Pedido" con una colección de "Eventos de auditoría" sin límite, exactamente el mismo diseño sería un error.
+Ahora bien, "pequeño" no es una intuición: es una pregunta concreta que conviene hacerse siempre —**¿la colección de hijos está acotada?**
+
+Un agregado cuya lista de hijos crece sin techo se convierte, tarde o temprano, en un problema de memoria y de bloqueos, porque hay que cargarla entera para validar cualquier invariante. Aplícalo a este código: `_configurations` está acotada de hecho (hay cuatro canales), pero nada en el modelo lo impone, y el repositorio carga la colección completa con `Include` para comprobar un solo canal.
+
+Aquí el techo real hace que la decisión sea correcta. En un agregado "Pedido" con una colección de "eventos de auditoría" sin límite, exactamente el mismo diseño sería un error.
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 820 260" role="img" aria-labelledby="aggTitle">
@@ -135,67 +141,68 @@ Ahora bien, "pequeño" no es una intuición: es una pregunta concreta que convie
 
 ## Regla 3 — Referencias por identidad
 
-`NotificationConfiguration.TemplateId` es un `Guid`, no una propiedad `NotificationTemplate Template`. Y `Notification` — el registro histórico de un envío — es todavía más estricto: guarda `ConfigurationId`, `TemplateId`, `TemplateVersionId` y `RecipientId`, los cuatro como `Guid` sueltos, sin una sola referencia navegable a otro agregado.
+`NotificationConfiguration.TemplateId` es un `Guid`, no una propiedad `NotificationTemplate Template`:
 
-```csharp title="Domain/Notifications/Notification.cs (solo Guids, nunca objetos)"
-public sealed class Notification : AggregateRoot
-{
-    public Guid ConfigurationId { get; private set; }
-    public Guid TemplateId { get; private set; }
-    public Guid TemplateVersionId { get; private set; }
-    public Guid RecipientId { get; private set; }
-    // ^ Cuatro Guids. Ni un solo `NotificationTrigger`, `NotificationTemplate` o
-    // `Recipient` navegable: Notification puede reconstruirse y leerse sin cargar
-    // ningún otro agregado en memoria.
-}
-```
+<Code
+    code={span(configurationSource, 'public Guid TemplateId', 'public bool IsEnabled')}
+    lang="csharp"
+    title="Services/Notification/.../Triggers/NotificationConfiguration.cs · el estado de la entidad hija"
+/>
+
+Y `Notification` —el registro histórico de un envío— es todavía más estricto:
+
+<Code
+    code={span(notificationSource, 'public Guid EventId', 'public DateTime OccurredAt')}
+    lang="csharp"
+    title="Services/Notification/.../Notifications/Notification.cs · solo Guids, nunca objetos"
+/>
+
+Cuatro `Guid` hacia otros agregados (`ConfigurationId`, `TemplateId`, `TemplateVersionId`, `RecipientId`) y **ni una sola referencia navegable**. `Notification` puede reconstruirse y leerse sin cargar ningún otro agregado en memoria.
 
 ## Regla 4 — Una transacción, un agregado
 
-Este es el punto más sutil, y el código real lo respeta incluso cuando una operación necesita mirar *dos* agregados. `AddConfigurationHandler` lee tanto el `NotificationTrigger` como el `NotificationTemplate` — pero solo **escribe** uno. El template se lee para validar una regla de compatibilidad ("¿esta plantilla está activa? ¿es del canal correcto?"), y esa lectura nunca se convierte en una escritura sobre el template. Solo `trigger` se guarda.
+Este es el punto más sutil, y el código real lo respeta incluso cuando una operación necesita mirar *dos* agregados.
 
-<Callout kind="honesto" title="Una precisión sobre 'sin condiciones de carrera'">
+<Code
+    code={member(addConfigurationHandler, 'public async Task<NotificationConfiguration> HandleAsync')}
+    lang="csharp"
+    title="Services/Notification/.../Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs"
+    mark={['var configuration = trigger.AddConfiguration(template.Id, cmd.Channel);', 'await _uow.SaveChangesAsync(ct);']}
+/>
 
-Todo lo anterior es cierto *dentro* de una transacción: mientras `AddConfiguration` se ejecuta, ningún otro código de ese hilo puede colar una configuración a espaldas de `EnsureChannelIsFree`. Lo que el agregado por sí solo no puede garantizar es qué pasa cuando **dos transacciones** hacen exactamente lo mismo a la vez: ambas leen el mismo estado, ambas concluyen que el canal está libre, y ambas guardan. Ese escenario, y las tres formas de cerrarlo con sus costes, es el segundo tema del [módulo 12](/ddd/persistencia). Vale la pena leerlo antes de dar por protegida cualquier invariante de este tipo en un sistema real.
-
-</Callout>
-
-```csharp title="Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs"
-public sealed class AddConfigurationHandler
-{
-    public async Task<NotificationConfiguration> HandleAsync(AddConfigurationCommand cmd, CancellationToken ct)
-    {
-        var trigger = await _triggers.GetByIdAsync(cmd.TriggerId, ct)
-            ?? throw new NotFoundException(nameof(NotificationTrigger), cmd.TriggerId);
-
-        var template = await _templates.GetByIdAsync(cmd.TemplateId, ct)
-            ?? throw new NotFoundException(nameof(NotificationTemplate), cmd.TemplateId);
-
-        if (!template.IsEnabled)
-            throw new AppValidationException($"La plantilla '{template.Name}' está desactivada.");
-
-        if (template.Channel != cmd.Channel)
-            throw new AppValidationException(
-                $"La plantilla es de canal {template.Channel}, no {cmd.Channel}.");
-
-        // Se LEE template para decidir. Solo se ESCRIBE trigger.
-        var configuration = trigger.AddConfiguration(template.Id, cmd.Channel);
-
-        await _uow.SaveChangesAsync(ct);   // una sola raíz modificada
-
-        return configuration;
-    }
-}
-```
+El handler **lee** tanto el `NotificationTrigger` como el `NotificationTemplate`, pero solo **escribe** uno. El template se lee para validar tres reglas de compatibilidad (está activa, no es del sistema, es del canal correcto), y esa lectura nunca se convierte en una escritura. Solo `trigger` se guarda.
 
 <Callout kind="advertencia" title="La lectura de un segundo agregado no rompe la regla">
 
-Leer `template` para decidir no es lo mismo que mutar dos agregados en la misma transacción. La regla de Vernon dice "una transacción **modifica** un solo agregado" — aquí solo `_uow.SaveChangesAsync()` persiste cambios, y esos cambios están todos dentro de `trigger`. Si `AddConfigurationHandler` también hubiera llamado a `template.Disable()` en el mismo método, ahí sí habría una violación real, y la forma correcta de resolverlo sería con un evento de dominio (ver [módulo 10](/ddd/domain-events)).
+Leer `template` para decidir no es lo mismo que mutar dos agregados en la misma transacción. La regla de Vernon dice "una transacción **modifica** un solo agregado".
+
+Si `AddConfigurationHandler` también hubiera llamado a `template.Disable()` en el mismo método, ahí sí habría una violación real, y la forma correcta de resolverlo sería con un evento de dominio ([módulo 10](/ddd/domain-events)).
 
 </Callout>
 
-<Callout kind="ejercicio" title="Ejercicio para pensar">
+<Callout kind="honesto" title="Pero mira la tercera comprobación de ese handler">
 
-Toma la entidad más grande de tu propio código y, para cada campo, pregunta: "si esto cambia, ¿qué otro campo del mismo objeto *tiene* que cambiar en la misma transacción para que el objeto siga siendo válido?". Los campos que nunca aparecen en esa respuesta probablemente pertenecen a otro agregado.
+`if (template.Channel != cmd.Channel)` es una **regla de negocio viviendo en el handler**, y además está duplicada: `NotificationTrigger.ChangeConfigurationTemplate` ya comprueba exactamente lo mismo dentro del agregado, lanzando `DomainException` en vez de `AppValidationException`.
+
+Misma regla, dos sitios, dos códigos HTTP distintos según por dónde entres. El [módulo 8](/ddd/domain-services) desarrolla el caso, y arreglarlo es la [Tarea 4](/ddd/tareas).
+
+</Callout>
+
+<Callout kind="resumen" title="Para recordar">
+
+- El agregado es el **límite de consistencia transaccional**, no una agrupación estética.
+- Regla 1: la invariante vive **dentro**, en un método privado al que todos los caminos públicos pasan.
+- Regla 2: pregúntate siempre si **la colección de hijos está acotada**.
+- Regla 3: hacia fuera, solo `Guid`. Una referencia navegable arrastra otro agregado a tu transacción.
+- Regla 4: **leer** otro agregado está permitido; **escribirlo** en la misma transacción, no.
+- Un `SaveChangesAsync` al final del handler es lo que hace visible dónde termina la operación de negocio.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `EnsureChannelIsFree` filtra por `c.IsEnabled`. ¿Qué significa eso para el negocio: puede haber dos configuraciones de Email en el mismo trigger, o no? ¿Por qué se diseñó así?
+2. `EnableConfiguration` pasa `exceptId: configurationId` y `AddConfiguration` no. Explica la diferencia sin mirar el código.
+3. Toma la entidad más grande de tu código y, para cada campo, pregunta: *"si esto cambia, ¿qué otro campo del mismo objeto tiene que cambiar en la misma transacción para que siga siendo válido?"*. Los campos que nunca aparecen en esa respuesta pertenecen a otro agregado.
 
 </Callout>

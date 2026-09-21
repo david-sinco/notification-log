@@ -1,0 +1,238 @@
+---
+title: "Proyecciones de decisión"
+description: "Lo que se lee para mostrar y lo que se lee para decidir no son la misma vista — ni deberían serlo."
+sidebar:
+  order: 8
+  label: "8 · Proyecciones de decisión"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, whole } from '../../../lib/code';
+import visitDecisionSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/DecisionProjections/VisitDecision.cs?raw';
+import visitDecisionProjection from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/DecisionProjections/VisitDecisionProjection.cs?raw';
+import softRulesInterface from '@code/Services/Rentals/NotificationLog.RentalService.Application/Abstractions/ISoftRuleChecks.cs?raw';
+import softRulesImpl from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/DecisionProjections/MartenSoftRuleChecks.cs?raw';
+import requestVisitHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Visits/Commands/RequestVisit/RequestVisitHandler.cs?raw';
+import visitViewSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/ReadModels/VisitView.cs?raw';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Distinguir una proyección de lectura de una proyección de decisión, y por qué conviene separarlas.
+- Resolver reglas que cruzan agregados sin cargar ninguno y sin romper la Regla 2 de Vernon.
+- Nombrar con precisión qué garantiza y qué no garantiza una regla blanda.
+- Ver una regla de negocio no trivial —las sanciones por inasistencia— resuelta sobre eventos.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> cuando una regla necesita saber algo de otros agregados, la respuesta
+no es agrandar el agregado: es proyectar lo mínimo que la regla necesita y aceptar que sea blanda.
+</div>
+
+## El problema
+
+Tres reglas reales de Rentals **no caben en ningún agregado**:
+
+| Regla | Por qué no cabe |
+| --- | --- |
+| "No puedes tener más de 3 visitas pendientes." | `Visit` solo conoce su propia visita. |
+| "Dos inasistencias en 30 días te bloquean 15 días." | Hay que mirar *todas* las visitas de ese interesado. |
+| "El anfitrión no puede tener dos visitas confirmadas a la misma hora." | Hay que mirar *todas* las visitas de ese anfitrión. |
+
+La tentación es crear un agregado `VisitasDeUnUsuario` que las contenga a todas. Sería un error de libro: viola la Regla 2 de Vernon (agregados pequeños, colecciones acotadas), crea un punto de contención brutal, y obliga a cargar años de historia para confirmar una visita.
+
+**La respuesta del event sourcing es otra:** proyectar exactamente los datos que la regla necesita, y consultarlos.
+
+## Una vista diminuta, hecha para decidir
+
+<Code
+    code={whole(visitDecisionSource)}
+    lang="csharp"
+    title="Services/Rentals/.../Infrastructure/DecisionProjections/VisitDecision.cs"
+/>
+
+Nueve campos. Compáralo con la vista de lectura del mismo agregado:
+
+<Code
+    code={whole(visitViewSource)}
+    lang="csharp"
+    title="Services/Rentals/.../Infrastructure/ReadModels/VisitView.cs"
+/>
+
+Dieciséis campos: motivos, quién canceló, franjas propuestas, marcas de tiempo… todo lo que hay que pintar en la ficha de una visita.
+
+`VisitDecision` no tiene nada de eso. Tiene **solo lo que preguntan las tres reglas**: quién es el visitante, quién el anfitrión, de qué publicación, en qué estado, en qué franja, y `StrikeAt`.
+
+<Callout kind="concepto" title="La diferencia entre las dos, en una tabla">
+
+| | Proyección de **lectura** (`VisitView`) | Proyección de **decisión** (`VisitDecision`) |
+| --- | --- | --- |
+| La consume | Una pantalla, vía DTO | Un **handler de comando**, antes de decidir |
+| Qué contiene | Todo lo que se muestra | Lo mínimo que pregunta la regla |
+| Cómo se consulta | Por id, o listado paginado | Con `Count`, `Any`, agregaciones |
+| Si está desfasada | El usuario ve datos viejos un instante | **Se puede tomar una decisión equivocada** |
+| Puede desaparecer | Sí, si nadie mira esa pantalla | Solo si desaparece la regla |
+
+Esa cuarta fila es la razón de separarlas. Una vista de decisión tiene requisitos de frescura distintos, y mezclarla con la de presentación hace invisible ese requisito.
+
+</Callout>
+
+## El campo que concentra la regla más difícil
+
+<Code
+    code={member(visitDecisionProjection, 'public override VisitDecision? Evolve')}
+    lang="csharp"
+    title="Services/Rentals/.../DecisionProjections/VisitDecisionProjection.cs"
+    mark={['snapshot.StrikeAt = EventTime.Of(c);', 'snapshot.StrikeAt = EventTime.Of(n);']}
+/>
+
+`StrikeAt` es donde vive la inteligencia de esta proyección. Se rellena en **dos** casos:
+
+- `VisitNoShow` — el interesado no se presentó. Siempre es sanción.
+- `VisitCancelled` **si y solo si** canceló el visitante **y** fue tarde (`c.IsLate`).
+
+Esa condición compuesta es una regla de negocio —"cancelar con menos de 12 horas cuenta como falta, pero solo si cancela el interesado"— **resuelta al proyectar, no al consultar**. La consulta después es trivial: buscar visitas con `StrikeAt != null`.
+
+Y fíjate de dónde sale el juicio: `c.IsLate` es un campo del evento, decidido por el agregado en el momento del hecho ([módulo 2](/event-sourcing/eventos)). La proyección no recalcula nada; **transcribe la decisión que ya se tomó**.
+
+## Consultarlas
+
+<Code
+    code={whole(softRulesInterface)}
+    lang="csharp"
+    title="Services/Rentals/.../Application/Abstractions/ISoftRuleChecks.cs"
+/>
+
+El nombre de la interfaz es el mejor comentario del repositorio: **`ISoftRuleChecks`**. No se llama `IVisitQueries` ni `IVisitReadModel` — dice explícitamente *"esto comprueba reglas blandas"*, y con eso queda dicho lo que garantiza.
+
+<Code
+    code={member(softRulesImpl, 'public Task<bool> HostHasOverlapAsync')}
+    lang="csharp"
+    title="Services/Rentals/.../DecisionProjections/MartenSoftRuleChecks.cs · solapamiento"
+/>
+
+Una consulta LINQ sobre documentos. Sin rehidratar ni un agregado, sin tocar la tabla de eventos.
+
+## La regla completa: las sanciones
+
+Aquí está el ejemplo que justifica todo el módulo:
+
+<Code
+    code={member(requestVisitHandler, 'private async Task<bool> IsBannedAsync')}
+    lang="csharp"
+    title="Services/Rentals/.../Visits/Commands/RequestVisit/RequestVisitHandler.cs · IsBannedAsync"
+/>
+
+Léelo con la política delante: `MaxStrikes = 2`, `StrikeWindow = 30 días`, `VisitBan = 15 días`. La regla es *"dos faltas dentro de una ventana de 30 días te bloquean durante 15 días desde la segunda"*.
+
+El bucle busca **pares consecutivos** de sanciones ordenadas: si la falta `i` y la falta `i-1` caen dentro de la ventana, y han pasado menos de 15 días desde la falta `i`, el usuario está bloqueado.
+
+<Callout kind="honesto" title="Dos cosas que enseña este método, una buena y una mejorable">
+
+**Lo bueno:** esta regla sería muy incómoda con un modelo de estado. Habría que mantener un contador `Strikes` en algún sitio, decidir cuándo se reinicia, y arrastrar un bug cada vez que cambiara la ventana. Con eventos, la regla se **evalúa** contra los hechos cada vez, y cambiar `StrikeWindow` cambia el comportamiento retroactivamente sin migrar nada.
+
+**Lo mejorable:** `GetVisitStrikesAsync` trae **todas** las sanciones del visitante y filtra por fecha en memoria (`.Where(at => at >= since)` después del `ToListAsync`). Con un puñado de sanciones da igual; como patrón, el filtro debería bajar a la consulta. Es una deuda pequeña y visible — y un buen primer ejercicio.
+
+</Callout>
+
+## Dónde vive cada cosa
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 300" role="img" aria-labelledby="decTitle">
+        <title id="decTitle">Un flujo alimenta dos proyecciones con propósitos distintos</title>
+        <defs>
+            <marker id="dcArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="330" y="20" width="220" height="80" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="440" y="44" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Eventos de Visit</text>
+        <text x="440" y="64" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#334155">VisitRequested · VisitConfirmed</text>
+        <text x="440" y="80" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#334155">VisitCancelled · VisitNoShow</text>
+
+        <line x1="330" y1="70" x2="235" y2="118" stroke="#16a34a" stroke-width="1.6" marker-end="url(#dcArrow)" />
+        <line x1="550" y1="70" x2="645" y2="118" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#dcArrow)" />
+
+        <rect x="30" y="128" width="270" height="150" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="165" y="152" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">VisitView · lectura</text>
+        <text x="165" y="172" text-anchor="middle" font-size="8.5" fill="#334155">16 campos: motivos, franjas,</text>
+        <text x="165" y="188" text-anchor="middle" font-size="8.5" fill="#334155">quién canceló, marcas de tiempo</text>
+        <rect x="50" y="200" width="230" height="30" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="165" y="219" text-anchor="middle" font-size="8.5" fill="#14532d">IVisitReadModel → pantalla</text>
+        <text x="165" y="252" text-anchor="middle" font-size="8.5" fill="#14532d" font-style="italic">si va desfasada, se ve un dato viejo</text>
+
+        <rect x="580" y="128" width="270" height="150" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="715" y="152" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">VisitDecision · decisión</text>
+        <text x="715" y="172" text-anchor="middle" font-size="8.5" fill="#334155">9 campos: estado, franja,</text>
+        <text x="715" y="188" text-anchor="middle" font-size="8.5" fill="#334155">visitante, anfitrión, StrikeAt</text>
+        <rect x="600" y="200" width="230" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="715" y="219" text-anchor="middle" font-size="8.5" fill="#4338ca">ISoftRuleChecks → handler</text>
+        <text x="715" y="252" text-anchor="middle" font-size="8.5" fill="#991b1b" font-style="italic">si va desfasada, se decide mal</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Los mismos eventos, dos vistas, dos consumidores y dos niveles de exigencia. El nombre de la
+        interfaz de la derecha —<code>ISoftRuleChecks</code>— es lo que impide olvidar la diferencia.
+    </p>
+</div>
+
+## Lo que una regla blanda NO garantiza
+
+<Callout kind="advertencia" title="Dilo en voz alta antes de usar este patrón">
+
+Entre que el handler consulta la proyección y que el evento se guarda, **otra transacción puede haber cambiado la respuesta**. Dos peticiones simultáneas pueden:
+
+- Confirmar dos visitas solapadas para el mismo anfitrión.
+- Crear la cuarta visita pendiente de un visitante que ya tenía tres.
+- Dejar pasar la solicitud de alguien que acaba de ganar su segunda sanción.
+
+Con proyecciones `Inline` la ventana es de milisegundos, pero existe. No es un fallo de la implementación: **es la definición de regla blanda**.
+
+</Callout>
+
+Y aceptarlo es la decisión correcta, con un criterio que conviene tener escrito:
+
+<ol class="ddd-steps">
+    <li>
+        <strong>¿Cuánto cuesta que falle?</strong> Un anfitrión con dos visitas solapadas reprograma una
+        por teléfono. Nadie pierde dinero ni queda en un estado ilegal.
+    </li>
+    <li>
+        <strong>¿Cuánto cuesta cerrarlo?</strong> Meter todas las visitas de un anfitrión en un agregado:
+        contención, colecciones sin techo, rehidrataciones enormes. El remedio es peor.
+    </li>
+    <li>
+        <strong>¿La regla es invariante o política?</strong> "Un anfitrión no debería tener dos visitas a la
+        vez" es una <em>política</em>. "Una visita no se puede confirmar dos veces" es una
+        <em>invariante</em>, y por eso esa sí vive en el agregado y está protegida por versión.
+    </li>
+</ol>
+
+<Callout kind="honesto" title="Compáralo con el otro servicio, porque la diferencia es de honestidad">
+
+El [módulo 12 de DDD](/ddd/persistencia) documenta una carrera en Notifications que **parece** una invariante protegida y no lo es: `EnsureChannelIsFree` vive dentro del agregado, se lee como una regla dura, y sin embargo dos peticiones simultáneas la rompen.
+
+Aquí el mismo riesgo existe, pero está **nombrado**: `ISoftRuleChecks`, en `Application`, separado de lo que sí protege el agregado. La diferencia no es técnica, es de diseño: cuando el código dice qué garantiza, nadie construye encima suponiendo de más.
+
+</Callout>
+
+<Callout kind="resumen" title="Para recordar">
+
+- Una regla que cruza agregados **no se arregla agrandando el agregado**. Se proyecta.
+- Una proyección de decisión lleva **solo lo que la regla pregunta**, y es mucho más pequeña que la de lectura.
+- El juicio de negocio se hace **al proyectar** (`StrikeAt`), transcribiendo lo que el evento ya decidió.
+- **Regla dura** = dentro del agregado, protegida por versión. **Regla blanda** = contra una proyección, puede fallar bajo concurrencia.
+- Aceptar una regla blanda es válido si el coste del fallo es bajo y el del remedio alto — pero hay que **nombrarlo**.
+- `ISoftRuleChecks` es buen diseño porque el nombre declara la garantía.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `VisitDecision` no guarda el motivo de cancelación y `VisitView` sí. Explica la diferencia con la regla del módulo.
+2. `StrikeAt` se rellena solo si `c.By == VisitParty.Visitor && c.IsLate`. ¿Por qué esa condición vive en la proyección y no en la consulta? ¿Qué se rompería al moverla?
+3. `GetVisitStrikesAsync` filtra por fecha **en memoria**. Reescribe la consulta para que el filtro baje a la base de datos, y di qué cambia en la interfaz (si es que cambia).
+4. `todo.md` propone limitar las consultas a "10 por interesado al día". ¿Es dura o blanda? Diseña la proyección de decisión que la resolvería.
+
+</Callout>

@@ -3,194 +3,243 @@ title: "Tareas guiadas sobre este código"
 description: "El criterio de éxito no es saber definir 'agregado'. Es poder escribir el siguiente archivo."
 sidebar:
   order: 14
-  label: "14 · Tareas guiadas sobre este código"
+  label: "14 · Tareas guiadas"
 ---
 
 import Callout from '../../../components/Callout.astro';
 
 <Callout kind="concepto" title="Cómo usar esta página">
 
-Once ejercicios reales, agrupados por dificultad, todos sobre `NotificationLog.NotificationService` tal como está hoy en este repositorio — no sobre un proyecto de juguete aparte. Cada tarea indica el objetivo, qué archivos vas a tocar o crear, una pista para arrancar y cómo saber que terminaste. No hay solución publicada a propósito: la forma de verificar que hiciste bien la tarea es la misma que usarías en el trabajo real — que compile, que los tests pasen, y que puedas explicar la decisión de diseño usando el vocabulario de los módulos anteriores.
+Diez ejercicios de **modelado**, agrupados por dificultad, todos sobre `NotificationLog.NotificationService` tal como está hoy en este repositorio — no sobre un proyecto de juguete.
+
+Cada tarea indica: el **módulo** que la respalda, el **objetivo**, la **decisión de diseño** que tienes que tomar (esa es la parte que importa), los **archivos** que vas a tocar y **cómo saber que terminaste**.
+
+No hay solución publicada a propósito. La forma de verificar que hiciste bien la tarea es la misma que usarías en el trabajo real: que compile, y que puedas explicar la decisión usando el vocabulario de los módulos anteriores.
 
 </Callout>
 
-## Diagnóstico rápido: qué le falta hoy a este código
+<div class="ddd-frase">
+<strong>Sobre el alcance:</strong> aquí no hay tareas de infraestructura, de pruebas ni de despliegue.
+Todas cambian <em>el modelo</em> — dónde vive una regla, qué tipo tiene un dato, dónde está el límite
+de un agregado. Es lo único que este tutorial se propuso enseñar.
+</div>
 
-Antes de empezar, esto es lo que ya sabes si seguiste el resto del tutorial, resumido como punto de partida honesto:
+## Diagnóstico: la deuda de modelado que ya conoces
 
-- **Sin tests de dominio.** El único test que existe en `NotificationLog.Tests` es `WebTests.GetWebResourceRootReturnsOkStatusCode`: levanta toda la aplicación distribuida con Aspire y comprueba que la home responde `200 OK`. Es un test de humo de extremo a extremo — útil para saber que el sistema arranca, pero no verifica ni una sola regla de negocio del dominio ([módulo 13](/ddd/pruebas)).
-- **Ninguna invariante protegida contra concurrencia.** No hay un solo token de concurrencia en el proyecto, y el índice de configuraciones por canal no es único: dos peticiones simultáneas pueden dejar dos configuraciones de Email activas en el mismo trigger ([módulo 12](/ddd/persistencia)).
-- **Un canal sin implementación real, a propósito.** `IWhatsAppNotificationSender` está registrado en el contenedor de DI con `NotImplementedWhatsAppNotificationSender`, un stub que siempre lanza `NotSupportedException`. No es un olvido: existe para que `NotificationDispatchService` (que exige las cuatro interfaces de envío en su constructor) pueda registrarse sin un proveedor de WhatsApp todavía elegido. Un envío que fallara en silencio sería peor que uno que queda registrado como notificación fallida con el motivo exacto.
-- **El mecanismo de eventos de dominio existe pero nadie lo usa** (módulo 10) — ninguna llamada a `Raise(...)` en todo el repositorio.
-- **Un candidato a Value Object sin extraer todavía:** el teléfono de `Recipient` se normaliza a mano con un método privado, en vez de con un tipo propio (módulo 5).
-- **Una regla de negocio escrita dos veces.** "La configuración y la plantilla deben ser del mismo canal" vive en `NotificationTrigger.ChangeConfigurationTemplate` como `DomainException` y otra vez en `AddConfigurationHandler` como `AppValidationException` — dos códigos HTTP para el mismo error de negocio ([módulo 8](/ddd/domain-services)).
-- **Obsesión primitiva dentro de un agregado.** `Notification.EventKey` es un `string` con su propia constante `EventKeyMaxLength`, que duplica `EventKey.MaxLength` en lugar de reutilizar el value object ([módulo 5](/ddd/value-objects)).
+Si seguiste el resto del tutorial, esto ya lo sabes. Sirve como punto de partida y como índice de las tareas:
 
-Cada uno de esos puntos es, literalmente, una de las tareas de abajo.
+| # | Deuda de modelado | Módulo | Tarea |
+| --- | --- | --- | --- |
+| 1 | El teléfono de `Recipient` es un `string?` normalizado a mano. | [5](/ddd/value-objects) | 1 |
+| 2 | `Notification.EventKey` es un `string` con su propia constante duplicada. | [5](/ddd/value-objects) | 2 |
+| 3 | La regla "configuración y plantilla del mismo canal" está escrita **dos veces**, con dos excepciones distintas. | [8](/ddd/domain-services) | 4 |
+| 4 | `INotificationTriggerRepository` mezcla carga de agregados con consultas paginadas. | [9](/ddd/repositorios-y-factories) | 7 |
+| 5 | El mecanismo de eventos de dominio existe y ningún agregado lo usa. | [10](/ddd/domain-events) | 8 |
+| 6 | `NotificationTemplate` no impide publicar versiones de una plantilla deshabilitada. | [7](/ddd/agregados) | 5 |
 
-## Nivel fácil
+## Nivel 1 · Valores y vocabulario
 
-<Callout kind="ejercicio" title="Tarea 1 · Tests unitarios para el dominio, sin mocks">
+<Callout kind="ejercicio" title="Tarea 1 · Extraer PhoneNumber como Value Object">
 
-**Objetivo:** escribir tests MSTest para al menos tres reglas de negocio reales, sin levantar base de datos ni Aspire. El [módulo 13](/ddd/pruebas) es el material de apoyo completo de esta tarea: qué probar en cada capa, cómo sortear que `NotificationConfiguration.Create` sea `internal`, y por qué los dobles escritos a mano ganan a los mocks aquí.
+**Módulo:** [5 · Value Object](/ddd/value-objects)
 
-**Reglas candidatas:**
+**Objetivo:** reemplazar el `string? Phone` de `Recipient`, normalizado a mano por `NormalizePhone`, por un value object propio siguiendo el molde de `EventKey` y `TemplateName`.
 
-- `NotificationTrigger.AddConfiguration` lanza `DomainException` si ya hay una configuración activa del mismo canal.
-- `EventKey.Create` rechaza un valor que no siga el formato `dominio.accion`.
-- `TemplateVersion.Create` exige `subject` para `Email`/`Push` y lo rechaza para `Sms`/`WhatsApp`.
+**La decisión de diseño:** hoy `NormalizePhone` solo quita espacios y guiones. ¿Qué es un teléfono *válido* para este contexto? Ojo: `Recipient` es una réplica, el teléfono ya lo validó Identity. Si tu `PhoneNumber.Create` rechaza valores que Identity sí acepta, acabas de crear una forma nueva de que un mensaje de integración falle. Decide si validas **formato** o solo **normalizas**, y escribe por qué.
 
-**Archivos a tocar:** `NotificationLog.Tests` (nuevo archivo, por ejemplo `NotificationTriggerTests.cs`).
+**Archivos:** nuevo `Domain/Recipients/PhoneNumber.cs`; `Domain/Recipients/Recipient.cs` (tipo de `Phone`, `AddressFor`, borrar `NormalizePhone`); `Infrastructure/Persistence/Configuration/RecipientConfiguration.cs` (una línea: el `HasConversion`, igual que hace `NotificationTriggerConfiguration` con `EventKey`).
 
-**Pista para arrancar:** hoy `NotificationLog.Tests.csproj` solo referencia `NotificationLog.AppHost`, no el proyecto `Domain`. El primer paso real —antes de escribir un solo test— es añadir un `<ProjectReference>` a `NotificationLog.NotificationService.Domain.csproj` (o crear un proyecto de tests nuevo, más pequeño, dedicado solo al dominio). Ese primer paso ya es una lección: un dominio con cero dependencias es fácil de testear en aislamiento, pero el arnés de pruebas todavía no está cableado para aprovecharlo.
-
-**Cómo saber que terminaste:** `dotnet test` corre y pasa, y ningún test usa `Mock<...>` ni una base de datos — solo agregados construidos con su propia fábrica.
-
-</Callout>
-
-<Callout kind="ejercicio" title="Tarea 2 · Extraer PhoneNumber como Value Object">
-
-**Objetivo:** reemplazar el `string? Phone` normalizado a mano en `Recipient` por un Value Object propio, siguiendo el molde de `EventKey`/`TemplateName` del [módulo 5](/ddd/value-objects).
-
-**Archivos a tocar:** nuevo `Domain/Recipients/PhoneNumber.cs`; `Domain/Recipients/Recipient.cs` (cambiar el tipo de `Phone` y el método `NormalizePhone`); `Infrastructure/Persistence/Configuration/RecipientConfiguration.cs` (mapear el nuevo tipo).
-
-**Pista para arrancar:** `NotificationTriggerConfiguration.cs` ya mapea `EventKey` —un Value Object— con `.HasConversion(key => key.Value, value => EventKey.Create(value))`. Es exactamente el patrón que necesitas para que EF Core siga guardando `PhoneNumber` como una columna `string` normal sin que el dominio sepa nada de EF Core.
-
-**Cómo saber que terminaste:** `Recipient` ya no tiene ningún método privado de normalización de teléfono — esa responsabilidad vive entera en `PhoneNumber.Create`, y es imposible construir un `Recipient` con un teléfono a medio validar.
+**Terminaste cuando:** `Recipient` no tiene ningún método privado de normalización de teléfono, y es imposible construir un `Recipient` con un teléfono a medio validar.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Tarea 3 · Registrar cuándo se dio de alta un destinatario">
+<Callout kind="ejercicio" title="Tarea 2 · Unificar Notification.EventKey con su Value Object">
 
-**Objetivo:** añadir una propiedad `CreatedAt` a `Recipient`, fijada una sola vez en `Create` y nunca modificable después — un ejercicio pequeño sobre qué significa que una entidad proteja su propio estado.
+**Módulo:** [5 · Value Object](/ddd/value-objects)
 
-**Archivos a tocar:** `Domain/Recipients/Recipient.cs`; `Infrastructure/Persistence/Configuration/RecipientConfiguration.cs`; una migración nueva de EF Core.
+**Objetivo:** eliminar la obsesión primitiva que queda **dentro** del dominio. `Notification` guarda el event key como `string` y define `EventKeyMaxLength = 200`, duplicando `EventKey.MaxLength`.
 
-**Pista para arrancar:** desde la carpeta de `NotificationLog.NotificationService.Infrastructure`, `dotnet ef migrations add AddRecipientCreatedAt` genera el andamiaje; revisa el `Up()` generado antes de aplicarlo.
+**La decisión de diseño — la parte interesante:** `NotificationDispatchService` ya tiene un `EventKey` válido en la mano (`trigger.EventKey`) y hoy lo degrada a `string` con `.Value` antes de pasarlo. ¿Hasta dónde haces subir el value object: hasta el comando, o hasta el propio `BusinessEvent` que entra por mensajería?
 
-**Cómo saber que terminaste:** no existe ningún setter público ni método `ChangeCreatedAt` — la única forma de que `CreatedAt` tenga un valor es haber pasado por `Recipient.Create`.
+Piénsalo con la regla del módulo 5: **primitivo antes de la puerta, value object después**. `BusinessEvent` viene de fuera y su event key puede ser inválido — ese es justamente el borde donde `EventKey.Create` debe ejecutarse, y no antes.
 
-</Callout>
+**Archivos:** `Domain/Notifications/Notification.cs`; las fábricas `RecordSuccess` / `RecordFailure` y sus dos comandos en `Application/Notifications/Commands/`; `Infrastructure/Persistence/Configuration/NotificationEntityConfiguration.cs`; `NotificationDto`.
 
-## Nivel intermedio
-
-<Callout kind="ejercicio" title="Tarea 4 · Implementar un remitente de WhatsApp real">
-
-**Objetivo:** reemplazar `NotImplementedWhatsAppNotificationSender` por una implementación funcional, siguiendo el mismo molde que el canal de SMS.
-
-**Archivos a tocar:** nuevo `Infrastructure/Notifications/Sending/WhatsApp/HttpWhatsAppNotificationSender.cs`; `Infrastructure/Notifications/Sending/NotificationSendingExtensions.cs` (registrar el nuevo remitente en vez del stub); posiblemente `appsettings.json` para su configuración.
-
-**Pista para arrancar:** `HttpSmsNotificationSender.cs` es exactamente el contrato que tienes que implementar: `SendAsync(string destination, RenderedMessage message, CancellationToken ct)` devolviendo un `NotificationSendResult`. No necesitas un proveedor real de WhatsApp para completar el ejercicio — puedes apuntar a un endpoint HTTP de pruebas local y devolver `NotificationSendResult.Success(...)` o `.Failure(...)` según la respuesta.
-
-**Cómo saber que terminaste:** un `BusinessEvent` dirigido a un `Recipient` con configuración de canal `WhatsApp` ya no lanza `NotSupportedException` — termina como notificación registrada, con éxito o con fallo.
+**Terminaste cuando:** la cadena `EventKeyMaxLength` ya no existe en el repositorio, y el único sitio que valida el formato de un event key es `EventKey.Create`.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Tarea 5 · Extraer la política de compatibilidad plantilla-canal a un Domain Service real">
+<Callout kind="ejercicio" title="Tarea 3 · Auditoría de lenguaje ubicuo">
 
-**Objetivo:** unificar una regla de negocio que hoy está escrita *dos veces*, y solo entonces decidir si lo que queda merece un Domain Service. Como muestra el [módulo 8](/ddd/domain-services), la regla "la configuración y la plantilla deben ser del mismo canal" ya vive en `NotificationTrigger.ChangeConfigurationTemplate` lanzando `DomainException` — y otra vez en `AddConfigurationHandler` lanzando `AppValidationException`. Misma regla, dos tipos de excepción, dos códigos HTTP según por dónde entres.
+**Módulo:** [1 · Lenguaje ubicuo](/ddd/lenguaje-ubicuo)
 
-**Paso 1 (el que importa):** mover la comprobación al agregado, dándole a `AddConfiguration` la misma firma que ya tiene `ChangeConfigurationTemplate` (`templateChannel` como parámetro). El handler pasa el dato y deja de juzgar; la comprobación `!template.IsEnabled` se queda en el handler, porque es estado de otro agregado.
+**Objetivo:** no escribir código nuevo, sino **juzgar** el que hay. Recorre `NotificationLog.NotificationService.Domain` con una tabla de dos columnas: *frase de negocio* ↔ *nombre en el código*.
 
-**Archivos a tocar:** `Domain/Triggers/NotificationTrigger.cs`; `Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs`. Y los tests de la Tarea 1, que deberían seguir pasando salvo por el cambio de firma — si alguno cambia de significado, es que la regla no era la misma en los dos sitios.
+**Busca tres cosas concretas:**
 
-**Paso 2 (la decisión):** con la regla ya unificada, pregúntate si extraerla a un `TemplateCompatibilityPolicy` aporta algo. Si decides que sí, recuerda lo que dice el módulo 8: un servicio de dominio sin dependencias externas **no necesita interfaz ni registro en DI**, y desde luego no se registra en `Infrastructure`.
+1. Un método cuyo nombre describa **la operación técnica** en vez del hecho de negocio.
+2. Un mensaje de `DomainException` que no pudiera decir alguien de negocio tal cual.
+3. Un concepto que el negocio nombra y que **no tiene nombre en el código** (vive disperso en dos o tres condiciones).
 
-**Cómo saber que terminaste:** la regla del canal aparece una sola vez en todo el repositorio, y un mismo error de negocio devuelve un mismo código HTTP entre por donde entre. Escribe además, en el mensaje del commit, tu respuesta honesta al paso 2 — "no lo extraje, era sobreingeniería" es una respuesta tan válida como la contraria, siempre que sea una decisión y no una costumbre.
+**La decisión de diseño:** el tercer punto es el valioso. Un concepto sin nombre suele ser un value object o una política que falta. Si encuentras uno, propón su nombre antes de escribir una línea.
 
-</Callout>
-
-<Callout kind="ejercicio" title="Tarea 6 · Añadir un canal nuevo de punta a punta">
-
-**Objetivo:** agregar un canal `InApp` (una notificación dentro de la propia aplicación, sin proveedor externo) y medir, con las manos, cuántos archivos hay que tocar para una decisión que "solo" agrega un valor a un enum.
-
-**Archivos a tocar (lista de partida, probablemente incompleta a propósito):** `Domain/Shared/NotificationChannel.cs` (nuevo valor `InApp`); `Domain/Recipients/Recipient.cs` (`AddressFor` y `CanReceive` — ¿qué "dirección" tiene sentido para un canal sin destino externo?); `Domain/Templates/TemplateVersion.cs` (¿requiere `subject` este canal?); una nueva interfaz `IInAppNotificationSender` en `Application/Notifications/Services/Sending/` y su registro en `NotificationSendingExtensions.cs`.
-
-**Cómo saber que terminaste:** puedes crear un trigger con una configuración de canal `InApp`, y al despachar un `BusinessEvent` hacia un destinatario activo, termina como una notificación registrada. Anota cuántos archivos tocaste al final — es la métrica real de qué tan bien aisladas estaban las decisiones de canal en este dominio.
+**Terminaste cuando:** tienes la tabla completa y, para al menos un hallazgo, el renombrado hecho y el commit explicando qué frase de negocio justifica el nombre nuevo.
 
 </Callout>
 
-## Nivel avanzado
+## Nivel 2 · Agregados e invariantes
 
-<Callout kind="ejercicio" title="Tarea 7 · Hacer real el evento de dominio ConfigurationAdded">
+<Callout kind="ejercicio" title="Tarea 4 · Mover la regla del canal al agregado">
 
-**Objetivo:** implementar, sin hipótesis, el ejemplo del [módulo 10](/ddd/domain-events): que `NotificationTrigger.AddConfiguration` levante un evento de dominio, y que algo lo despache después de guardar.
+**Módulos:** [7 · Agregados](/ddd/agregados) y [8 · Domain Service](/ddd/domain-services)
 
-**Archivos a tocar:** nuevo `Domain/Triggers/ConfigurationAdded.cs` (un `record` que herede de `DomainEvent`); `Domain/Triggers/NotificationTrigger.cs` (llamar a `Raise(...)` dentro de `AddConfiguration`); `Infrastructure/Persistence/Context/NotificationDbContext.cs` (despachar `DomainEvents` de las raíces modificadas después de `SaveChangesAsync`, y limpiar con `ClearDomainEvents()`); un handler nuevo que reaccione al evento — puede ser tan simple como escribir una línea de log que simule avisar a un sistema externo de auditoría.
+**Objetivo:** unificar una regla de negocio que hoy está escrita *dos veces*. "La configuración y la plantilla deben ser del mismo canal" vive en `NotificationTrigger.ChangeConfigurationTemplate` lanzando `DomainException` — y otra vez en `AddConfigurationHandler` lanzando `AppValidationException`. Misma regla, dos códigos HTTP según por dónde entres.
 
-**Pista para arrancar:** sobrescribir `SaveChangesAsync` en `NotificationDbContext` es el punto más simple para recolectar `ChangeTracker.Entries<AggregateRoot>()` antes de guardar, y despachar sus eventos después de que la transacción confirme.
+**Paso 1 — el que importa:** dale a `AddConfiguration` la misma firma que ya tiene `ChangeConfigurationTemplate` (`templateChannel` como parámetro). El handler pasa el dato y deja de juzgar.
 
-**Cómo saber que terminaste:** llamar a `AddConfigurationHandler.HandleAsync` produce, además de la fila nueva en `NotificationConfigurations`, una entrada de log (o el efecto que hayas elegido) generada por un handler que `AddConfigurationHandler` nunca referencia directamente.
+**Paso 2 — la decisión difícil:** de las tres comprobaciones que hace hoy el handler sobre `template`, **solo una** debe bajar al agregado. Las otras dos (`!template.IsEnabled` y `template.IsSystem`) se quedan. Escribe la regla general que decide cuál va dónde. Pista: tiene que ver con *de quién es el estado que se está juzgando*.
 
-</Callout>
+**Paso 3 — la pregunta abierta:** con la regla ya unificada, ¿merece un `TemplateCompatibilityPolicy`? Si decides que sí, recuerda: un servicio de dominio sin dependencias externas **no necesita interfaz ni registro en DI**.
 
-<Callout kind="ejercicio" title="Tarea 8 · Endurecer el Anti-Corruption Layer contra versiones de esquema desconocidas">
+**Archivos:** `Domain/Triggers/NotificationTrigger.cs`; `Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs`.
 
-**Objetivo:** hoy, ni `UserContactUpdatedHandler` ni el resto de la capa de mensajería comprueban `schema_version` — el campo existe en el `.proto` ([módulo 4](/ddd/context-map)) pero nada lo lee todavía. Vas a cerrar esa brecha: si llega un mensaje con una versión de esquema mayor a la que este servicio entiende, debe registrarse un aviso y descartarse el mensaje sin lanzar una excepción no controlada.
-
-**Archivos a tocar:** `Infrastructure/Messaging/Consumers/UserContactUpdatedHandler.cs` (o un nuevo punto intermedio antes de él); posiblemente una constante `SupportedSchemaVersion` junto a `UserChange`.
-
-**Cómo saber que terminaste:** un mensaje con `schema_version` mayor al soportado termina en un log de advertencia, no en una notificación fallida ni en una excepción que tumbe el consumer — exactamente la misma filosofía "todo fallo queda registrado, nunca se pierde en silencio" que ya viste en `ScribanTemplateRenderer` y en `NotificationDispatchService`.
+**Terminaste cuando:** la regla del canal aparece una sola vez en todo el repositorio, y un mismo error de negocio devuelve un mismo código HTTP entre por donde entre. En el mensaje del commit, tu respuesta al paso 3 — *"no lo extraje, era sobreingeniería"* es tan válida como la contraria, siempre que sea una decisión y no una costumbre.
 
 </Callout>
 
-<Callout kind="ejercicio" title="Tarea 9 · Cerrar la grieta de concurrencia del canal único">
+<Callout kind="ejercicio" title="Tarea 5 · Proteger una invariante que hoy no existe">
 
-**Objetivo:** hacer que la invariante "un solo canal activo por trigger" sobreviva a dos peticiones simultáneas, no solo a una. Hoy no lo hace, por las razones que detalla el [módulo 12](/ddd/persistencia): la comprobación ocurre en memoria sobre un estado leído antes, y ni el índice ni un token de concurrencia impiden que dos transacciones ganen la carrera a la vez.
+**Módulo:** [7 · Agregados](/ddd/agregados)
 
-**Elige una de las dos estrategias** — y esa elección es la mitad del ejercicio:
+**Objetivo:** `NotificationTemplate.PublishVersion` no comprueba `IsEnabled`. Hoy se puede publicar una versión nueva de una plantilla deshabilitada, y el agregado lo permite sin protestar.
 
-- *Índice único filtrado:* una migración nueva con `CREATE UNIQUE INDEX ... ON NotificationConfigurations (NotificationTriggerId, Channel) WHERE IsEnabled = 1`, escrito con `migrationBuilder.Sql(...)` o con `.HasFilter(...)` en `NotificationConfigurationConfiguration`. Tendrás que decidir dónde traducir la excepción de SQL Server a un error de dominio comprensible — mira cómo lo hace `GlobalExceptionHandler` con `DomainException`.
-- *Token de concurrencia:* una propiedad de versión en `NotificationTrigger` marcada con `IsRowVersion()` en su configuración de EF, y una decisión explícita sobre qué hacer con `DbUpdateConcurrencyException` en `AddConfigurationHandler` (¿reintentar?, ¿devolver un 409?).
+**La decisión de diseño — y no es obvia:** antes de escribir el `if`, decide si eso *es* una invariante. Argumentos a favor de bloquearlo: una plantilla deshabilitada está fuera de servicio, publicar sobre ella es un error del usuario. Argumentos en contra: preparar la versión nueva *mientras* la plantilla está apagada, y encenderla después, es un flujo de trabajo legítimo — exactamente el mismo razonamiento por el que `EnsureChannelIsFree` solo cuenta las configuraciones *habilitadas*.
 
-**Archivos a tocar:** `Infrastructure/Persistence/Configuration/NotificationConfigurationConfiguration.cs` o `NotificationTriggerConfiguration.cs`; una migración nueva; posiblemente `Application/Triggers/Commands/AddConfiguration/AddConfigurationHandler.cs` y `ApiService/Exceptions/GlobalExceptionHandler.cs`.
+Elige un lado y defiéndelo. Si eliges "no es una invariante", la tarea se convierte en documentar por qué, y eso también es modelado.
 
-**Cómo saber que terminaste:** escribe un test de integración que lance dos `AddConfigurationHandler.HandleAsync` en paralelo, con dos `DbContext` distintos, sobre el mismo trigger y el mismo canal. Antes de tu cambio, ambos terminan bien y quedan dos filas activas; después, uno de los dos falla de forma controlada. Ese test es la prueba de que el problema existía — consérvalo.
+**Archivos:** `Domain/Templates/NotificationTemplate.cs`.
 
-</Callout>
-
-<Callout kind="ejercicio" title="Tarea 10 · Escribir el Context Map de este proyecto como documento">
-
-**Objetivo:** después de haber tocado código real en las tareas anteriores, produce un único diagrama (a mano, en una herramienta de diagramas, o incluso en ASCII) que muestre los bounded contexts reales de este sistema — Usuarios (productor externo), Notifications (este servicio) y, si completaste la tarea 8, el sistema de auditoría hipotético — con el patrón de integración correcto entre cada par (ACL, Open Host Service, Published Language).
-
-**Cómo saber que terminaste:** puedes señalar, para cada línea de tu diagrama, el archivo exacto del repositorio que la implementa. Si no puedes señalar un archivo, esa línea es una suposición, no un hecho — vuelve al módulo correspondiente antes de darla por buena.
+**Terminaste cuando:** la decisión está escrita —en el código con una guarda, o en el commit con un párrafo— y puedes explicar por qué esta regla se parece o no a la del canal único.
 
 </Callout>
 
-## Bonus: deuda de modelado ya localizada
+<Callout kind="ejercicio" title="Tarea 6 · Decidir el límite de un agregado nuevo">
 
-<Callout kind="ejercicio" title="Tarea 11 · Unificar Notification.EventKey con su Value Object">
+**Módulos:** [3 · Bounded Context](/ddd/bounded-context) y [7 · Agregados](/ddd/agregados)
 
-**Objetivo:** eliminar la última obsesión primitiva que queda dentro del dominio. `Notification` guarda el event key como `string` y define `EventKeyMaxLength = 200`, duplicando `EventKey.MaxLength`. Dos constantes independientes para la misma regla es exactamente el problema que el [módulo 5](/ddd/value-objects) existe para evitar.
+**Objetivo:** el negocio pide algo nuevo: *"el destinatario debe poder apagar las notificaciones de un canal concreto — nada de SMS, pero sí email — y también silenciar un trigger concreto"*.
 
-**Archivos a tocar:** `Domain/Notifications/Notification.cs` (cambiar el tipo y borrar la constante duplicada); las fábricas `RecordSuccess` / `RecordFailure` y sus dos comandos en `Application/Notifications/Commands/`; `Infrastructure/Persistence/Configuration/NotificationEntityConfiguration.cs` (añadir el `HasConversion`, igual que hace `NotificationTriggerConfiguration`); `NotificationDto`.
+Hoy `Recipient.AcceptsNotifications` es un único booleano para todo.
 
-**La decisión interesante:** `NotificationDispatchService` ya tiene un `EventKey` válido en la mano (`trigger.EventKey`) y hoy lo degrada a `string` con `.Value` antes de pasarlo. ¿Hasta dónde haces subir el value object — hasta el comando, o hasta el propio `BusinessEvent` que entra por mensajería? Fíjate en que `BusinessEvent` viene de fuera y su event key puede ser inválido: ese es justamente el borde donde `EventKey.Create` debe ejecutarse, y no antes.
+**La decisión de diseño — es toda la tarea.** Hay tres diseños defendibles, y tienes que elegir uno **antes** de escribir código:
 
-**Cómo saber que terminaste:** la cadena `EventKeyMaxLength` ya no existe en el repositorio, y el único sitio que valida el formato de un event key es `EventKey.Create`. Si además `ListNotificationsHandler` te obliga a tocar la proyección, acabas de comprobar en carne propia el coste de borde que describe el [módulo 12](/ddd/persistencia).
+1. **Dentro de `Recipient`**, como una colección de preferencias. Consistencia fuerte; el agregado crece; ¿está acotada la colección?
+2. **Agregado propio** `NotificationPreferences`, con el mismo `Id` que el `Recipient`. Agregados pequeños; consistencia eventual entre ambos; ¿quién lo crea y cuándo?
+3. **Dentro de `NotificationTrigger`**, como una lista de destinatarios silenciados. Casi seguro mal — pero escribe *por qué*, porque el argumento es el mismo que la Regla 2.
+
+**Archivos:** los que decida tu diseño. La decisión vale más que la implementación.
+
+**Terminaste cuando:** puedes responder las cuatro reglas de Vernon para tu diseño, y en particular: *"¿qué tiene que ser consistente en la misma transacción que este cambio?"*. Si la respuesta es "nada más", la opción 2 gana.
+
+</Callout>
+
+## Nivel 3 · Fronteras y hechos
+
+<Callout kind="ejercicio" title="Tarea 7 · Sacar las consultas del repositorio de dominio">
+
+**Módulos:** [9 · Repositorio](/ddd/repositorios-y-factories) y [11 · CQRS](/ddd/arquitectura)
+
+**Objetivo:** `INotificationTriggerRepository.ListAsync(string? search, bool? isEnabled, int page, int pageSize)` no habla el lenguaje del negocio: habla el de una pantalla. Es un método de consulta viviendo en una interfaz del dominio.
+
+**El plan:** crear una abstracción de consultas en `Application` (por ejemplo `ITriggerQueries`) que devuelva **DTOs directamente**, implementarla en `Infrastructure` contra el `DbContext`, y borrar `ListAsync` de la interfaz del dominio.
+
+**La decisión de diseño:** al hacerlo, la consulta deja de materializar agregados completos y puede hacer el `Select` dentro de SQL. Mide qué desaparece: ¿cuántas columnas deja de traer? ¿Sigue haciendo falta el `Include`? Compara el resultado con `IListingRepository` de Rentals, que tiene exactamente dos métodos por esta misma razón.
+
+**Archivos:** `Domain/Triggers/INotificationTriggerRepository.cs` (quitar `ListAsync`); nueva interfaz en `Application/Triggers/Queries/`; nueva implementación `internal` en `Infrastructure/Persistence/`; `ListTriggersHandler`.
+
+**Terminaste cuando:** la interfaz del dominio solo tiene métodos que cargan agregados **para modificarlos**, y ninguna firma del dominio menciona `page`, `pageSize` ni `search`.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 8 · Levantar un evento de dominio con lenguaje ubicuo">
+
+**Módulos:** [10 · Domain Events](/ddd/domain-events) y [1 · Lenguaje ubicuo](/ddd/lenguaje-ubicuo)
+
+**Objetivo:** `AggregateRoot.Raise` existe y ningún agregado de Notifications lo llama. Hacer que uno lo llame — pero eligiendo bien **cuál** hecho.
+
+**La decisión de diseño — es una trampa deliberada:** el candidato fácil es `ConfigurationAdded`. Descártalo: es el nombre del método en pasado, no un hecho de negocio. Nadie dice *"se añadió una configuración"*.
+
+El candidato con lenguaje ubicuo de verdad está en la ruta de envío. Cuando `NotificationDispatchService` registra un fallo, ha ocurrido algo que al negocio **sí** le importa y sobre lo que querría reaccionar: `NotificacionFallida`. Levántalo desde `Notification.RecordFailure`, que es el sitio donde el hecho se vuelve cierto.
+
+**Y la segunda decisión:** ¿quién lo despacha? Si lo haces después de `SaveChangesAsync`, el evento se pierde si el proceso muere en medio. Si lo haces dentro, vuelves al problema de consistencia. Escribe cuál eliges y qué aceptas perder — o mira cómo lo resuelve [Rentals](/event-sourcing/procesos), donde el evento *es* el dato persistido.
+
+**Archivos:** nuevo `Domain/Notifications/NotificacionFallida.cs` (un `record` que herede de `DomainEvent`); `Domain/Notifications/Notification.cs` (la llamada a `Raise`); el punto de despacho que decidas.
+
+**Terminaste cuando:** un fallo de envío produce, además de la fila en `Notifications`, un efecto generado por un handler que `NotificationDispatchService` nunca referencia directamente.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 9 · Escribir el Context Map de este sistema">
+
+**Módulos:** [3 · Bounded Context](/ddd/bounded-context) y [4 · Context Map](/ddd/context-map)
+
+**Objetivo:** producir un único diagrama —a mano, en una herramienta, o en ASCII— con los bounded contexts reales de este repositorio: **Identity**, **Notifications** y **Rentals**, más el patrón de integración correcto entre cada par.
+
+**Lo que tiene que aparecer, porque existe de verdad:**
+
+- El exchange fanout `identity.users` con **dos** consumidores que traducen el mismo mensaje de formas distintas.
+- La cola `notification-dispatch`, donde Rentals publica hacia Notifications.
+- La réplica `PersonVerificationDocument` en Rentals, y por qué es una decisión de disponibilidad, no de modelado.
+- El Shared Kernel `Domain.Shared`, compartido por los tres.
+
+**La regla del ejercicio:** para cada línea de tu diagrama debes poder señalar **el archivo exacto** que la implementa. Si no puedes señalar un archivo, esa línea es una suposición, no un hecho.
+
+**Terminaste cuando:** el diagrama está completo y, para el Shared Kernel, has escrito en una frase la condición que haría necesario partirlo.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 10 · Clasificar tu propio subdominio y decidir la inversión">
+
+**Módulo:** [2 · Subdominios](/ddd/subdominios)
+
+**Objetivo:** aplicar la única parte de DDD que no se aprende leyendo código — la estratégica — a algo tuyo.
+
+**El ejercicio:** toma tu producto real. Dibuja sus subdominios. Para cada uno responde: si dejara de existir mañana, ¿el negocio pierde su ventaja competitiva (**core**), sigue operando pero peor (**soporte**), o lo reemplazas por un SaaS en una tarde (**genérico**)?
+
+**La decisión de diseño:** de esa clasificación sale, para cada pieza, cuánto de este tutorial merece. Sé concreto: nombra al menos una pieza que hoy tiene **más** diseño del que su clasificación justifica, y una que tiene **menos**.
+
+**El control de calidad:** si clasificaste algo como genérico y aun así lo estás construyendo con modelo propio, o no era genérico, o estás gastando de más. Este repositorio tiene el ejemplo en casa: Notifications es de soporte con cuatro agregados; [Rentals](/event-sourcing) es el intento de core con event sourcing completo.
+
+**Terminaste cuando:** puedes justificar cada etiqueta hablando del **negocio**, no de la capacidad en abstracto.
 
 </Callout>
 
 ## Cuándo NO usar DDD
 
-<Callout kind="concepto" title="Concepto">
+<Callout kind="advertencia" title="La pregunta correcta no es por proyecto, es por carpeta">
 
-Poca complejidad de negocio, dominio esencialmente CRUD, proyecto de vida corta, o falta de acceso a expertos de negocio. Sin experto disponible, no hay lenguaje ubicuo y el resto del enfoque se cae.
+Poca complejidad de negocio, dominio esencialmente CRUD, proyecto de vida corta, o falta de acceso a expertos de negocio. Sin experto disponible no hay lenguaje ubicuo, y el resto del enfoque se cae.
+
+Dentro del mismo NotificationLog conviven zonas con distinta complejidad. La configuración de qué canal usa cada plantilla merece el agregado que ya viste; un catálogo administrable de zonas horarias soportadas no necesitaría agregado, ni value object, ni repositorio con nombre de negocio — un CRUD directo sería la decisión correcta.
+
+**La pregunta nunca es "¿este proyecto usa DDD?" sino "¿esta pieza concreta tiene una regla que proteger?"** — y la respuesta puede ser distinta en cada carpeta del mismo repositorio.
 
 </Callout>
 
-Dentro del mismo NotificationLog conviven, con toda probabilidad, zonas con distinta complejidad. La configuración de qué canal usa cada tipo de plantilla merece el agregado que ya viste; pero si mañana el equipo necesitara un simple catálogo administrable de zonas horarias soportadas, ese catálogo no necesitaría un agregado, ni un value object, ni un repositorio con nombre de negocio — un CRUD directo sobre una tabla, sin ceremonia, sería la decisión correcta. Aplicar DDD táctico ahí sería coste alto, beneficio cero. La pregunta nunca es "¿este proyecto usa DDD?" sino "¿esta pieza concreta tiene una regla que proteger?" — y la respuesta puede ser distinta en cada carpeta del mismo repositorio.
-
-<Callout kind="ejercicio" title="El criterio de éxito real">
+<Callout kind="resumen" title="El criterio de éxito real">
 
 No es que sepas definir "agregado". Es que, terminadas estas tareas, en el siguiente refinamiento sobre un proyecto real puedas decir *"eso no debería estar en este contexto"* o *"¿cómo llama negocio a ese estado?"* — y el resto del equipo entienda a qué te refieres, sin necesitar una reunión aparte para traducirlo.
 
 </Callout>
 
+## Y después
+
+Cuando termines, el paso natural es la sección de [Event Sourcing](/event-sourcing): los mismos conceptos tácticos —agregado, invariante, value object, evento de dominio— aplicados a un modelo donde **los hechos son la fuente de verdad** y el estado es un cálculo. Se apoya en el otro servicio de este repositorio, y varias decisiones que aquí quedaron abiertas (concurrencia, eventos sin despachar, CQRS a medio camino) allí están resueltas de otra forma.
+
 ## Recursos recomendados
 
-- Eric Evans, *Domain-Driven Design* (2003) — el libro azul. Denso; sugiere leer las partes I y IV primero.
-- Vaughn Vernon, *Implementing Domain-Driven Design* — el libro rojo, más práctico, de donde salen las cuatro reglas de agregados.
-- Vaughn Vernon, *Domain-Driven Design Distilled* — el mejor punto de entrada para un equipo entero.
-- Alberto Brandolini, *Introducing EventStorming* — para descubrir el modelo en conversación, antes de escribir código.
-- Scott Wlaschin, *Domain Modeling Made Functional* — excelente aunque no uses lenguajes funcionales.
+- **Eric Evans**, *Domain-Driven Design* (2003) — el libro azul. Denso; empieza por las partes I y IV.
+- **Vaughn Vernon**, *Implementing Domain-Driven Design* — el libro rojo, más práctico, de donde salen las cuatro reglas de agregados.
+- **Vaughn Vernon**, *Domain-Driven Design Distilled* — el mejor punto de entrada para un equipo entero.
+- **Alberto Brandolini**, *Introducing EventStorming* — para descubrir el modelo en conversación, antes de escribir código.
+- **Scott Wlaschin**, *Domain Modeling Made Functional* — excelente aunque no uses lenguajes funcionales.

@@ -1,0 +1,235 @@
+---
+title: "El agregado en dos mitades: decidir y aplicar"
+description: "La regla que lo gobierna todo: el método público valida y levanta el hecho; solo Apply cambia el estado."
+sidebar:
+  order: 3
+  label: "3 · Decidir y aplicar"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, members, span } from '../../../lib/code';
+import aggregateRootSource from '@code/Shared/Domain.Shared/Common/AggregateRoot.cs?raw';
+import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
+import visitSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Visit.cs?raw';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Separar las dos mitades de un agregado event-sourced y saber qué puede hacer cada una.
+- Explicar por qué `Apply` no puede validar nada, nunca.
+- Leer el caso donde un método levanta **dos** eventos, y por qué eso está bien.
+- Reconocer los tres errores que rompen un agregado event-sourced en silencio.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>La regla de oro:</strong> el método público <em>decide</em> —valida, consulta el estado,
+lanza excepciones— y termina levantando un hecho. <code>Apply</code> <em>obedece</em> —cambia
+campos y nada más—. Si <code>Apply</code> tiene un <code>if</code> que puede fallar, el agregado
+está roto.
+</div>
+
+## El mecanismo, otra vez
+
+Ya lo viste en el [módulo 10 de DDD](/ddd/domain-events), pero aquí es el motor entero:
+
+<Code
+    code={members(aggregateRootSource, ['protected void Raise', 'public virtual void Apply'])}
+    lang="csharp"
+    title="Shared/Domain.Shared/Common/AggregateRoot.cs"
+/>
+
+`Raise` aplica el hecho **ahora** y lo guarda **para después**. Esa doble función es lo que permite que el mismo método `Apply` sirva para dos cosas muy distintas:
+
+<ol class="ddd-steps">
+    <li><strong>Al decidir:</strong> el agregado ya está en memoria; <code>Raise</code> lo mueve al estado nuevo para que la siguiente llamada del mismo comando vea el estado actualizado.</li>
+    <li><strong>Al rehidratar:</strong> se parte de un objeto vacío y se le aplican todos los eventos del flujo, en orden, sin validar nada. Es el <a href="/event-sourcing/rehidratacion">módulo 4</a>.</li>
+</ol>
+
+## La mitad que decide
+
+<Code
+    code={member(listingSource, 'public void SubmitForReview')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · SubmitForReview"
+    mark={['Raise(new ListingSubmittedForReview());']}
+/>
+
+Cinco guardas y una línea de `Raise`. Esa proporción es la normal y es la buena: **el método público es casi todo validación**.
+
+Observa qué consulta cada guarda: `Status`, `Details`, `Location`, `Description`, `Price`, `_photos`. Todo estado del propio agregado, que llegó ahí a través de `Apply` de los eventos anteriores. El método decide mirando el resultado acumulado de la historia.
+
+## La mitad que aplica
+
+<Code
+    code={member(listingSource, 'public override void Apply')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · Apply"
+/>
+
+Un `switch` exhaustivo sobre los quince eventos de este agregado. Casos simples que asignan un campo; casos con datos que delegan en un `When` privado:
+
+<Code
+    code={members(listingSource, ['private void When(ListingDrafted e)', 'private void When(ListingPriceChanged e)', 'private void MarkPublished'])}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · los When"
+/>
+
+<Callout kind="advertencia" title="Por qué Apply NO puede validar">
+
+Piensa en qué pasa si metes una guarda ahí. Un evento guardado hace dos años, cuando la regla era otra, deja de poder aplicarse — **y el agregado se vuelve imposible de cargar**. No es un error que aparezca en el momento: aparece el día que alguien abre esa publicación vieja.
+
+La validación ocurre **una vez**, cuando el hecho está a punto de suceder. Después el hecho es historia, y la historia no se discute.
+
+El único `throw` legítimo dentro de `Apply` es el `default` del `switch`: *"este evento no pertenece a este agregado"*. Eso no juzga el negocio, detecta un error de programación o un flujo corrupto — y el [módulo 10](/event-sourcing/evolucion) cuenta lo que pasa cuando salta de verdad.
+
+</Callout>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 280" role="img" aria-labelledby="decideApplyTitle">
+        <title id="decideApplyTitle">Las dos mitades del agregado y sus dos caminos</title>
+        <defs>
+            <marker id="daArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="30" width="250" height="220" rx="12" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="145" y="54" text-anchor="middle" font-size="11.5" font-weight="700" fill="#4338ca">DECIDIR — método público</text>
+        <text x="40" y="80" font-size="9.5" fill="#334155">• mira el estado acumulado</text>
+        <text x="40" y="99" font-size="9.5" fill="#334155">• valida argumentos</text>
+        <text x="40" y="118" font-size="9.5" fill="#334155">• comprueba invariantes</text>
+        <text x="40" y="137" font-size="9.5" fill="#334155">• lanza DomainException</text>
+        <text x="40" y="156" font-size="9.5" fill="#334155">• puede no hacer nada (idempotencia)</text>
+        <rect x="40" y="172" width="210" height="34" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="145" y="193" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#4338ca">Raise(new ListingApproved(...))</text>
+        <text x="145" y="230" text-anchor="middle" font-size="9" fill="#4338ca" font-style="italic">aquí vive todo el "no"</text>
+
+        <line x1="272" y1="140" x2="312" y2="140" stroke="#4f46e5" stroke-width="1.8" marker-end="url(#daArrow)" />
+
+        <rect x="315" y="30" width="250" height="220" rx="12" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="440" y="54" text-anchor="middle" font-size="11.5" font-weight="700" fill="#14532d">APLICAR — Apply / When</text>
+        <text x="335" y="80" font-size="9.5" fill="#334155">• asigna campos</text>
+        <text x="335" y="99" font-size="9.5" fill="#334155">• reconstruye value objects</text>
+        <text x="335" y="118" font-size="9.5" fill="#334155">• con FromStorage (sin validar)</text>
+        <text x="335" y="143" font-size="9.5" font-weight="600" fill="#991b1b">✗ nunca valida</text>
+        <text x="335" y="162" font-size="9.5" font-weight="600" fill="#991b1b">✗ nunca llama a Raise</text>
+        <text x="335" y="181" font-size="9.5" font-weight="600" fill="#991b1b">✗ nunca mira el reloj</text>
+        <text x="440" y="218" text-anchor="middle" font-size="9" fill="#14532d" font-style="italic">tiene que poder ejecutarse</text>
+        <text x="440" y="233" text-anchor="middle" font-size="9" fill="#14532d" font-style="italic">mil veces, siempre igual</text>
+
+        <rect x="610" y="30" width="230" height="100" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="725" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Camino 1 · comando</text>
+        <text x="725" y="76" text-anchor="middle" font-size="9" fill="#334155">Raise → Apply + guarda el evento</text>
+        <text x="725" y="94" text-anchor="middle" font-size="9" fill="#334155">para que lo persista el repositorio</text>
+        <text x="725" y="115" text-anchor="middle" font-size="8.5" fill="#9a3412" font-style="italic">pasa por las dos mitades</text>
+
+        <rect x="610" y="150" width="230" height="100" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="725" y="174" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Camino 2 · rehidratación</text>
+        <text x="725" y="196" text-anchor="middle" font-size="9" fill="#334155">Apply, Apply, Apply... del flujo</text>
+        <text x="725" y="214" text-anchor="middle" font-size="9" fill="#334155">sin pasar por los métodos públicos</text>
+        <text x="725" y="235" text-anchor="middle" font-size="8.5" fill="#9a3412" font-style="italic">solo la mitad derecha</text>
+
+        <line x1="567" y1="90" x2="606" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#daArrow)" />
+        <line x1="567" y1="180" x2="606" y2="190" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#daArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        La mitad izquierda solo se recorre cuando ocurre algo nuevo. La derecha se recorre además cada vez
+        que se carga el agregado — por eso tiene que ser pura y no puede fallar.
+    </p>
+</div>
+
+## Tres detalles que se aprenden leyendo este código
+
+### 1 · Un método puede levantar dos eventos
+
+<Code
+    code={members(listingSource, ['public void UpdatePhotos', 'private void SendBackToReviewIfVisible'])}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · dos hechos en una operación"
+    mark={['SendBackToReviewIfVisible();']}
+/>
+
+Cambiar las fotos de una publicación ya publicada provoca **dos hechos**: las fotos cambiaron, y la publicación volvió a revisión. Son dos cosas distintas que le importan al negocio por separado, así que son dos eventos.
+
+Y funciona porque `Raise` ya aplicó el primero: cuando `SendBackToReviewIfVisible` consulta `IsVisible`, está mirando el estado **después** de `ListingPhotosUpdated`.
+
+<Callout kind="antipatron" title="Lo que NO hay que hacer aquí">
+
+La tentación es crear un evento `ListingPhotosUpdatedAndSentBackToReview`. Sería un hecho compuesto que mezcla dos razones de negocio, imposible de consumir por separado — la proyección que solo quiere saber de fotos tendría que entender también el estado de revisión.
+
+**Un hecho, un evento.** Si una operación provoca dos hechos, levanta dos.
+
+</Callout>
+
+### 2 · Un método puede decidir no levantar nada
+
+<Code
+    code={member(listingSource, 'public void Withdraw')}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · Withdraw"
+    mark={['if (Status == ListingStatus.Withdrawn)']}
+/>
+
+Retirar una publicación ya retirada **no es un error**: simplemente no pasó nada nuevo. El método vuelve sin levantar evento, y el flujo no crece.
+
+Ese patrón aparece por todo el repositorio (`Pause`, `Resume`, `Decline`, `Cancel`, `Expire`) y es lo que hace el sistema **idempotente**: reintentar un comando —algo que pasa constantemente con comandos programados y mensajes reentregados— no ensucia la historia con hechos falsos.
+
+Compáralo con `Confirm`, que distingue los dos casos con precisión quirúrgica:
+
+<Code
+    code={span(visitSource, 'public void Confirm(DateTimeOffset slotStart, DateTimeOffset now)', 'throw new DomainException("Solo se puede confirmar una visita solicitada.");')}
+    lang="csharp"
+    title="Services/Rentals/.../Visits/Visit.cs · idempotente solo si es la misma franja"
+/>
+
+Confirmar **la misma** franja dos veces: no pasa nada. Confirmar **otra** franja sobre una visita ya confirmada: error. La idempotencia no es "ignorar repeticiones", es "reconocer cuándo la repetición es la misma decisión".
+
+### 3 · El reloj entra como parámetro, nunca se lee dentro
+
+<Code
+    code={members(listingSource, ['private void Raise(DomainEvent domainEvent, DateTimeOffset now)', 'private static DateTimeOffset OccurredAt'])}
+    lang="csharp"
+    title="Services/Rentals/.../Listings/Listing.cs · el tiempo, controlado desde fuera"
+/>
+
+Ningún método del dominio llama a `DateTime.UtcNow`. El momento llega como parámetro `now` desde el handler, que lo obtiene de `TimeProvider` — y este `Raise` privado lo **graba en el evento**, sobrescribiendo el valor por defecto de `DomainEvent`.
+
+Eso tiene una consecuencia bonita en `When(ListingPriceChanged)`: `LastPriceChangeAt` sale de `OccurredAt(e)`, es decir, **del propio evento**. Al rehidratar, el agregado recupera exactamente el instante de entonces, no el de ahora.
+
+<Callout kind="advertencia" title="El error sutil que evita ese diseño">
+
+Si `Apply` leyera el reloj, cada rehidratación produciría un estado distinto: cargar la misma publicación dos veces daría dos valores de `LastPriceChangeAt`, y la regla de las 24 horas se volvería impredecible.
+
+**`Apply` tiene que ser una función pura de los eventos.** Misma historia, mismo estado, siempre.
+
+</Callout>
+
+<Callout kind="antipatron" title="Los tres errores que rompen un agregado event-sourced">
+
+1. **Mutar estado en el método público.** `Status = Paused;` directamente, además del `Raise`. Funciona hoy y falla al rehidratar: el evento no sabe reproducir ese cambio, y el agregado cargado de la base será distinto del que había en memoria.
+2. **Validar dentro de `Apply`.** Convierte eventos viejos en agregados imposibles de cargar.
+3. **Leer el reloj, un `Guid.NewGuid()` o una configuración dentro de `Apply`.** Rompe la pureza: la misma historia deja de dar el mismo estado.
+
+Los tres comparten síntoma: **el sistema funciona en desarrollo y falla con datos reales**, meses después.
+
+</Callout>
+
+<Callout kind="resumen" title="Para recordar">
+
+- El método público **decide**: valida, consulta el estado acumulado, y termina en `Raise`.
+- `Apply` **obedece**: asigna campos y reconstruye value objects con `FromStorage`. Sin validar, sin reloj, sin azar.
+- `Raise` aplica *y* guarda, por eso el segundo `Raise` de un método ya ve el estado del primero.
+- **Un hecho, un evento.** Una operación puede levantar dos; nunca uno compuesto.
+- No levantar evento es una respuesta válida: es lo que hace el sistema **idempotente**.
+- El tiempo entra como parámetro y **se graba en el evento**, para que la rehidratación sea determinista.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `Reinstate` llama a `Raise(new ListingReinstated(...))` y acto seguido a `Expire(now)`. ¿Por qué puede levantar dos eventos, y qué pasaría si `Expire` se llamara antes del `Raise`?
+2. Alguien propone mover la comprobación `if (_photos.Count < ListingPolicy.MinPhotos)` de `SubmitForReview` al `When(ListingSubmittedForReview)`. Explica en dos frases por qué eso rompe el agregado.
+3. `Visit.AutoComplete` no lanza excepción si la visita no está confirmada: vuelve en silencio. ¿Por qué ese método sí y `MarkCompleted` no? (Pista: mira quién llama a cada uno.)
+
+</Callout>

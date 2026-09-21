@@ -1,0 +1,214 @@
+---
+title: "Estado contra hechos"
+description: "La misma operación escrita de las dos formas, en el mismo repositorio."
+sidebar:
+  order: 1
+  label: "1 · Estado contra hechos"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member } from '../../../lib/code';
+import triggerSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/NotificationTrigger.cs?raw';
+import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
+
+<Callout kind="concepto" title="Objetivos de este módulo">
+
+- Ver la misma clase de operación escrita con estado y con eventos, en el mismo repositorio.
+- Nombrar las cuatro ganancias del event sourcing y los cuatro costes que trae.
+- Decidir, con criterios concretos, si un dominio lo merece.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> guardar estado te dice cómo están las cosas; guardar hechos te dice
+además cómo llegaron a estarlo — y esa segunda pregunta, en algunos dominios, es el negocio.
+</div>
+
+## La misma operación, dos veces
+
+Empecemos por lo concreto. En Notifications, deshabilitar un trigger es asignar un campo:
+
+<Code
+    code={member(triggerSource, 'public void Disable')}
+    lang="csharp"
+    title="Notifications · NotificationTrigger.Disable() — el estado se muta"
+    mark={['IsEnabled = false;']}
+/>
+
+Después de ese `SaveChangesAsync`, la columna `IsEnabled` pasa de `1` a `0`. **Y ya no hay forma de saber que alguna vez valió `1`**, ni cuándo cambió, ni cuántas veces.
+
+En Rentals, pausar una publicación no asigna nada:
+
+<Code
+    code={member(listingSource, 'public void Pause')}
+    lang="csharp"
+    title="Rentals · Listing.Pause() — se levanta un hecho"
+    mark={['Raise(new ListingPaused());']}
+/>
+
+El estado cambia, sí, pero como **consecuencia** del hecho, en otro sitio:
+
+<Code
+    code={member(listingSource, 'public override void Apply')}
+    lang="csharp"
+    title="Rentals · Listing.Apply — el estado es una función de los eventos"
+    mark={['case ListingPaused: Status = ListingStatus.Paused; break;']}
+/>
+
+Lo que se guarda en la base de datos no es `Status = Paused`. Es una fila nueva que dice *"a las 14:32 del 3 de marzo, esta publicación se pausó"*. El `Status` que ve la pantalla se calcula sumando esa fila a todas las anteriores.
+
+## Las cuatro ganancias
+
+<ol class="ddd-steps">
+    <li>
+        <strong>La historia es gratis y completa.</strong> No hay una tabla de auditoría que alguien
+        tenga que acordarse de escribir: <em>el dato es la auditoría</em>. En Rentals puedes responder
+        "¿cuántas veces bajó de precio esta publicación antes de arrendarse?" sin haber previsto la
+        pregunta.
+    </li>
+    <li>
+        <strong>Preguntas nuevas sobre datos viejos.</strong> Si mañana el negocio quiere saber el tiempo
+        medio entre <code>ListingSubmittedForReview</code> y <code>ListingApproved</code>, la respuesta ya
+        está en los eventos de los dos últimos años. Con estado, esa información se perdió al hacer el
+        <code>UPDATE</code>.
+    </li>
+    <li>
+        <strong>Modelos de lectura desechables.</strong> Una proyección se puede borrar y reconstruir
+        desde cero. Cambiar la forma de una pantalla no necesita migración de datos: necesita reproyectar.
+    </li>
+    <li>
+        <strong>Concurrencia incluida.</strong> Añadir un evento exige declarar la versión esperada del
+        flujo. El bloqueo optimista que en el otro servicio <a href="/ddd/persistencia">hay que acordarse
+        de añadir</a> aquí viene con el modelo.
+    </li>
+</ol>
+
+## Los cuatro costes
+
+Y ahora la otra mitad, que los tutoriales suelen saltarse:
+
+<ol class="ddd-steps">
+    <li>
+        <strong>Nunca puedes borrar un evento.</strong> Un hecho mal modelado te acompaña para siempre.
+        El <a href="/event-sourcing/evolucion">módulo 10</a> es la historia real de lo que pasa cuando
+        esto se ignora: hoy los flujos guardados de Rentals <em>no se pueden reconstruir</em>.
+    </li>
+    <li>
+        <strong>Leer es un problema aparte.</strong> No hay <code>SELECT * FROM listings</code>. Hay que
+        construir y mantener proyecciones — CQRS deja de ser opcional y pasa a ser obligatorio.
+    </li>
+    <li>
+        <strong>Consistencia eventual en las lecturas.</strong> Con proyecciones asíncronas, lo que
+        devuelve una consulta puede ir un instante por detrás de lo que ya se guardó. (Rentals lo evita
+        hoy usándolas <em>inline</em>, y el <a href="/event-sourcing/proyecciones">módulo 7</a> explica
+        el precio de esa decisión.)
+    </li>
+    <li>
+        <strong>Todo el mundo tiene que entenderlo.</strong> Un desarrollador nuevo no puede abrir una
+        tabla y ver el estado. Es una curva de aprendizaje de equipo, no de una persona.
+    </li>
+</ol>
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 840 300" role="img" aria-labelledby="stateVsEventsTitle">
+        <title id="stateVsEventsTitle">Guardar estado frente a guardar hechos</title>
+        <defs>
+            <marker id="sveArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <text x="200" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">Estado (Notifications)</text>
+        <rect x="40" y="44" width="320" height="52" rx="8" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="200" y="66" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#334155">NotificationTriggers</text>
+        <text x="200" y="84" text-anchor="middle" font-size="9" font-family="monospace" fill="#64748b">id=7a1f · IsEnabled=false</text>
+
+        <text x="200" y="124" text-anchor="middle" font-size="9.5" fill="#991b1b">una fila, siempre la misma</text>
+        <text x="200" y="142" text-anchor="middle" font-size="9.5" fill="#991b1b">cada UPDATE borra el pasado</text>
+
+        <rect x="40" y="160" width="320" height="110" rx="8" fill="#fee2e2" stroke="#fecaca" />
+        <text x="200" y="184" text-anchor="middle" font-size="10" font-weight="600" fill="#991b1b">Preguntas que ya no se pueden responder</text>
+        <text x="200" y="206" text-anchor="middle" font-size="9" fill="#991b1b">¿cuándo se deshabilitó?</text>
+        <text x="200" y="224" text-anchor="middle" font-size="9" fill="#991b1b">¿quién lo hizo?</text>
+        <text x="200" y="242" text-anchor="middle" font-size="9" fill="#991b1b">¿cuántas veces cambió antes?</text>
+
+        <text x="620" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">Hechos (Rentals)</text>
+        <rect x="440" y="44" width="360" height="130" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="620" y="64" text-anchor="middle" font-size="9.5" font-family="monospace" fill="#14532d">rentals.mt_events · stream 7a1f</text>
+        <text x="460" y="86" font-size="9" font-family="monospace" fill="#334155">v1 · ListingDrafted</text>
+        <text x="460" y="102" font-size="9" font-family="monospace" fill="#334155">v2 · ListingDetailsUpdated</text>
+        <text x="460" y="118" font-size="9" font-family="monospace" fill="#334155">v3 · ListingSubmittedForReview</text>
+        <text x="460" y="134" font-size="9" font-family="monospace" fill="#334155">v4 · ListingApproved</text>
+        <text x="460" y="150" font-size="9" font-family="monospace" fill="#334155">v5 · ListingPaused</text>
+        <text x="460" y="166" font-size="9" font-family="monospace" fill="#64748b">(append-only, nunca UPDATE)</text>
+
+        <line x1="620" y1="176" x2="620" y2="196" stroke="#16a34a" stroke-width="1.5" marker-end="url(#sveArrow)" />
+        <text x="640" y="192" font-size="8.5" fill="#14532d">Apply()</text>
+
+        <rect x="440" y="202" width="360" height="68" rx="8" fill="#fff" stroke="#bbf7d0" />
+        <text x="620" y="224" text-anchor="middle" font-size="10" font-weight="600" fill="#14532d">Estado actual = cálculo</text>
+        <text x="620" y="244" text-anchor="middle" font-size="9" font-family="monospace" fill="#334155">Status = Paused · ExpiresAt = ...</text>
+        <text x="620" y="260" text-anchor="middle" font-size="8.5" fill="#64748b">y la historia sigue entera</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        A la izquierda una fila que se sobrescribe; a la derecha un flujo que solo crece. El estado de la
+        derecha se puede recalcular en cualquier momento; el pasado de la izquierda, no.
+    </p>
+</div>
+
+## Cuándo merece la pena, con criterios
+
+Los tres criterios que deciden, aplicados a este repositorio:
+
+| Criterio | Notifications | Rentals |
+| --- | --- | --- |
+| ¿El negocio pregunta por el **pasado**, no solo por el presente? | No. Interesa la configuración vigente. | **Sí.** Cuántas veces bajó el precio, cuántas visitas se cayeron, si el interesado tiene sanciones. |
+| ¿Las entidades tienen un **ciclo de vida** con muchas transiciones? | No. Un trigger se habilita y se deshabilita. | **Sí.** `Listing` tiene nueve estados y quince eventos. |
+| ¿Hay reglas que dependen de **cuándo** pasaron las cosas? | No. | **Sí.** "El precio solo se puede cambiar una vez cada 24 horas"; "dos inasistencias en 30 días bloquean al interesado". |
+
+Ese tercer criterio es el decisivo, y `Listing.ChangePrice` lo muestra sin ambigüedad:
+
+<Code
+    code={member(listingSource, 'public void ChangePrice')}
+    lang="csharp"
+    title="Rentals · Listing.ChangePrice — una regla que necesita saber cuándo"
+    mark={['now - lastChange < ListingPolicy.PriceChangeCooldown']}
+/>
+
+`LastPriceChangeAt` no es un campo que alguien recuerde actualizar: **sale de la marca de tiempo del evento anterior**. En un modelo de estado tendrías que añadir esa columna a propósito, y acordarte de mantenerla en cada camino de escritura.
+
+<Callout kind="advertencia" title="Cuándo NO usarlo">
+
+- **CRUD sin transiciones.** Un catálogo de ciudades no tiene historia interesante. Guarda filas.
+- **Cuando nadie va a leer la historia.** Si el "por si acaso" es la única justificación, no la hay: los costes son inmediatos y el beneficio, hipotético.
+- **Cuando el equipo no lo va a sostener.** Un event store medio entendido es peor que unas tablas bien entendidas.
+- **Todo el sistema a la vez.** Este repositorio hace lo correcto: event sourcing en el servicio que lo necesita, tablas en el que no.
+
+</Callout>
+
+<Callout kind="honesto" title="Y una advertencia sobre este repositorio en concreto">
+
+Rentals es un laboratorio de aprendizaje, y su clasificación como "core domain" es parte del ejercicio ([módulo 2 de DDD](/ddd/subdominios)). En un producto real habría que preguntarse si un portal de arriendos justifica event sourcing en *todos* sus agregados — `Owner`, por ejemplo, tiene exactamente **dos** eventos y ninguna transición posterior.
+
+Es un caso donde el modelo de estado habría bastado, y se hizo event-sourced por uniformidad. No es un error grave, pero conviene verlo: **la decisión se toma por agregado, no por servicio.**
+
+</Callout>
+
+<Callout kind="resumen" title="Para recordar">
+
+- Estado = *cómo están las cosas*. Hechos = *todo lo que pasó*. El estado se deriva de los hechos.
+- Las ganancias: historia gratis, preguntas nuevas sobre datos viejos, lecturas desechables, concurrencia incluida.
+- Los costes: no se borra nada, hay que construir proyecciones, consistencia eventual, y curva de equipo.
+- El criterio decisivo: **¿hay reglas que dependen de cuándo pasaron las cosas?** Si sí, el event sourcing las regala.
+- La decisión es **por agregado**, no por servicio. `Owner` no lo necesitaba.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `Listing.ChangePrice` compara `now - lastChange`. Si Notifications necesitara la misma regla, ¿qué tendría que añadir al agregado y a la tabla, y qué podría salir mal al mantenerlo?
+2. `Owner` tiene dos eventos y ninguna transición. Escribe el argumento a favor y el argumento en contra de haberlo hecho event-sourced.
+3. Piensa en un agregado de tu propio sistema. Haz la tabla de tres criterios. ¿Sale a favor o en contra?
+
+</Callout>

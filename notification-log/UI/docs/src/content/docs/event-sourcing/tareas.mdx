@@ -1,0 +1,247 @@
+---
+title: "Tareas guiadas sobre Rentals"
+description: "Nueve ejercicios de modelado event-sourced sobre un servicio real e incompleto."
+sidebar:
+  order: 11
+  label: "11 · Tareas guiadas"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<Callout kind="concepto" title="Cómo usar esta página">
+
+Nueve ejercicios de **modelado event-sourced** sobre `Services/Rentals` tal como está hoy. Todos salen de algo real: un hueco que existe en el código, o una funcionalidad pendiente en `notification-log/todo.md`.
+
+Cada tarea indica el **módulo** que la respalda, el **objetivo**, la **decisión de diseño** (que es la parte que importa), los **archivos** y **cómo saber que terminaste**.
+
+No hay solución publicada. El criterio es el del trabajo real: que compile, que arranque con `dotnet run --project NotificationLog.AppHost`, y que puedas explicar la decisión con el vocabulario de esta guía.
+
+</Callout>
+
+<div class="ddd-frase">
+<strong>Sobre el alcance:</strong> igual que en la <a href="/ddd/tareas">guía de DDD</a>, aquí no hay
+tareas de pruebas ni de infraestructura. Todas cambian el modelo: qué hechos existen, qué lleva cada
+uno, dónde está el límite del flujo y quién reacciona.
+</div>
+
+## Ventaja injusta: Rentals está a medias
+
+Y eso es bueno para aprender. Estos son los huecos reales, y cada uno es una tarea:
+
+| # | Hueco | Módulo | Tarea |
+| --- | --- | --- | --- |
+| 1 | `ProcessRouter` no reacciona a `ListingExpired`. | [9](/event-sourcing/procesos) | 1 |
+| 2 | `GetVisitStrikesAsync` filtra por fecha en memoria. | [8](/event-sourcing/decisiones) | 2 |
+| 3 | `Owner` es event-sourced con un solo evento y ninguna transición. | [1](/event-sourcing/por-que) | 3 |
+| 4 | No hay política escrita de evolución de eventos, y la base ya no se puede reconstruir. | [10](/event-sourcing/evolucion) | 4 |
+| 5 | Nada avisa a facturación cuando un `Listing` se cierra. | [9](/event-sourcing/procesos) | 7 |
+| 6 | Faltan tres agregados del `todo.md`: consultas, favoritos y búsquedas guardadas. | [3](/event-sourcing/agregado) | 5, 6, 8 |
+
+## Nivel 1 · Leer el modelo y completarlo
+
+<Callout kind="ejercicio" title="Tarea 1 · Cerrar la reacción que falta a ListingExpired">
+
+**Módulo:** [9 · Procesos](/event-sourcing/procesos)
+
+**Objetivo:** cuando una publicación vence, sus visitas futuras se quedan en pie. `ProcessRouter` reacciona a `ListingClosed` y `ListingWithdrawn` llamando a `OnNoLongerAvailableAsync`, pero no a `ListingExpired`.
+
+**La decisión de diseño:** el `case` nuevo es de una línea. Lo interesante es lo que va **después**: `OnNoLongerAvailableAsync` cancela las visitas con `VisitParty.Host` y el motivo *"La publicación ya no está disponible."*. ¿Sirve el mismo motivo cuando la causa es un vencimiento y no una decisión del propietario? El visitante va a leer ese texto.
+
+Y una segunda pregunta que decide si esto es un `case` o algo más: cancelar por vencimiento, ¿debería contar como sanción para alguien? (Pista: mira quién cancela y qué hace `VisitDecisionProjection` con `c.By`.)
+
+**Archivos:** `Application/Processes/ProcessRouter.cs`; posiblemente `ListingLifecycleProcess.cs` si decides distinguir el motivo.
+
+**Terminaste cuando:** una publicación vencida deja sus visitas futuras canceladas, el visitante recibe una notificación, y el motivo que lee tiene sentido.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 2 · Bajar el filtro de sanciones a la consulta">
+
+**Módulo:** [8 · Proyecciones de decisión](/event-sourcing/decisiones)
+
+**Objetivo:** `MartenSoftRuleChecks.GetVisitStrikesAsync` trae **todas** las sanciones históricas de un visitante y después filtra por fecha en memoria. Con pocas da igual; como patrón, está mal.
+
+**La decisión de diseño:** al arreglarlo aparece una pregunta más interesante. La firma actual (`GetVisitStrikesAsync(visitorId, since)`) devuelve una lista de fechas que `RequestVisitHandler.IsBannedAsync` recorre buscando pares dentro de la ventana.
+
+¿Debería la proyección responder directamente `IsBanned`? Argumento a favor: menos datos viajando, la consulta es más simple. Argumento en contra: **la política de sanciones (`MaxStrikes`, `StrikeWindow`, `VisitBan`) es una regla de negocio y no debería vivir en `Infrastructure`**.
+
+Decide y defiéndelo. La respuesta correcta no es obvia.
+
+**Archivos:** `Infrastructure/DecisionProjections/MartenSoftRuleChecks.cs`; posiblemente `Application/Abstractions/ISoftRuleChecks.cs`.
+
+**Terminaste cuando:** el filtro por fecha ocurre en la base de datos, y la política de sanciones sigue viviendo donde tú decidiste que debe vivir — por escrito.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 3 · Auditar si Owner debería ser event-sourced">
+
+**Módulo:** [1 · Estado contra hechos](/event-sourcing/por-que)
+
+**Objetivo:** no escribir código, sino **juzgar** el que hay. `Owner` tiene dos eventos (`NaturalOwnerRegistered`, `CompanyOwnerRegistered`), ninguna transición posterior, y un flujo de exactamente un evento por agregado.
+
+**El ejercicio:** aplica la tabla de tres criterios del módulo 1 a `Owner`. Después responde tres preguntas:
+
+1. ¿Qué se gana hoy teniéndolo event-sourced?
+2. ¿Qué costaría migrarlo a un documento de Marten normal, y qué habría que tocar?
+3. `todo.md` dice que hay que poder **actualizar** el contacto de un propietario y crearle un usuario en Identity. ¿Cambia eso tu respuesta?
+
+**La decisión de diseño:** la tercera pregunta es la trampa. Un agregado sin transiciones *hoy* puede tenerlas mañana, y migrar de vuelta a eventos cuesta más que haber empezado ahí. Ese argumento es legítimo — pero también es la excusa con la que se justifica cualquier sobreingeniería. Escribe dónde pones tú la línea.
+
+**Terminaste cuando:** tienes las tres respuestas escritas y una recomendación con fecha: *"lo dejaría así hasta que X"*.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 4 · Escribir la política de evolución de eventos">
+
+**Módulo:** [10 · Evolución del esquema](/event-sourcing/evolucion)
+
+**Objetivo:** la base de Rentals no se puede reconstruir, y no hay nada escrito que impida que vuelva a pasar.
+
+**El ejercicio, en tres partes:**
+
+1. **Diagnostica.** Levanta el entorno, crea una publicación, aprópiala y páusala. Después renombra un campo de `ListingPaused` (por ejemplo, añádele un `string Reason` obligatorio) y vuelve a cargar esa publicación. Describe **exactamente** qué falla, dónde, y con qué mensaje.
+2. **Arregla con una de las tres estrategias** del módulo 10 (alias, upcasting o versionar el tipo). Elige una y explica por qué esa.
+3. **Escribe la política.** Tres o cuatro frases para el `CLAUDE.md` del repositorio: qué se puede cambiar en un evento, qué no, y desde qué momento el event store pasa a ser inmutable.
+
+**Terminaste cuando:** el flujo creado antes del cambio se sigue cargando sin error, y la política está escrita en el repositorio.
+
+</Callout>
+
+## Nivel 2 · Modelar un agregado nuevo
+
+<Callout kind="ejercicio" title="Tarea 5 · El agregado Favoritos">
+
+**Módulos:** [3 · Decidir y aplicar](/event-sourcing/agregado) y [5 · Flujos](/event-sourcing/persistencia)
+
+**Objetivo:** implementar `FavoriteList`, **un flujo por usuario**, con la especificación que ya está en `todo.md`:
+
+- Máximo 100 publicaciones por usuario.
+- Solo se agregan publicaciones publicadas.
+- Si cambian de estado siguen en la lista, mostrando el estado actual.
+- Agregar o quitar dos veces lo mismo **no genera evento**.
+- Eventos: `ListingFavorited(ListingId)`, `ListingUnfavorited(ListingId)`.
+
+**Las tres decisiones de diseño:**
+
+1. **El id del flujo.** Un flujo por usuario significa `FavoriteList.Id == userId`. ¿Qué evento abre el flujo la primera vez que alguien marca un favorito — uno de creación explícito, o el propio `ListingFavorited`? Mira cómo lo resuelven `Listing` y `Visit` y decide.
+2. **"Solo publicaciones publicadas".** Esa comprobación **no puede** vivir en el agregado: `FavoriteList` no conoce las publicaciones. ¿Regla dura o blanda? ¿Handler o proyección de decisión?
+3. **Un flujo que crece durante años.** Un usuario activo agrega y quita favoritos cientos de veces. Aquí sí hay que hablar de [snapshots](/event-sourcing/rehidratacion) — o de por qué todavía no.
+
+**Archivos:** `Domain/Favorites/FavoriteList.cs`, sus dos eventos, `IFavoriteListRepository`; `Infrastructure/Persistence/MartenFavoriteListRepository.cs`; los comandos y el registro en DI.
+
+**Terminaste cuando:** marcar dos veces el mismo favorito produce **un solo** evento en el flujo, y puedes explicar por qué el límite de 100 sí vive en el agregado y "solo publicadas" no.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 6 · El agregado Consultas, con id determinista">
+
+**Módulos:** [2 · El evento](/event-sourcing/eventos) y [3 · Decidir y aplicar](/event-sourcing/agregado)
+
+**Objetivo:** implementar `Inquiry` —la conversación entre un interesado y el propietario de una publicación— según `todo.md`:
+
+- **Un flujo por par publicación–interesado.** Id determinista: UUID v5 de `ListingId + SeekerId`.
+- Una sola conversación por par; un mensaje nuevo se añade a la existente.
+- Mensajes de 1 a 1.000 caracteres, **sin teléfonos, correos ni enlaces**.
+- Solo el propietario responde. Se cierran cuando la publicación se cierra, se retira o vence.
+- Eventos: `InquiryOpened(InquiryId, ListingId, SeekerId, Message)`, `InquiryMessagePosted(AuthorId, Text)`, `InquiryClosed(Reason)`.
+
+**Las tres decisiones de diseño:**
+
+1. **El id determinista.** `Domain/Shared/NameBasedGuid.cs` ya existe y hace exactamente esto. ¿Qué problema resuelve calcular el id en vez de generarlo? (Pista: piensa en dos mensajes simultáneos del mismo interesado sobre la misma publicación, y en qué hace `StartStream` si el flujo ya existe.)
+2. **"Sin teléfonos ni correos".** ¿Value object, guarda en el agregado, o validador de aplicación? Los tres son defendibles; uno es más difícil de saltarse.
+3. **El cierre automático.** `Inquiry` no se entera de que la publicación se cerró. Es un [proceso](/event-sourcing/procesos) — y tiene el mismo hueco que la Tarea 1: ¿reaccionas también a `ListingExpired`?
+
+**Terminaste cuando:** dos mensajes del mismo interesado sobre la misma publicación caen en **el mismo flujo**, y cerrar la publicación cierra la conversación sin que `Listing` sepa que existe.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 7 · Publicar un hecho hacia otro contexto">
+
+**Módulos:** [9 · Procesos](/event-sourcing/procesos) y [4 de DDD · Context Map](/ddd/context-map)
+
+**Objetivo:** `todo.md` pide *"publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`)"*. Hoy `ListingClosed` solo dispara una notificación al propietario.
+
+**La decisión de diseño — es toda la tarea.** `ListingClosed` es un evento **de dominio**: privado, sin versión, con la forma que le conviene a `Listing`. Facturación es otro bounded context.
+
+Lo que **no** hay que hacer es publicar `ListingClosed` tal cual. Hay que diseñar el **evento de integración**: qué campos lleva, con qué nombre, con qué versión de esquema. Mira `NotificationDispatchRequested` como modelo, y `WolverineNotificationDispatcher` como el sitio donde vive la traducción.
+
+Preguntas concretas: ¿lleva el precio final, o solo el identificador? ¿Lleva datos del propietario, o facturación los pide aparte? Cada respuesta es una decisión de acoplamiento.
+
+**Archivos:** un `.proto` nuevo en `Shared/NotificationLog.Contracts/`; una abstracción en `Application/Abstractions/`; su publicador en `Infrastructure/Messaging/Publishers/`; el `case` en `ProcessRouter`; la cola en `RabbitMqMessagingExtensions`.
+
+**Terminaste cuando:** cerrar una publicación deja un mensaje en la cola nueva, y puedes justificar cada campo del contrato explicando qué necesita facturación y qué **no** le estás contando de Rentals.
+
+</Callout>
+
+## Nivel 3 · Modelo y tiempo
+
+<Callout kind="ejercicio" title="Tarea 8 · Búsquedas guardadas y alertas periódicas">
+
+**Módulos:** [3 · Decidir y aplicar](/event-sourcing/agregado), [7 · Proyecciones](/event-sourcing/proyecciones) y [9 · Procesos](/event-sourcing/procesos)
+
+**Objetivo:** el más ambicioso del `todo.md`. `SavedSearchList`, un flujo por usuario con `SavedSearch` como entidad hija:
+
+- Máximo 10 por usuario. Nombre, criterios (operación, tipo, ciudad, barrio, rango de precio, habitaciones…) y frecuencia: inmediata, diaria (7:00 hora del usuario) o ninguna.
+- Eventos: `SavedSearchCreated(SearchId, Name, Criteria, Frequency)`, `SavedSearchUpdated(...)`, `SavedSearchDeleted(SearchId)`.
+- Alertas inmediatas al aprobar una publicación o bajar su precio (`busqueda.coincidencia`).
+- Resumen diario con las publicaciones nuevas que coinciden (`busqueda.resumen`).
+
+**Las cuatro decisiones de diseño:**
+
+1. **Los criterios dentro de un evento.** `Criteria` es una estructura compuesta. El [módulo 2](/event-sourcing/eventos) dice que los eventos van aplanados a primitivos… ¿cómo lo aplanas sin que el evento tenga veinte campos, y qué pasa el día que se añade un criterio nuevo?
+2. **Emparejar en el sentido contrario.** Al aprobar una publicación hay que encontrar **qué búsquedas coinciden con ella** — lo contrario de lo que hace una búsqueda normal. Eso es una proyección, y no es la de lectura.
+3. **El resumen diario no lo dispara ningún evento.** `ICommandScheduler` programa comandos para un instante concreto; una tarea recurrente es otra cosa. ¿Cómo encaja algo periódico en un modelo donde todo nace de un hecho?
+4. **La hora del usuario.** "7:00 hora del usuario" en un sistema que guarda todo en UTC. ¿Dónde vive la zona horaria, y de qué contexto viene?
+
+**Terminaste cuando:** aprobar una publicación que coincide con una búsqueda de frecuencia inmediata produce un `NotificationDispatchRequested` con la clave `busqueda.coincidencia`, sin que `Listing` sepa que existen las búsquedas guardadas.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tarea 9 · Responder una pregunta que nadie previó">
+
+**Módulos:** [1 · Estado contra hechos](/event-sourcing/por-que) y [7 · Proyecciones](/event-sourcing/proyecciones)
+
+**Objetivo:** cobrar la promesa central de esta guía. El negocio pregunta, sin aviso previo:
+
+> *"¿Cuánto tarda de media una publicación desde que se envía a revisión hasta que se aprueba, por ciudad y por mes?"*
+
+Nadie diseñó nada para responder eso. Los datos, sin embargo, ya están: `ListingSubmittedForReview`, `ListingApproved` y `ListingDetailsUpdated` (que trae la ciudad), todos con su `OccurredOn`.
+
+**El ejercicio:** construye una proyección nueva que lo responda, y **reconstrúyela desde el principio de la historia**.
+
+**Las dos decisiones de diseño:**
+
+1. **¿`Inline` o asíncrona?** Es un informe, nadie lo lee justo después de escribir. El módulo 7 ya da la respuesta; escríbela con sus dos consecuencias.
+2. **¿Una proyección por flujo, o una agregada?** La pregunta cruza publicaciones y agrupa por ciudad y mes. `SingleStreamProjection` no sirve. Busca qué otro tipo de proyección ofrece Marten y por qué este caso es distinto de `ListingView`.
+
+**Terminaste cuando:** la respuesta incluye publicaciones creadas **antes** de que escribieras una sola línea de esta proyección. Ese es el momento en que se entiende para qué sirve todo esto.
+
+</Callout>
+
+## Cuándo NO usar event sourcing
+
+<Callout kind="advertencia" title="La pregunta es por agregado, no por servicio">
+
+Si después de estas tareas te llevas una sola cosa, que sea esta: **la decisión se toma agregado por agregado**.
+
+Este repositorio lo demuestra en las dos direcciones. `Listing` y `Visit` lo justifican con creces: nueve estados, quince eventos, reglas que dependen del cuándo. `Owner` no lo justifica, y está event-sourced igual — por uniformidad, que es una razón legítima pero débil.
+
+Y un servicio entero, Notifications, vive perfectamente sin él, porque su negocio es configuración declarativa y no historia.
+
+**La pregunta correcta:** *"¿alguien va a preguntar algún día cómo llegó esto a estar así?"* Si la respuesta honesta es no, guarda filas.
+
+</Callout>
+
+<Callout kind="resumen" title="El criterio de éxito real">
+
+No es que sepas explicar qué es un event store. Es que, delante de un dominio nuevo, puedas decir *"esta regla es dura y va en el agregado; esta otra es blanda y va contra una proyección"* — y que el equipo entienda qué garantiza cada una sin una reunión aparte.
+
+</Callout>
+
+## Recursos recomendados
+
+- **Greg Young**, charlas sobre *Event Sourcing* y *CQRS* — el origen del patrón, y la mejor explicación de por qué no es lo mismo que un log de auditoría.
+- **Vaughn Vernon**, *Implementing Domain-Driven Design*, capítulo 8 (Domain Events) y apéndice A — la conexión entre DDD táctico y event sourcing.
+- **Documentación de Marten** — `martendb.io`, secciones *Event Store* y *Projections*. Es el motor que usa Rentals.
+- **Alexey Zimarev**, *Hands-On Domain-Driven Design with .NET Core* — event sourcing en .NET, con el mismo enfoque de decidir/aplicar.
+- **Documentación de Wolverine** — para la parte de comandos programados y colas durables.
