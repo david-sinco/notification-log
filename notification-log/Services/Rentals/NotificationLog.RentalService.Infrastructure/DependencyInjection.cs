@@ -49,6 +49,7 @@ public static class DependencyInjection
 
         services.AddScoped<ICommandScheduler, WolverineCommandScheduler>();
         services.AddScoped<INotificationDispatcher, WolverineNotificationDispatcher>();
+        services.AddScoped<IAccountProvisioner, WolverineAccountProvisioner>();
 
         services.AddRabbitMqMessaging(configuration);
 

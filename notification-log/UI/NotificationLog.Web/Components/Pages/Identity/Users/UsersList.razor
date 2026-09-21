@@ -46,6 +46,7 @@
             <table class="table">
                 <thead>
                     <tr>
+                        <th>Nombre</th>
                         <th>Correo</th>
                         <th>Teléfono</th>
                         <th>Roles</th>
@@ -56,6 +57,7 @@
                     @foreach (var u in users)
                     {
                         <tr class="row-link" @onclick='() => Nav.NavigateTo($"/users/{u.Id}")'>
+                            <td class="fw-medium">@u.Name</td>
                             <td>
                                 @(u.Email ?? "—")
                                 @if (u.Email is not null && !u.IsEmailVerified)

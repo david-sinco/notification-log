@@ -35,6 +35,7 @@ internal static class UserMapping
     public static void Apply(User user, ApplicationUser entity)
     {
         entity.Name = user.Name;
+        entity.PhoneNumber = user.Phone;
         entity.Locale = user.Locale;
         entity.TimeZone = user.TimeZone;
         entity.AcceptsNotifications = user.AcceptsNotifications;

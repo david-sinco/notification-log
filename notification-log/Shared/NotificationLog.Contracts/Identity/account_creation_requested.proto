@@ -18,4 +18,5 @@ message AccountCreationRequested {
   string time_zone = 14;
   bool accepts_notifications = 15;
   repeated string roles = 16;
+  string phone = 17;
 }

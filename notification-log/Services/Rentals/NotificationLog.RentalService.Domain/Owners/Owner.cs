@@ -18,32 +18,39 @@ public sealed class Owner : AggregateRoot
     public IdentityDocument? Document { get; private set; }
     public LegalName? LegalName { get; private set; }
     public Nit? Nit { get; private set; }
+    public ContactInfo? Contact { get; private set; }
 
-    public static Owner RegisterNatural(Guid id, Guid createdBy, PersonName name, IdentityDocument document)
+    public static Owner RegisterNatural(
+        Guid id, Guid createdBy, PersonName name, IdentityDocument document, ContactInfo contact)
     {
         Guard.RequireId(id, "El identificador del propietario es obligatorio.");
         Guard.RequireId(createdBy, "El usuario que registra al propietario es obligatorio.");
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(contact);
 
         var owner = new Owner();
 
         owner.Raise(new NaturalOwnerRegistered(
-            id, createdBy, name.FirstNames, name.LastNames, document.Type, document.Number));
+            id, createdBy, name.FirstNames, name.LastNames, document.Type, document.Number,
+            contact.Email, contact.Phone));
 
         return owner;
     }
 
-    public static Owner RegisterCompany(Guid id, Guid createdBy, LegalName legalName, Nit nit)
+    public static Owner RegisterCompany(
+        Guid id, Guid createdBy, LegalName legalName, Nit nit, ContactInfo contact)
     {
         Guard.RequireId(id, "El identificador del propietario es obligatorio.");
         Guard.RequireId(createdBy, "El usuario que registra al propietario es obligatorio.");
         ArgumentNullException.ThrowIfNull(legalName);
         ArgumentNullException.ThrowIfNull(nit);
+        ArgumentNullException.ThrowIfNull(contact);
 
         var owner = new Owner();
 
-        owner.Raise(new CompanyOwnerRegistered(id, createdBy, legalName.Value, nit.Number, nit.CheckDigit));
+        owner.Raise(new CompanyOwnerRegistered(
+            id, createdBy, legalName.Value, nit.Number, nit.CheckDigit, contact.Email, contact.Phone));
 
         return owner;
     }
@@ -68,6 +75,7 @@ public sealed class Owner : AggregateRoot
         Type = OwnerType.Natural;
         Name = PersonName.FromStorage(e.FirstNames, e.LastNames);
         Document = IdentityDocument.FromStorage(e.DocumentType, e.DocumentNumber);
+        Contact = ContactInfo.FromStorage(e.Email, e.Phone);
     }
 
     private void When(CompanyOwnerRegistered e)
@@ -77,5 +85,6 @@ public sealed class Owner : AggregateRoot
         Type = OwnerType.Company;
         LegalName = LegalName.FromStorage(e.LegalName);
         Nit = Nit.FromStorage(e.Nit, e.NitCheckDigit);
+        Contact = ContactInfo.FromStorage(e.Email, e.Phone);
     }
 }

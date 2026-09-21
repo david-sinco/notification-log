@@ -2,6 +2,7 @@ namespace NotificationLog.Web.Api.Identity.Users;
 
 public sealed record UserDto(
     Guid Id,
+    string Name,
     string? Email,
     bool IsEmailVerified,
     string? Phone,

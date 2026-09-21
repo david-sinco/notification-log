@@ -5,6 +5,7 @@ namespace NotificationLog.IdentityService.Application.Users.Commands.CreateAccou
 public sealed record CreateAccountCommand(
     Guid Id,
     string Identifier,
+    string Phone,
     string Name,
     string Locale,
     string TimeZone,

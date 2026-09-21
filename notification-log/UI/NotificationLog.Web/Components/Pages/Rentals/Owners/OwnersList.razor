@@ -132,6 +132,23 @@ else if (page is not null)
             </div>
         }
 
+        <div class="row g-2 mb-3">
+            <div class="col-md-7">
+                <label class="form-label">Correo</label>
+                <input type="email" class="form-control" maxlength="256" @bind="email" />
+            </div>
+            <div class="col-md-5">
+                <label class="form-label">Teléfono</label>
+                <input class="form-control" placeholder="3001234567" @bind="phone" />
+                <div class="form-hint">Si no pones indicativo se asume +57.</div>
+            </div>
+        </div>
+
+        <div class="alert-info-soft p-3 mb-3 small">
+            Con el correo y el teléfono se crea la cuenta del propietario en Llave, para que pueda
+            confirmarlos y recibir las notificaciones de sus publicaciones y visitas.
+        </div>
+
         @if (createError is not null)
         {
             <ErrorAlert Exception="createError" />
@@ -163,6 +180,8 @@ else if (page is not null)
     private string documentNumber = "";
     private string legalName = "";
     private string nit = "";
+    private string email = "";
+    private string phone = "";
 
     private string Subtitle => Actor.IsStaff
         ? "Toda persona natural o jurídica dueña de los inmuebles que se publican."
@@ -239,9 +258,11 @@ else if (page is not null)
         try
         {
             var id = createCompany
-                ? await Api.RegisterCompanyAsync(new RegisterCompanyOwnerRequest(legalName, nit), CancellationToken.None)
+                ? await Api.RegisterCompanyAsync(
+                    new RegisterCompanyOwnerRequest(legalName, nit, email, phone),
+                    CancellationToken.None)
                 : await Api.RegisterNaturalAsync(
-                    new RegisterNaturalOwnerRequest(firstNames, lastNames, documentType, documentNumber),
+                    new RegisterNaturalOwnerRequest(firstNames, lastNames, documentType, documentNumber, email, phone),
                     CancellationToken.None);
 
             showCreate = false;

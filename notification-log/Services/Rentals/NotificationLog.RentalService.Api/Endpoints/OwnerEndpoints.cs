@@ -57,7 +57,8 @@ public static class OwnerEndpoints
         RegisterNaturalOwnerHandler handler,
         CancellationToken ct)
     {
-        var command = new RegisterNaturalOwnerCommand(body.FirstNames, body.LastNames, body.DocumentType, body.DocumentNumber);
+        var command = new RegisterNaturalOwnerCommand(
+            body.FirstNames, body.LastNames, body.DocumentType, body.DocumentNumber, body.Email, body.Phone);
         var id = await handler.HandleAsync(command, user, ct);
 
         return Results.Created($"/api/owners/{id}", new CreatedOwnerResponse(id));
@@ -69,7 +70,7 @@ public static class OwnerEndpoints
         RegisterCompanyOwnerHandler handler,
         CancellationToken ct)
     {
-        var id = await handler.HandleAsync(new RegisterCompanyOwnerCommand(body.LegalName, body.Nit), user, ct);
+        var id = await handler.HandleAsync(new RegisterCompanyOwnerCommand(body.LegalName, body.Nit, body.Email, body.Phone), user, ct);
 
         return Results.Created($"/api/owners/{id}", new CreatedOwnerResponse(id));
     }

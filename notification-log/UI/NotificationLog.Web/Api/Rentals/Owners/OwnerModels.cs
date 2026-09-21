@@ -17,12 +17,16 @@ public sealed record OwnerDto(
     string? DocumentNumber,
     string? LegalName,
     string? Nit,
+    string Email,
+    string Phone,
     DateTimeOffset RegisteredAt);
 
 public sealed record RegisterNaturalOwnerRequest(
     string FirstNames,
     string LastNames,
     DocumentType DocumentType,
-    string DocumentNumber);
+    string DocumentNumber,
+    string Email,
+    string Phone);
 
-public sealed record RegisterCompanyOwnerRequest(string LegalName, string Nit);
+public sealed record RegisterCompanyOwnerRequest(string LegalName, string Nit, string Email, string Phone);

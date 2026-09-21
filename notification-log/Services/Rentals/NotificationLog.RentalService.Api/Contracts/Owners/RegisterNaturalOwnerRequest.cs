@@ -6,4 +6,6 @@ public sealed record RegisterNaturalOwnerRequest(
     string FirstNames,
     string LastNames,
     DocumentType DocumentType,
-    string DocumentNumber);
+    string DocumentNumber,
+    string Email,
+    string Phone);

@@ -13,12 +13,17 @@ public sealed class RegisterCompanyOwnerHandler
 {
     private readonly IOwnerRepository _owners;
     private readonly IOwnerReadModel _readModel;
+    private readonly IAccountProvisioner _accounts;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<RegisterCompanyOwnerCommand> _validator;
 
     public RegisterCompanyOwnerHandler(
-        IOwnerRepository owners, IOwnerReadModel readModel, IUnitOfWork uow, IValidator<RegisterCompanyOwnerCommand> validator)
-        => (_owners, _readModel, _uow, _validator) = (owners, readModel, uow, validator);
+        IOwnerRepository owners,
+        IOwnerReadModel readModel,
+        IAccountProvisioner accounts,
+        IUnitOfWork uow,
+        IValidator<RegisterCompanyOwnerCommand> validator)
+        => (_owners, _readModel, _accounts, _uow, _validator) = (owners, readModel, accounts, uow, validator);
 
     public async Task<Guid> HandleAsync(RegisterCompanyOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
@@ -28,14 +33,18 @@ public sealed class RegisterCompanyOwnerHandler
 
         var legalName = LegalName.Create(cmd.LegalName);
         var nit = Nit.Create(cmd.Nit);
+        var contact = ContactInfo.Create(cmd.Email, cmd.Phone);
 
         if (await _readModel.ExistsWithNitAsync(nit.Number, ct))
             throw new AppValidationException("Ya existe un propietario con ese NIT.");
 
-        var owner = Owner.RegisterCompany(ownerId, user.GetUserId(), legalName, nit);
+        var owner = Owner.RegisterCompany(ownerId, user.GetUserId(), legalName, nit, contact);
 
         await _owners.AppendAsync(owner, ct);
         await _uow.SaveChangesAsync(ct);
+
+        await _accounts.RequestAccountAsync(
+            new AccountRequest(owner.Id, legalName.Value, contact.Email, contact.Phone, [UserRole.Propietario]), ct);
 
         return owner.Id;
     }

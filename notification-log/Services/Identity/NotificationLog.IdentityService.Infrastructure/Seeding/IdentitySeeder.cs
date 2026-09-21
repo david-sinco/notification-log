@@ -55,6 +55,7 @@ public sealed class IdentitySeeder : IHostedService
 
         var admin = new ApplicationUser(Guid.NewGuid())
         {
+            Name = "Administrador",
             Email = login.Value,
             EmailConfirmed = true
         };

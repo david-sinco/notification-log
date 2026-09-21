@@ -7,5 +7,7 @@ public sealed record CompanyOwnerRegistered(
     Guid CreatedBy,
     string LegalName,
     string Nit,
-    int NitCheckDigit
+    int NitCheckDigit,
+    string Email,
+    string Phone
 ) : DomainEvent;

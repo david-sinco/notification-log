@@ -35,7 +35,7 @@ public sealed class User : AggregateRoot
 
     public bool IsVerified => IsEmailConfirmed || IsPhoneConfirmed;
 
-    public string DisplayName => Email ?? Phone ?? Id.ToString();
+    public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Email ?? Phone ?? Id.ToString() : Name;
 
     public string VerifiedEmail => IsEmailConfirmed ? Email ?? string.Empty : string.Empty;
 
@@ -56,11 +56,7 @@ public sealed class User : AggregateRoot
 
         var user = new User(id);
 
-        if (login.Channel == LoginChannel.Email)
-            user.Email = login.Value;
-        else
-            user.Phone = login.Value;
-
+        user.SetContact(login);
         user.UpdateProfile(name, locale, timeZone, acceptsNotifications);
 
         return user;
@@ -110,6 +106,28 @@ public sealed class User : AggregateRoot
         Locale = locale;
         TimeZone = timeZone;
         AcceptsNotifications = acceptsNotifications;
+    }
+
+    public void SetContact(LoginIdentifier contact)
+    {
+        ArgumentNullException.ThrowIfNull(contact);
+
+        if (contact.Channel == LoginChannel.Email)
+        {
+            if (Email == contact.Value)
+                return;
+
+            Email = contact.Value;
+            IsEmailConfirmed = false;
+        }
+        else
+        {
+            if (Phone == contact.Value)
+                return;
+
+            Phone = contact.Value;
+            IsPhoneConfirmed = false;
+        }
     }
 
     public bool IsConfirmed(LoginChannel channel) =>

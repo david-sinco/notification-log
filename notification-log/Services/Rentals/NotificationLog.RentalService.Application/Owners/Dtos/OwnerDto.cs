@@ -10,4 +10,6 @@ public sealed record OwnerDto(
     string? DocumentNumber,
     string? LegalName,
     string? Nit,
+    string Email,
+    string Phone,
     DateTimeOffset RegisteredAt);

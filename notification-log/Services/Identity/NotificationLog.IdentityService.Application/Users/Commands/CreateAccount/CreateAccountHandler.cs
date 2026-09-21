@@ -22,20 +22,26 @@ public sealed class CreateAccountHandler
         var login = LoginIdentifier.TryParse(cmd.Identifier)
             ?? throw new AppValidationException($"'{cmd.Identifier}' no es un correo ni un teléfono válido.");
 
+        var phone = string.IsNullOrWhiteSpace(cmd.Phone)
+            ? null
+            : LoginIdentifier.TryParse(cmd.Phone)
+                ?? throw new AppValidationException($"'{cmd.Phone}' no es un teléfono válido.");
+
         var locale = string.IsNullOrWhiteSpace(cmd.Locale) ? AccountPolicy.DefaultLocale : cmd.Locale;
         var timeZone = string.IsNullOrWhiteSpace(cmd.TimeZone) ? AccountPolicy.DefaultTimeZone : cmd.TimeZone;
 
-        var user = await _users.FindByLoginAsync(login, ct);
+        var user = await _users.FindByIdAsync(cmd.Id, ct) ?? await _users.FindByLoginAsync(login, ct);
 
         if (user is null)
         {
             if (cmd.Id == Guid.Empty)
                 throw new AppValidationException("Hay que indicar el id de la cuenta.");
 
-            if (await _users.FindByIdAsync(cmd.Id, ct) is not null)
-                throw new AppValidationException($"Ya existe otra cuenta con el id '{cmd.Id}'.");
-
             user = User.Register(cmd.Id, login, cmd.Name, locale, timeZone, cmd.AcceptsNotifications);
+
+            if (phone is not null)
+                user.SetContact(phone);
+
             user.Confirm(login.Channel);
 
             await _users.AddAsync(user, ct);
@@ -43,6 +49,11 @@ public sealed class CreateAccountHandler
         else
         {
             user.UpdateProfile(cmd.Name, locale, timeZone, cmd.AcceptsNotifications);
+            user.SetContact(login);
+
+            if (phone is not null)
+                user.SetContact(phone);
+
             user.Confirm(login.Channel);
 
             await _users.UpdateAsync(user, ct);

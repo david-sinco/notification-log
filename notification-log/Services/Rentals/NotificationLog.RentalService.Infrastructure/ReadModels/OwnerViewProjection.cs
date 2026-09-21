@@ -24,6 +24,8 @@ public sealed class OwnerViewProjection : SingleStreamProjection<OwnerView, Guid
                 LastNames = n.LastNames,
                 DocumentType = n.DocumentType,
                 DocumentNumber = n.DocumentNumber,
+                Email = n.Email,
+                Phone = n.Phone,
                 RegisteredAt = at
             },
             CompanyOwnerRegistered c => new OwnerView
@@ -34,6 +36,8 @@ public sealed class OwnerViewProjection : SingleStreamProjection<OwnerView, Guid
                 LegalName = c.LegalName,
                 Nit = c.Nit,
                 NitCheckDigit = c.NitCheckDigit,
+                Email = c.Email,
+                Phone = c.Phone,
                 RegisteredAt = at
             },
             _ => snapshot

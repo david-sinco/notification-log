@@ -49,5 +49,7 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
         x.DocumentNumber,
         x.LegalName,
         x.Nit is null ? null : $"{x.Nit}-{x.NitCheckDigit}",
+        x.Email,
+        x.Phone,
         x.RegisteredAt);
 }

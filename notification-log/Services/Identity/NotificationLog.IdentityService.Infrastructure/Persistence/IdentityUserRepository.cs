@@ -78,6 +78,14 @@ internal sealed class IdentityUserRepository : IUserRepository
         var entity = await _users.FindByIdAsync(user.Id.ToString())
             ?? throw new DomainException($"La cuenta '{user.Id}' ya no existe.");
 
+        if (!string.Equals(entity.Email, user.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            var updated = await _users.SetEmailAsync(entity, user.Email);
+
+            if (!updated.Succeeded)
+                throw new DomainException(string.Join(" ", updated.Errors.Select(error => error.Description)));
+        }
+
         UserMapping.Apply(user, entity);
     }
 

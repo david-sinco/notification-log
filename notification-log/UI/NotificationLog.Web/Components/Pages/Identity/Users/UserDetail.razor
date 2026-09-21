@@ -21,7 +21,7 @@ else if (user is not null)
     <div class="page-header">
         <div>
             <p class="eyebrow">Cuenta</p>
-            <h1>@(IsOwnProfile ? "Mi perfil" : user.Email ?? user.Phone ?? "Usuario")</h1>
+            <h1>@(IsOwnProfile ? "Mi perfil" : user.Name)</h1>
             <p class="font-monospace small">@user.Id</p>
         </div>
         <div>
@@ -40,6 +40,8 @@ else if (user is not null)
             <div class="surface-card">
                 <h2 class="h6">Datos de acceso</h2>
                 <dl class="kv-list">
+                    <dt>Nombre</dt>
+                    <dd>@user.Name</dd>
                     <dt>Correo</dt>
                     <dd>@(user.Email ?? "—") @VerifiedLabel(user.Email, user.IsEmailVerified)</dd>
                     <dt>Teléfono</dt>

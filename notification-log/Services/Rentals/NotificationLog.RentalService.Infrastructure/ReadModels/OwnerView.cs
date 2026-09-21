@@ -14,5 +14,7 @@ public sealed class OwnerView
     public string? LegalName { get; set; }
     public string? Nit { get; set; }
     public int? NitCheckDigit { get; set; }
+    public string Email { get; set; } = string.Empty;
+    public string Phone { get; set; } = string.Empty;
     public DateTimeOffset RegisteredAt { get; set; }
 }

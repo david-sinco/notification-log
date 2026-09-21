@@ -4,6 +4,7 @@ namespace NotificationLog.IdentityService.Application.Users.Dtos;
 
 public sealed record UserDto(
     Guid Id,
+    string Name,
     string? Email,
     bool IsEmailVerified,
     string? Phone,
@@ -13,6 +14,7 @@ public sealed record UserDto(
 {
     public static UserDto From(User user, DateTimeOffset now) =>
         new(user.Id,
+            user.DisplayName,
             user.Email,
             user.IsEmailConfirmed,
             user.Phone,

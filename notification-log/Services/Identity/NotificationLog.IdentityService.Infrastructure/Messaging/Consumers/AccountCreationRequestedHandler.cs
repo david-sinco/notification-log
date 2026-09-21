@@ -14,6 +14,7 @@ public static class AccountCreationRequestedHandler
             new CreateAccountCommand(
                 Id: ParseId(message.UserId),
                 Identifier: message.Identifier,
+                Phone: message.Phone,
                 Name: message.Name,
                 Locale: message.Locale,
                 TimeZone: message.TimeZone,
