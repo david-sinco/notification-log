@@ -29,6 +29,7 @@
     <File Path="CLAUDE.md" />
     <File Path="Person.md" />
     <File Path="Rentals.md" />
+    <File Path="todo.md" />
   </Folder>
   <Folder Name="/UI/">
     <Project Path="UI/NotificationLog.Web/NotificationLog.Web.csproj" />

@@ -4,10 +4,11 @@
 @inject RentalsActor Actor
 @inject NavigationManager Nav
 
-<PageTitle>Publicaciones · NotificationLog</PageTitle>
+<PageTitle>Publicaciones · Llave</PageTitle>
 
 <div class="page-header">
     <div>
+        <p class="eyebrow">Arriendos</p>
         <h1>Publicaciones</h1>
         <p>Inmuebles en venta o arriendo, desde el borrador hasta el cierre.</p>
     </div>
@@ -129,7 +130,7 @@
                         <option value="@o.Id">@OwnerName(o)</option>
                     }
                 </select>
-                <div class="form-hint">La publicación queda a nombre del propietario; vos quedás como quien la creó.</div>
+                <div class="form-hint">La publicación queda a nombre del propietario; tú quedas como quien la creó.</div>
             </div>
         }
         else
@@ -219,7 +220,7 @@
 
         try
         {
-            owners = (await OwnersApi.ListAsync(1, 100, CancellationToken.None)).Items;
+            owners = (await OwnersApi.ListAsync(null, 1, 100, CancellationToken.None)).Items;
         }
         catch (ApiException ex)
         {

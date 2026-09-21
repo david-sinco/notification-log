@@ -1,12 +1,12 @@
 @page "/rentals/owners/{Id:guid}"
 @attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}")]
 @inject OwnersApiClient Api
+@inject ListingsApiClient ListingsApi
+@inject NavigationManager Nav
 
-<PageTitle>Propietario · NotificationLog</PageTitle>
+<PageTitle>Propietario · Llave</PageTitle>
 
-<div class="mb-3">
-    <a href="/rentals/owners" class="small">← Volver a propietarios</a>
-</div>
+<a href="/rentals/owners" class="back-link">← Volver a propietarios</a>
 
 @if (loading)
 {
@@ -20,18 +20,16 @@ else if (owner is not null)
 {
     <div class="page-header">
         <div>
+            <p class="eyebrow">@OwnerLabels.Type(owner.Type)</p>
             <h1>@OwnerLabels.Name(owner)</h1>
-            <p class="font-monospace small">@owner.Id</p>
-        </div>
-        <div>
-            <span class="chip">@OwnerLabels.Type(owner.Type)</span>
+            <p>@OwnerLabels.Identification(owner)</p>
         </div>
     </div>
 
-    <div class="row g-4">
+    <div class="row g-4 mb-4">
         <div class="col-lg-6">
-            <div class="surface-card">
-                <h2 class="h6">Datos del propietario</h2>
+            <div class="surface-card h-100">
+                <h2>Datos del propietario</h2>
                 <dl class="kv-list">
                     @if (owner.Nit is not null)
                     {
@@ -54,9 +52,11 @@ else if (owner is not null)
         </div>
 
         <div class="col-lg-6">
-            <div class="surface-card">
-                <h2 class="h6">Registro</h2>
+            <div class="surface-card h-100">
+                <h2>Registro</h2>
                 <dl class="kv-list">
+                    <dt>Identificador</dt>
+                    <dd><ShortId Value="owner.Id" /></dd>
                     <dt>Registrado por</dt>
                     <dd><ShortId Value="owner.CreatedBy" /></dd>
                     <dt>Fecha</dt>
@@ -65,12 +65,53 @@ else if (owner is not null)
             </div>
         </div>
     </div>
+
+    <div class="table-card">
+        <div class="card-title-row">
+            <h2>Publicaciones de este propietario</h2>
+            <a href="/rentals/listings" class="small">Ver todas →</a>
+        </div>
+
+        @if (listings is { Count: 0 })
+        {
+            <EmptyState Text="Este propietario todavía no tiene publicaciones." Icon="🏠" />
+        }
+        else if (listings is not null)
+        {
+            <div class="table-responsive-wrap">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Inmueble</th>
+                            <th>Operación</th>
+                            <th>Precio</th>
+                            <th>Estado</th>
+                            <th>Actualizada</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var listing in listings)
+                        {
+                            <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/listings/{listing.Id}")'>
+                                <td>@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</td>
+                                <td>@RentalsFormat.Term(listing.Operation)</td>
+                                <td>@RentalsFormat.Money(listing.Price)</td>
+                                <td><RentalStatusPill Status="@listing.Status" /></td>
+                                <td class="text-muted small">@RentalsFormat.Date(listing.UpdatedAt)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
 }
 
 @code {
     [Parameter] public Guid Id { get; set; }
 
     private OwnerDto? owner;
+    private IReadOnlyList<ListingSummaryDto>? listings;
     private bool loading = true;
     private ApiException? error;
 
@@ -80,6 +121,7 @@ else if (owner is not null)
         try
         {
             owner = await Api.GetByIdAsync(Id, CancellationToken.None);
+            listings = (await ListingsApi.ListAsync(null, null, null, Id, 1, 10, CancellationToken.None)).Items;
             error = null;
         }
         catch (ApiException ex)

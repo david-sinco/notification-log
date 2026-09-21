@@ -1,11 +1,9 @@
 @page "/recipients/{Id:guid}"
 @inject RecipientsApiClient Api
 
-<PageTitle>Destinatario · NotificationLog</PageTitle>
+<PageTitle>Destinatario · Llave</PageTitle>
 
-<div class="mb-3">
-    <a href="/recipients" class="small">← Volver a destinatarios</a>
-</div>
+<a href="/recipients" class="back-link">← Volver a destinatarios</a>
 
 @if (loading)
 {
@@ -19,6 +17,7 @@ else if (recipient is not null)
 {
     <div class="page-header">
         <div>
+            <p class="eyebrow">Destinatario</p>
             <h1>@recipient.Name</h1>
         </div>
         <div>

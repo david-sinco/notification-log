@@ -1,10 +1,44 @@
+@using System.Security.Claims
+
 <AuthorizeView>
     <Authorized>
-        <form action="authentication/logout" method="post" class="d-flex align-items-center gap-2">
-            <AntiforgeryToken />
-            <input type="hidden" name="returnUrl" value="/" />
-            <span class="small text-muted">@context.User.Identity?.Name</span>
-            <button type="submit" class="btn btn-outline-secondary btn-sm">Cerrar sesión</button>
-        </form>
+        <div class="user-card">
+            <a class="user-identity" href="users/me">
+                <span class="avatar" aria-hidden="true">@Initials(context.User)</span>
+                <span class="user-text">
+                    <span class="user-name">@(context.User.Identity?.Name ?? "Mi cuenta")</span>
+                    <span class="user-role">@Roles(context.User)</span>
+                </span>
+            </a>
+
+            <form action="authentication/logout" method="post">
+                <AntiforgeryToken />
+                <input type="hidden" name="returnUrl" value="/" />
+                <button type="submit" class="logout">Cerrar sesión</button>
+            </form>
+        </div>
     </Authorized>
 </AuthorizeView>
+
+@code {
+    private static string Initials(ClaimsPrincipal user)
+    {
+        var name = user.Identity?.Name;
+
+        if (string.IsNullOrWhiteSpace(name))
+            return "·";
+
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length == 1
+            ? parts[0][..1].ToUpperInvariant()
+            : $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
+    }
+
+    private static string Roles(ClaimsPrincipal user)
+    {
+        var roles = user.FindAll(IdentityClaims.Role).Select(claim => claim.Value).ToArray();
+
+        return roles.Length == 0 ? "Sin rol" : string.Join(" · ", roles);
+    }
+}

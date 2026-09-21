@@ -2,11 +2,9 @@
 @inject VisitsApiClient Api
 @inject RentalsActor Actor
 
-<PageTitle>Visita · NotificationLog</PageTitle>
+<PageTitle>Visita · Llave</PageTitle>
 
-<div class="mb-3">
-    <a href="/rentals/visits" class="small">← Volver a visitas</a>
-</div>
+<a href="/rentals/visits" class="back-link">← Volver a visitas</a>
 
 @if (loading && visit is null)
 {
@@ -20,6 +18,7 @@ else if (visit is not null)
 {
     <div class="page-header">
         <div>
+            <p class="eyebrow">Visita</p>
             <h1>Visita @(visit.ConfirmedSlotStart is { } confirmed ? $"el {RentalsFormat.Date(confirmed)}" : "por confirmar")</h1>
             <p>Franjas de @visit.SlotDurationMinutes minutos, hora de Colombia · <ShortId Value="visit.Id" /></p>
         </div>

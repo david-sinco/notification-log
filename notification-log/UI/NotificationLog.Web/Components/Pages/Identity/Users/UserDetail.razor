@@ -2,12 +2,10 @@
 @page "/users/{Id:guid}"
 @inject UsersApiClient Api
 
-<PageTitle>@(IsOwnProfile ? "Mi perfil" : "Usuario") · NotificationLog</PageTitle>
+<PageTitle>@(IsOwnProfile ? "Mi perfil" : "Usuario") · Llave</PageTitle>
 
 <AuthorizeView Roles="@IdentityRoles.Administrador">
-    <div class="mb-3">
-        <a href="/users" class="small">← Volver a usuarios</a>
-    </div>
+    <a href="/users" class="back-link">← Volver a usuarios</a>
 </AuthorizeView>
 
 @if (loading)
@@ -22,6 +20,7 @@ else if (user is not null)
 {
     <div class="page-header">
         <div>
+            <p class="eyebrow">Cuenta</p>
             <h1>@(IsOwnProfile ? "Mi perfil" : user.Email ?? user.Phone ?? "Usuario")</h1>
             <p class="font-monospace small">@user.Id</p>
         </div>

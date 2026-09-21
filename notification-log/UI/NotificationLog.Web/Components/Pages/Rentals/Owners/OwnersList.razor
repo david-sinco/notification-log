@@ -2,18 +2,20 @@
 @attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}")]
 @using System.Net
 @inject OwnersApiClient Api
+@inject RentalsActor Actor
 @inject NavigationManager Nav
 
-<PageTitle>Propietarios · NotificationLog</PageTitle>
+<PageTitle>Propietarios · Llave</PageTitle>
 
 <div class="page-header">
     <div>
+        <p class="eyebrow">Arriendos</p>
         <h1>Propietarios</h1>
         <p>@Subtitle</p>
     </div>
     @if (CanRegister)
     {
-        <button class="btn btn-primary" @onclick="OpenCreate">+ Nuevo propietario</button>
+        <button class="btn btn-primary" @onclick="OpenCreate">+ Registrar propietario</button>
     }
 </div>
 
@@ -22,15 +24,30 @@
     <ErrorAlert Exception="error" />
 }
 
+@if (Actor.IsStaff)
+{
+    <div class="filter-bar">
+        <div class="form-check mb-0">
+            <input class="form-check-input" type="checkbox" id="only-mine" checked="@onlyMine" @onchange="ToggleOnlyMine" />
+            <label class="form-check-label" for="only-mine">Solo los que registré yo</label>
+        </div>
+    </div>
+}
+
 @if (loading)
 {
     <div class="p-4 text-center text-muted">Cargando…</div>
 }
-else if (!canSeeAll)
+else if (!Actor.IsStaff)
 {
     @if (ownRecord is null)
     {
-        <EmptyState Text="Aún no estás registrado como propietario." Icon="🔑" />
+        <div class="surface-card">
+            <EmptyState Text="Aún no estás registrado como propietario." Icon="🔑" />
+            <p class="form-hint text-center mb-0">
+                Registra tus datos para poder publicar inmuebles y atender visitas.
+            </p>
+        </div>
     }
     else
     {
@@ -55,12 +72,16 @@ else if (page is not null)
     </div>
 }
 
-<Modal Title="Nuevo propietario" @bind-IsVisible="showCreate">
+<Modal Title="Registrar propietario" @bind-IsVisible="showCreate">
     <ChildContent>
-        @if (!canSeeAll)
+        @if (!Actor.IsStaff)
         {
-            <div class="form-hint mb-3">Te registras a ti mismo como propietario.</div>
+            <div class="alert-info-soft p-3 mb-3 small">
+                Te registras a ti mismo como propietario: el registro queda con tu mismo identificador y solo
+                puedes hacerlo una vez.
+            </div>
         }
+
         <div class="mb-3">
             <label class="form-label">Tipo de persona</label>
             <select class="form-select" @bind="createCompany">
@@ -68,16 +89,17 @@ else if (page is not null)
                 <option value="true">Persona jurídica</option>
             </select>
         </div>
+
         @if (createCompany)
         {
             <div class="mb-3">
                 <label class="form-label">Razón social</label>
-                <input class="form-control" @bind="legalName" />
+                <input class="form-control" maxlength="200" @bind="legalName" />
             </div>
             <div class="mb-3">
                 <label class="form-label">NIT</label>
                 <input class="form-control" placeholder="900123456-7" @bind="nit" />
-                <div class="form-hint">Con el dígito de verificación después del guion.</div>
+                <div class="form-hint">De 8 o 9 dígitos y el dígito de verificación después del guion.</div>
             </div>
         }
         else
@@ -85,11 +107,11 @@ else if (page is not null)
             <div class="row g-2 mb-3">
                 <div class="col-md-6">
                     <label class="form-label">Nombres</label>
-                    <input class="form-control" @bind="firstNames" />
+                    <input class="form-control" maxlength="100" @bind="firstNames" />
                 </div>
                 <div class="col-md-6">
                     <label class="form-label">Apellidos</label>
-                    <input class="form-control" @bind="lastNames" />
+                    <input class="form-control" maxlength="100" @bind="lastNames" />
                 </div>
             </div>
             <div class="row g-2 mb-3">
@@ -105,9 +127,11 @@ else if (page is not null)
                 <div class="col-md-7">
                     <label class="form-label">Número</label>
                     <input class="form-control" @bind="documentNumber" />
+                    <div class="form-hint">@DocumentHint</div>
                 </div>
             </div>
         }
+
         @if (createError is not null)
         {
             <ErrorAlert Exception="createError" />
@@ -122,16 +146,12 @@ else if (page is not null)
 @code {
     private const int PageSize = 20;
 
-    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
-
-    private Guid currentUserId;
-    private bool canSeeAll;
-
     private PagedResult<OwnerDto>? page;
     private OwnerDto? ownRecord;
     private bool loading = true;
     private ApiException? error;
     private int currentPage = 1;
+    private bool onlyMine;
 
     private bool showCreate;
     private bool creating;
@@ -144,28 +164,25 @@ else if (page is not null)
     private string legalName = "";
     private string nit = "";
 
-    private string Subtitle => canSeeAll
-        ? "Todos los propietarios registrados en Arriendos."
-        : "Tu registro como propietario.";
+    private string Subtitle => Actor.IsStaff
+        ? "Toda persona natural o jurídica dueña de los inmuebles que se publican."
+        : "Tu registro como propietario dentro de Llave.";
 
-    private bool CanRegister => !loading && (canSeeAll || ownRecord is null);
+    private bool CanRegister => !loading && (Actor.IsStaff || ownRecord is null);
 
-    protected override async Task OnInitializedAsync()
-    {
-        var user = (await AuthState).User;
-        currentUserId = Guid.TryParse(user.FindFirst(IdentityClaims.Subject)?.Value, out var sub) ? sub : Guid.Empty;
-        canSeeAll = user.IsInRole(IdentityRoles.Administrador) || user.IsInRole(IdentityRoles.Moderador);
+    private string DocumentHint => documentType == DocumentType.Passport
+        ? "Entre 5 y 20 letras o números."
+        : "Entre 6 y 10 dígitos, sin puntos.";
 
-        await LoadAsync();
-    }
+    protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
         loading = true;
         try
         {
-            if (canSeeAll)
-                page = await Api.ListAsync(currentPage, PageSize, CancellationToken.None);
+            if (Actor.IsStaff)
+                page = await Api.ListAsync(onlyMine ? Actor.Require() : null, currentPage, PageSize, CancellationToken.None);
             else
                 ownRecord = await LoadOwnRecordAsync();
 
@@ -185,7 +202,7 @@ else if (page is not null)
     {
         try
         {
-            return await Api.GetByIdAsync(currentUserId, CancellationToken.None);
+            return await Api.GetByIdAsync(Actor.Require(), CancellationToken.None);
         }
         catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
@@ -193,9 +210,18 @@ else if (page is not null)
         }
     }
 
+    private Task ToggleOnlyMine(ChangeEventArgs args)
+    {
+        onlyMine = args.Value is true;
+        currentPage = 1;
+
+        return LoadAsync();
+    }
+
     private Task GoToPage(int p)
     {
         currentPage = p;
+
         return LoadAsync();
     }
 

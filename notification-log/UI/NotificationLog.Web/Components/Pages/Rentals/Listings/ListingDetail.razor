@@ -4,11 +4,9 @@
 @inject RentalsActor Actor
 @inject NavigationManager Nav
 
-<PageTitle>Publicación · NotificationLog</PageTitle>
+<PageTitle>Publicación · Llave</PageTitle>
 
-<div class="mb-3">
-    <a href="/rentals/listings" class="small">← Volver a publicaciones</a>
-</div>
+<a href="/rentals/listings" class="back-link">← Volver a publicaciones</a>
 
 @if (loading && listing is null)
 {
@@ -22,6 +20,7 @@ else if (listing is not null)
 {
     <div class="page-header">
         <div>
+            <p class="eyebrow">PublicaciÃ³n</p>
             <h1>@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</h1>
             <p>@RentalsFormat.Term(listing.Operation) · @RentalsFormat.Money(listing.Price) · <ShortId Value="listing.Id" /></p>
         </div>

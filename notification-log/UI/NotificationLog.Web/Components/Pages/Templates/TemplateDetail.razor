@@ -1,11 +1,9 @@
 @page "/templates/{Id:guid}"
 @inject TemplatesApiClient Api
 
-<PageTitle>Plantilla · NotificationLog</PageTitle>
+<PageTitle>Plantilla · Llave</PageTitle>
 
-<div class="mb-3">
-    <a href="/templates" class="small">← Volver a plantillas</a>
-</div>
+<a href="/templates" class="back-link">← Volver a plantillas</a>
 
 @if (loading)
 {
@@ -19,6 +17,7 @@ else if (template is not null)
 {
     <div class="page-header">
         <div>
+            <p class="eyebrow">Plantilla</p>
             <h1 class="d-flex align-items-center gap-2">
                 @template.Name
                 <ChannelBadge Channel="@template.Channel" />

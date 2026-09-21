@@ -4,7 +4,6 @@ using NotificationLog.Web.Api.Recipients;
 using NotificationLog.Web.Api.Templates;
 using NotificationLog.Web.Api.Triggers;
 using NotificationLog.Web.Api.Rentals;
-using NotificationLog.Web.Api.Rentals.Identity;
 using NotificationLog.Web.Api.Rentals.Listings;
 using NotificationLog.Web.Api.Rentals.Owners;
 using NotificationLog.Web.Api.Rentals.Visits;
@@ -32,7 +31,6 @@ builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress
 builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://notification"));
 
 builder.Services.AddHttpClient<VisitsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
-builder.Services.AddHttpClient<DevIdentityApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
 builder.Services.AddScoped<RentalsActor>();
 
 builder.Services.AddHttpContextAccessor();

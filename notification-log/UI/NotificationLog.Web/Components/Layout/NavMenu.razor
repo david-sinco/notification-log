@@ -1,117 +1,102 @@
-@inject NavigationManager Nav
-
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">
-            <span class="brand-mark">N</span> NotificationLog
-        </a>
-    </div>
+﻿<div class="nav-head">
+    <a class="brand" href="">
+        <img src="img/llave-mark.svg" alt="" />
+        <span>
+            <span class="brand-name">Llave</span>
+            <span class="brand-tag">Backoffice</span>
+        </span>
+    </a>
 </div>
 
 <input type="checkbox" title="Menú de navegación" class="navbar-toggler" />
 
 <div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
     <nav class="nav flex-column">
-        <div class="nav-item px-3">
+        <div class="nav-item">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill" aria-hidden="true"></span> Panel
+                <span class="bi bi-grid-fill" aria-hidden="true"></span> Panel
             </NavLink>
         </div>
 
-        <details class="nav-group px-3" open="@IsUsersRoute">
-            <summary class="nav-group-title" onclick="event.stopPropagation()">Identidad</summary>
+        <p class="nav-group-title">Arriendos</p>
 
+        <div class="nav-item">
+            <NavLink class="nav-link" href="rentals/listings">
+                <span class="bi bi-building-fill" aria-hidden="true"></span> Publicaciones
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="rentals/visits">
+                <span class="bi bi-calendar-fill" aria-hidden="true"></span> Visitas
+            </NavLink>
+        </div>
+
+        <AuthorizeView Roles="@OwnerRoles">
             <div class="nav-item">
-                <NavLink class="nav-link" href="users/me">
-                    <span class="bi bi-person-circle" aria-hidden="true"></span> Mi perfil
+                <NavLink class="nav-link" href="rentals/owners">
+                    <span class="bi bi-key-fill" aria-hidden="true"></span> Propietarios
                 </NavLink>
             </div>
+        </AuthorizeView>
 
-            <AuthorizeView Roles="@IdentityRoles.Administrador">
-                <div class="nav-item">
-                    <NavLink class="nav-link" href="users" Match="NavLinkMatch.All">
-                        <span class="bi bi-people-fill" aria-hidden="true"></span> Usuarios
-                    </NavLink>
-                </div>
-            </AuthorizeView>
-        </details>
-
-        <details class="nav-group px-3" open="@(!IsRentalsRoute && !IsUsersRoute)">
-            <summary class="nav-group-title" onclick="event.stopPropagation()">Notificaciones</summary>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="triggers">
-                    <span class="bi bi-lightning-fill" aria-hidden="true"></span> Triggers
-                </NavLink>
-            </div>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="templates">
-                    <span class="bi bi-file-text-fill" aria-hidden="true"></span> Plantillas
-                </NavLink>
-            </div>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="recipients">
-                    <span class="bi bi-people-fill" aria-hidden="true"></span> Destinatarios
-                </NavLink>
-            </div>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="notifications">
-                    <span class="bi bi-bell-fill" aria-hidden="true"></span> Notificaciones
-                </NavLink>
-            </div>
-        </details>
-
-        <details class="nav-group px-3" open="@IsRentalsRoute">
-            <summary class="nav-group-title" onclick="event.stopPropagation()">Arriendos</summary>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="rentals" Match="NavLinkMatch.All">
-                    <span class="bi bi-grid-fill" aria-hidden="true"></span> Resumen
-                </NavLink>
-            </div>
-
-            <AuthorizeView Roles="@OwnerRoles">
-                <div class="nav-item">
-                    <NavLink class="nav-link" href="rentals/owners">
-                        <span class="bi bi-people-fill" aria-hidden="true"></span> Propietarios
-                    </NavLink>
-                </div>
-            </AuthorizeView>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="rentals/listings">
-                    <span class="bi bi-building-fill" aria-hidden="true"></span> Publicaciones
-                </NavLink>
-            </div>
-
+        <AuthorizeView Roles="@StaffRoles">
             <div class="nav-item">
                 <NavLink class="nav-link" href="rentals/moderation">
                     <span class="bi bi-shield-fill" aria-hidden="true"></span> Moderación
                 </NavLink>
             </div>
+        </AuthorizeView>
 
+        <p class="nav-group-title">Notificaciones</p>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="triggers">
+                <span class="bi bi-lightning-fill" aria-hidden="true"></span> Triggers
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="templates">
+                <span class="bi bi-file-text-fill" aria-hidden="true"></span> Plantillas
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="recipients">
+                <span class="bi bi-people-fill" aria-hidden="true"></span> Destinatarios
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="notifications">
+                <span class="bi bi-bell-fill" aria-hidden="true"></span> Envíos
+            </NavLink>
+        </div>
+
+        <p class="nav-group-title">Cuenta</p>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="users/me">
+                <span class="bi bi-person-fill" aria-hidden="true"></span> Mi perfil
+            </NavLink>
+        </div>
+
+        <AuthorizeView Roles="@IdentityRoles.Administrador">
             <div class="nav-item">
-                <NavLink class="nav-link" href="rentals/visits">
-                    <span class="bi bi-calendar-fill" aria-hidden="true"></span> Visitas
+                <NavLink class="nav-link" href="users" Match="NavLinkMatch.All">
+                    <span class="bi bi-people-fill" aria-hidden="true"></span> Usuarios
                 </NavLink>
             </div>
-
-            <div class="nav-item">
-                <NavLink class="nav-link" href="rentals/identity">
-                    <span class="bi bi-person-fill" aria-hidden="true"></span> Identidades (dev)
-                </NavLink>
-            </div>
-        </details>
+        </AuthorizeView>
     </nav>
+
+    <div class="nav-user">
+        <LoginDisplay />
+    </div>
 </div>
 
 @code {
-    private const string OwnerRoles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}";
-
-    private bool IsUsersRoute => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("users", StringComparison.OrdinalIgnoreCase);
-
-    private bool IsRentalsRoute =>Nav.ToBaseRelativePath(Nav.Uri).StartsWith("rentals", StringComparison.OrdinalIgnoreCase);
+    private const string StaffRoles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador}";
+    private const string OwnerRoles = $"{StaffRoles},{IdentityRoles.Propietario}";
 }

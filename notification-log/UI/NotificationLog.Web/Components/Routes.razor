@@ -4,7 +4,9 @@
             <NotAuthorized>
                 @if (context.User.Identity?.IsAuthenticated == true)
                 {
-                    <EmptyState Text="No tienes permiso para ver esta página." Icon="🔒" />
+                    <div class="surface-card">
+                        <EmptyState Text="No tienes permiso para ver esta página." Icon="🔒" />
+                    </div>
                 }
                 else
                 {
@@ -14,4 +16,16 @@
         </AuthorizeRouteView>
         <FocusOnNavigate RouteData="routeData" Selector="h1" />
     </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(Layout.MainLayout)">
+            <div class="page-header">
+                <div>
+                    <p class="eyebrow">Llave</p>
+                    <h1>No encontramos esa página</h1>
+                    <p>Puede que el enlace esté viejo o que el recurso ya no exista.</p>
+                </div>
+            </div>
+            <a class="btn btn-primary" href="">Ir al panel</a>
+        </LayoutView>
+    </NotFound>
 </Router>

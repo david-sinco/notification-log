@@ -3,7 +3,6 @@
 ## Prioridad alta
 
 - [ ] **Token hacia las APIs.** Enviar el access token desde la Web con un `DelegatingHandler` que agregue `Authorization: Bearer` y lo renueve con el refresh token (patrón `BlazorWebAppOidcServer`).
-- [ ] **Caída de Notification y Rentals con el debugger** (`ExecutionEngineException`). Confirmar arrancando sin depurar; salidas: desactivar Hot Reload o pregenerar el código de Wolverine (`TypeLoadMode.Static`).
 - [ ] **Validar tokens en Rentals y Notification.**
   - OpenIddict Validation con su audience, más `LocalhostSubdomainHandler` para llegar a Identity.
   - Policies por rol.
@@ -12,7 +11,6 @@
 
 ## Identity
 
-- [ ] **Reiniciar la base de Identity.** Las migraciones se rehicieron desde cero al pasar el servicio a capas (`InitialIdentity` vive ahora en Infrastructure), así que la base `identity` que ya exista tiene un historial de migraciones que no coincide: hay que borrarla para que arranque.
 - [ ] UI de administración de usuarios en la Web: listado, roles, bloquear y desbloquear.
 - [ ] Agregar o cambiar el correo o el celular de una cuenta existente, con código y evento `UserContactChanged`.
 - [ ] **Propagar los cambios de perfil.** `UserCreated` es el único evento que lleva el perfil completo y `RecipientSyncService` lo ignora si el destinatario ya existe, así que actualizar nombre, idioma o zona horaria (por ejemplo con un mensaje a la cola `identity-accounts` de una cuenta que ya está) no llega a Notification. Falta un evento de actualización de perfil, o que el consumidor haga upsert.
@@ -24,7 +22,9 @@
 
 ## Web
 
-- [ ] **Refactorizar el front con la marca "Llave".** La identidad visual que se inventó para Llave solo vive hoy en las páginas de login y registro de Identity (`wwwroot/css/llave.css`, `wwwroot/img/llave-mark.svg`); llevarla a toda la Web.
+- [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro) y en `Web/wwwroot/app.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
+- [ ] **Quitar la réplica dev de Identity en Rentals.** La página `/rentals/identity` ya se borró de la Web, pero en la API siguen `DevIdentityEndpoints`, `PersonVerificationDocument` y `IIdentityReplica`: hoy los alimenta `PersonVerificationChanged` desde Identity, así que el endpoint manual sobra.
+- [ ] Página propia de acceso denegado: `/authentication/access-denied` todavía responde texto plano.
 
 ## Integración y negocio
 
