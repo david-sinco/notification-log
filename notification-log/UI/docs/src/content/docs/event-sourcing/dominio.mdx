@@ -1,0 +1,305 @@
+---
+title: "El portal Llave: el negocio antes que el patrón"
+description: "Quién usa Rentals, qué puede pasarle a una publicación y dónde está cada carpeta. Sin event sourcing todavía."
+sidebar:
+  order: 1
+  label: "1 · El portal Llave"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { member, whole } from '../../../lib/code';
+import listingStatus from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Enums/ListingStatus.cs?raw';
+import listingPolicy from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/ListingPolicy.cs?raw';
+import visitStatus from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Enums/VisitStatus.cs?raw';
+import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
+import visitSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Visit.cs?raw';
+import ownerSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Owners/Owner.cs?raw';
+
+<p class="ddd-lede">
+Casi todos los tutoriales de event sourcing empiezan con un carrito de la compra o una cuenta
+bancaria inventada, y el lector acaba entendiendo el mecanismo sin entender nunca <em>para qué</em>
+servía. Aquí el dominio es real y está en el repositorio, así que vale la pena gastar un módulo
+entero en él — sin mencionar un solo evento. Si no sabes qué es una publicación, qué le puede
+pasar y quién decide, los once módulos siguientes son sintaxis.
+</p>
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> "Llave" es un portal de arriendos donde un propietario publica un
+inmueble, un moderador lo aprueba y un interesado pide verlo — y todo el servicio gira alrededor
+de esas tres cosas: la <strong>publicación</strong>, la <strong>visita</strong> y el
+<strong>propietario</strong>.
+</div>
+
+## Ya conoces el producto
+
+Piensa en Idealista, Fotocasa o Airbnb, y quédate solo con dos pantallas: la del anuncio y la de "solicitar una visita". Eso es Llave.
+
+No hay pagos, ni contratos, ni mensajería tipo chat, ni valoraciones. Hay alguien que ofrece un inmueble y alguien que quiere verlo antes de decidir, con un moderador en medio que revisa que el anuncio no sea basura.
+
+<Callout kind="advertencia" title="Dónde falla la comparación">
+
+En un portal real, el anuncio es principalmente **contenido**: fotos, texto, precio. Se edita libremente y a nadie le importa el historial.
+
+En Llave el anuncio es principalmente un **procedimiento**: pasa por revisión, se aprueba o se rechaza con motivos, caduca al mes, se renueva, se pausa, se suspende, se reinstaura. Esa diferencia —de contenido a procedimiento— es exactamente la que hace que este dominio se beneficie de event sourcing y el catálogo de un portal cualquiera no. El [módulo 2](/event-sourcing/por-que) la desarrolla.
+
+</Callout>
+
+## Las cuatro personas que aparecen
+
+El vocabulario del negocio, que vas a leer en todos los módulos:
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">Propietario <em>(owner)</em></span><span class="arrow">→</span><span>De quién es el inmueble. Puede ser una persona o una empresa.</span></div>
+<div class="term-pair"><span class="biz">Anfitrión <em>(host)</em></span><span class="arrow">→</span><span>Quien recibe y responde una solicitud de visita. Normalmente el propietario.</span></div>
+<div class="term-pair"><span class="biz">Interesado <em>(visitor / seeker)</em></span><span class="arrow">→</span><span>Quien pide ver el inmueble.</span></div>
+<div class="term-pair"><span class="biz">Moderador</span><span class="arrow">→</span><span>Quien aprueba, rechaza, suspende o reinstaura una publicación.</span></div>
+</div>
+
+Fíjate en que **ninguno de los cuatro es un agregado de Rentals**. Los usuarios viven en el servicio de Identity; Rentals solo maneja sus identificadores. El único que tiene entidad propia aquí es el propietario, y por un motivo muy concreto que verás en un momento.
+
+## Las tres cosas que Rentals sí modela
+
+### 1 · `Listing` — la publicación, que es una máquina de estados
+
+Empieza por lo concreto. Un propietario crea un borrador, rellena los datos, sube fotos, pone precio y lo envía a revisión. Ese último paso solo se permite si todo está completo:
+
+<Code
+    code={member(listingSource, 'public void SubmitForReview')}
+    lang="csharp"
+    title="Domain/Listings/Listing.cs · las condiciones para entrar a revisión"
+    mark={['if (_photos.Count < ListingPolicy.MinPhotos)']}
+/>
+
+Cinco comprobaciones y una línea de acción. Esa proporción se repite en todo el agregado, y es la primera señal de qué clase de objeto es: **un `Listing` existe sobre todo para decir que no**.
+
+A partir de ahí la publicación se mueve entre ocho estados:
+
+<Code
+    code={whole(listingStatus)}
+    lang="csharp"
+    title="Domain/Listings/Enums/ListingStatus.cs"
+/>
+
+Y las reglas de cuánto duran las cosas están todas juntas en un solo archivo, que conviene tener a mano porque los módulos siguientes lo citan sin explicarlo:
+
+<Code
+    code={whole(listingPolicy)}
+    lang="csharp"
+    title="Domain/Listings/ListingPolicy.cs · los números del negocio"
+    mark={['public const int ValidityMonths = 1;', 'public static readonly TimeSpan PriceChangeCooldown = TimeSpan.FromHours(24);']}
+/>
+
+Un **`Policy`** —en este repositorio— es una clase estática con las constantes de negocio de un agregado. No es un patrón de event sourcing: es simplemente el sitio donde viven los números para que no estén repartidos por el código. Mínimo cinco fotos, precio mínimo según sea arriendo o venta, un mes de vigencia, aviso siete días antes, y un cambio de precio cada veinticuatro horas.
+
+**Por qué importa:** esa última constante, `PriceChangeCooldown`, es una regla que depende de *cuándo* pasó algo. Guárdatela: es el argumento que decide todo el módulo siguiente.
+
+### 2 · `Visit` — la cita, que es una negociación con reloj
+
+Un interesado no pide "una visita el martes". Propone **hasta tres franjas** y el anfitrión elige una:
+
+<Code
+    code={member(visitSource, 'public static Visit Request')}
+    lang="csharp"
+    title="Domain/Visits/Visit.cs · Request"
+    mark={['throw new DomainException("No se puede solicitar una visita a una publicación propia.");', 'deadline < firstStart ? deadline : firstStart']}
+/>
+
+La última línea es la que más enseña sobre este dominio. `RespondBy` —el plazo que tiene el anfitrión para contestar— es **el menor** entre "48 horas desde ahora" y "el comienzo de la primera franja propuesta". Porque no tiene sentido darle 48 horas para responder a una visita que es mañana.
+
+Los estados de una visita:
+
+<Code
+    code={whole(visitStatus)}
+    lang="csharp"
+    title="Domain/Visits/Enums/VisitStatus.cs"
+/>
+
+Y dos reglas que vas a ver citadas constantemente, porque son las que no caben dentro del agregado:
+
+- **Máximo 3 visitas pendientes** por interesado a la vez.
+- **Dos faltas en 30 días bloquean 15 días.** Una "falta" es no presentarse, o cancelar con menos de 12 horas siendo el interesado.
+
+**Por qué importa:** ninguna de las dos se puede comprobar mirando una sola visita. Hay que mirar *todas* las de esa persona. Ese problema tiene un módulo entero, el [9](/event-sourcing/decisiones).
+
+### 3 · `Owner` — el propietario, que casi no hace nada
+
+<Code
+    code={member(ownerSource, 'public static Owner RegisterNatural')}
+    lang="csharp"
+    title="Domain/Owners/Owner.cs · RegisterNatural"
+/>
+
+Un propietario se registra y ya está. No tiene estados, no tiene transiciones, no tiene métodos además de las dos fábricas (`RegisterNatural` para personas, `RegisterCompany` para empresas).
+
+Existe como agregado propio por una razón de negocio sencilla: **el propietario no es el usuario**. Una inmobiliaria puede publicar inmuebles de terceros, así que quien crea la publicación (`CreatedBy`) y de quién es el inmueble (`OwnerId`) son dos identidades distintas que hay que guardar por separado.
+
+**Por qué importa:** `Owner` es el contraejemplo de toda esta guía. Está construido con event sourcing igual que los otros dos, y **no lo necesitaba**. Lo veremos en el [módulo 2](/event-sourcing/por-que) y lo auditarás tú en la [tarea 3](/event-sourcing/tareas).
+
+## El ciclo de vida, de un vistazo
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 340" role="img" aria-labelledby="lifecycleTitle">
+        <title id="lifecycleTitle">Los ocho estados de una publicación y cómo se pasa de uno a otro</title>
+        <defs>
+            <marker id="lcArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="130" width="120" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="80" y="150" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Draft</text>
+        <text x="80" y="165" text-anchor="middle" font-size="8" fill="#64748b">borrador</text>
+
+        <line x1="142" y1="153" x2="178" y2="153" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#lcArrow)" />
+        <text x="160" y="145" text-anchor="middle" font-size="7.5" fill="#64748b">enviar</text>
+
+        <rect x="180" y="130" width="120" height="46" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="240" y="150" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">InReview</text>
+        <text x="240" y="165" text-anchor="middle" font-size="8" fill="#9a3412">el moderador decide</text>
+
+        <path d="M240 128 Q 160 90 80 126" fill="none" stroke="#dc2626" stroke-width="1.3" marker-end="url(#lcArrow)" />
+        <text x="160" y="96" text-anchor="middle" font-size="7.5" fill="#991b1b">rechazar (con motivos)</text>
+
+        <line x1="302" y1="153" x2="338" y2="153" stroke="#16a34a" stroke-width="1.5" marker-end="url(#lcArrow)" />
+        <text x="320" y="145" text-anchor="middle" font-size="7.5" fill="#14532d">aprobar</text>
+
+        <rect x="340" y="130" width="130" height="46" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="405" y="150" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Published</text>
+        <text x="405" y="165" text-anchor="middle" font-size="8" fill="#14532d">visible · caduca en 1 mes</text>
+
+        <rect x="340" y="34" width="130" height="42" rx="8" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="405" y="52" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">Paused</text>
+        <text x="405" y="66" text-anchor="middle" font-size="8" fill="#64748b">visible, sin visitas nuevas</text>
+        <line x1="392" y1="128" x2="392" y2="80" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#lcArrow)" />
+        <line x1="420" y1="80" x2="420" y2="126" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#lcArrow)" />
+
+        <rect x="340" y="232" width="130" height="42" rx="8" fill="#fef2f2" stroke="#fecaca" />
+        <text x="405" y="250" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">Suspended</text>
+        <text x="405" y="264" text-anchor="middle" font-size="8" fill="#991b1b">castigo del moderador</text>
+        <line x1="392" y1="180" x2="392" y2="228" stroke="#dc2626" stroke-width="1.3" marker-end="url(#lcArrow)" />
+        <line x1="420" y1="228" x2="420" y2="182" stroke="#16a34a" stroke-width="1.3" marker-end="url(#lcArrow)" />
+        <text x="470" y="210" text-anchor="middle" font-size="7.5" fill="#64748b">reinstaurar</text>
+
+        <line x1="472" y1="153" x2="508" y2="153" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#lcArrow)" />
+        <text x="490" y="145" text-anchor="middle" font-size="7.5" fill="#64748b">1 mes</text>
+
+        <rect x="510" y="130" width="120" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="570" y="150" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Expired</text>
+        <text x="570" y="165" text-anchor="middle" font-size="8" fill="#64748b">renovable 7 días</text>
+
+        <path d="M570 128 Q 490 100 410 126" fill="none" stroke="#16a34a" stroke-width="1.3" marker-end="url(#lcArrow)" />
+        <text x="490" y="106" text-anchor="middle" font-size="7.5" fill="#14532d">renovar</text>
+
+        <rect x="680" y="70" width="170" height="46" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="765" y="90" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Closed</text>
+        <text x="765" y="104" text-anchor="middle" font-size="8" fill="#14532d">se arrendó o se vendió</text>
+
+        <rect x="680" y="190" width="170" height="46" rx="8" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="765" y="210" text-anchor="middle" font-size="11" font-weight="600" fill="#1e293b">Withdrawn</text>
+        <text x="765" y="224" text-anchor="middle" font-size="8" fill="#64748b">el propietario se arrepintió</text>
+
+        <line x1="632" y1="142" x2="676" y2="110" stroke="#16a34a" stroke-width="1.4" marker-end="url(#lcArrow)" />
+        <line x1="632" y1="164" x2="676" y2="196" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#lcArrow)" />
+
+        <text x="440" y="310" text-anchor="middle" font-size="9" fill="#64748b">Ocho estados, quince transiciones. Las visitas futuras se cancelan solas cuando la publicación deja de estar disponible.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Esto es lo que hace de <code>Listing</code> un buen candidato a event sourcing: no es una ficha que
+        se edita, es un expediente que va pasando por etapas, y cada etapa le importa a alguien.
+    </p>
+</div>
+
+## Un recorrido completo, en once pasos
+
+Sigue una publicación desde que nace hasta que se arrienda. Es la historia que van a ir troceando todos los módulos, así que merece la pena leerla entera una vez:
+
+<ol class="ddd-steps">
+    <li>Una inmobiliaria registra a <strong>doña Marta</strong> como propietaria. <em>(<code>Owner</code>)</em></li>
+    <li>Crea el <strong>borrador</strong> de su apartamento en Chapinero, en arriendo.</li>
+    <li>Rellena datos, ubicación y descripción; sube <strong>seis fotos</strong>; pone 2.100.000 al mes.</li>
+    <li><strong>Lo envía a revisión.</strong> Pasa porque tiene todo lo obligatorio.</li>
+    <li>Un moderador lo <strong>aprueba</strong>. Queda publicado y con fecha de vencimiento a un mes.</li>
+    <li>Nadie llama en dos semanas. La propietaria <strong>baja el precio</strong> a 1.950.000.</li>
+    <li>Un interesado <strong>pide una visita</strong> proponiendo tres franjas.</li>
+    <li>La anfitriona <strong>confirma</strong> la del jueves a las 15:00.</li>
+    <li>El sistema <strong>programa solo</strong> dos recordatorios y el cierre automático de la visita.</li>
+    <li>La visita ocurre. Se marca como <strong>completada</strong>.</li>
+    <li>Se firma el contrato: la publicación se <strong>cierra</strong> con el precio final, y las demás visitas futuras de ese inmueble <strong>se cancelan solas</strong>.</li>
+</ol>
+
+Ahora la pregunta que abre la guía entera: **si todo eso se guarda como filas que se actualizan, ¿qué queda al final?** Una fila con `Status = Closed` y `Price = 1.950.000`. Los pasos 3 a 10 desaparecieron, y con ellos la respuesta a "¿bajó de precio antes de arrendarse?", "¿cuánto tardó en aprobarse?" y "¿cuántas visitas hicieron falta?".
+
+## Dónde está cada cosa en el código
+
+El servicio tiene las mismas cuatro capas que el resto del repositorio, y las dependencias apuntan hacia dentro: `Api` → `Infrastructure` → `Application` → `Domain`.
+
+| Carpeta | Qué vas a encontrar | Módulo que la explica |
+| --- | --- | --- |
+| `Domain/Listings`, `Domain/Visits`, `Domain/Owners` | Los tres agregados, sus eventos, sus value objects y sus `Policy`. | [3](/event-sourcing/eventos) y [4](/event-sourcing/agregado) |
+| `Domain/Shared` | `Money`, `TimeSlot`, `Guard`, `NameBasedGuid`. Piezas comunes a los tres. | — |
+| `Shared/Domain.Shared` | `AggregateRoot`, `DomainEvent`. **El motor entero cabe en dos archivos.** | [4](/event-sourcing/agregado) y [5](/event-sourcing/rehidratacion) |
+| `Application/*/Commands` | Un caso de uso por carpeta: comando, handler y validador. | [7](/event-sourcing/comandos) |
+| `Application/*/Queries` | Las consultas, que **no** pasan por los agregados. | [8](/event-sourcing/proyecciones) |
+| `Application/Processes` | Qué hacer cuando algo ya ocurrió. | [10](/event-sourcing/procesos) |
+| `Infrastructure/Persistence` | Marten: cómo se leen y se escriben los flujos. | [6](/event-sourcing/persistencia) |
+| `Infrastructure/ReadModels` | Las vistas para las pantallas. | [8](/event-sourcing/proyecciones) |
+| `Infrastructure/DecisionProjections` | Las vistas para las reglas. | [9](/event-sourcing/decisiones) |
+| `Api/Endpoints` | Minimal APIs, una por agregado. | [7](/event-sourcing/comandos) |
+
+<Callout kind="concepto" title="Dos archivos y ya has visto el motor">
+
+Si solo vas a abrir dos archivos antes de seguir, que sean estos:
+
+- `Shared/Domain.Shared/Common/AggregateRoot.cs` — treinta líneas. Contiene `Raise`, `Apply` y `Rehydrate`, que son literalmente todo el mecanismo de event sourcing de este repositorio.
+- `Services/Rentals/.../Domain/Listings/Listing.cs` — el agregado más rico, con sus quince eventos.
+
+Todo lo demás es plomería alrededor de esos dos.
+
+</Callout>
+
+## Lo que suele confundir al llegar aquí
+
+<Callout kind="advertencia" title="Cuatro malentendidos, resueltos antes de que aparezcan">
+
+**"Rentals gestiona usuarios."** No. Los usuarios, contraseñas y roles viven en el servicio de Identity. Rentals solo guarda `Guid` y, para una única regla, mantiene una copia local de si alguien verificó su teléfono. Está anotado en `todo.md` como algo a eliminar.
+
+**"El moderador es un agregado."** Tampoco. Es un `Guid` que queda grabado dentro del hecho: `ListingApproved` lleva `ModeratorId`. Quién aprobó es un dato del hecho, no una entidad de este servicio.
+
+**"`Owner` y anfitrión son lo mismo."** Casi siempre sí, pero no por definición. El anfitrión es quien responde las visitas de una publicación; el propietario es de quien es el inmueble. Una inmobiliaria publica por terceros.
+
+**"Una publicación pausada está oculta."** No: `Paused` sigue siendo visible. Lo que no admite es visitas nuevas. `IsVisible` en `Listing` incluye `Published` y `Paused`, y esa distinción decide qué comandos se aceptan.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Los eventos.** Han aparecido de refilón en los `Raise`, pero todavía no los hemos mirado. Módulo [3](/event-sourcing/eventos).
+- **Cómo se guarda todo esto.** Aquí solo hemos visto clases de dominio. La base de datos empieza en el [módulo 6](/event-sourcing/persistencia).
+- **Las funcionalidades que Rentals todavía no tiene:** consultas entre interesado y propietario, favoritos, búsquedas guardadas y reportes de publicaciones. Están especificadas en `todo.md` y son la materia prima de las [tareas](/event-sourcing/tareas).
+- **Los value objects** (`Money`, `TimeSlot`, `Location`…). Son DDD táctico corriente y la [guía de DDD](/ddd/value-objects) ya los cubre.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Llave es un portal de arriendos reducido a lo esencial: **publicar, moderar, visitar**.
+- Tres agregados: `Listing` (ocho estados, quince transiciones), `Visit` (negociación con plazos) y `Owner` (casi vacío).
+- Cuatro personas —propietario, anfitrión, interesado, moderador— y **ninguna es un agregado**: los usuarios están en Identity.
+- Los números del negocio viven en `ListingPolicy` y `VisitPolicy`.
+- Dos reglas de visitas no caben en ningún agregado: el límite de pendientes y las sanciones por inasistencia.
+- `Listing` no es una ficha que se edita: es un **expediente que pasa por etapas**. Esa es la frase que hay que llevarse al módulo siguiente.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Antes de leer nada más, haz que este dominio deje de ser texto:
+
+1. Arranca el entorno con `dotnet run --project NotificationLog.AppHost` (necesita Docker Desktop).
+2. Entra al panel, crea una publicación, súbele fotos y **envíala a revisión**. Aprópiala desde la cola de moderación.
+3. Vuelve a `mt_events` en DbGate (`localhost:3000`, PostgreSQL, esquema `rentals`) y cuenta cuántas filas generó todo eso.
+
+Cuando veas esa lista de filas con nombres como `ListingDrafted` y `ListingApproved`, ya tienes delante el objeto de estudio de los once módulos siguientes.
+
+**Y luego:** el [módulo 2](/event-sourcing/por-que) coge una sola operación de este dominio —pausar una publicación— y la escribe de las dos formas posibles, para que la diferencia deje de ser una opinión.
+
+</Callout>

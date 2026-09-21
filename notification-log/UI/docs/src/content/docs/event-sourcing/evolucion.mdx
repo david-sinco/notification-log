@@ -2,8 +2,8 @@
 title: "Evolución del esquema: cuando el evento cambia"
 description: "El único problema de verdad del event sourcing, contado con el caso real de este repositorio: hoy la base de Rentals no se puede reconstruir."
 sidebar:
-  order: 10
-  label: "10 · Evolución del esquema"
+  order: 11
+  label: "11 · Evolución del esquema"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -14,50 +14,64 @@ import storeConfigSource from '@code/Services/Rentals/NotificationLog.RentalServ
 import listingDrafted from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Events/ListingDrafted.cs?raw';
 import listingProjectionSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/ReadModels/ListingViewProjection.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Un cambio pequeño: <code>ListingDrafted</code> necesita un campo más. Lo añades, ajustas los dos
+sitios que lo construyen, compila a la primera y los tests pasan en verde. Despliegas. Todo
+funciona — hasta que alguien abre una publicación creada hace seis meses y aparece con el
+identificador vacío, sin propietario y sin operación.
+</p>
 
-- Entender por qué cambiar un evento es distinto de cambiar una tabla.
-- Clasificar los cambios en compatibles, traducibles e imposibles.
-- Diagnosticar un event store roto a partir de un caso real de este repositorio.
-- Conocer las cuatro estrategias de evolución y cuándo usa cada una.
+Nada falló. No hay excepción, no hay log, no hay alerta. Simplemente el JSON guardado en 2025 ya no encaja con la clase de 2026, y el deserializador hizo lo que hacen todos: rellenar con valores por defecto y seguir.
 
-</Callout>
+Este es el único problema del event sourcing que no tiene una solución limpia, y por eso es el módulo más útil de la guía.
 
 <div class="ddd-frase">
 <strong>En una frase:</strong> un event store no tiene migraciones — tiene un contrato de lectura
 que debe seguir funcionando para todos los eventos escritos desde el primer día.
 </div>
 
-## Por qué esto es distinto
+## Ya conoces el problema: son tus archivos de hace veinte años
+
+Tienes una carpeta con documentos de toda la vida. Los de los últimos años se abren sin problema. Los de 2005 se abren con la maquetación rota. Los de 1998 no se abren.
+
+No es que los archivos se hayan estropeado: están intactos, byte a byte. Lo que cambió fue **el programa que los lee**. Y ahí está la única defensa posible: o el programa sigue entendiendo los formatos viejos, o tienes que convertirlos mientras todavía se puedan leer.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Con documentos puedes convertirlos todos una vez y olvidarte. Aquí también podrías —reescribir la historia es técnicamente posible— pero al hacerlo **destruyes precisamente lo que hacía valioso el event store**: dejar de ser un registro fiel de lo que pasó.
+
+Y hay una asimetría cruel que los documentos no tienen: un documento que no abre te lo dice. Un evento que ya no encaja **muchas veces se lee sin protestar**, con los campos vacíos.
+
+</Callout>
+
+## Por qué esto es distinto de una migración
 
 Con un modelo de estado, cambiar de forma es un trámite: `dotnet ef migrations add`, un `ALTER TABLE`, y la tabla queda en la forma nueva. **Los datos viejos se transforman una vez y desaparecen en su forma antigua.**
 
-Con eventos no hay nada que transformar, porque no hay una forma "actual": hay eventos de 2024 escritos como se escribían en 2024, y eventos de hoy. Todos tienen que poder leerse.
+Con eventos no hay nada que transformar, porque no hay una forma "actual": hay eventos de 2024 escritos como se escribían en 2024, y eventos de hoy. Todos tienen que poder leerse, siempre.
 
 <Callout kind="advertencia" title="Y la comprobación no la hace el compilador">
 
 El código compila perfectamente aunque `Apply` ya no sepa leer un evento de hace dos años. El fallo aparece **en tiempo de ejecución**, al cargar ese agregado concreto — probablemente en producción, probablemente con un dato que nadie miraba desde hace meses.
 
-Esa asimetría (compila bien, falla tarde) es lo que hace peligroso este tema.
+Esa asimetría (compila bien, falla tarde) es lo que hace peligroso este tema, y la razón de que las reglas del final no sean opcionales.
 
 </Callout>
 
-## Cómo se reconoce un tipo guardado
+## Las dos formas de romper la historia
 
 <Code
     code={span(storeConfigSource, 'options.Events.AddEventTypes', '.Where(type => type is { IsAbstract: false, IsClass: true } && typeof(IDomainEvent).IsAssignableFrom(type)));')}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/MartenStoreConfiguration.cs · el registro de tipos"
+    title="Infrastructure/Persistence/MartenStoreConfiguration.cs · el registro de tipos"
 />
 
-Marten guarda, junto a cada evento, **el nombre de su tipo**. Al leer, busca en este registro la clase correspondiente y deserializa el JSON sobre ella.
-
-De ahí salen las dos formas de romper la historia:
+Marten guarda, junto a cada evento, **el nombre de su tipo**. Al leer, busca en este registro la clase correspondiente y deserializa el JSON sobre ella. De ahí salen exactamente dos formas de romperlo:
 
 <ol class="ddd-steps">
     <li>
         <strong>El tipo ya no existe.</strong> Se borró o se renombró la clase. Marten encuentra un nombre
-        que no está en el registro y no puede materializar el evento.
+        que no está en el registro y no puede materializar el evento. <strong>Falla ruidosamente.</strong>
     </li>
     <li>
         <strong>El tipo existe pero el JSON no encaja.</strong> Se añadió, quitó o renombró una propiedad.
@@ -65,7 +79,7 @@ De ahí salen las dos formas de romper la historia:
     </li>
 </ol>
 
-La segunda es peor. La primera falla ruidosamente; la segunda deja un `Guid.Empty` donde había un identificador, y el error aparece mucho más tarde y muy lejos.
+**Por qué importa:** la segunda es mucho peor. La primera te para en seco y te obliga a arreglarla; la segunda deja un `Guid.Empty` donde había un identificador, y el error aparece mucho más tarde y muy lejos — en una comparación de identidad que no cuadra, o en una notificación enviada a nadie.
 
 ## El caso real de este repositorio
 
@@ -88,7 +102,7 @@ Mira lo que pasa hoy al intentar cargar uno de esos flujos:
 <Code
     code={span(listingSource, 'default:', '$"El evento \'{domainEvent.GetType().Name}\' no pertenece al agregado Listing.");')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · el default del switch"
+    title="Domain/Listings/Listing.cs · el default del switch"
 />
 
 Ese `default` es una **buena** guarda —detecta que algo no encaja en lugar de ignorarlo en silencio— pero aquí se dispara contra datos legítimos: eventos que un día fueron correctos y cuyo agregado ya no sabe leer.
@@ -98,11 +112,11 @@ Y el segundo problema es más sutil, porque no lanza nada:
 <Code
     code={member(listingSource, 'private void When(ListingDrafted e)')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · When(ListingDrafted)"
+    title="Domain/Listings/Listing.cs · When(ListingDrafted)"
     mark={['Id = e.ListingId;']}
 />
 
-Si el JSON guardado no tiene `ListingId` con ese nombre, `e.ListingId` es `Guid.Empty`. El agregado se carga **sin fallar**, con un `Id` vacío, y el error aparece después: una `ForeignKey` que no cuadra, una comparación de identidad que falla, una notificación enviada a nadie.
+Si el JSON guardado no tiene `ListingId` con ese nombre, `e.ListingId` es `Guid.Empty`. El agregado se carga **sin fallar**, con un `Id` vacío. Es la escena con la que abría el módulo.
 
 <Callout kind="antipatron" title="La lección, que es la que importa">
 
@@ -118,7 +132,7 @@ La regla práctica: decide explícitamente en qué momento el event store pasa a
 
 ### 1 · Compatible: añadir un campo opcional
 
-Añadir una propiedad nueva a un evento existente. Los eventos viejos se deserializan con el valor por defecto, y `Apply` tiene que saber qué hacer con él.
+Los eventos viejos se deserializan con el valor por defecto, y hay que saber qué hacer con él.
 
 ```csharp
 // Antes
@@ -132,7 +146,7 @@ public sealed record ListingPriceChanged(
 ) : DomainEvent;
 ```
 
-**Regla:** el campo nuevo tiene que ser opcional **y** `Apply` tiene que tratar la ausencia como un caso legítimo, no como un error. Si el campo es obligatorio para la lógica, no es un cambio compatible.
+**La regla:** el campo nuevo tiene que ser opcional **y** el código que lo aplica tiene que tratar la ausencia como un caso legítimo, no como un error. Si el campo es obligatorio para la lógica, no es un cambio compatible — es el cambio de la escena inicial.
 
 ### 2 · Traducible: renombrar, dividir, cambiar de tipo
 
@@ -151,7 +165,7 @@ Aquí hace falta una traducción explícita. Las opciones, de menor a mayor esfu
     <li>
         <strong>Versionar el tipo.</strong> Dejar <code>ListingDraftedV1</code> y añadir
         <code>ListingDraftedV2</code>, con <code>Apply</code> manejando los dos. Honesto y explícito, pero
-        el <code>switch</code> crece para siempre. Se reserva para cuando la semántica cambió, no solo la
+        el <code>switch</code> crece para siempre. Se reserva para cuando cambió la semántica, no solo la
         forma.
     </li>
 </ol>
@@ -162,7 +176,7 @@ Si el evento nuevo necesita un dato que los viejos **no contienen**, no hay trad
 
 - Un valor por defecto documentado ("las publicaciones anteriores a marzo cuentan como arriendo").
 - Aceptar que el campo sea nulo para siempre y que las reglas lo contemplen.
-- Un proceso de migración único que reescriba la historia — con todo lo que eso implica, empezando por que deja de ser un registro fiel de lo que pasó.
+- Un proceso de migración único que reescriba la historia.
 
 <Callout kind="advertencia" title="Reescribir la historia: el último recurso">
 
@@ -181,12 +195,12 @@ Sin haberlo buscado, este repositorio tiene dos defensas contra este problema y 
 <Code
     code={span(listingProjectionSource, 'case ListingWithdrawn w:', 'snapshot.UpdatedAt = at;')}
     lang="csharp"
-    title="Services/Rentals/.../ReadModels/ListingViewProjection.cs · el switch cierra sin default"
+    title="Infrastructure/ReadModels/ListingViewProjection.cs · el switch cierra sin default"
 />
 
-El `switch` de `Evolve` **no tiene `default`**. Un evento desconocido simplemente no hace nada, y la vista sigue construyéndose. Es lo contrario de `Apply`, y las dos decisiones son correctas: una vista incompleta es aceptable, un agregado incompleto no.
+El `switch` de `Evolve` **no tiene `default`**. Un evento desconocido simplemente no hace nada, y la vista sigue construyéndose. Es lo contrario de `Apply`, y las dos decisiones son correctas: **una vista incompleta es aceptable; un agregado incompleto, no**, porque con él se toman decisiones.
 
-**Defensa 2 — Los enums se guardan como texto.** `EnumStorage.AsString` ([módulo 5](/event-sourcing/persistencia)) evita el peor error silencioso de todos: reordenar un `enum` y reinterpretar toda la historia.
+**Defensa 2 — Los enums se guardan como texto.** `EnumStorage.AsString` ([módulo 6](/event-sourcing/persistencia)) evita el peor error silencioso de todos: reordenar un `enum` y reinterpretar toda la historia.
 
 **Lo que falta — no hay versión en los eventos de dominio.** `DomainEvent` tiene `EventId` y `OccurredOn`, nada más. Los contratos de integración sí llevan `schema_version` ([módulo 4 de DDD](/ddd/context-map)); los internos, no.
 
@@ -202,13 +216,27 @@ Lo que **no** es defendible es no haberlo pensado. Esta página existe para que 
 
 </Callout>
 
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro creencias que llevan directas al problema">
+
+**"Mientras no esté en producción puedo cambiar lo que quiera."** Cierto, y peligroso: no hay ningún aviso el día que deja de serlo. Por eso la frontera se escribe a mano, en el repositorio, antes de necesitarla.
+
+**"Renombrar una clase es seguro, es solo un nombre."** El nombre del tipo es lo que Marten guarda para saber qué clase usar al leer. Renombrar la clase es renombrar el dato.
+
+**"Si añado un campo, los eventos viejos lo traerán vacío y ya está."** Solo si el código lo trata como un caso legítimo. Un campo "vacío pero obligatorio" es un agregado mal construido que nadie detecta.
+
+**"Los tests me protegen."** Los tests construyen eventos con la clase de hoy. Solo detectarían esto si cargaran JSON antiguo guardado de verdad — que es, por cierto, un test que merece mucho la pena escribir.
+
+</Callout>
+
 ## Las cuatro reglas para no llegar aquí
 
 <ol class="ddd-steps">
     <li>
         <strong>Trata un evento como un contrato público desde el primer día.</strong> Nómbralo y dale
         forma como si fueras a vivir con él diez años. Es lo que dice el
-        <a href="/event-sourcing/eventos">módulo 2</a>, y este módulo es la razón.
+        <a href="/event-sourcing/eventos">módulo 3</a>, y este módulo es la razón.
     </li>
     <li>
         <strong>Añade, no cambies.</strong> Un campo opcional nuevo es casi siempre gratis; renombrar uno,
@@ -226,6 +254,13 @@ Lo que **no** es defendible es no haberlo pensado. Esta página existe para que 
     </li>
 </ol>
 
+## Lo que este módulo deja fuera
+
+- **El código concreto del *upcasting* en Marten.** Se explica qué es y cuándo usarlo; la sintaxis está en su documentación y cambia entre versiones.
+- **Versionar los contratos de integración.** Eso es otro problema —contratos entre servicios— y lo cubre el [módulo 4 de DDD](/ddd/context-map). Aquí hablamos solo de los eventos internos.
+- **Herramientas de migración de event stores.** Existen; ninguna evita tener que decidir qué significan los datos que faltan.
+- **Cómo automatizar la prueba de reconstrucción.** La idea está en la regla 4; montarla en CI es un ejercicio excelente y no está hecho.
+
 <Callout kind="resumen" title="Para recordar">
 
 - Un event store **no tiene migraciones**: tiene un contrato de lectura que debe valer para toda la historia.
@@ -235,6 +270,16 @@ Lo que **no** es defendible es no haberlo pensado. Esta página existe para que 
 - Reescribir la historia es posible y a veces correcto, pero anula el valor de auditoría del event store.
 - Un `switch` sin `default` está bien en una proyección y mal en un agregado. Las dos decisiones son deliberadas.
 - **Reproyecta a menudo en desarrollo**: es la única prueba real de que la historia sigue viva.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Rompe tú la historia, a propósito y en local. Crea una publicación, páusala, y después añade un campo obligatorio a `ListingPaused`. Vuelve a cargar esa publicación.
+
+Anota **exactamente** qué falla, dónde y con qué mensaje. Haberlo visto una vez en tu propia pantalla vale más que cualquier advertencia escrita, y es la primera parte de la [tarea 4](/event-sourcing/tareas).
+
+**Y luego:** el [módulo 12](/event-sourcing/tareas) te deja el repositorio en las manos. Nueve ejercicios, todos sobre huecos reales de este código.
 
 </Callout>
 

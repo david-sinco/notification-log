@@ -2,8 +2,8 @@
 title: "Rehidratación: el estado como cálculo"
 description: "Quince líneas en el dominio convierten una lista de hechos en un agregado listo para decidir."
 sidebar:
-  order: 4
-  label: "4 · Rehidratación"
+  order: 5
+  label: "5 · Rehidratación"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -15,19 +15,38 @@ import visitSource from '@code/Services/Rentals/NotificationLog.RentalService.Do
 import streamsSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/AggregateStreams.cs?raw';
 import listingRepoSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenListingRepository.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Llegas a Rentals buscando el mapeo. Abres <code>Infrastructure/Persistence</code> esperando
+configuraciones de entidades, columnas, relaciones y algún <code>Include</code>. No hay nada de
+eso. El repositorio de publicaciones tiene <strong>tres líneas</strong>, y el método que convierte
+la base de datos en un objeto de dominio vive en <code>Domain</code>, que no tiene ni una sola
+dependencia de paquete.
+</p>
 
-- Leer el método que convierte una historia en un agregado, línea por línea.
-- Entender por qué vive en `Domain` y no en `Infrastructure`.
-- Saber qué hace el constructor privado aquí, y en qué se parece al truco de EF Core.
-- Reconocer los dos problemas de rendimiento del patrón y sus dos soluciones.
-
-</Callout>
+La primera reacción es pensar que falta código. No falta: es que cuando lo que guardas son hechos, "cargar" deja de ser un problema de mapeo y pasa a ser una operación de dominio.
 
 <div class="ddd-frase">
 <strong>En una frase:</strong> un agregado event-sourced no se carga, se <em>calcula</em> — empieza
 vacío y se le aplican sus hechos en orden hasta llegar al presente.
 </div>
+
+## Ya conoces el mecanismo: es una partida de ajedrez anotada
+
+Una partida no se guarda como una foto del tablero. Se guarda como una **lista de jugadas**: `1. e4 e5 2. Cf3 Cc6…`. Para saber cómo está el tablero en la jugada 30, coges un tablero vacío, colocas las piezas iniciales y reproduces las 29 jugadas anteriores en orden.
+
+Eso es rehidratar. Y de la analogía salen tres cosas que valen para todo el módulo:
+
+- **Las jugadas son el dato; la posición es el resultado.** Nadie duda de cuál es la fuente de verdad.
+- **Reproducir siempre da lo mismo.** Si dos personas reproducen la misma partida llegan a la misma posición, porque una jugada no tiene criterio: se ejecuta.
+- **Los libros imprimen diagramas cada cierto número de jugadas** para no tener que reproducir desde el principio. Eso son los *snapshots*, y aparecen al final del módulo.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En ajedrez todas las jugadas son del mismo tipo y el tablero de partida siempre es igual. Aquí cada evento es de un tipo distinto y el "tablero inicial" es un objeto completamente vacío: hasta el identificador y el propietario llegan en el primer evento.
+
+Y una partida se puede reproducir a medias para ver la jugada 20. Un agregado, **no**: o aplicas toda su historia o tienes un objeto que no representa nada. Volveremos a esto.
+
+</Callout>
 
 ## El método entero
 
@@ -66,7 +85,7 @@ La consecuencia práctica es grande: puedes reconstruir un agregado desde una li
 
 </Callout>
 
-## La línea que hace posible todo: el constructor privado
+## La línea que lo hace posible: el constructor privado
 
 <Code
     code={[
@@ -78,12 +97,12 @@ La consecuencia práctica es grande: puedes reconstruir un agregado desde una li
     title="Los tres constructores privados de Rentals"
 />
 
-Sin ese constructor, `Rehydrate` no tendría de dónde partir. Con él, la única forma pública de obtener un `Listing` nuevo es la fábrica `Draft`, que valida y levanta `ListingDrafted`:
+Sin ese constructor, `Rehydrate` no tendría de dónde partir. Con él, la única forma pública de obtener un `Listing` nuevo es la fábrica `Draft`:
 
 <Code
     code={member(listingSource, 'public static Listing Draft')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · Draft"
+    title="Domain/Listings/Listing.cs · Draft"
     mark={['var listing = new Listing();', 'listing.Raise(new ListingDrafted(id, ownerId, createdBy, operation));']}
 />
 
@@ -98,19 +117,19 @@ Es decir: **incluso al crear, el estado viene del evento.** Ni la fábrica asign
 <Code
     code={member(listingSource, 'private void When(ListingDrafted e)')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · el estado nace del evento"
+    title="Domain/Listings/Listing.cs · el estado nace del evento"
 />
 
-Esa simetría tiene un efecto verificable: un agregado recién creado en memoria y el mismo agregado rehidratado desde la base tienen **exactamente** el mismo estado, porque recorrieron el mismo camino.
+**Por qué importa:** esa simetría tiene un efecto verificable. Un agregado recién creado en memoria y el mismo agregado rehidratado desde la base tienen **exactamente** el mismo estado, porque recorrieron el mismo camino. Es la garantía que faltaba en el bug con el que abría el [módulo 4](/event-sourcing/agregado).
 
-## Quién llama a Rehydrate
+## Quién trae los eventos
 
-El dominio no sabe de dónde salen los eventos. Quien los trae es la infraestructura:
+El dominio no sabe de dónde salen. Quien los trae es la infraestructura:
 
 <Code
     code={member(streamsSource, 'public async Task<TAggregate?> LoadAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/AggregateStreams.cs · LoadAsync"
+    title="Infrastructure/Persistence/AggregateStreams.cs · LoadAsync"
     mark={['if (events.Count == 0)', 'AggregateRoot.Rehydrate<TAggregate>(id, events.Select(e => (IDomainEvent)e.Data).ToList());']}
 />
 
@@ -118,7 +137,7 @@ Cuatro líneas de trabajo real:
 
 - `FetchStreamAsync` pide a Marten **todos** los eventos del flujo, ordenados por versión.
 - Si no hay ninguno, devuelve `null` — el contrato que `Rehydrate` exige.
-- Guarda la última versión en un diccionario (eso es para el [módulo 5](/event-sourcing/persistencia): es la base del control de concurrencia).
+- Guarda la última versión en un diccionario. Eso es para el [módulo 6](/event-sourcing/persistencia): es la base del control de concurrencia.
 - Desempaqueta `e.Data` —el envoltorio de Marten trae metadatos además del evento— y llama a `Rehydrate`.
 
 Y el repositorio que ve la capa de aplicación es una fachada de tres líneas:
@@ -126,10 +145,12 @@ Y el repositorio que ve la capa de aplicación es una fachada de tres líneas:
 <Code
     code={whole(listingRepoSource)}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/MartenListingRepository.cs"
+    title="Infrastructure/Persistence/MartenListingRepository.cs"
 />
 
 Comparado con [el repositorio de EF Core del otro servicio](/ddd/repositorios-y-factories), aquí no hay `Include`, ni `AsNoTracking`, ni proyecciones. **No hay forma de cargar un agregado a medias**: o tienes toda su historia o no tienes nada. La preocupación del módulo 9 de DDD —"un agregado cargado a medias no puede defender su invariante"— aquí simplemente no puede ocurrir.
+
+## Cómo encaja todo
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 860 260" role="img" aria-labelledby="rehydrateTitle">
@@ -151,7 +172,7 @@ Comparado con [el repositorio de EF Core del otro servicio](/ddd/repositorios-y-
         <text x="130" y="159" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">v3 ListingPriceChanged</text>
         <rect x="36" y="170" width="188" height="22" rx="4" fill="#fff" stroke="#fed7aa" />
         <text x="130" y="185" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">v4 ListingApproved</text>
-        <text x="130" y="209" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">append-only, ordenado por versión</text>
+        <text x="130" y="209" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">solo crece, ordenado por versión</text>
 
         <line x1="242" y1="130" x2="288" y2="130" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#reArrow)" />
         <text x="265" y="122" text-anchor="middle" font-size="7.5" fill="#64748b">FetchStream</text>
@@ -182,13 +203,43 @@ Comparado con [el repositorio de EF Core del otro servicio](/ddd/repositorios-y-
     </p>
 </div>
 
-## Los dos problemas de rendimiento, y sus dos respuestas
+## El caso que más enseña: un evento que usa lo que dejó otro
 
-### Problema 1 — Flujos largos
+<Code
+    code={member(visitSource, 'private void When(VisitRequested e)')}
+    lang="csharp"
+    title="Domain/Visits/Visit.cs · When(VisitRequested)"
+    mark={['_slotDuration = e.SlotDuration;']}
+/>
+
+`_slotDuration` es un campo **privado** que no aparece en ninguna propiedad pública. Existe solo para que un evento posterior pueda usarlo:
+
+<Code
+    code={member(visitSource, 'private void When(VisitConfirmed e)')}
+    lang="csharp"
+    title="Domain/Visits/Visit.cs · When(VisitConfirmed)"
+    mark={['_slotDuration']}
+/>
+
+`VisitConfirmed` solo lleva `SlotStart`. Para calcular el final de la franja hace falta la duración, que llegó en `VisitRequested` — dos eventos antes.
+
+**La idea general:** al aplicar un evento, el agregado ya tiene todo el contexto de los eventos anteriores. Por eso `VisitConfirmed` puede permitirse ser mínimo y no repetir un dato que el flujo ya contiene. Es la Regla 3 del [módulo 3](/event-sourcing/eventos) —"no lleva nada deducible"— hecha posible por la rehidratación.
+
+<Callout kind="advertencia" title="Y el límite de esa propiedad">
+
+Solo funciona **dentro del mismo flujo**. Si `VisitConfirmed` necesitara un dato de la publicación, no podría sacarlo de ahí: tendría que venir en el propio evento, puesto por quien decidió (el método público, con el dato que le pasó el handler).
+
+Esta es la versión event-sourced de la Regla 3 de Vernon: **un flujo no navega a otro flujo**.
+
+</Callout>
+
+## Los dos problemas de rendimiento, y sus respuestas
+
+### Flujos largos
 
 Cargar un agregado cuesta **O(número de eventos)**. Un `Listing` con cuatro eventos se rehidrata en microsegundos; uno con cuarenta mil, no.
 
-**La respuesta estándar son los *snapshots*:** guardar cada N eventos una foto del estado, y rehidratar desde la foto más reciente aplicando solo los eventos posteriores. Marten los soporta.
+La respuesta estándar son los ***snapshots***: guardar cada N eventos una foto del estado, y rehidratar desde la foto más reciente aplicando solo los eventos posteriores. Son los diagramas impresos del libro de ajedrez. Marten los soporta.
 
 <Callout kind="honesto" title="Rentals no usa snapshots, y hace bien">
 
@@ -204,41 +255,32 @@ El agregado que cambiaría esta respuesta está pendiente en `todo.md`: `Favorit
 
 </Callout>
 
-### Problema 2 — Leer para mostrar
+### Leer para mostrar
 
-Si cada consulta tuviera que rehidratar un agregado, listar cien publicaciones costaría cien flujos completos. Sería absurdo — y por eso **las consultas de este servicio no pasan por aquí**: van contra proyecciones ([módulo 7](/event-sourcing/proyecciones)).
+Si cada consulta tuviera que rehidratar un agregado, listar cien publicaciones costaría cien flujos completos. Sería absurdo — y por eso **las consultas de este servicio no pasan por aquí**: van contra proyecciones ([módulo 8](/event-sourcing/proyecciones)).
 
-Fíjate en la asimetría: `IListingRepository` solo lo usan los **comandos**. `ListListingsHandler` ni siquiera lo conoce.
+Fíjate en la asimetría: `IListingRepository` solo lo usan los **comandos**. El handler que lista publicaciones ni siquiera lo conoce.
 
-## El caso que más enseña: Visit
+## Lo que suele confundir
 
-<Code
-    code={member(visitSource, 'private void When(VisitRequested e)')}
-    lang="csharp"
-    title="Services/Rentals/.../Visits/Visit.cs · When(VisitRequested)"
-    mark={['_slotDuration = e.SlotDuration;']}
-/>
+<Callout kind="antipatron" title="Cuatro dudas que aparecen siempre aquí">
 
-`_slotDuration` es un campo **privado** que no aparece en ninguna propiedad pública. Existe solo para que un evento posterior pueda usarlo:
+**"¿No es lentísimo reproducir la historia en cada petición?"** Con flujos de diez o quince eventos, no: es una consulta por `stream_id` con índice y un bucle en memoria. El problema aparece con flujos de miles de eventos, y entonces se llama snapshot. Lo que sí sería lento es usar esto para **listar**, y por eso no se usa.
 
-<Code
-    code={member(visitSource, 'private void When(VisitConfirmed e)')}
-    lang="csharp"
-    title="Services/Rentals/.../Visits/Visit.cs · When(VisitConfirmed)"
-    mark={['_slotDuration']}
-/>
+**"Entonces cargo solo los últimos eventos y ya."** No. Un agregado a medias no es un agregado: sus guardas mirarían un estado falso y aceptarían operaciones imposibles. O toda la historia, o un snapshot más el resto.
 
-`VisitConfirmed` solo lleva `SlotStart`. Para calcular el final de la franja hace falta la duración, que llegó en `VisitRequested` — dos eventos antes.
+**"Si el flujo no existe, devuelvo un agregado vacío."** Ese es el bug que `Rehydrate` evita lanzando una excepción. Un `Listing` en blanco pasaría por los métodos públicos y empezaría a levantar eventos sobre un flujo inexistente, con un `Id` que nadie puso.
 
-Esa es una propiedad que solo tiene la rehidratación: **al aplicar un evento, el agregado ya tiene todo el contexto de los eventos anteriores**. Por eso `VisitConfirmed` puede permitirse ser mínimo, y no necesita repetir un dato que el flujo ya contiene.
-
-<Callout kind="advertencia" title="Y el límite de esa propiedad">
-
-Solo funciona **dentro del mismo flujo**. Si `VisitConfirmed` necesitara un dato de la publicación, no podría sacarlo de ahí: tendría que venir en el propio evento, puesto por quien decidió (el método público, con el dato que le pasó el handler).
-
-Esta es la versión event-sourced de la Regla 3 de Vernon: **un flujo no navega a otro flujo**.
+**"El snapshot es el estado; los eventos son el histórico."** Al revés, y es la confusión más peligrosa. El snapshot es una **caché**: si se corrompe o se queda viejo, se borra y se recalcula. Si algún día alguien empieza a escribir directamente sobre el snapshot, has vuelto a un modelo de estado con pasos de más.
 
 </Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo se escriben los eventos nuevos** y qué hace ese diccionario de versiones: [módulo 6](/event-sourcing/persistencia).
+- **La implementación de snapshots** en Marten. Se ha explicado qué son y por qué aquí no hacen falta; el día que hagan falta, la documentación de Marten lo cubre en una página.
+- **Rehidratar hasta un momento del pasado** (*"¿cómo estaba esta publicación el 3 de marzo?"*). Es trivial —aplicar solo los eventos anteriores a esa fecha— y este repositorio no lo usa.
+- **Cachear agregados en memoria** entre peticiones. Aquí cada comando rehidrata desde cero, que es lo más simple y lo correcto mientras los flujos sean cortos.
 
 <Callout kind="resumen" title="Para recordar">
 
@@ -249,6 +291,25 @@ Esta es la versión event-sourced de la Regla 3 de Vernon: **un flujo no navega 
 - `Rehydrate` vive en `Domain` porque es una función pura de eventos. Marten se queda en `AggregateStreams`.
 - No hay agregados a medias. El coste es O(eventos); los **snapshots** son la optimización, no el patrón.
 - Un `When` puede usar datos que dejó un evento anterior — pero solo del **mismo flujo**.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Escribe un test —o un `Main` de consola— que no toque la base de datos:
+
+```csharp
+var listing = AggregateRoot.Rehydrate<Listing>(id, new IDomainEvent[]
+{
+    new ListingDrafted(id, ownerId, createdBy, Operation.Rent),
+    new ListingPriceChanged(0, 2_100_000),
+    // ...añade los que quieras
+});
+```
+
+Comprueba el `Status` y el `Price` que salen. Acabas de construir un agregado a partir de hechos inventados, sin infraestructura, sin contenedor y sin Docker. Esa facilidad para probar es uno de los beneficios menos publicitados del patrón.
+
+**Y luego:** el [módulo 6](/event-sourcing/persistencia) cierra el círculo — qué pasa con los eventos que `Raise` fue apuntando, y por qué ese diccionario de versiones es lo que impide que dos personas se pisen.
 
 </Callout>
 

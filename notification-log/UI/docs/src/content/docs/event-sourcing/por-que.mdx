@@ -1,9 +1,9 @@
 ---
 title: "Estado contra hechos"
-description: "La misma operación escrita de las dos formas, en el mismo repositorio."
+description: "La misma operación escrita de las dos formas, en el mismo repositorio, para que la diferencia deje de ser una opinión."
 sidebar:
-  order: 1
-  label: "1 · Estado contra hechos"
+  order: 2
+  label: "2 · Estado contra hechos"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -12,22 +12,40 @@ import { member } from '../../../lib/code';
 import triggerSource from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/NotificationTrigger.cs?raw';
 import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Llevas ocho meses con el portal en marcha. Alguien de producto entra un martes y pregunta:
+<em>"¿cuántas publicaciones bajan de precio antes de arrendarse, y cuánto lo bajan?"</em>. Es una
+pregunta razonable, el dato existió en algún momento — y no puedes responder. La columna
+<code>price</code> tiene un número, el de ahora. Los anteriores se fueron con cada
+<code>UPDATE</code>, uno detrás de otro, sin que nadie lo decidiera.
+</p>
 
-- Ver la misma clase de operación escrita con estado y con eventos, en el mismo repositorio.
-- Nombrar las cuatro ganancias del event sourcing y los cuatro costes que trae.
-- Decidir, con criterios concretos, si un dominio lo merece.
-
-</Callout>
+Ese martes es el que separa los dos modelos de este módulo. No hablamos de rendimiento ni de elegancia: hablamos de qué preguntas va a poder responder tu sistema dentro de dos años, y de que esa lista **se decide hoy**, cuando eliges cómo guardar las cosas.
 
 <div class="ddd-frase">
 <strong>En una frase:</strong> guardar estado te dice cómo están las cosas; guardar hechos te dice
 además cómo llegaron a estarlo — y esa segunda pregunta, en algunos dominios, es el negocio.
 </div>
 
-## La misma operación, dos veces
+## Ya conoces la diferencia: es una foto contra un vídeo
 
-Empecemos por lo concreto. En Notifications, deshabilitar un trigger es asignar un campo:
+Una fila de base de datos es una **foto del presente**. Cada vez que algo cambia, haces una foto nueva encima de la anterior y tiras la vieja. Siempre sabes cómo están las cosas ahora, y nunca cómo llegaron ahí.
+
+Un flujo de eventos es el **vídeo completo**. Ocupa más, cuesta más de mirar, y para saber cómo están las cosas ahora tienes que reproducirlo hasta el final. A cambio, cualquier pregunta sobre lo que pasó tiene respuesta, incluidas las que a nadie se le habían ocurrido cuando se grabó.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un vídeo se ve de principio a fin y es pesado; un flujo de eventos de este repositorio tiene entre dos y quince elementos, y reproducirlo cuesta microsegundos.
+
+Y hay algo que el vídeo no tiene: **cada fotograma aquí es una decisión de negocio con nombre**. No es "el precio pasó de 2.100.000 a 1.950.000 en algún momento", es *"la propietaria bajó el precio"*, un hecho que alguien provocó a propósito. Esa diferencia entre *observar un cambio* y *registrar una decisión* es la que hace útil el patrón, y volverá en el [módulo 3](/event-sourcing/eventos).
+
+</Callout>
+
+## La misma operación, escrita dos veces
+
+Empecemos por lo concreto, con los dos servicios de este repositorio delante.
+
+En Notifications, deshabilitar un trigger es **asignar un campo**:
 
 <Code
     code={member(triggerSource, 'public void Disable')}
@@ -36,9 +54,9 @@ Empecemos por lo concreto. En Notifications, deshabilitar un trigger es asignar 
     mark={['IsEnabled = false;']}
 />
 
-Después de ese `SaveChangesAsync`, la columna `IsEnabled` pasa de `1` a `0`. **Y ya no hay forma de saber que alguna vez valió `1`**, ni cuándo cambió, ni cuántas veces.
+Después del `SaveChangesAsync`, la columna `IsEnabled` pasa de `1` a `0`. **Y ya no hay forma de saber que alguna vez valió `1`**, ni cuándo cambió, ni cuántas veces.
 
-En Rentals, pausar una publicación no asigna nada:
+En Rentals, pausar una publicación **no asigna nada**:
 
 <Code
     code={member(listingSource, 'public void Pause')}
@@ -47,7 +65,7 @@ En Rentals, pausar una publicación no asigna nada:
     mark={['Raise(new ListingPaused());']}
 />
 
-El estado cambia, sí, pero como **consecuencia** del hecho, en otro sitio:
+`Raise` es el verbo central de esta guía: significa *"declaro que este hecho ha ocurrido"*. El estado sí cambia, pero como **consecuencia** del hecho, en otro sitio:
 
 <Code
     code={member(listingSource, 'public override void Apply')}
@@ -58,57 +76,62 @@ El estado cambia, sí, pero como **consecuencia** del hecho, en otro sitio:
 
 Lo que se guarda en la base de datos no es `Status = Paused`. Es una fila nueva que dice *"a las 14:32 del 3 de marzo, esta publicación se pausó"*. El `Status` que ve la pantalla se calcula sumando esa fila a todas las anteriores.
 
-## Las cuatro ganancias
+**La idea general:** en un modelo de estado, el campo *es* el dato. En un modelo de hechos, el campo es un **resumen desechable** de los hechos, y el dato son los hechos. Todo lo que viene después en esta guía es consecuencia de esa inversión.
+
+## Lo que se gana, con un ejemplo cada cosa
+
+Cuatro ganancias, y ninguna es teórica: las tres primeras se ven en el recorrido de doña Marta del [módulo 1](/event-sourcing/dominio).
 
 <ol class="ddd-steps">
     <li>
         <strong>La historia es gratis y completa.</strong> No hay una tabla de auditoría que alguien
-        tenga que acordarse de escribir: <em>el dato es la auditoría</em>. En Rentals puedes responder
-        "¿cuántas veces bajó de precio esta publicación antes de arrendarse?" sin haber previsto la
-        pregunta.
+        tenga que acordarse de escribir: <em>el dato es la auditoría</em>. "¿Cuántas veces bajó de precio
+        esta publicación antes de arrendarse?" se responde sin haber previsto la pregunta.
     </li>
     <li>
-        <strong>Preguntas nuevas sobre datos viejos.</strong> Si mañana el negocio quiere saber el tiempo
-        medio entre <code>ListingSubmittedForReview</code> y <code>ListingApproved</code>, la respuesta ya
-        está en los eventos de los dos últimos años. Con estado, esa información se perdió al hacer el
+        <strong>Preguntas nuevas sobre datos viejos.</strong> Si mañana el negocio quiere el tiempo medio
+        entre <code>ListingSubmittedForReview</code> y <code>ListingApproved</code>, la respuesta ya está
+        en los eventos de los dos últimos años. Con estado, esa información se perdió al hacer el
         <code>UPDATE</code>.
     </li>
     <li>
-        <strong>Modelos de lectura desechables.</strong> Una proyección se puede borrar y reconstruir
-        desde cero. Cambiar la forma de una pantalla no necesita migración de datos: necesita reproyectar.
+        <strong>Los modelos de lectura son desechables.</strong> Una vista se puede borrar y reconstruir
+        desde cero. Cambiar la forma de una pantalla no necesita migración de datos: necesita
+        recalcular.
     </li>
     <li>
-        <strong>Concurrencia incluida.</strong> Añadir un evento exige declarar la versión esperada del
-        flujo. El bloqueo optimista que en el otro servicio <a href="/ddd/persistencia">hay que acordarse
-        de añadir</a> aquí viene con el modelo.
+        <strong>La concurrencia viene incluida.</strong> Añadir un evento exige declarar la versión
+        esperada del flujo. El bloqueo optimista que en el otro servicio
+        <a href="/ddd/persistencia">hay que acordarse de añadir</a> aquí es el mecanismo de escritura.
     </li>
 </ol>
 
-## Los cuatro costes
-
-Y ahora la otra mitad, que los tutoriales suelen saltarse:
+## Lo que cuesta, que los tutoriales suelen saltarse
 
 <ol class="ddd-steps">
     <li>
         <strong>Nunca puedes borrar un evento.</strong> Un hecho mal modelado te acompaña para siempre.
-        El <a href="/event-sourcing/evolucion">módulo 10</a> es la historia real de lo que pasa cuando
+        El <a href="/event-sourcing/evolucion">módulo 11</a> es la historia real de lo que pasa cuando
         esto se ignora: hoy los flujos guardados de Rentals <em>no se pueden reconstruir</em>.
     </li>
     <li>
-        <strong>Leer es un problema aparte.</strong> No hay <code>SELECT * FROM listings</code>. Hay que
-        construir y mantener proyecciones — CQRS deja de ser opcional y pasa a ser obligatorio.
+        <strong>Leer se convierte en un problema aparte.</strong> No hay
+        <code>SELECT * FROM listings</code>. Hay que construir y mantener proyecciones — CQRS deja de ser
+        opcional y pasa a ser obligatorio.
     </li>
     <li>
-        <strong>Consistencia eventual en las lecturas.</strong> Con proyecciones asíncronas, lo que
-        devuelve una consulta puede ir un instante por detrás de lo que ya se guardó. (Rentals lo evita
-        hoy usándolas <em>inline</em>, y el <a href="/event-sourcing/proyecciones">módulo 7</a> explica
-        el precio de esa decisión.)
+        <strong>Aparece la consistencia eventual.</strong> Con vistas asíncronas, lo que devuelve una
+        consulta puede ir un instante por detrás de lo que ya se guardó. (Rentals lo evita hoy
+        actualizándolas dentro de la misma transacción, y el
+        <a href="/event-sourcing/proyecciones">módulo 8</a> explica el precio de esa decisión.)
     </li>
     <li>
-        <strong>Todo el mundo tiene que entenderlo.</strong> Un desarrollador nuevo no puede abrir una
-        tabla y ver el estado. Es una curva de aprendizaje de equipo, no de una persona.
+        <strong>Todo el equipo tiene que entenderlo.</strong> Alguien nuevo no puede abrir una tabla y ver
+        el estado. Es una curva de aprendizaje colectiva, no individual.
     </li>
 </ol>
+
+## Cómo encajan las dos mitades
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 840 300" role="img" aria-labelledby="stateVsEventsTitle">
@@ -141,7 +164,7 @@ Y ahora la otra mitad, que los tutoriales suelen saltarse:
         <text x="460" y="118" font-size="9" font-family="monospace" fill="#334155">v3 · ListingSubmittedForReview</text>
         <text x="460" y="134" font-size="9" font-family="monospace" fill="#334155">v4 · ListingApproved</text>
         <text x="460" y="150" font-size="9" font-family="monospace" fill="#334155">v5 · ListingPaused</text>
-        <text x="460" y="166" font-size="9" font-family="monospace" fill="#64748b">(append-only, nunca UPDATE)</text>
+        <text x="460" y="166" font-size="9" font-family="monospace" fill="#64748b">(solo se añade, nunca UPDATE)</text>
 
         <line x1="620" y1="176" x2="620" y2="196" stroke="#16a34a" stroke-width="1.5" marker-end="url(#sveArrow)" />
         <text x="640" y="192" font-size="8.5" fill="#14532d">Apply()</text>
@@ -157,17 +180,17 @@ Y ahora la otra mitad, que los tutoriales suelen saltarse:
     </p>
 </div>
 
-## Cuándo merece la pena, con criterios
+## El criterio que decide, aplicado a este repositorio
 
-Los tres criterios que deciden, aplicados a este repositorio:
+Tres preguntas. Si dos o tres salen que sí, el agregado se beneficia:
 
 | Criterio | Notifications | Rentals |
 | --- | --- | --- |
 | ¿El negocio pregunta por el **pasado**, no solo por el presente? | No. Interesa la configuración vigente. | **Sí.** Cuántas veces bajó el precio, cuántas visitas se cayeron, si el interesado tiene sanciones. |
-| ¿Las entidades tienen un **ciclo de vida** con muchas transiciones? | No. Un trigger se habilita y se deshabilita. | **Sí.** `Listing` tiene nueve estados y quince eventos. |
+| ¿Las entidades tienen un **ciclo de vida** con muchas transiciones? | No. Un trigger se habilita y se deshabilita. | **Sí.** `Listing` tiene ocho estados y quince eventos. |
 | ¿Hay reglas que dependen de **cuándo** pasaron las cosas? | No. | **Sí.** "El precio solo se puede cambiar una vez cada 24 horas"; "dos inasistencias en 30 días bloquean al interesado". |
 
-Ese tercer criterio es el decisivo, y `Listing.ChangePrice` lo muestra sin ambigüedad:
+El tercero es el decisivo, y `Listing.ChangePrice` lo muestra sin ambigüedad:
 
 <Code
     code={member(listingSource, 'public void ChangePrice')}
@@ -176,7 +199,39 @@ Ese tercer criterio es el decisivo, y `Listing.ChangePrice` lo muestra sin ambig
     mark={['now - lastChange < ListingPolicy.PriceChangeCooldown']}
 />
 
-`LastPriceChangeAt` no es un campo que alguien recuerde actualizar: **sale de la marca de tiempo del evento anterior**. En un modelo de estado tendrías que añadir esa columna a propósito, y acordarte de mantenerla en cada camino de escritura.
+`LastPriceChangeAt` no es un campo que alguien recuerde actualizar: **sale de la marca de tiempo del evento anterior**. En un modelo de estado tendrías que añadir esa columna a propósito y acordarte de mantenerla en cada camino de escritura; aquí es un subproducto de tener la historia.
+
+**Por qué importa:** cada vez que una regla de negocio contiene las palabras *"antes de"*, *"desde la última vez"*, *"en los últimos N días"* o *"dos veces seguidas"*, un modelo de estado te obliga a inventar y mantener un contador. Un modelo de hechos te lo regala.
+
+## El mismo recorrido, contado dos veces
+
+Vuelve a la publicación de doña Marta del [módulo 1](/event-sourcing/dominio) y mira qué queda de ella en cada modelo después de arrendarse:
+
+| | Con estado | Con hechos |
+| --- | --- | --- |
+| Lo que hay en la base | 1 fila, 12 columnas | 11 filas, una por paso |
+| ¿Bajó de precio? | — | **Sí, una vez, un 7%** |
+| ¿Cuánto tardó en aprobarse? | — | **31 horas** |
+| ¿Cuántas visitas hicieron falta? | — | **Una** |
+| ¿Estuvo pausada alguna vez? | — | **No** |
+| ¿Cuál es el precio actual? | 1.950.000 | 1.950.000 |
+| ¿Cuánto cuesta esa última respuesta? | Un `SELECT` | Reproducir 11 eventos, o **leer la vista** ([módulo 8](/event-sourcing/proyecciones)) |
+
+La última fila es el resumen honesto del intercambio: **pagas la pregunta fácil para poder hacer las difíciles.**
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro confusiones habituales, en orden de frecuencia">
+
+**"Esto es una tabla de auditoría con otro nombre."** No. Una tabla de auditoría es una copia *además* del dato, que alguien escribe a mano y que puede quedar incompleta o mentir. Aquí los eventos **son** el dato: no hay forma de cambiar el sistema sin dejar rastro, porque el rastro es el único sitio donde se escribe.
+
+**"Event sourcing y CQRS son lo mismo."** Son cosas distintas que aquí van juntas por obligación. CQRS es separar el modelo de escritura del de lectura; se puede hacer con tablas normales. Event sourcing es guardar hechos en vez de estado. Lo que ocurre es que, si guardas hechos, **no te queda más remedio** que construir un modelo de lectura aparte — de ahí que siempre aparezcan juntos.
+
+**"Los eventos de dominio son mensajes entre servicios."** No necesariamente. `ListingApproved` es un `record` de C# privado de Rentals; nadie fuera lo conoce. Convertirlo en un mensaje público es una traducción explícita y deliberada, y tiene su propio módulo, el [10](/event-sourcing/procesos).
+
+**"Si es tan bueno, hazlo en todo el sistema."** Ese es el error caro. La decisión se toma **por agregado**, y este repositorio lo demuestra en las dos direcciones: Notifications entero vive mejor con tablas, y dentro de Rentals hay un agregado —`Owner`— que no lo necesitaba.
+
+</Callout>
 
 <Callout kind="advertencia" title="Cuándo NO usarlo">
 
@@ -189,19 +244,37 @@ Ese tercer criterio es el decisivo, y `Listing.ChangePrice` lo muestra sin ambig
 
 <Callout kind="honesto" title="Y una advertencia sobre este repositorio en concreto">
 
-Rentals es un laboratorio de aprendizaje, y su clasificación como "core domain" es parte del ejercicio ([módulo 2 de DDD](/ddd/subdominios)). En un producto real habría que preguntarse si un portal de arriendos justifica event sourcing en *todos* sus agregados — `Owner`, por ejemplo, tiene exactamente **dos** eventos y ninguna transición posterior.
+`Owner` tiene exactamente **dos** eventos y ninguna transición posterior. Aplícale la tabla de tres criterios: sale que no en las tres filas.
 
-Es un caso donde el modelo de estado habría bastado, y se hizo event-sourced por uniformidad. No es un error grave, pero conviene verlo: **la decisión se toma por agregado, no por servicio.**
+Es un caso donde el modelo de estado habría bastado, y se hizo event-sourced por uniformidad. No es un error grave —y hay un argumento defendible: `todo.md` ya pide poder actualizar el contacto de un propietario, lo que le daría transiciones— pero conviene verlo: **la decisión se toma por agregado, no por servicio**, y "por coherencia con los demás" es una razón legítima y débil a la vez.
+
+Lo auditarás tú en la [tarea 3](/event-sourcing/tareas).
 
 </Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo se guarda un evento.** Hemos visto `Raise` y `Apply` como métodos de C#; dónde acaban esas filas es el [módulo 6](/event-sourcing/persistencia).
+- **Cómo se consulta sin rehidratar.** El coste de la "pregunta fácil" se resuelve con proyecciones, [módulo 8](/event-sourcing/proyecciones).
+- **La comparación con un log de mensajería** (Kafka y compañía). Se parecen en la forma y se diferencian en el propósito: uno transporta, el otro **es** la base de datos.
+- **Los modelos híbridos.** Se puede guardar estado *y* publicar eventos, o tener event sourcing en dos agregados y tablas en el resto. Es lo normal en sistemas reales y no cambia nada de lo que sigue.
 
 <Callout kind="resumen" title="Para recordar">
 
 - Estado = *cómo están las cosas*. Hechos = *todo lo que pasó*. El estado se deriva de los hechos.
-- Las ganancias: historia gratis, preguntas nuevas sobre datos viejos, lecturas desechables, concurrencia incluida.
-- Los costes: no se borra nada, hay que construir proyecciones, consistencia eventual, y curva de equipo.
-- El criterio decisivo: **¿hay reglas que dependen de cuándo pasaron las cosas?** Si sí, el event sourcing las regala.
+- El método público **levanta un hecho**; el estado cambia después, en `Apply`, como consecuencia.
+- Se gana: historia gratis, preguntas nuevas sobre datos viejos, lecturas desechables, concurrencia incluida.
+- Se paga: no se borra nada, hay que construir proyecciones, consistencia eventual, y curva de equipo.
+- El criterio decisivo: **¿hay reglas que dependan de cuándo pasaron las cosas?** Si sí, el event sourcing las regala.
 - La decisión es **por agregado**, no por servicio. `Owner` no lo necesitaba.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Coge **un** agregado de tu propio sistema —el que más te duela— y hazle la tabla de tres criterios. Tres líneas, cinco minutos. Si sale que sí en dos o más, tienes un candidato; si sale que no, acabas de ahorrarte un proyecto.
+
+**Y luego:** el [módulo 3](/event-sourcing/eventos) mira de cerca la pieza que has visto pasar en todos los `Raise` de esta página. Son diez líneas de código y la decisión más permanente que vas a tomar.
 
 </Callout>
 
@@ -209,6 +282,6 @@ Es un caso donde el modelo de estado habría bastado, y se hizo event-sourced po
 
 1. `Listing.ChangePrice` compara `now - lastChange`. Si Notifications necesitara la misma regla, ¿qué tendría que añadir al agregado y a la tabla, y qué podría salir mal al mantenerlo?
 2. `Owner` tiene dos eventos y ninguna transición. Escribe el argumento a favor y el argumento en contra de haberlo hecho event-sourced.
-3. Piensa en un agregado de tu propio sistema. Haz la tabla de tres criterios. ¿Sale a favor o en contra?
+3. Alguien dice: *"nosotros ya tenemos event sourcing, guardamos un JSON en una tabla `audit_log` cada vez que cambia algo"*. Da dos razones concretas por las que eso no es lo mismo.
 
 </Callout>

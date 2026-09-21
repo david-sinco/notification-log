@@ -2,8 +2,8 @@
 title: "El evento como hecho"
 description: "Un tipo diminuto que va a sobrevivir a todas tus clases. Vale la pena nombrarlo bien."
 sidebar:
-  order: 2
-  label: "2 · El evento como hecho"
+  order: 3
+  label: "3 · El evento como hecho"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -18,23 +18,35 @@ import visitRequested from '@code/Services/Rentals/NotificationLog.RentalService
 import visitCancelled from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Events/VisitCancelled.cs?raw';
 import visitCompleted from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Events/VisitCompleted.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Estás revisando un pull request. Alguien renombró <code>ListingDrafted</code> a
+<code>ListingCreated</code> "porque queda más claro". Es un F2 en el IDE, compila, los tests pasan,
+y en cualquier otro proyecto lo aprobarías sin pensarlo. Aquí, si lo apruebas, acabas de dejar
+ilegibles todas las publicaciones creadas hasta hoy.
+</p>
 
-- Nombrar un evento como un hecho de negocio y reconocer los nombres que no lo son.
-- Decidir qué datos lleva un evento y cuáles no, con tres reglas concretas.
-- Entender por qué los eventos de este repositorio llevan primitivos y no value objects.
-- Aceptar la consecuencia más dura del patrón: un evento publicado es para siempre.
+Un evento es el único tipo de tu sistema que **no puedes refactorizar**, porque no vive solo en el código: vive también en cuarenta mil filas guardadas con su forma antigua. Este módulo va de darle forma y nombre como si fueras a convivir con él diez años — que es exactamente lo que va a pasar.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un evento es un hecho de negocio, en pasado, con los datos justos
+para que alguien pueda entenderlo dentro de diez años sin preguntarte nada.
+</div>
+
+## Ya conoces esta restricción: es el periódico de ayer
+
+Un periódico impreso no se edita. Si mañana descubres que el titular estaba mal, no vas casa por casa tachando: publicas una **corrección** en la edición siguiente. Las dos ediciones quedan, y la historia completa es la suma de ambas.
+
+De ahí salen las dos consecuencias de este módulo. La primera: **el titular importa muchísimo**, porque es lo que la gente va a leer y ya no lo puedes cambiar. La segunda: **la noticia tiene que contarse completa**, porque el lector de dentro de diez años no te tiene a ti para preguntarte el contexto.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un periódico puede mentir y nadie lo impide. Un evento, no: solo lo emite el agregado, y solo después de validar que ese hecho podía ocurrir ([módulo 4](/event-sourcing/agregado)). Cuando llega a la tabla, ya pasó el filtro.
+
+Y al revés: un periódico se puede leer aunque esté mal escrito. Un evento cuyo formato cambió **deja de poder leerse**, en silencio o a gritos. Eso es el [módulo 11](/event-sourcing/evolucion).
 
 </Callout>
 
-<div class="ddd-frase">
-<strong>En una frase:</strong> un evento es el único tipo de tu sistema que no puedes refactorizar,
-porque ya hay millones guardados con su forma antigua.
-</div>
-
-## La base: dos archivos de cinco líneas
-
-Todo el contrato de un evento en este repositorio cabe aquí:
+## Todo el contrato cabe en dos archivos de cinco líneas
 
 <Code
     code={whole(iDomainEventSource)}
@@ -48,16 +60,18 @@ Todo el contrato de un evento en este repositorio cabe aquí:
     title="Shared/Domain.Shared/EventSourcing/DomainEvent.cs"
 />
 
-Dos datos obligatorios y nada más: **quién es este hecho** (`EventId`) y **cuándo ocurrió** (`OccurredOn`). Lo importante es lo que *no* hay:
+Dos datos obligatorios y nada más: **quién es este hecho** (`EventId`) y **cuándo ocurrió** (`OccurredOn`). Lo interesante es lo que *no* hay:
 
-- No hay `AggregateId`. Lo pone el flujo, no el evento ([módulo 5](/event-sourcing/persistencia)).
+- No hay `AggregateId`. Lo pone el flujo, no el evento ([módulo 6](/event-sourcing/persistencia)).
 - No hay `Version`. Lo pone el event store.
-- No hay `UserId` ni `CorrelationId`. Cuando hace falta, es un dato del hecho y va en el evento concreto (`ListingApproved.ModeratorId`).
-- Es `abstract record`: **inmutable por construcción**, e igualdad por valor gratis.
+- No hay `UserId` ni `CorrelationId`. Cuando hacen falta, son datos del hecho y van en el evento concreto (`ListingApproved.ModeratorId`).
+- Es un **`abstract record`**: inmutable por construcción, e igualdad por valor gratis.
+
+**Por qué importa:** cuanto más pequeña es la base, menos cosas tienen que seguir siendo verdad dentro de diez años. Todo lo que metas aquí lo estás metiendo en *todos* los eventos que vas a escribir en la vida del sistema.
 
 ## El nombre es lo primero y lo más caro de cambiar
 
-Un evento se nombra con un **verbo en pasado sobre un sujeto de negocio**. Compara la lista real de `Listing` con la lista que habría salido de nombrar los métodos:
+Un evento se nombra con un **verbo en pasado sobre un sujeto de negocio**. Compara la lista real de `Listing` con la que habría salido de nombrar los métodos en lugar de los hechos:
 
 | Lo que hay en el repositorio | Lo que habría salido de nombrar el método |
 | --- | --- |
@@ -69,17 +83,19 @@ Un evento se nombra con un **verbo en pasado sobre un sujeto de negocio**. Compa
 
 La columna izquierda la entiende alguien de negocio leyéndola en voz alta. La derecha describe lo que hizo el programa.
 
+**Por qué importa:** ese nombre va a aparecer en la tabla, en los logs, en los paneles de métricas y en las conversaciones con negocio durante años. Es la parte del sistema con más lectores por línea de código.
+
 <Callout kind="antipatron" title="Los tres nombres que delatan un evento mal modelado">
 
 - **`XUpdated` / `XChanged` a secas.** Anuncia que algo cambió sin decir *qué hecho* ocurrió. Quien lo consume tiene que comparar campos para adivinarlo.
-- **`XStatusSet` / `StatusChangedTo...`.** Nombra el mecanismo interno (una columna de estado) en vez del hecho. Si el día de mañana el estado deja de ser una columna, el evento queda mintiendo.
+- **`XStatusSet` / `StatusChangedTo...`.** Nombra el mecanismo interno (una columna de estado) en vez del hecho. Si mañana el estado deja de ser una columna, el evento queda mintiendo.
 - **`XCommand` en pasado.** `ApproveListingExecuted` no es un hecho: es la confirmación de que corrió un método. Un evento describe el mundo, no el programa.
 
 </Callout>
 
 <Callout kind="honesto" title="Un nombre de este repositorio que se acerca al límite">
 
-`ListingDetailsUpdated` lleva `Updated` en el nombre, y por la regla de arriba sería sospechoso. Aquí está justificado —el negocio sí dice "actualicé los datos del inmueble", es una sola acción del propietario— pero fíjate en que es el único, y en que lleva **todos** los campos, no un delta.
+`ListingDetailsUpdated` lleva `Updated` en el nombre y, por la regla de arriba, sería sospechoso. Aquí está justificado —el negocio sí dice "actualicé los datos del inmueble", es una sola acción del propietario— pero fíjate en que es el único, y en que lleva **todos** los campos, no un delta.
 
 La prueba para distinguirlo de un `XUpdated` malo: *¿existe una acción de negocio con ese nombre que alguien realiza a propósito?* Para "actualizar los datos del inmueble", sí. Para "se actualizó la publicación", no.
 
@@ -87,50 +103,50 @@ La prueba para distinguirlo de un `XUpdated` malo: *¿existe una acción de nego
 
 ## Qué datos lleva: tres reglas
 
-### Regla 1 — Lleva lo que hace falta para reconstruir el estado
+### Regla 1 — Lo que hace falta para reconstruir el estado
 
 <Code
     code={whole(listingDrafted)}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Events/ListingDrafted.cs"
+    title="Domain/Listings/Events/ListingDrafted.cs"
 />
 
-Este es el primer evento de un flujo, así que trae la identidad y todo lo que fija de por vida: quién es el propietario, quién lo creó, y si es arriendo o venta. Sin eso, `Apply` no podría reconstruir un `Listing` desde cero.
+Es el primer evento de un flujo, así que trae la identidad y todo lo que queda fijado de por vida: quién es el propietario, quién lo creó, y si es arriendo o venta. Sin eso, no habría forma de reconstruir un `Listing` desde cero.
 
-### Regla 2 — Lleva lo que el negocio necesita saber, aunque el estado no lo use
+### Regla 2 — Lo que el negocio necesita saber, aunque el estado no lo use
 
 <Code
     code={whole(listingPriceChanged)}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Events/ListingPriceChanged.cs"
+    title="Domain/Listings/Events/ListingPriceChanged.cs"
 />
 
-Fíjate en `OldPrice`. El estado del agregado **no lo necesita** — `Apply` solo asigna `Price = NewPrice`. Está ahí porque el hecho de negocio es *"bajó de 2.100.000 a 1.950.000"*, no *"ahora vale 1.950.000"*.
+Fíjate en `OldPrice`. El estado del agregado **no lo necesita** — al aplicar el evento solo se asigna `Price = NewPrice`. Está ahí porque el hecho de negocio es *"bajó de 2.100.000 a 1.950.000"*, no *"ahora vale 1.950.000"*.
 
-Ese campo es lo que permitirá, dentro de dos años, responder "¿cuántas publicaciones bajaron de precio más de un 10% antes de arrendarse?" — o [avisar a quien la tenga en favoritos](/event-sourcing/tareas) cuando el precio baje un 3%, que es una funcionalidad pendiente en `todo.md`.
+Ese campo es lo que permitirá, dentro de dos años, responder la pregunta del [módulo 2](/event-sourcing/por-que) — o avisar a quien tenga la publicación en favoritos cuando el precio baje un 3%, que es una funcionalidad pendiente en `todo.md`.
 
-**La regla:** un evento no es un `diff` para el agregado. Es el relato de lo que pasó, y el agregado es solo uno de sus lectores.
+**La regla general:** un evento no es un `diff` para el agregado. Es el relato de lo que pasó, y el agregado es solo uno de sus lectores.
 
-### Regla 3 — No lleva nada que se pueda deducir
+### Regla 3 — Nada que se pueda deducir
 
 <Code
     code={whole(visitCompleted)}
     lang="csharp"
-    title="Services/Rentals/.../Visits/Events/VisitCompleted.cs"
+    title="Domain/Visits/Events/VisitCompleted.cs"
 />
 
-Un `record` sin un solo campo. Todo lo que hace falta saber —qué visita, cuándo— ya está: la visita es el flujo, y el cuándo está en `OccurredOn`. Añadirle `VisitId` sería duplicar el identificador del flujo dentro del evento, con el riesgo de que algún día no coincidan.
+Un `record` sin un solo campo. Todo lo que hace falta saber —qué visita, cuándo— ya está: la visita **es** el flujo, y el cuándo está en `OccurredOn`. Añadirle un `VisitId` sería duplicar el identificador del flujo dentro del evento, con el riesgo de que algún día no coincidan.
 
 `VisitCancelled`, en cambio, sí lleva datos, porque hay decisiones de negocio dentro del hecho:
 
 <Code
     code={whole(visitCancelled)}
     lang="csharp"
-    title="Services/Rentals/.../Visits/Events/VisitCancelled.cs"
+    title="Domain/Visits/Events/VisitCancelled.cs"
     mark={['bool IsLate']}
 />
 
-`IsLate` es el caso interesante: se podría *calcular* comparando `OccurredOn` con la franja confirmada. Pero se guarda, y esa es la decisión correcta — porque `LateCancellationWindow` es una política que puede cambiar, y **el hecho debe conservar el juicio que se hizo con las reglas de aquel momento**, no el que haría con las de hoy.
+`IsLate` es el caso interesante: se podría *calcular* comparando `OccurredOn` con la franja confirmada. Pero se guarda, y esa es la decisión correcta — porque "tarde" significa *menos de 12 horas antes*, y esas 12 horas son una política que puede cambiar. **El hecho debe conservar el juicio que se hizo con las reglas de aquel momento**, no el que haría con las de hoy.
 
 > Regla práctica: si el valor depende de una política que puede cambiar, guárdalo en el evento. Si es aritmética pura, dedúcelo.
 
@@ -141,44 +157,114 @@ Esto choca con lo que enseña la [guía de DDD](/ddd/value-objects), así que me
 <Code
     code={whole(listingDetailsUpdated)}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Events/ListingDetailsUpdated.cs"
+    title="Domain/Listings/Events/ListingDetailsUpdated.cs"
 />
 
-El agregado tiene `PropertyDetails`, `Location`, `ListingDescription`, `Stratum` y `Money` — todos value objects. El evento tiene `decimal`, `int`, `string` y `long`.
-
-Y el método que lo levanta los desarma uno por uno, mientras que `Apply` los vuelve a armar con las fábricas `FromStorage`:
+El agregado tiene `PropertyDetails`, `Location`, `ListingDescription`, `Stratum` y `Money` — todos value objects. El evento tiene `decimal`, `int`, `string` y `long`. El método que lo levanta los desarma uno por uno, y al aplicarlo se vuelven a armar con unas fábricas llamadas `FromStorage`.
 
 <Callout kind="concepto" title="Las tres razones de aplanar">
 
 1. **Un evento es un contrato de serialización.** Marten lo guarda como JSON. Si el evento llevara `Money`, el JSON dependería de la forma interna de una clase de dominio, y renombrar una propiedad privada rompería la lectura de los eventos viejos.
-2. **Un value object valida.** Un `Money.Create` que hoy rechaza negativos rompería la rehidratación de un evento antiguo con un valor que entonces era legal. Por eso existe `FromStorage`, que **no valida**: el valor ya se validó cuando el hecho ocurrió.
+2. **Un value object valida.** Un `Money.Create` que hoy rechaza negativos rompería la reconstrucción de un evento antiguo con un valor que entonces era legal. Por eso existe `FromStorage`, que **no valida**: el valor ya se validó cuando el hecho ocurrió.
 3. **El evento tiene más lectores que el agregado.** Las proyecciones, los procesos y (traducidos) otros servicios leen estos eventos. Cuantos menos tipos propios exija entender, mejor.
 
 </Callout>
 
 <Callout kind="advertencia" title="El precio de aplanar">
 
-Se paga en verbosidad: `ListingDetailsUpdated` tiene trece campos, y el emparejamiento entre lo que se desarma en `UpdateDetails` y lo que se arma en `When(ListingDetailsUpdated)` es manual. Si alguien añade un campo a `PropertyDetails` y olvida uno de los dos lados, el compilador avisa en el constructor pero **no** avisa si lo pasa en el orden equivocado entre dos `int` consecutivos.
+Se paga en verbosidad: `ListingDetailsUpdated` tiene trece campos, y el emparejamiento entre lo que se desarma al levantarlo y lo que se arma al aplicarlo es manual. Si alguien añade un campo a `PropertyDetails` y olvida uno de los dos lados, el compilador avisa; pero **no** avisa si lo pasa en el orden equivocado entre dos `int` consecutivos.
 
-Es exactamente la obsesión primitiva que el módulo 5 de DDD enseña a evitar — aceptada aquí a propósito, en la frontera de serialización, por las tres razones de arriba.
+Es exactamente la obsesión primitiva que el [módulo 5 de DDD](/ddd/value-objects) enseña a evitar — aceptada aquí a propósito, **en la frontera de serialización**, por las tres razones de arriba.
 
 </Callout>
+
+## Un hecho, cuatro lectores
+
+Aquí es donde encajan las tres reglas: un evento no se diseña para quien lo escribe, sino para todos los que lo van a leer.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 280" role="img" aria-labelledby="readersTitle">
+        <title id="readersTitle">Los cuatro lectores de un mismo evento</title>
+        <defs>
+            <marker id="rdArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="300" y="18" width="260" height="70" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="430" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">ListingPriceChanged</text>
+        <text x="430" y="60" text-anchor="middle" font-size="9" font-family="monospace" fill="#334155">OldPrice = 2100000</text>
+        <text x="430" y="76" text-anchor="middle" font-size="9" font-family="monospace" fill="#334155">NewPrice = 1950000</text>
+
+        <line x1="330" y1="90" x2="150" y2="128" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#rdArrow)" />
+        <line x1="400" y1="90" x2="350" y2="128" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#rdArrow)" />
+        <line x1="460" y1="90" x2="510" y2="128" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#rdArrow)" />
+        <line x1="530" y1="90" x2="710" y2="128" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#rdArrow)" />
+
+        <rect x="20" y="132" width="200" height="104" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="120" y="154" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">El agregado</text>
+        <text x="120" y="174" text-anchor="middle" font-size="8.5" fill="#334155">usa NewPrice y la fecha</text>
+        <text x="120" y="190" text-anchor="middle" font-size="8.5" fill="#334155">para la regla de 24 h</text>
+        <text x="120" y="214" text-anchor="middle" font-size="8" fill="#4338ca" font-style="italic">ignora OldPrice</text>
+
+        <rect x="240" y="132" width="180" height="104" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="330" y="154" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">La proyección</text>
+        <text x="330" y="174" text-anchor="middle" font-size="8.5" fill="#334155">actualiza el precio</text>
+        <text x="330" y="190" text-anchor="middle" font-size="8.5" fill="#334155">que ve la pantalla</text>
+        <text x="330" y="214" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">módulo 8</text>
+
+        <rect x="440" y="132" width="180" height="104" rx="10" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="530" y="154" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">El proceso</text>
+        <text x="530" y="174" text-anchor="middle" font-size="8.5" fill="#334155">avisa a quien la tenga</text>
+        <text x="530" y="190" text-anchor="middle" font-size="8.5" fill="#334155">en favoritos (pendiente)</text>
+        <text x="530" y="214" text-anchor="middle" font-size="8" fill="#9d174d" font-style="italic">necesita OldPrice</text>
+
+        <rect x="640" y="132" width="200" height="104" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="740" y="154" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">El analista, en 2028</text>
+        <text x="740" y="174" text-anchor="middle" font-size="8.5" fill="#334155">"¿cuánto se baja de media</text>
+        <text x="740" y="190" text-anchor="middle" font-size="8.5" fill="#334155">antes de arrendar?"</text>
+        <text x="740" y="214" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">necesita los dos precios</text>
+
+        <text x="430" y="266" text-anchor="middle" font-size="9" fill="#64748b">Tres de los cuatro lectores no existían cuando se escribió el evento. Por eso lleva OldPrice.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        La Regla 2 se entiende aquí: un campo que el agregado no usa puede ser imprescindible para los
+        otros tres lectores — y dos de ellos aún no se han escrito.
+    </p>
+</div>
 
 ## Y el coste que no se puede deshacer
 
 <Code
     code={whole(visitRequested)}
     lang="csharp"
-    title="Services/Rentals/.../Visits/Events/VisitRequested.cs"
+    title="Domain/Visits/Events/VisitRequested.cs"
 />
 
-Mira `SlotDuration`. Hoy es siempre `VisitPolicy.SlotDuration` (una hora), así que parece redundante — se podría leer de la política. Pero está en el evento, y esa es la decisión correcta por el mismo motivo que `IsLate`: si mañana las visitas pasan a durar 45 minutos, las visitas antiguas deben seguir midiendo una hora.
+Mira `SlotDuration`. Hoy siempre vale lo mismo —una hora, según `VisitPolicy`— así que parece redundante: se podría leer de la política. Pero está en el evento, y es la decisión correcta por el mismo motivo que `IsLate`: si mañana las visitas pasan a durar 45 minutos, las visitas antiguas deben seguir midiendo una hora.
 
-Ahora la parte incómoda: **ese campo ya no se puede quitar**. Hay eventos guardados que lo llevan, y `Visit.When(VisitRequested)` lo necesita para reconstruir las franjas.
+Ahora la parte incómoda: **ese campo ya no se puede quitar**. Hay eventos guardados que lo llevan, y el agregado lo necesita para reconstruir las franjas.
 
 > Un evento publicado es una decisión permanente. Puedes añadirle campos opcionales, puedes dejar de emitirlo, pero no puedes cambiar lo que significa lo que ya está guardado.
 
-El [módulo 10](/event-sourcing/evolucion) es la historia completa de qué hacer cuando aun así hay que cambiarlo — y de lo que pasó en este repositorio por no hacerlo a tiempo.
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Tres errores que parecen razonables al escribirlos">
+
+**Meter en el evento el estado resultante.** `ListingPaused(NewStatus: "Paused")` es redundante hoy y mentira mañana: el estado resultante depende de cómo lo interprete el agregado, que puede cambiar. El evento dice qué pasó, no en qué quedó todo.
+
+**Emitir un evento por cada campo que cambió.** Si actualizar el inmueble levantara `AreaChanged`, `RoomsChanged` y `DescriptionChanged`, habrías convertido una acción de negocio en tres hechos artificiales que nadie pidió. Uno por **acción del usuario**, no uno por columna.
+
+**Meter todo "por si acaso".** El extremo contrario de la Regla 2. Cada campo es un compromiso permanente: si nadie sabe decir quién lo va a leer, no lo pongas. La Regla 2 pide campos con un lector identificable —aunque ese lector sea "el negocio dentro de dos años"—, no campos por miedo.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Qué hacer cuando aun así hay que cambiar un evento.** Alias, *upcasting* y versionado de tipo: [módulo 11](/event-sourcing/evolucion).
+- **Los metadatos** (`CorrelationId`, quién ejecutó, desde qué IP). Marten los admite; este repositorio no los usa, y cuando el dato importa va dentro del evento.
+- **Eventos de integración.** Los de esta página son privados de Rentals. Convertirlos en contrato público es el [módulo 10](/event-sourcing/procesos).
+- **Cómo se serializa exactamente.** JSON con enums como texto; el detalle está en el [módulo 6](/event-sourcing/persistencia).
 
 <Callout kind="resumen" title="Para recordar">
 
@@ -188,6 +274,16 @@ El [módulo 10](/event-sourcing/evolucion) es la historia completa de qué hacer
 - No lleva lo deducible — salvo que dependa de **una política que puede cambiar** (`IsLate`, `SlotDuration`).
 - Va **aplanado a primitivos**, porque es un contrato de serialización con muchos lectores.
 - Y es **permanente**. Nómbralo y dale forma como si fueras a vivir con él diez años, porque vas a hacerlo.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre `Services/Rentals/.../Domain/Listings/Events/` y lee los quince archivos de un tirón. Son quince `record` de una o dos líneas: en total, menos de cien líneas de código.
+
+Léelos en voz alta como si fueran titulares. El que te haga dudar —el que no sepas explicarle a alguien de negocio sin mirar el código— es el que está mal nombrado.
+
+**Y luego:** el [módulo 4](/event-sourcing/agregado) responde la pregunta que este ha dejado abierta: si el evento no valida nada y solo describe, **¿quién decide que puede ocurrir?**
 
 </Callout>
 

@@ -2,8 +2,8 @@
 title: "Flujos, versión y concurrencia"
 description: "Añadir eventos declarando la versión esperada: el bloqueo optimista que viene incluido en el modelo."
 sidebar:
-  order: 5
-  label: "5 · Flujos y concurrencia"
+  order: 6
+  label: "6 · Flujos y concurrencia"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -14,32 +14,49 @@ import unitOfWorkSource from '@code/Services/Rentals/NotificationLog.RentalServi
 import storeConfigSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenStoreConfiguration.cs?raw';
 import diSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/DependencyInjection.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Mismo segundo, dos peticiones. Un moderador aprueba la publicación de doña Marta; doña Marta, que
+ya encontró inquilino por otro lado, la retira. Las dos leen el mismo estado —"en revisión"—, las
+dos pasan sus validaciones, y las dos escriben. Con una tabla, gana la última y el resultado es
+una publicación retirada que, según el histórico que nadie guardó, nunca fue aprobada. O al revés.
+</p>
 
-- Entender qué es un flujo (*stream*) y por qué coincide con el límite del agregado.
-- Leer cómo se añaden eventos declarando la versión esperada.
-- Comparar ese control de concurrencia con la grieta que tiene el otro servicio.
-- Ver qué configura Marten y qué se deja explícitamente sin configurar.
+Este módulo va de por qué en Rentals eso no puede pasar, y de que no hay ningún mérito en ello: **la protección no se añadió, viene con la forma de escribir**.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un flujo es la lista ordenada e inmutable de todo lo que le pasó a
+un agregado, y su número de versión es, gratis, el token de concurrencia que el otro servicio no
+tiene.
+</div>
+
+## Ya conoces el mecanismo: es un `git push` rechazado
+
+Cuando haces `git push` y alguien empujó antes que tú, Git no mezcla lo que le da la gana ni sobrescribe: **rechaza**. Tu commit se construyó sobre un padre que ya no es la punta de la rama, así que el push no es válido. Traes lo nuevo, rehaces tu trabajo encima, y vuelves a empujar.
+
+Aquí es idéntico. Cargas un agregado y anotas en qué versión estaba. Al escribir dices *"esto debe quedar en la versión 5"*. Si otro llegó antes y el flujo ya va por la 5, tu escritura se rechaza.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Git resuelve el conflicto con un merge: dos ramas se juntan. Aquí **no hay merge**. Una escritura rechazada es un error que sube hasta el usuario, o un reintento que vuelve a cargar y vuelve a decidir desde cero. No hay forma automática de fusionar dos decisiones de negocio.
+
+Y Git compara contenidos; esto compara solo un número. Da igual si los dos cambios eran compatibles: si la versión no coincide, se rechaza.
 
 </Callout>
 
-<div class="ddd-frase">
-<strong>En una frase:</strong> un flujo es la lista ordenada e inmutable de todo lo que le pasó a un
-agregado, y su número de versión es, gratis, el token de concurrencia que el otro servicio no tiene.
-</div>
+## Un flujo es un agregado, sin capa intermedia
 
-## El flujo: un agregado, un identificador, una secuencia
+En Marten, un ***stream*** —flujo— es una secuencia de eventos identificada por un `Guid` y numerada desde 1. Aquí **el `Guid` del flujo es el `Id` del agregado**: no hay tabla de correspondencias ni clave sustituta.
 
-En Marten, un *stream* es una secuencia de eventos identificada por un `Guid` y numerada desde 1. Aquí **el `Guid` del flujo es el `Id` del agregado** — no hay tabla de correspondencias ni clave sustituta.
+Eso no es un detalle de implementación, es una decisión de diseño con consecuencias: **el límite del flujo es el límite del agregado**, y por tanto el límite de la consistencia transaccional. La Regla 4 de Vernon ([módulo 7 de DDD](/ddd/agregados)) —una transacción modifica un solo agregado— aquí se lee como *"una operación escribe en un solo flujo"*.
 
-Eso tiene una consecuencia de diseño importante: **el límite del flujo es el límite del agregado**, y por tanto el límite de la consistencia transaccional. La Regla 4 de Vernon ([módulo 7 de DDD](/ddd/agregados)) —una transacción modifica un solo agregado— aquí se lee como *"una operación escribe en un solo flujo"*.
+**Por qué importa:** todo lo que quieras proteger con garantías fuertes tiene que caber en un flujo. Todo lo que no quepa será una regla blanda, y eso tiene un módulo entero, el [9](/event-sourcing/decisiones).
 
-## Añadir eventos, no guardar estado
+## Escribir es añadir, no guardar
 
 <Code
     code={member(streamsSource, 'public void Append<TAggregate>')}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/AggregateStreams.cs · Append"
+    title="Infrastructure/Persistence/AggregateStreams.cs · Append"
     mark={['_session.Events.Append(aggregate.Id, version + events.Length, events);', '_session.Events.StartStream<TAggregate>(aggregate.Id, events);']}
 />
 
@@ -52,7 +69,7 @@ Léelo despacio, porque en quince líneas está todo el modelo de escritura:
     </li>
     <li>
         <strong>Si no hay ninguno, no hace nada.</strong> Ese <code>return</code> temprano es lo que
-        permite que los métodos idempotentes del <a href="/event-sourcing/agregado">módulo 3</a> —
+        permite que los métodos idempotentes del <a href="/event-sourcing/agregado">módulo 4</a> —
         <code>Withdraw</code> sobre algo ya retirado— no generen ni una fila.
     </li>
     <li>
@@ -79,12 +96,16 @@ Del `LoadAsync` que leíste en el [módulo anterior](/event-sourcing/rehidrataci
         span(streamsSource, '_versions[id] = events[^1].Version;', '_versions[id] = events[^1].Version;')
     ].join('\n\n')}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/AggregateStreams.cs · la versión leída se recuerda"
+    title="Infrastructure/Persistence/AggregateStreams.cs · la versión leída se recuerda"
 />
 
-`AggregateStreams` está registrado como `Scoped`, así que ese diccionario **vive lo que dura la petición**. Al cargar un flujo anota en qué versión estaba; al añadir, le dice a Marten *"esto debe quedar en la versión N+k"*.
+`AggregateStreams` está registrado como **`Scoped`**, así que ese diccionario vive lo que dura la petición y nada más. Al cargar un flujo anota en qué versión estaba; al añadir, le dice a Marten *"esto debe quedar en la versión N+k"*.
 
 Si entre la lectura y la escritura otra transacción añadió eventos al mismo flujo, la versión real ya no coincide y **Marten rechaza la escritura** con una excepción de concurrencia.
+
+**Por qué importa:** ese `Scoped` no es decorativo. Si el diccionario se compartiera entre peticiones, una petición escribiría con la versión que leyó otra, y la protección se volvería en contra: rechazos aleatorios o, peor, escrituras aceptadas sobre estado ajeno.
+
+## El caso completo: las dos peticiones del principio
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 840 300" role="img" aria-labelledby="concTitle">
@@ -99,29 +120,29 @@ Si entre la lectura y la escritura otra transacción añadió eventos al mismo f
         <line x1="420" y1="46" x2="420" y2="272" stroke="#e5e9f2" stroke-width="1" />
         <line x1="760" y1="46" x2="760" y2="272" stroke="#e5e9f2" stroke-width="1" />
 
-        <text x="80" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Petición A</text>
+        <text x="80" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Moderador</text>
         <text x="420" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Flujo 7a1f</text>
-        <text x="760" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Petición B</text>
+        <text x="760" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Propietaria</text>
 
         <rect x="14" y="56" width="132" height="34" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
-        <text x="80" y="70" text-anchor="middle" font-size="8" fill="#334155">LoadAsync</text>
+        <text x="80" y="70" text-anchor="middle" font-size="8" fill="#334155">carga la publicación</text>
         <text x="80" y="82" text-anchor="middle" font-size="7.5" fill="#64748b">versión leída = 4</text>
         <line x1="146" y1="73" x2="410" y2="73" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#coArrow)" />
 
         <rect x="694" y="96" width="132" height="34" rx="6" fill="#fff7ed" stroke="#fed7aa" />
-        <text x="760" y="110" text-anchor="middle" font-size="8" fill="#334155">LoadAsync</text>
+        <text x="760" y="110" text-anchor="middle" font-size="8" fill="#334155">carga la publicación</text>
         <text x="760" y="122" text-anchor="middle" font-size="7.5" fill="#64748b">versión leída = 4</text>
         <line x1="694" y1="113" x2="430" y2="113" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#coArrow)" />
 
         <rect x="14" y="146" width="132" height="32" rx="6" fill="#eef2ff" stroke="#c7d2fe" />
-        <text x="80" y="166" text-anchor="middle" font-size="8" fill="#334155">Append esperando v5</text>
+        <text x="80" y="166" text-anchor="middle" font-size="8" fill="#334155">aprueba · espera v5</text>
         <line x1="146" y1="162" x2="410" y2="162" stroke="#4f46e5" stroke-width="1.5" marker-end="url(#coArrow)" />
 
         <rect x="312" y="146" width="216" height="32" rx="6" fill="#f0fdf4" stroke="#bbf7d0" />
         <text x="420" y="166" text-anchor="middle" font-size="8.5" font-weight="600" fill="#14532d">✓ aceptado — ahora va por v5</text>
 
         <rect x="694" y="208" width="132" height="32" rx="6" fill="#fff7ed" stroke="#fed7aa" />
-        <text x="760" y="228" text-anchor="middle" font-size="8" fill="#334155">Append esperando v5</text>
+        <text x="760" y="228" text-anchor="middle" font-size="8" fill="#334155">retira · espera v5</text>
         <line x1="694" y1="224" x2="430" y2="224" stroke="#ea580c" stroke-width="1.5" marker-end="url(#coArrow)" />
 
         <rect x="290" y="200" width="260" height="56" rx="8" fill="#fee2e2" stroke="#fecaca" />
@@ -136,36 +157,38 @@ Si entre la lectura y la escritura otra transacción añadió eventos al mismo f
     </p>
 </div>
 
+La petición rechazada no queda a medias: su transacción no llegó a escribir nada. El propietario recibe un error y, al reintentar, carga la publicación **ya aprobada** — y entonces `Withdraw` decide con el estado real, que es justo lo que queríamos.
+
 <Callout kind="honesto" title="El contraste exacto con Notifications">
 
 El [módulo 12 de DDD](/ddd/persistencia) documenta una grieta real: dos peticiones simultáneas pueden dejar dos configuraciones de Email activas en el mismo trigger, porque la invariante se comprueba en memoria sobre un estado leído antes y **nada obliga a volver a mirar**. Cerrarla requiere añadir a propósito un índice único filtrado o un `IsRowVersion()`.
 
 Aquí esa defensa no se añade: **es el mecanismo de escritura**. No hay forma de escribir sin declarar la versión esperada, así que no hay forma de olvidarse.
 
-Y conviene decir la otra mitad, para no vender magia: esto protege **dentro de un flujo**. Una regla que cruza flujos —"este anfitrión no puede tener dos visitas confirmadas a la misma hora"— sigue siendo una carrera, y el [módulo 8](/event-sourcing/decisiones) explica por qué este repositorio la acepta a propósito.
+Y conviene decir la otra mitad, para no vender magia: esto protege **dentro de un flujo**. Una regla que cruza flujos —"este anfitrión no puede tener dos visitas confirmadas a la misma hora"— sigue siendo una carrera, y el [módulo 9](/event-sourcing/decisiones) explica por qué este repositorio la acepta a propósito.
 
 </Callout>
 
-## La unidad de trabajo
+## Una transacción, y lo que entra en ella
 
 <Code
     code={whole(unitOfWorkSource)}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/MartenUnitOfWork.cs"
+    title="Infrastructure/Persistence/MartenUnitOfWork.cs"
 />
 
 Implementa la misma interfaz `IUnitOfWork` que el otro servicio ([un solo método](/ddd/persistencia)), así que la capa de aplicación de Rentals se escribe igual: *cargar, decidir, añadir, guardar*.
 
-La diferencia está en qué cuenta: `_session.PendingChanges.Streams()` suma los **eventos pendientes**, no las filas modificadas. Y el `SaveChangesAsync` de Marten escribe todos esos eventos —más las proyecciones *inline* del [módulo 7](/event-sourcing/proyecciones)— **en una sola transacción de PostgreSQL**.
+La diferencia está en qué cuenta: `_session.PendingChanges.Streams()` suma los **eventos pendientes**, no las filas modificadas. Y el `SaveChangesAsync` de Marten escribe todos esos eventos —más las vistas que se actualizan en línea, del [módulo 8](/event-sourcing/proyecciones)— **en una sola transacción de PostgreSQL**.
 
-Ese detalle es el que hace innecesario un *outbox* para las proyecciones: no puede ocurrir que el evento se guarde y la vista no.
+**Por qué importa:** ese detalle hace innecesario un *outbox* para las vistas. No puede ocurrir que el evento se guarde y la vista no, porque o entran los dos o no entra ninguno.
 
-## Qué se configura en Marten
+## Qué se configura, y qué se deja fuera a propósito
 
 <Code
     code={member(storeConfigSource, 'public static void Configure')}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/MartenStoreConfiguration.cs"
+    title="Infrastructure/Persistence/MartenStoreConfiguration.cs"
     mark={['options.Events.AddEventTypes', 'ProjectionLifecycle.Inline']}
 />
 
@@ -173,32 +196,51 @@ Cuatro decisiones que merecen nombre:
 
 - **`DatabaseSchemaName = "rentals"`.** Todo el event store vive en su propio esquema de PostgreSQL, separado del de Identity.
 - **`UseSystemTextJsonForSerialization(EnumStorage.AsString)`.** Los eventos se guardan como JSON con los enums **como texto**. Si fueran números, insertar un valor nuevo en medio de `ListingStatus` reinterpretaría en silencio todos los eventos históricos. Es una de las decisiones más baratas y más importantes del archivo.
-- **El registro de tipos por reflexión.** Marten necesita saber a qué clase corresponde cada nombre guardado. Aquí se barre el ensamblado de dominio buscando todo lo que implemente `IDomainEvent`, en lugar de mantener una lista a mano que alguien olvidaría actualizar. El [módulo 10](/event-sourcing/evolucion) explica qué pasa cuando un tipo guardado deja de existir.
-- **Las proyecciones, todas `Inline`.** Se actualizan en la misma transacción que el evento.
+- **El registro de tipos por reflexión.** Marten necesita saber a qué clase corresponde cada nombre guardado. Aquí se barre el ensamblado de dominio buscando todo lo que implemente `IDomainEvent`, en lugar de mantener una lista a mano que alguien olvidaría actualizar. El [módulo 11](/event-sourcing/evolucion) explica qué pasa cuando un tipo guardado deja de existir.
+- **Las vistas, todas `Inline`.** Se actualizan en la misma transacción que el evento.
 
-Y la configuración de servicios remata el cuadro:
+Y el registro de servicios remata el cuadro:
 
 <Code
     code={span(diSource, 'services.AddMarten(options =>', '.AddSubscriptionWithServices<DomainEventsSubscription>(ServiceLifetime.Singleton);')}
     lang="csharp"
-    title="Services/Rentals/.../DependencyInjection.cs · el registro completo"
+    title="Infrastructure/DependencyInjection.cs · el registro completo"
     mark={['ApplyAllDatabaseChangesOnStartup()', 'AddAsyncDaemon(DaemonMode.Solo)']}
 />
 
 - **`ApplyAllDatabaseChangesOnStartup`** — Marten crea sus tablas al arrancar. No hay migraciones que escribir, a diferencia del otro servicio.
 - **`UseLightweightSessions`** — sesiones sin *identity map* ni seguimiento de cambios. Coherente: aquí no se hace *dirty tracking* de nada, solo se añaden eventos.
-- **`AddAsyncDaemon(DaemonMode.Solo)`** — el proceso que alimenta las suscripciones del [módulo 9](/event-sourcing/procesos). `Solo` significa "una sola instancia", correcto en desarrollo y algo que habría que revisar al escalar.
+- **`AddAsyncDaemon(DaemonMode.Solo)`** — el proceso que alimenta las suscripciones del [módulo 10](/event-sourcing/procesos). `Solo` significa "una sola instancia", correcto en desarrollo y algo que habría que revisar al escalar.
 - **`IntegrateWithWolverine`** — pone la mensajería dentro de la misma transacción de Marten.
 
 <Callout kind="advertencia" title="Lo que NO está configurado, y es deliberado">
 
 **No hay snapshots** ni proyecciones *de agregado* (`SingleStreamProjection<Listing>`). Marten sabe hacer las dos cosas, y aquí no se usan.
 
-La razón es que el agregado se rehidrata con [código propio en `Domain`](/event-sourcing/rehidratacion): `AggregateRoot.Rehydrate`. Si se delegara en Marten, el dominio quedaría acoplado a él y `Apply` tendría que seguir sus convenciones.
+La razón es que el agregado se rehidrata con [código propio en `Domain`](/event-sourcing/rehidratacion). Si se delegara en Marten, el dominio quedaría acoplado a él y `Apply` tendría que seguir sus convenciones.
 
 Es un intercambio consciente: **más código propio a cambio de que el dominio no sepa qué event store hay debajo**. Merece la pena conocerlo porque la decisión contraria también es defendible.
 
 </Callout>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Tres ideas que parecen seguirse de esto y no se siguen">
+
+**"Entonces el sistema está a salvo de carreras."** Solo dentro de un flujo. Cualquier regla que mire *otros* agregados —cuántas visitas pendientes tiene alguien, si el anfitrión ya tiene una cita a esa hora— sigue siendo vulnerable, por muy bien protegido que esté cada flujo por separado.
+
+**"Añadir siempre será más lento que actualizar."** Escribir es un `INSERT` sin bloqueos de fila ni índices que reorganizar; suele ser más barato que un `UPDATE`. Lo caro no es escribir: es **leer sin una vista preparada**, y por eso existen las proyecciones.
+
+**"Si los eventos son el dato, necesito un outbox para no perder mensajes."** Al contrario: el evento ya está guardado en la base antes de que nadie reaccione a él. No puede perderse. Lo que puede pasar es que la reacción llegue tarde o se repita, que es un problema distinto y mucho más manejable — [módulo 10](/event-sourcing/procesos).
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Qué hacer con un rechazo por concurrencia.** Hoy sube como error; reintentar automáticamente (cargar de nuevo y repetir la decisión) es válido para comandos idempotentes y este repositorio no lo implementa.
+- **Escalar el *daemon*.** `DaemonMode.Solo` asume una instancia. Con varias haría falta `HotCold` o particionado, y eso es operación, no modelado.
+- **Particionar o archivar flujos viejos.** Marten lo soporta; con el volumen de Rentals no se plantea.
+- **La forma exacta de las tablas de Marten** (`mt_events`, `mt_streams`). Merece la pena mirarlas en DbGate, pero no dependas de su forma: son internas.
 
 <Callout kind="resumen" title="Para recordar">
 
@@ -206,8 +248,18 @@ Es un intercambio consciente: **más código propio a cambio de que el dominio n
 - Escribir es **añadir**, nunca actualizar. Sin eventos pendientes, no se escribe nada.
 - La **versión esperada** (`version + events.Length`) es el bloqueo optimista, y viene incluido en el modelo.
 - Protege **dentro** de un flujo. Las reglas que cruzan flujos siguen siendo carreras.
-- Eventos y proyecciones *inline* se guardan en **una sola transacción**: no hace falta outbox para las vistas.
+- Eventos y vistas *inline* se guardan en **una sola transacción**: no hace falta outbox para las vistas.
 - `EnumStorage.AsString` evita que reordenar un `enum` reinterprete la historia. Decisión barata, consecuencia enorme.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Provoca tú el rechazo. Con el entorno levantado, abre la misma publicación en dos pestañas del panel, y desde cada una lanza una operación distinta casi a la vez (pausar en una, retirar en otra).
+
+Mira después `mt_events` en DbGate: verás **una** fila nueva, no dos, y la versión avanzó de uno en uno. La escritura perdedora no dejó rastro, que es exactamente lo que debía pasar.
+
+**Y luego:** el [módulo 7](/event-sourcing/comandos) junta todo lo visto hasta aquí en un solo recorrido, desde una petición HTTP hasta esa fila.
 
 </Callout>
 

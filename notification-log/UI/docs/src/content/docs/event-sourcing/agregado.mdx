@@ -2,8 +2,8 @@
 title: "El agregado en dos mitades: decidir y aplicar"
 description: "La regla que lo gobierna todo: el método público valida y levanta el hecho; solo Apply cambia el estado."
 sidebar:
-  order: 3
-  label: "3 · Decidir y aplicar"
+  order: 4
+  label: "4 · Decidir y aplicar"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -13,14 +13,15 @@ import aggregateRootSource from '@code/Shared/Domain.Shared/Common/AggregateRoot
 import listingSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/Listing.cs?raw';
 import visitSource from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Visits/Visit.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Un tester abre una incidencia rarísima: pausa una publicación, la pantalla dice "pausada", todo
+correcto. Recarga la página y vuelve a estar publicada. Lo repite: pasa siempre. No hay error en
+los logs, la petición devolvió 204, y la fila del evento está guardada.
+</p>
 
-- Separar las dos mitades de un agregado event-sourced y saber qué puede hacer cada una.
-- Explicar por qué `Apply` no puede validar nada, nunca.
-- Leer el caso donde un método levanta **dos** eventos, y por qué eso está bien.
-- Reconocer los tres errores que rompen un agregado event-sourced en silencio.
+El diagnóstico, cuando llega, es de una línea: alguien escribió `Status = Paused;` en el método público **además** de levantar el evento. Funcionó en memoria —por eso la pantalla lo mostró bien— y desapareció al recargar, porque al reconstruir el objeto desde su historia ese cambio no existía en ninguna parte.
 
-</Callout>
+Ese bug es el único que hay que aprender a no cometer en todo el event sourcing, y este módulo va de la regla que lo hace imposible.
 
 <div class="ddd-frase">
 <strong>La regla de oro:</strong> el método público <em>decide</em> —valida, consulta el estado,
@@ -29,9 +30,25 @@ campos y nada más—. Si <code>Apply</code> tiene un <code>if</code> que puede 
 está roto.
 </div>
 
-## El mecanismo, otra vez
+## Ya conoces el reparto: es el árbitro y el marcador
 
-Ya lo viste en el [módulo 10 de DDD](/ddd/domain-events), pero aquí es el motor entero:
+En un partido hay dos cosas que no se mezclan. El **árbitro** decide si el gol sube al marcador: mira si había fuera de juego, si la pelota entró entera, si el tiempo se había cumplido. Es el único que puede decir que no.
+
+El **marcador** no opina. Recibe "gol del equipo local" y suma uno. No sabe si hubo fuera de juego ni le importa; si el árbitro lo concedió, el marcador lo refleja.
+
+En un agregado event-sourced, el método público es el árbitro y `Apply` es el marcador. Y hay una razón práctica para que el marcador no discuta: **cada vez que cargas el partido desde el principio, vuelves a pasar todos los goles por él**. Si el marcador tuviera opinión, un gol legal en 2024 podría ser rechazado hoy, y el resultado final cambiaría solo por haberlo vuelto a leer.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+El árbitro de verdad puede rectificar y anular un gol. Aquí no: una vez levantado, el hecho está. Lo más parecido a anular es levantar un hecho nuevo que lo compense —una cancelación, una reinstauración—, y eso deja las dos cosas en la historia.
+
+Y el árbitro pita mirando el campo; el método público decide mirando **el marcador**, es decir, el estado que dejaron los hechos anteriores. Las dos mitades están conectadas, y en un solo sentido.
+
+</Callout>
+
+## El mecanismo entero, en dos métodos
+
+Ya lo viste en el [módulo 10 de DDD](/ddd/domain-events), pero aquí no es un accesorio: es el motor.
 
 <Code
     code={members(aggregateRootSource, ['protected void Raise', 'public virtual void Apply'])}
@@ -39,19 +56,21 @@ Ya lo viste en el [módulo 10 de DDD](/ddd/domain-events), pero aquí es el moto
     title="Shared/Domain.Shared/Common/AggregateRoot.cs"
 />
 
-`Raise` aplica el hecho **ahora** y lo guarda **para después**. Esa doble función es lo que permite que el mismo método `Apply` sirva para dos cosas muy distintas:
+`Raise` hace **dos cosas en dos líneas**: aplica el hecho *ahora* y lo guarda *para después*. Esa doble función es lo que permite que el mismo `Apply` sirva en dos situaciones muy distintas:
 
 <ol class="ddd-steps">
-    <li><strong>Al decidir:</strong> el agregado ya está en memoria; <code>Raise</code> lo mueve al estado nuevo para que la siguiente llamada del mismo comando vea el estado actualizado.</li>
-    <li><strong>Al rehidratar:</strong> se parte de un objeto vacío y se le aplican todos los eventos del flujo, en orden, sin validar nada. Es el <a href="/event-sourcing/rehidratacion">módulo 4</a>.</li>
+    <li><strong>Al decidir:</strong> el agregado ya está en memoria; <code>Raise</code> lo mueve al estado nuevo, para que lo que venga a continuación dentro del mismo comando vea el estado actualizado.</li>
+    <li><strong>Al rehidratar:</strong> se parte de un objeto vacío y se le aplican todos los eventos del flujo, en orden, sin validar nada. Es el <a href="/event-sourcing/rehidratacion">módulo 5</a>.</li>
 </ol>
+
+**Por qué importa:** el estado del agregado solo se toca en un sitio. Hay un único camino desde un hecho hasta un campo, y ese camino se recorre igual la primera vez que la milésima.
 
 ## La mitad que decide
 
 <Code
     code={member(listingSource, 'public void SubmitForReview')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · SubmitForReview"
+    title="Domain/Listings/Listing.cs · SubmitForReview"
     mark={['Raise(new ListingSubmittedForReview());']}
 />
 
@@ -59,20 +78,22 @@ Cinco guardas y una línea de `Raise`. Esa proporción es la normal y es la buen
 
 Observa qué consulta cada guarda: `Status`, `Details`, `Location`, `Description`, `Price`, `_photos`. Todo estado del propio agregado, que llegó ahí a través de `Apply` de los eventos anteriores. El método decide mirando el resultado acumulado de la historia.
 
+**La idea general:** aquí vive todo el "no" del sistema. Un método público que no puede rechazar nada probablemente no es una decisión de negocio, y quizá no debería existir.
+
 ## La mitad que aplica
 
 <Code
     code={member(listingSource, 'public override void Apply')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · Apply"
+    title="Domain/Listings/Listing.cs · Apply"
 />
 
-Un `switch` exhaustivo sobre los quince eventos de este agregado. Casos simples que asignan un campo; casos con datos que delegan en un `When` privado:
+Un `switch` exhaustivo sobre los quince eventos de este agregado. Casos simples que asignan un campo, y casos con datos que delegan en un método privado `When`:
 
 <Code
     code={members(listingSource, ['private void When(ListingDrafted e)', 'private void When(ListingPriceChanged e)', 'private void MarkPublished'])}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · los When"
+    title="Domain/Listings/Listing.cs · los When"
 />
 
 <Callout kind="advertencia" title="Por qué Apply NO puede validar">
@@ -81,9 +102,11 @@ Piensa en qué pasa si metes una guarda ahí. Un evento guardado hace dos años,
 
 La validación ocurre **una vez**, cuando el hecho está a punto de suceder. Después el hecho es historia, y la historia no se discute.
 
-El único `throw` legítimo dentro de `Apply` es el `default` del `switch`: *"este evento no pertenece a este agregado"*. Eso no juzga el negocio, detecta un error de programación o un flujo corrupto — y el [módulo 10](/event-sourcing/evolucion) cuenta lo que pasa cuando salta de verdad.
+El único `throw` legítimo dentro de `Apply` es el `default` del `switch`: *"este evento no pertenece a este agregado"*. Eso no juzga el negocio, detecta un error de programación o un flujo corrupto — y el [módulo 11](/event-sourcing/evolucion) cuenta lo que pasa cuando salta de verdad.
 
 </Callout>
+
+## Cómo encajan las dos mitades
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 860 280" role="img" aria-labelledby="decideApplyTitle">
@@ -146,7 +169,7 @@ El único `throw` legítimo dentro de `Apply` es el `default` del `switch`: *"es
 <Code
     code={members(listingSource, ['public void UpdatePhotos', 'private void SendBackToReviewIfVisible'])}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · dos hechos en una operación"
+    title="Domain/Listings/Listing.cs · dos hechos en una operación"
     mark={['SendBackToReviewIfVisible();']}
 />
 
@@ -167,20 +190,20 @@ La tentación es crear un evento `ListingPhotosUpdatedAndSentBackToReview`. Ser�
 <Code
     code={member(listingSource, 'public void Withdraw')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · Withdraw"
+    title="Domain/Listings/Listing.cs · Withdraw"
     mark={['if (Status == ListingStatus.Withdrawn)']}
 />
 
 Retirar una publicación ya retirada **no es un error**: simplemente no pasó nada nuevo. El método vuelve sin levantar evento, y el flujo no crece.
 
-Ese patrón aparece por todo el repositorio (`Pause`, `Resume`, `Decline`, `Cancel`, `Expire`) y es lo que hace el sistema **idempotente**: reintentar un comando —algo que pasa constantemente con comandos programados y mensajes reentregados— no ensucia la historia con hechos falsos.
+Ese patrón aparece por todo el repositorio (`Pause`, `Resume`, `Decline`, `Cancel`, `Expire`) y es lo que hace el sistema **idempotente** — palabra que significa exactamente esto: *ejecutar la operación dos veces deja el mundo igual que ejecutarla una*. Importa porque reintentar un comando es constante en este sistema: hay comandos programados con meses de antelación y mensajes que se reentregan.
 
 Compáralo con `Confirm`, que distingue los dos casos con precisión quirúrgica:
 
 <Code
     code={span(visitSource, 'public void Confirm(DateTimeOffset slotStart, DateTimeOffset now)', 'throw new DomainException("Solo se puede confirmar una visita solicitada.");')}
     lang="csharp"
-    title="Services/Rentals/.../Visits/Visit.cs · idempotente solo si es la misma franja"
+    title="Domain/Visits/Visit.cs · idempotente solo si es la misma franja"
 />
 
 Confirmar **la misma** franja dos veces: no pasa nada. Confirmar **otra** franja sobre una visita ya confirmada: error. La idempotencia no es "ignorar repeticiones", es "reconocer cuándo la repetición es la misma decisión".
@@ -190,12 +213,12 @@ Confirmar **la misma** franja dos veces: no pasa nada. Confirmar **otra** franja
 <Code
     code={members(listingSource, ['private void Raise(DomainEvent domainEvent, DateTimeOffset now)', 'private static DateTimeOffset OccurredAt'])}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Listing.cs · el tiempo, controlado desde fuera"
+    title="Domain/Listings/Listing.cs · el tiempo, controlado desde fuera"
 />
 
 Ningún método del dominio llama a `DateTime.UtcNow`. El momento llega como parámetro `now` desde el handler, que lo obtiene de `TimeProvider` — y este `Raise` privado lo **graba en el evento**, sobrescribiendo el valor por defecto de `DomainEvent`.
 
-Eso tiene una consecuencia bonita en `When(ListingPriceChanged)`: `LastPriceChangeAt` sale de `OccurredAt(e)`, es decir, **del propio evento**. Al rehidratar, el agregado recupera exactamente el instante de entonces, no el de ahora.
+Eso tiene una consecuencia bonita al aplicar `ListingPriceChanged`: `LastPriceChangeAt` sale del propio evento. Al rehidratar, el agregado recupera exactamente el instante de entonces, no el de ahora.
 
 <Callout kind="advertencia" title="El error sutil que evita ese diseño">
 
@@ -204,6 +227,23 @@ Si `Apply` leyera el reloj, cada rehidratación produciría un estado distinto: 
 **`Apply` tiene que ser una función pura de los eventos.** Misma historia, mismo estado, siempre.
 
 </Callout>
+
+## El recorrido completo, con las dos mitades trabajando
+
+Doña Marta cambia las fotos de su apartamento, que estaba publicado. Sigue el camino entero:
+
+<ol class="ddd-steps">
+    <li><strong>Entra por el método público.</strong> <code>UpdatePhotos</code> valida: que haya entre 5 y 30, que no se repitan, que la publicación sea editable.</li>
+    <li><strong>Levanta el primer hecho.</strong> <code>Raise(ListingPhotosUpdated)</code> → <code>Apply</code> reemplaza la lista de fotos <em>y</em> el evento queda apuntado en <code>DomainEvents</code>.</li>
+    <li><strong>Consulta el estado ya actualizado.</strong> <code>SendBackToReviewIfVisible</code> mira <code>IsVisible</code>: la publicación estaba <code>Published</code>, así que sí.</li>
+    <li><strong>Levanta el segundo hecho.</strong> <code>Raise(ListingSubmittedForReview)</code> → <code>Apply</code> pone <code>Status = InReview</code>.</li>
+    <li><strong>El repositorio se lleva los dos eventos</strong> y los añade al flujo. El módulo 6 explica cómo.</li>
+    <li><strong>Mañana, alguien abre esa publicación.</strong> Se crea un <code>Listing</code> vacío y se le aplican los quince eventos del flujo, incluidos estos dos, en orden.</li>
+</ol>
+
+El paso 6 es la prueba: el objeto que sale de ahí es **idéntico** al que había en memoria en el paso 4, porque recorrió exactamente el mismo `Apply`. Si alguien hubiera asignado un campo a mano en el paso 1, los dos objetos serían distintos — y eso es el bug con el que empezaba este módulo.
+
+## Lo que suele confundir
 
 <Callout kind="antipatron" title="Los tres errores que rompen un agregado event-sourced">
 
@@ -215,6 +255,21 @@ Los tres comparten síntoma: **el sistema funciona en desarrollo y falla con dat
 
 </Callout>
 
+<Callout kind="advertencia" title="Y dos dudas razonables que aparecen aquí">
+
+**"¿Y si necesito llamar a un servicio externo para decidir?"** No puedes, y es a propósito: el agregado decide solo con su propia historia. Todo lo que venga de fuera —si el usuario está verificado, si el anfitrión tiene otra visita a esa hora— lo comprueba el handler **antes** de llamar al método, y se lo pasa ya resuelto. El [módulo 7](/event-sourcing/comandos) lo ordena y el [9](/event-sourcing/decisiones) lo lleva al límite.
+
+**"¿Apply no es demasiado tonto?"** Sí, y ese es el objetivo. Todo lo que tenga criterio va arriba; abajo solo queda transcribir. Un `Apply` aburrido es la señal de que el agregado está bien partido.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **De dónde salen los eventos al cargar.** Aquí `Apply` se ha recorrido a mano; quién trae la lista es el [módulo 5](/event-sourcing/rehidratacion).
+- **Cómo se guardan los eventos pendientes** que `Raise` va apuntando: [módulo 6](/event-sourcing/persistencia).
+- **Las reglas que el agregado no puede comprobar** porque miran otros agregados: [módulo 9](/event-sourcing/decisiones).
+- **Probar un agregado event-sourced** con el estilo *dada esta historia, cuando este comando, entonces estos eventos*. Encaja perfectamente con este diseño y no se desarrolla aquí.
+
 <Callout kind="resumen" title="Para recordar">
 
 - El método público **decide**: valida, consulta el estado acumulado, y termina en `Raise`.
@@ -222,7 +277,17 @@ Los tres comparten síntoma: **el sistema funciona en desarrollo y falla con dat
 - `Raise` aplica *y* guarda, por eso el segundo `Raise` de un método ya ve el estado del primero.
 - **Un hecho, un evento.** Una operación puede levantar dos; nunca uno compuesto.
 - No levantar evento es una respuesta válida: es lo que hace el sistema **idempotente**.
-- El tiempo entra como parámetro y **se graba en el evento**, para que la rehidratación sea determinista.
+- El tiempo entra como parámetro y **se graba en el evento**, para que la reconstrucción sea determinista.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre `Listing.cs` y haz una sola cosa: recorre los quince métodos públicos y comprueba que **ninguno** asigna una propiedad. Busca un `= ` a la izquierda de un campo fuera de `Apply` y sus `When`.
+
+No lo vas a encontrar, y ese es el punto: en cinco minutos habrás verificado con tus ojos la regla entera del módulo, y sabrás detectar su violación en cualquier código que revises.
+
+**Y luego:** el [módulo 5](/event-sourcing/rehidratacion) responde la pregunta pendiente — cómo se pasa de una lista de eventos guardados a un objeto listo para volver a decidir.
 
 </Callout>
 

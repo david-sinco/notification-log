@@ -2,8 +2,8 @@
 title: "Proyecciones y modelo de lectura"
 description: "Aquí CQRS deja de ser opcional: si no construyes la vista, no hay nada que consultar."
 sidebar:
-  order: 7
-  label: "7 · Proyecciones"
+  order: 8
+  label: "8 · Proyecciones"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -16,31 +16,50 @@ import readModelInterface from '@code/Services/Rentals/NotificationLog.RentalSer
 import listListingsHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Listings/Queries/ListListings/ListListingsHandler.cs?raw';
 import storeConfigSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenStoreConfiguration.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+Abre el panel, pestaña "Publicaciones". Hay una tabla paginada con ciudad, barrio, precio y
+estado; se puede filtrar por operación y ordenar por fecha de última modificación. Ahora abre
+DbGate y busca esa tabla en el esquema <code>rentals</code>.
+</p>
 
-- Entender por qué en event sourcing el modelo de lectura es obligatorio, no una optimización.
-- Leer una proyección real y ver en qué se parece y en qué se diferencia de `Apply`.
-- Decidir entre proyecciones `Inline` y asíncronas, con el coste de cada una.
-- Ver el CQRS completo que el otro servicio deja a medias.
-
-</Callout>
+No existe. Lo único que hay es `mt_events`, una fila por hecho, sin una sola columna que diga "ciudad" o "estado". Y sin embargo la pantalla se pinta en milisegundos, filtrando y paginando. Este módulo va de dónde sale esa tabla que no existe.
 
 <div class="ddd-frase">
 <strong>En una frase:</strong> una proyección es la misma historia contada para otro lector — el
 agregado la lee para decidir, la proyección la lee para mostrar, y ninguno necesita al otro.
 </div>
 
-## El problema que resuelve
+## Ya conoces la idea: es el índice de un libro
 
-No existe `SELECT * FROM listings`. Lo único que hay en la base es una tabla de eventos, y rehidratar cien agregados para pintar un listado sería absurdo ([módulo 4](/event-sourcing/rehidratacion)).
+Un índice no contiene el libro: lo **resume para una forma concreta de buscar**. Nadie lee el libro entero para encontrar un capítulo; mira el índice, que alguien construyó recorriendo el libro una vez.
+
+Y tres propiedades del índice valen exactamente aquí:
+
+- **Es derivado.** Si se pierde, se reconstruye leyendo el libro otra vez. El libro nunca se reconstruye a partir del índice.
+- **Se hace uno por cada forma de buscar.** Índice de capítulos, índice onomástico, índice de materias. Tres índices, un solo libro.
+- **Puede ir desfasado.** Si añades un capítulo y no rehaces el índice, el libro sigue siendo correcto y el índice miente.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un índice se construye al final, cuando el libro está terminado. Aquí se construye **a medida que el libro se escribe**: cada evento nuevo actualiza la vista en el mismo momento en que se guarda.
+
+Y un índice remite al texto ("página 142"); una proyección **copia** los datos que necesita. Por eso puede tener campos que el original no tiene, y por eso ocupa espacio propio.
+
+</Callout>
+
+## Por qué esto no es opcional
+
+No existe `SELECT * FROM listings`. Lo único que hay en la base es una tabla de eventos, y rehidratar cien agregados para pintar un listado sería absurdo ([módulo 5](/event-sourcing/rehidratacion)).
 
 Así que hay que **construir la tabla**. Eso es una proyección: un proceso que escucha los eventos y mantiene una vista con la forma que necesita la pantalla.
 
 <Callout kind="concepto" title="Esto es CQRS, y aquí no es negociable">
 
-El [módulo 11 de DDD](/ddd/arquitectura) presenta CQRS como una separación útil: comandos por un lado, consultas por otro. En Notifications se queda a medio camino — la separación existe en la capa de aplicación pero las consultas siguen pasando por los repositorios de agregados.
+**CQRS** significa separar el modelo con el que escribes del modelo con el que lees. El [módulo 11 de DDD](/ddd/arquitectura) lo presenta como una separación útil, y en Notifications se queda a medio camino: la separación existe en la capa de aplicación, pero las consultas siguen pasando por los repositorios de agregados.
 
 Aquí **no hay medio camino posible**. El modelo de escritura son eventos; el de lectura son documentos. Son dos representaciones distintas del mismo hecho, y no hay forma de usar una para lo otro.
+
+Es un buen ejemplo de algo que pasa a menudo: una buena práctica se sigue mejor cuando el modelo no deja alternativa.
 
 </Callout>
 
@@ -49,12 +68,14 @@ Aquí **no hay medio camino posible**. El modelo de escritura son eventos; el de
 <Code
     code={whole(listingViewSource)}
     lang="csharp"
-    title="Services/Rentals/.../Infrastructure/ReadModels/ListingView.cs"
+    title="Infrastructure/ReadModels/ListingView.cs"
 />
 
 Todo lo que la [guía de DDD](/ddd/persistencia) enseña a evitar en un agregado está aquí a propósito: propiedades públicas con `set`, primitivos en lugar de value objects, estructura aplanada, listas reasignables.
 
 **Y está bien.** `ListingView` no es un agregado: no protege ninguna invariante, no toma ninguna decisión, no tiene comportamiento. Es una fila. Aplicarle encapsulación sería ceremonia sin beneficio.
+
+Fíjate además en tres campos que el agregado `Listing` **no tiene**: `CreatedAt`, `UpdatedAt` y `RejectionReasons`. La vista guarda cosas que la pantalla necesita y el dominio no — porque `Listing` nunca ha tenido que decidir nada mirando cuándo se creó.
 
 <Callout kind="advertencia" title="La prueba para no confundirse">
 
@@ -64,14 +85,12 @@ El día que una decisión necesite datos de la vista, el sitio correcto es el ag
 
 </Callout>
 
-Fíjate además en tres campos que el agregado `Listing` **no tiene**: `CreatedAt`, `UpdatedAt` y `RejectionReasons`. La vista guarda cosas que la pantalla necesita y el dominio no — porque `Listing` nunca ha tenido que decidir nada mirando cuándo se creó.
-
 ## La proyección: un `Evolve` que se parece mucho a `Apply`
 
 <Code
     code={member(listingProjectionSource, 'public override ListingView? Evolve')}
     lang="csharp"
-    title="Services/Rentals/.../Infrastructure/ReadModels/ListingViewProjection.cs"
+    title="Infrastructure/ReadModels/ListingViewProjection.cs"
     mark={['if (e.Data is ListingDrafted drafted)', 'if (snapshot is null)', 'snapshot.UpdatedAt = at;']}
 />
 
@@ -108,7 +127,9 @@ Tres detalles que enseñan el patrón:
 
 El caso de `ListingRejected` lo ilustra bien: el agregado solo pone `Status = Draft` —los motivos no le hacen falta para ninguna regla— mientras que la proyección **sí** guarda `RejectionReasons`, porque el propietario tiene que verlos.
 
-Dos lectores de la misma historia, cada uno quedándose con lo que necesita.
+**La idea general:** dos lectores de la misma historia, cada uno quedándose con lo que necesita. Y ninguno de los dos sabe que el otro existe.
+
+## Cómo encaja
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 860 290" role="img" aria-labelledby="projTitle">
@@ -159,7 +180,7 @@ La capa de aplicación declara qué necesita, sin saber que hay documentos debaj
 <Code
     code={whole(readModelInterface)}
     lang="csharp"
-    title="Services/Rentals/.../Application/Abstractions/IListingReadModel.cs"
+    title="Application/Abstractions/IListingReadModel.cs"
 />
 
 Y la implementación consulta los documentos con LINQ, igual que consultaría una tabla:
@@ -167,7 +188,7 @@ Y la implementación consulta los documentos con LINQ, igual que consultaría un
 <Code
     code={member(readModelSource, 'public async Task<(IReadOnlyList<ListingSummaryDto> Items, int TotalCount)> ListAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Infrastructure/ReadModels/MartenListingReadModel.cs"
+    title="Infrastructure/ReadModels/MartenListingReadModel.cs"
     mark={['_session.Query<ListingView>()']}
 />
 
@@ -178,7 +199,7 @@ El handler que lo usa es de tres líneas y ni siquiera conoce al repositorio de 
 <Code
     code={member(listListingsHandler, 'public async Task<PagedResult<ListingSummaryDto>> HandleAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Application/Listings/Queries/ListListings/ListListingsHandler.cs"
+    title="Application/Listings/Queries/ListListings/ListListingsHandler.cs"
 />
 
 <Callout kind="honesto" title="Compáralo con el otro servicio">
@@ -187,8 +208,6 @@ El handler que lo usa es de tres líneas y ni siquiera conoce al repositorio de 
 
 Aquí el `Select` ocurre contra un documento pensado para eso. No es que Marten sea mejor que EF Core: es que el event sourcing **obligó** a separar los dos modelos, y esa obligación resultó ser una ventaja.
 
-Es un buen recordatorio de que muchas "buenas prácticas" se siguen mejor cuando el modelo no deja alternativa.
-
 </Callout>
 
 ## `Inline` o asíncrona: la decisión
@@ -196,11 +215,11 @@ Es un buen recordatorio de que muchas "buenas prácticas" se siguen mejor cuando
 <Code
     code={span(storeConfigSource, 'options.Projections.Add(new VisitDecisionProjection()', 'options.Projections.Add(new OwnerViewProjection(), ProjectionLifecycle.Inline);')}
     lang="csharp"
-    title="Services/Rentals/.../Persistence/MartenStoreConfiguration.cs · las cuatro proyecciones"
+    title="Infrastructure/Persistence/MartenStoreConfiguration.cs · las cuatro proyecciones"
     mark={['ProjectionLifecycle.Inline']}
 />
 
-Las cuatro son `Inline`, y eso es una decisión con consecuencias:
+Las cuatro son `Inline` —se actualizan dentro de la misma transacción que el evento—, y eso es una decisión con consecuencias:
 
 | | `Inline` (lo que usa Rentals) | `Async` |
 | --- | --- | --- |
@@ -222,22 +241,48 @@ La regla práctica: `Inline` para las vistas que el usuario lee justo después d
 
 </Callout>
 
-## La ventaja que solo tiene este modelo: reproyectar
+## El caso completo: añadir un dato que nadie había previsto
 
-Una vista es **desechable**. Se puede borrar la tabla entera y reconstruirla desde los eventos, porque los eventos son la fuente de verdad y siguen ahí.
+El negocio pide mostrar **cuántas veces ha bajado de precio cada publicación**. Nadie lo pensó al diseñar la pantalla. Con un modelo de estado harías una migración, añadirías una columna… y la rellenarías con ceros, porque el dato histórico no existe en ninguna parte.
 
-Eso cambia qué significa "cambiar una pantalla":
+Aquí son tres pasos:
 
-- **Con estado:** añadir una columna es una migración. Rellenarla con datos históricos es un script, si es que el dato existe en algún sitio. Muchas veces no existe.
-- **Con eventos:** añadir un campo a `ListingView`, ponerlo en `Evolve`, y reconstruir. **El dato histórico ya estaba en los eventos.**
+<ol class="ddd-steps">
+    <li><strong>Añade el campo a la vista.</strong> <code>public int PriceDrops &#123; get; set; &#125;</code> en <code>ListingView</code>.</li>
+    <li><strong>Cuéntalo en <code>Evolve</code>.</strong> En el caso de <code>ListingPriceChanged</code>, incrementa si <code>NewPrice &lt; OldPrice</code>. El dato ya estaba en el evento desde el primer día ([módulo 3](/event-sourcing/eventos), Regla 2).</li>
+    <li><strong>Reconstruye la proyección.</strong> Marten recorre la historia entera y rellena el campo — también en las publicaciones de hace dos años.</li>
+</ol>
+
+Ese tercer paso es el superpoder del modelo: **una vista es desechable**. Cambiar una pantalla deja de ser una migración de datos y pasa a ser un recálculo.
 
 <Callout kind="honesto" title="Y aquí, hoy, ese superpoder no funciona">
 
 Reproyectar exige que todos los eventos guardados se puedan volver a leer. En la base actual de Rentals **no se puede**: hay flujos con eventos de funcionalidades ya borradas (ofertas, reservas, favoritos, búsquedas) y `ListingDrafted` cambió de forma.
 
-Por eso `todo.md` dice, literalmente, que hay que reiniciar el esquema `rentals`. El [módulo 10](/event-sourcing/evolucion) es esa historia completa — y es, con diferencia, la lección más útil de esta guía.
+Por eso `todo.md` dice, literalmente, que hay que reiniciar el esquema `rentals`. El [módulo 11](/event-sourcing/evolucion) es esa historia completa — y es, con diferencia, la lección más útil de esta guía.
 
 </Callout>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro errores clásicos con proyecciones">
+
+**Tratar la vista como fuente de verdad.** Si alguien escribe directamente en `ListingView` desde un handler, la vista deja de ser derivable y reconstruirla borraría ese dato. La única forma de cambiar una vista es emitir un evento.
+
+**Una vista gigante para todo.** La tentación es tener un único `ListingView` con cincuenta campos que sirva a todas las pantallas y también a las reglas. Es el camino a que cada cambio afecte a todos. Una vista por forma de leer — y las que se usan para decidir van aparte, [módulo 9](/event-sourcing/decisiones).
+
+**Poner lógica de negocio en `Evolve`.** Matiz importante, porque hay un caso legítimo: calcular al proyectar está bien (contar bajadas de precio, marcar una sanción); **juzgar** al proyectar no lo está, porque la política puede cambiar y reproyectar daría otro resultado. Si el juicio importa, lo hace el agregado y viaja en el evento.
+
+**Olvidar que reproyectar existe.** Mucha gente arrastra vistas incorrectas durante meses porque "arreglarlo implicaría migrar datos". No implica nada: se corrige `Evolve` y se reconstruye.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Las vistas que alimentan decisiones**, que tienen requisitos distintos: [módulo 9](/event-sourcing/decisiones).
+- **Proyecciones que cruzan varios flujos** (`MultiStreamProjection`), necesarias para informes agregados. Rentals no tiene ninguna; es la [tarea 9](/event-sourcing/tareas).
+- **Cómo se lanza una reconstrucción en Marten** y qué pasa con el tráfico mientras tanto. Es operación, y la documentación de Marten lo cubre.
+- **Guardar las vistas fuera de PostgreSQL** (Elasticsearch para buscar, por ejemplo). Es el mismo patrón con otro destino.
 
 <Callout kind="resumen" title="Para recordar">
 
@@ -250,10 +295,20 @@ Por eso `todo.md` dice, literalmente, que hay que reiniciar el esquema `rentals`
 
 </Callout>
 
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre DbGate y compara dos cosas en el esquema `rentals`: la tabla `mt_events` y el documento `mt_doc_listingview`.
+
+Busca **la misma publicación** en las dos. A la izquierda verás su historia completa; a la derecha, una sola fila con el resumen que ve la pantalla. Ver los dos lados a la vez es el momento en que el modelo de lectura deja de ser abstracto.
+
+**Y luego:** el [módulo 9](/event-sourcing/decisiones) coge la misma técnica y la usa para algo más delicado que pintar una tabla — decidir si una operación se permite.
+
+</Callout>
+
 <Callout kind="ejercicio" title="Comprueba que lo entendiste">
 
 1. `ListingView` tiene `CreatedAt` y `UpdatedAt`; `Listing` no tiene ninguno de los dos. ¿Por qué el agregado no los necesita, y de dónde salen en la vista?
 2. Al procesar `ListingRejected`, el agregado ignora los motivos y la proyección los guarda. Generaliza esa diferencia en una frase.
-3. El negocio pide mostrar "cuántas veces ha bajado de precio esta publicación". ¿Qué cambias, en qué archivo, y qué hace falta hacer después para que el dato aparezca también en las publicaciones antiguas?
+3. Implementa de verdad el caso de las bajadas de precio: el campo, el `Evolve` y qué harías para que el dato aparezca en las publicaciones antiguas.
 
 </Callout>

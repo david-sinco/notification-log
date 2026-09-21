@@ -1,6 +1,6 @@
 ---
 title: "Event Sourcing, explicado con el servicio que lo usa de verdad"
-description: "Once módulos sobre guardar hechos en lugar de estado, anclados al servicio de arriendos de este repositorio: agregados que deciden y aplican, flujos en Marten, proyecciones y procesos."
+description: "Doce módulos sobre guardar hechos en lugar de estado, anclados al portal de arriendos de este repositorio: qué es el dominio, qué es un evento, cómo se reconstruye un agregado, cómo se lee y cómo se reacciona."
 sidebar:
   order: 0
   label: "Introducción"
@@ -8,19 +8,56 @@ sidebar:
 
 import Callout from '../../../components/Callout.astro';
 
-La guía de [DDD](/ddd) enseña el modelado táctico sobre un servicio que guarda **estado**: una fila por trigger, una fila por plantilla, y `UPDATE` cada vez que algo cambia.
+<p class="ddd-lede">
+Un propietario llama enfadado: su publicación aparece rechazada y él jura que la envió con las
+cinco fotos. Abres la base de datos y encuentras una fila: <code>status = Draft</code>. Nada más.
+Ni quién la rechazó, ni cuándo, ni por qué, ni si alguna vez estuvo publicada. El
+<code>UPDATE</code> que la dejó así se llevó por delante la única respuesta que necesitabas.
+</p>
 
-Esta guía enseña la alternativa sobre el otro servicio de este mismo repositorio: **Rentals**, el portal de arriendos "Llave", donde nada se actualiza nunca. Lo único que se escribe son hechos —`ListingDrafted`, `ListingApproved`, `VisitNoShow`— y el estado que ves en pantalla es un **cálculo** sobre esos hechos.
+Esa llamada es el problema que resuelve esta guía. No es un problema de auditoría ni de logs: es que el modelo de datos más habitual del mundo —una fila por cosa, que se sobrescribe— **está diseñado para olvidar**. Guarda el resultado y tira el proceso.
 
 <div class="ddd-frase">
-<strong>La idea entera:</strong> en lugar de guardar <em>cómo están las cosas</em>, guardas
-<em>todo lo que pasó</em>. El estado actual se deriva; la historia, no se puede perder porque es lo
-único que hay.
+<strong>La idea entera:</strong> en lugar de guardar <em>cómo están las cosas</em>, guarda
+<em>todo lo que pasó</em>. El estado actual deja de ser el dato y pasa a ser un cálculo sobre los
+hechos — y la historia no se puede perder, porque es lo único que hay.
+</div>
+
+## Ya conoces esto: es tu extracto bancario
+
+Tu banco no guarda tu saldo. Guarda **movimientos**: la nómina del día 30, la compra en la panadería, la transferencia que recibiste. El saldo que ves en la app es la suma de todos ellos, calculada al vuelo.
+
+Por eso puedes preguntarle a tu banco cosas que nadie previó cuando abriste la cuenta: cuánto gastaste en restaurantes en marzo, cuántas veces te quedaste en números rojos, qué día entró aquel ingreso raro. Las respuestas ya estaban ahí, en los movimientos, esperando la pregunta.
+
+E imagina la alternativa: un banco que solo guardara el saldo. Cada operación sería un `UPDATE` sobre una cifra. Funcionaría perfectamente… hasta que alguien reclamara un cobro.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un extracto bancario es una lista de importes homogéneos, y el saldo es una suma. En un sistema real los hechos son de tipos distintos —*se aprobó*, *se pausó*, *cambió de precio*— y "sumarlos" significa aplicar cada uno a su manera.
+
+Además, tu banco **sí** guarda el saldo en algún sitio, por rendimiento: no recalcula cinco años de movimientos cada vez que abres la app. Eso también existe aquí, y tiene nombre —proyecciones y *snapshots*—, pero es una copia acelerada, no la fuente de verdad.
+
+Con esas dos correcciones, la analogía aguanta toda la guía.
+
+</Callout>
+
+## El vocabulario mínimo
+
+Siete palabras se repiten en todas las páginas. No hace falta entenderlas ahora: cada una se presenta a fondo en su módulo, con código delante. Esta lista está aquí para que ninguna te pille de sorpresa.
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">Evento</span><span class="arrow">→</span><span>Un hecho que ya ocurrió y no se puede deshacer. <code>ListingApproved</code>.</span></div>
+<div class="term-pair"><span class="biz">Flujo <em>(stream)</em></span><span class="arrow">→</span><span>La lista ordenada de todos los eventos de una misma cosa.</span></div>
+<div class="term-pair"><span class="biz">Event store</span><span class="arrow">→</span><span>La base de datos donde viven los flujos. Solo se le añade; nunca se actualiza.</span></div>
+<div class="term-pair"><span class="biz">Agregado</span><span class="arrow">→</span><span>El objeto que decide si un hecho nuevo puede ocurrir. Una publicación, una visita.</span></div>
+<div class="term-pair"><span class="biz">Rehidratar</span><span class="arrow">→</span><span>Reconstruir ese objeto aplicándole sus eventos en orden.</span></div>
+<div class="term-pair"><span class="biz">Proyección</span><span class="arrow">→</span><span>Una tabla derivada de los eventos, con la forma que necesita una pantalla.</span></div>
+<div class="term-pair"><span class="biz">Proceso</span><span class="arrow">→</span><span>Código que escucha un hecho y provoca otros. "Se aprobó" ⇒ "programa el vencimiento".</span></div>
 </div>
 
 ## Por qué este repositorio es un buen sitio para aprenderlo
 
-Porque tiene **los dos modelos, resolviendo problemas comparables, con el mismo equipo y las mismas bases**. Eso convierte cada decisión en una comparación en vez de en una afirmación:
+Porque tiene **los dos modelos, resolviendo problemas comparables, con las mismas bases y el mismo equipo**. Eso convierte cada decisión en una comparación en vez de en una afirmación:
 
 | | Notifications ([guía DDD](/ddd)) | Rentals (esta guía) |
 | --- | --- | --- |
@@ -28,7 +65,7 @@ Porque tiene **los dos modelos, resolviendo problemas comparables, con el mismo 
 | Motor | SQL Server + EF Core | PostgreSQL + Marten |
 | Escritura | `UPDATE` sobre el agregado | `append` de eventos nuevos |
 | Lectura | Los mismos repositorios | **Proyecciones separadas** |
-| Concurrencia | Sin protección ([módulo 12](/ddd/persistencia)) | Por número de versión, incluida |
+| Concurrencia | Sin protección ([módulo 12 de DDD](/ddd/persistencia)) | Por número de versión, incluida |
 | Historia | Se pierde en cada `UPDATE` | Es el dato |
 
 Cuando una página de esta guía dice *"aquí esto se resuelve distinto"*, puedes abrir el archivo del otro servicio y comprobarlo.
@@ -37,7 +74,7 @@ Cuando una página de esta guía dice *"aquí esto se resuelve distinto"*, puede
 
 El portal "Llave" está en construcción. Hoy tiene tres agregados —`Listing`, `Visit`, `Owner`— y hay trabajo pendiente anotado en `notification-log/todo.md`: consultas entre interesado y propietario, favoritos, búsquedas guardadas, reportes de publicaciones.
 
-Además hay un problema real de evolución de esquema que el [módulo 10](/event-sourcing/evolucion) usa como caso de estudio: **los flujos guardados hoy no se pueden reconstruir**, porque contienen eventos de funcionalidades que ya se borraron y porque `ListingDrafted` cambió de forma.
+Además hay un problema real de evolución de esquema que el [módulo 11](/event-sourcing/evolucion) usa como caso de estudio: **los flujos guardados hoy no se pueden reconstruir**, porque contienen eventos de funcionalidades que ya se borraron y porque `ListingDrafted` cambió de forma.
 
 Esta guía no lo esconde. Al contrario: un event store con un evento huérfano es exactamente la clase de problema que no aparece en ningún tutorial y sí aparece en producción.
 
@@ -46,70 +83,73 @@ Esta guía no lo esconde. Al contrario: un event store con un evento huérfano e
 ## El recorrido
 
 <div class="ddd-diagram">
-    <svg viewBox="0 0 880 320" role="img" aria-labelledby="esMapTitle">
-        <title id="esMapTitle">Mapa de la guía: del hecho al estado, a la lectura y a la reacción</title>
+    <svg viewBox="0 0 900 330" role="img" aria-labelledby="esMapTitle">
+        <title id="esMapTitle">Mapa de la guía: del terreno al hecho, del hecho a la lectura y a la reacción</title>
         <defs>
             <marker id="esArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
                 <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
             </marker>
         </defs>
 
-        <rect x="20" y="20" width="200" height="270" rx="12" fill="#eef2ff" stroke="#dbe2ff" />
-        <text x="120" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">1 · EL HECHO</text>
-        <text x="120" y="64" text-anchor="middle" font-size="9.5" fill="#4338ca">¿qué se guarda?</text>
-        <rect x="36" y="80" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
-        <text x="120" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">1 · Estado vs. hechos</text>
-        <text x="120" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">qué se gana y qué cuesta</text>
-        <rect x="36" y="128" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
-        <text x="120" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">2 · El evento</text>
-        <text x="120" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">nombre, forma, inmutabilidad</text>
-        <rect x="36" y="176" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
-        <text x="120" y="193" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">3 · Decidir y aplicar</text>
-        <text x="120" y="207" text-anchor="middle" font-size="8.5" fill="#64748b">el agregado en dos mitades</text>
-        <rect x="36" y="224" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
-        <text x="120" y="241" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">4 · Rehidratación</text>
-        <text x="120" y="255" text-anchor="middle" font-size="8.5" fill="#64748b">el estado como cálculo</text>
+        <rect x="20" y="20" width="200" height="280" rx="12" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="120" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">1 · EL TERRENO</text>
+        <text x="120" y="64" text-anchor="middle" font-size="9.5" fill="#475569">¿de qué va esto?</text>
+        <rect x="36" y="80" width="168" height="38" rx="8" fill="#fff" stroke="#e5e9f2" />
+        <text x="120" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">1 · El portal Llave</text>
+        <text x="120" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">el negocio y el código</text>
+        <rect x="36" y="128" width="168" height="38" rx="8" fill="#fff" stroke="#e5e9f2" />
+        <text x="120" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">2 · Estado vs. hechos</text>
+        <text x="120" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">qué se gana y qué cuesta</text>
 
-        <rect x="245" y="20" width="200" height="270" rx="12" fill="#f0fdf4" stroke="#bbf7d0" />
-        <text x="345" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#14532d">2 · EL FLUJO</text>
-        <text x="345" y="64" text-anchor="middle" font-size="9.5" fill="#14532d">¿cómo se guarda?</text>
-        <rect x="261" y="80" width="168" height="38" rx="8" fill="#fff" stroke="#bbf7d0" />
-        <text x="345" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">5 · Flujos en Marten</text>
-        <text x="345" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">append, versión, concurrencia</text>
-        <rect x="261" y="128" width="168" height="38" rx="8" fill="#fff" stroke="#bbf7d0" />
-        <text x="345" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">6 · El comando</text>
-        <text x="345" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">cargar, decidir, añadir</text>
+        <rect x="245" y="20" width="200" height="280" rx="12" fill="#eef2ff" stroke="#dbe2ff" />
+        <text x="345" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#4338ca">2 · EL HECHO</text>
+        <text x="345" y="64" text-anchor="middle" font-size="9.5" fill="#4338ca">¿qué se guarda?</text>
+        <rect x="261" y="80" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="345" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">3 · El evento</text>
+        <text x="345" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">nombre, forma, permanencia</text>
+        <rect x="261" y="128" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="345" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">4 · Decidir y aplicar</text>
+        <text x="345" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">el agregado en dos mitades</text>
+        <rect x="261" y="176" width="168" height="38" rx="8" fill="#fff" stroke="#c7d2fe" />
+        <text x="345" y="193" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">5 · Rehidratación</text>
+        <text x="345" y="207" text-anchor="middle" font-size="8.5" fill="#64748b">el estado como cálculo</text>
 
-        <rect x="470" y="20" width="200" height="270" rx="12" fill="#fff7ed" stroke="#fed7aa" />
-        <text x="570" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#9a3412">3 · LA LECTURA</text>
-        <text x="570" y="64" text-anchor="middle" font-size="9.5" fill="#9a3412">¿cómo se consulta?</text>
+        <rect x="470" y="20" width="200" height="280" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="570" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#9a3412">3 · EL FLUJO</text>
+        <text x="570" y="64" text-anchor="middle" font-size="9.5" fill="#9a3412">¿cómo se guarda y se lee?</text>
         <rect x="486" y="80" width="168" height="38" rx="8" fill="#fff" stroke="#fed7aa" />
-        <text x="570" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">7 · Proyecciones</text>
-        <text x="570" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">CQRS de verdad</text>
+        <text x="570" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">6 · Flujos y versión</text>
+        <text x="570" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">append y concurrencia</text>
         <rect x="486" y="128" width="168" height="38" rx="8" fill="#fff" stroke="#fed7aa" />
-        <text x="570" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">8 · Proyecc. de decisión</text>
-        <text x="570" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">leer para decidir, no para ver</text>
+        <text x="570" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">7 · Un comando entero</text>
+        <text x="570" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">de la petición a la fila</text>
+        <rect x="486" y="176" width="168" height="38" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="570" y="193" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">8 · Proyecciones</text>
+        <text x="570" y="207" text-anchor="middle" font-size="8.5" fill="#64748b">CQRS de verdad</text>
+        <rect x="486" y="224" width="168" height="38" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="570" y="241" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">9 · Leer para decidir</text>
+        <text x="570" y="255" text-anchor="middle" font-size="8.5" fill="#64748b">reglas duras y blandas</text>
 
-        <rect x="695" y="20" width="165" height="270" rx="12" fill="#fdf2f8" stroke="#fbcfe8" />
-        <text x="777" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#9d174d">4 · REACCIÓN</text>
-        <text x="777" y="64" text-anchor="middle" font-size="9.5" fill="#9d174d">¿y después?</text>
-        <rect x="709" y="80" width="137" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
-        <text x="777" y="97" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">9 · Procesos</text>
-        <text x="777" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">suscripción y agenda</text>
-        <rect x="709" y="128" width="137" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
-        <text x="777" y="145" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">10 · Evolución</text>
-        <text x="777" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">cuando el evento cambia</text>
-        <rect x="709" y="176" width="137" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
-        <text x="777" y="193" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">11 · Tareas</text>
-        <text x="777" y="207" text-anchor="middle" font-size="8.5" fill="#64748b">te toca a ti</text>
+        <rect x="695" y="20" width="185" height="280" rx="12" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="787" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#9d174d">4 · LA REACCIÓN</text>
+        <text x="787" y="64" text-anchor="middle" font-size="9.5" fill="#9d174d">¿y después?</text>
+        <rect x="709" y="80" width="157" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
+        <text x="787" y="97" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">10 · Procesos</text>
+        <text x="787" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">un hecho provoca otros</text>
+        <rect x="709" y="128" width="157" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
+        <text x="787" y="145" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">11 · Evolución</text>
+        <text x="787" y="159" text-anchor="middle" font-size="8.5" fill="#64748b">cuando el evento cambia</text>
+        <rect x="709" y="176" width="157" height="38" rx="8" fill="#fff" stroke="#fbcfe8" />
+        <text x="787" y="193" text-anchor="middle" font-size="10" font-weight="600" fill="#1e293b">12 · Tareas</text>
+        <text x="787" y="207" text-anchor="middle" font-size="8.5" fill="#64748b">te toca a ti</text>
 
-        <line x1="222" y1="155" x2="243" y2="155" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#esArrow)" />
-        <line x1="447" y1="155" x2="468" y2="155" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#esArrow)" />
-        <line x1="672" y1="155" x2="693" y2="155" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#esArrow)" />
+        <line x1="222" y1="160" x2="243" y2="160" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#esArrow)" />
+        <line x1="447" y1="160" x2="468" y2="160" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#esArrow)" />
+        <line x1="672" y1="160" x2="693" y2="160" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#esArrow)" />
     </svg>
     <p class="ddd-diagram-caption">
-        El orden sigue el camino de un hecho: nace en el agregado, se guarda en un flujo, alimenta
-        proyecciones para leer y decidir, y dispara procesos que provocan hechos nuevos.
+        El orden sigue el camino de un hecho: primero entiendes el negocio donde nace, luego cómo se decide
+        y se guarda, luego cómo se lee, y por último qué desencadena.
     </p>
 </div>
 
@@ -117,83 +157,104 @@ Esta guía no lo esconde. Al contrario: un event store con un evento huérfano e
 
 | # | Módulo | Vas a aprender a... | Archivo ancla |
 | --- | --- | --- | --- |
-| 1 | [Estado contra hechos](/event-sourcing/por-que) | Decidir si un dominio se beneficia de event sourcing, y cuándo no. | `Listing.cs` frente a `NotificationTrigger.cs` |
-| 2 | [El evento como hecho](/event-sourcing/eventos) | Nombrar y dar forma a un evento para que sobreviva diez años. | `Listings/Events/*.cs` |
-| 3 | [Decidir y aplicar](/event-sourcing/agregado) | Partir un agregado en las dos mitades que exige este modelo. | `Listing.cs` · `Approve` y `Apply` |
-| 4 | [Rehidratación](/event-sourcing/rehidratacion) | Reconstruir un agregado a partir de su historia, sin persistencia de por medio. | `Domain.Shared/Common/AggregateRoot.cs` |
-| 5 | [Flujos, versión y concurrencia](/event-sourcing/persistencia) | Añadir eventos con control optimista y entender qué falla si dos escriben a la vez. | `Persistence/AggregateStreams.cs` |
-| 6 | [Un comando de punta a punta](/event-sourcing/comandos) | Seguir una petición desde el endpoint hasta el evento guardado. | `ConfirmVisitHandler.cs` |
-| 7 | [Proyecciones y modelo de lectura](/event-sourcing/proyecciones) | Construir vistas de consulta que no tocan el agregado. | `ReadModels/ListingViewProjection.cs` |
-| 8 | [Proyecciones de decisión](/event-sourcing/decisiones) | Distinguir lo que se lee para mostrar de lo que se lee para decidir. | `DecisionProjections/VisitDecision.cs` |
-| 9 | [Procesos y reacciones](/event-sourcing/procesos) | Reaccionar a un evento para programar comandos futuros y avisar a otros servicios. | `Subscriptions/DomainEventsSubscription.cs` |
-| 10 | [Evolución del esquema](/event-sourcing/evolucion) | Cambiar un evento sin romper la historia — y reconocer cuándo ya la rompiste. | `Listing.Apply` y `todo.md` |
-| 11 | [Tareas guiadas](/event-sourcing/tareas) | Modelar un agregado event-sourced nuevo en este repositorio. | — (te toca a ti) |
+| 1 | [El portal Llave](/event-sourcing/dominio) | Moverte por el dominio y por el código antes de ver una sola línea de event sourcing. | `Services/Rentals/` |
+| 2 | [Estado contra hechos](/event-sourcing/por-que) | Decidir si un dominio se beneficia de event sourcing, y cuándo no. | `Listing.cs` frente a `NotificationTrigger.cs` |
+| 3 | [El evento como hecho](/event-sourcing/eventos) | Nombrar y dar forma a un evento para que sobreviva diez años. | `Listings/Events/*.cs` |
+| 4 | [Decidir y aplicar](/event-sourcing/agregado) | Partir un agregado en las dos mitades que exige este modelo. | `Listing.cs` · `Approve` y `Apply` |
+| 5 | [Rehidratación](/event-sourcing/rehidratacion) | Reconstruir un agregado a partir de su historia, sin persistencia de por medio. | `Domain.Shared/Common/AggregateRoot.cs` |
+| 6 | [Flujos, versión y concurrencia](/event-sourcing/persistencia) | Añadir eventos con control optimista y entender qué falla si dos escriben a la vez. | `Persistence/AggregateStreams.cs` |
+| 7 | [Un comando de punta a punta](/event-sourcing/comandos) | Seguir una petición desde el endpoint hasta el evento guardado. | `ConfirmVisitHandler.cs` |
+| 8 | [Proyecciones y modelo de lectura](/event-sourcing/proyecciones) | Construir vistas de consulta que no tocan el agregado. | `ReadModels/ListingViewProjection.cs` |
+| 9 | [Proyecciones de decisión](/event-sourcing/decisiones) | Distinguir lo que se lee para mostrar de lo que se lee para decidir. | `DecisionProjections/VisitDecision.cs` |
+| 10 | [Procesos y reacciones](/event-sourcing/procesos) | Reaccionar a un evento para programar comandos futuros y avisar a otros servicios. | `Subscriptions/DomainEventsSubscription.cs` |
+| 11 | [Evolución del esquema](/event-sourcing/evolucion) | Cambiar un evento sin romper la historia — y reconocer cuándo ya la rompiste. | `Listing.Apply` y `todo.md` |
+| 12 | [Tareas guiadas](/event-sourcing/tareas) | Modelar un agregado event-sourced nuevo en este repositorio. | — (te toca a ti) |
 
 ## Recorre la guía
 
 <div class="ddd-card-grid">
-    <a class="ddd-card" href="/event-sourcing/por-que">
+    <a class="ddd-card" href="/event-sourcing/dominio">
         <span class="ddd-card-num">01</span>
+        <h3>El portal Llave</h3>
+        <p>Quién usa esto, qué puede pasarle a una publicación y dónde está cada carpeta.</p>
+    </a>
+    <a class="ddd-card" href="/event-sourcing/por-que">
+        <span class="ddd-card-num">02</span>
         <h3>Estado contra hechos</h3>
         <p>La misma operación, escrita de las dos formas. Qué se gana, qué se paga.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/eventos">
-        <span class="ddd-card-num">02</span>
+        <span class="ddd-card-num">03</span>
         <h3>El evento como hecho</h3>
         <p>Por qué <code>ListingPriceChanged</code> lleva el precio viejo y el nuevo.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/agregado">
-        <span class="ddd-card-num">03</span>
+        <span class="ddd-card-num">04</span>
         <h3>Decidir y aplicar</h3>
         <p>El método público valida y levanta; <code>Apply</code> cambia el estado. Nunca los dos.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/rehidratacion">
-        <span class="ddd-card-num">04</span>
+        <span class="ddd-card-num">05</span>
         <h3>Rehidratación</h3>
         <p><code>Rehydrate</code> en quince líneas, y por qué vive en el dominio.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/persistencia">
-        <span class="ddd-card-num">05</span>
+        <span class="ddd-card-num">06</span>
         <h3>Flujos y concurrencia</h3>
         <p>El bloqueo optimista que en el otro servicio hay que acordarse de añadir.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/comandos">
-        <span class="ddd-card-num">06</span>
+        <span class="ddd-card-num">07</span>
         <h3>Un comando completo</h3>
-        <p>De <code>POST /api/visits/{'{'}id{'}'}/confirm</code> a una fila en <code>rentals.mt_events</code>.</p>
+        <p>De una petición HTTP a una fila en <code>rentals.mt_events</code>.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/proyecciones">
-        <span class="ddd-card-num">07</span>
+        <span class="ddd-card-num">08</span>
         <h3>Proyecciones</h3>
         <p><code>ListingView</code>: la misma historia, contada para una pantalla.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/decisiones">
-        <span class="ddd-card-num">08</span>
-        <h3>Proyecciones de decisión</h3>
+        <span class="ddd-card-num">09</span>
+        <h3>Leer para decidir</h3>
         <p>Reglas blandas que cruzan agregados sin cargar ninguno.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/procesos">
-        <span class="ddd-card-num">09</span>
+        <span class="ddd-card-num">10</span>
         <h3>Procesos y reacciones</h3>
         <p>Un evento programa comandos futuros y cruza la frontera hacia Notifications.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/evolucion">
-        <span class="ddd-card-num">10</span>
+        <span class="ddd-card-num">11</span>
         <h3>Evolución del esquema</h3>
         <p>La base de Rentals hoy no se puede reconstruir. Por qué, y cómo se evita.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/tareas">
-        <span class="ddd-card-num">11</span>
+        <span class="ddd-card-num">12</span>
         <h3>Tareas guiadas</h3>
         <p>Nueve ejercicios de modelado event-sourced sobre este repositorio.</p>
     </a>
 </div>
 
-<Callout kind="concepto" title="Qué conviene traer leído">
+## Cómo está escrita cada página
 
-Esta guía **no repite** los conceptos tácticos de DDD: da por sabidos agregado, invariante, value object y repositorio. Si alguno te suena flojo, el módulo correspondiente de la guía de DDD está enlazado en el punto exacto donde hace falta.
+Todas siguen el mismo recorrido, y conviene conocerlo para saber dónde estás:
 
-Los tres que más se usan aquí:
+<ol class="ddd-steps">
+    <li><strong>Una escena concreta.</strong> Algo que pasa, o que se rompe, antes de cualquier definición.</li>
+    <li><strong>La idea en una frase</strong>, en el recuadro destacado. Si solo lees eso, ya te llevas el mapa.</li>
+    <li><strong>Una comparación con algo que ya conoces</strong>, y dónde deja de servir.</li>
+    <li><strong>Tres o cuatro ideas, una encima de otra</strong>, cada una con su código real delante. Las palabras nuevas se definen justo donde aparecen.</li>
+    <li><strong>Un diagrama</strong> que junta las piezas, y <strong>un recorrido completo</strong> donde se ven trabajando juntas.</li>
+    <li><strong>Lo que suele confundir</strong>, <strong>lo que el módulo deja fuera</strong> a propósito, y <strong>qué hacer a continuación</strong>.</li>
+</ol>
+
+Los fragmentos de código se importan de los `.cs` reales del repositorio, así que no pueden quedar desactualizados en silencio. Y los siete recuadros significan siempre lo mismo: 💡 concepto, 🧩 código, ⚠️ advertencia, 🚫 antipatrón, ✏️ ejercicio, 🔍 honesto, 📌 resumen.
+
+<Callout kind="concepto" title="Qué conviene traer leído (y qué no hace falta)">
+
+**No hace falta** saber Marten, ni PostgreSQL, ni haber tocado nunca un event store. Se explican a medida que aparecen.
+
+**Sí se dan por sabidos** los conceptos tácticos de DDD: agregado, invariante, value object y repositorio. Si alguno te suena flojo, el módulo correspondiente de la guía de DDD está enlazado en el punto exacto donde hace falta. Los tres que más se usan aquí:
 
 - [Agregados](/ddd/agregados) — el límite de consistencia, que aquí pasa a ser el límite del **flujo**.
 - [Domain Events](/ddd/domain-events) — el mecanismo `Raise` / `Apply`, que aquí es el motor entero.
@@ -201,10 +262,28 @@ Los tres que más se usan aquí:
 
 </Callout>
 
-<Callout kind="concepto" title="Cómo leer cada página">
+## Lo que esta guía deja fuera
 
-Misma estructura que la guía de DDD: **objetivos**, **en una frase**, **concepto**, **código real importado del repositorio**, **para recordar** y **comprueba que lo entendiste**. Y los mismos siete recuadros — 💡 concepto, 🧩 código, ⚠️ advertencia, 🚫 antipatrón, ✏️ ejercicio, 🔍 honesto, 📌 resumen.
+Para que no te quedes con la sensación de que falta algo, aquí está lo que **no** vas a encontrar, con el motivo:
 
-Los fragmentos de código se importan de los `.cs` reales, así que no pueden quedar desactualizados en silencio.
+- **Snapshots en profundidad.** Se explican como concepto en el [módulo 5](/event-sourcing/rehidratacion), pero Rentals no los usa porque sus flujos son cortos. Implementarlos sin necesitarlos enseñaría poco.
+- **Sagas con compensación.** Aquí hay *process managers* ([módulo 10](/event-sourcing/procesos)), que escuchan y emiten comandos, pero no hay transacciones distribuidas que deshacer.
+- **Escalado y particionado del event store.** Rentals corre con un solo *daemon* y una sola base. Es el tema del día siguiente.
+- **Frameworks de event sourcing.** No hay Axon, ni EventStoreDB, ni abstracciones genéricas. Hay Marten y unas cien líneas propias, que es justo la cantidad de magia que se puede leer entera.
+- **Pruebas.** Merecen su guía y la [tienen en DDD](/ddd/pruebas); el enfoque *dada una historia, cuando este comando, entonces estos eventos* se menciona pero no se desarrolla.
+
+Nada de eso hace falta para entender el patrón ni para construir con él.
+
+<Callout kind="ejercicio" title="Antes de pasar al módulo 1: mira la tabla">
+
+Cinco minutos, y te ahorran media guía de abstracción.
+
+1. Levanta el entorno: `dotnet run --project NotificationLog.AppHost` desde `notification-log/`.
+2. Abre **DbGate** en `localhost:3000` y entra en la conexión *PostgreSQL*, esquema `rentals`.
+3. Busca la tabla **`mt_events`** y ordénala por `stream_id` y `version`.
+
+Lo que estás viendo es todo lo que Rentals sabe del mundo: una fila por hecho, sin una sola columna de estado. Vuelve a esta tabla al final de cada módulo — es la que da sentido a todo lo demás.
+
+Si el entorno todavía no te arranca, el [módulo 1](/event-sourcing/dominio) empieza justo por ahí.
 
 </Callout>

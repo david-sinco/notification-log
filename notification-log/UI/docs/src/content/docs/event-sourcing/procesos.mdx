@@ -2,8 +2,8 @@
 title: "Procesos: reaccionar a los hechos"
 description: "Un evento guardado dispara comandos futuros, cancela otros agregados y cruza la frontera hacia otro servicio."
 sidebar:
-  order: 9
-  label: "9 · Procesos y reacciones"
+  order: 10
+  label: "10 · Procesos y reacciones"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -20,30 +20,50 @@ import scheduledHandler from '@code/Services/Rentals/NotificationLog.RentalServi
 import expireHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Listings/Commands/ExpireListing/ExpireListingHandler.cs?raw';
 import dispatcherSource from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/Publishers/WolverineNotificationDispatcher.cs?raw';
 
-<Callout kind="concepto" title="Objetivos de este módulo">
+<p class="ddd-lede">
+El anfitrión confirma la visita del jueves. La respuesta es un <code>204</code> y, aparentemente,
+no pasa nada más. Pero el miércoles a las 15:00 llega un recordatorio, el jueves a las 13:00 llega
+otro, y el domingo la visita aparece cerrada sola. Buscas el <code>cron</code> que hace eso y no
+existe. Buscas un <code>BackgroundService</code> que recorra la tabla de visitas y tampoco.
+</p>
 
-- Ver cómo se consumen los eventos ya guardados, después de la transacción.
-- Distinguir un *process manager* de una proyección: uno provoca cambios, la otra solo observa.
-- Entender cómo se programa un comando para dentro de un mes, y por qué el handler debe tolerar que llegue tarde.
-- Seguir un hecho de Rentals hasta convertirse en un mensaje para Notifications.
+Lo que hay es un evento guardado y alguien escuchándolo. Este módulo va de esa última pieza: qué ocurre **después** de que un hecho ya es historia.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> una proyección lee los eventos para <em>saber</em>; un proceso los
+lee para <em>hacer</em> — y lo que hace suele terminar en eventos nuevos.
+</div>
+
+## Ya conoces la mecánica: es el tablón de una oficina
+
+Alguien clava un aviso en el tablón: *"la publicación 7a1f ha sido aprobada"*. El aviso no da órdenes a nadie en concreto; simplemente está ahí.
+
+Cada departamento pasa por delante y decide si le toca. Administración apunta en el calendario *"renovar dentro de un mes"*. Atención al cliente manda un correo a la propietaria. Facturación, de momento, no hace nada.
+
+Tres detalles del tablón valen exactamente aquí:
+
+- **El aviso se clava una sola vez, y ya no se quita.** Lo que cada departamento haga después es asunto suyo.
+- **Si un departamento está de vacaciones, el aviso no desaparece.** Lo atenderá cuando vuelva.
+- **Un departamento puede leerlo dos veces sin querer.** Si su reacción es "apuntar en el calendario", apuntarlo dos veces es molesto; por eso todo lo que se hace aquí tiene que ser **repetible sin daño**.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En una oficina, el que clava el aviso a veces espera respuesta. Aquí no: quien guardó el evento ya terminó su transacción y devolvió un `204`. Si una reacción falla, **el comando original no se deshace**.
+
+Eso obliga a un cambio de mentalidad: lo que va después del commit no puede ser imprescindible para que la operación sea correcta. Si algo tiene que ocurrir sí o sí en el mismo instante, va dentro del agregado, no en un proceso.
 
 </Callout>
 
-<div class="ddd-frase">
-<strong>En una frase:</strong> una proyección lee los eventos para <em>saber</em>; un proceso los lee
-para <em>hacer</em> — y lo que hace suele terminar en eventos nuevos.
-</div>
-
-## El consumidor de la historia
+## Quién lee la historia
 
 <Code
     code={member(subscriptionSource, 'public override async Task<IChangeListener> ProcessEventsAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Messaging/Subscriptions/DomainEventsSubscription.cs"
+    title="Infrastructure/Messaging/Subscriptions/DomainEventsSubscription.cs"
     mark={['await using var scope = _scopes.CreateAsyncScope();', 'await controller.RecordDeadLetterEventAsync(e, ex);']}
 />
 
-Una *subscription* de Marten recibe páginas de eventos **ya confirmados** y hace tres cosas por cada uno:
+Una ***subscription*** de Marten recibe páginas de eventos **ya confirmados** y hace tres cosas por cada uno:
 
 <ol class="ddd-steps">
     <li>
@@ -76,32 +96,32 @@ Es el mismo razonamiento del [módulo 10 de DDD](/ddd/domain-events) sobre despa
 <Code
     code={member(routerSource, 'public async Task RouteAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Application/Processes/ProcessRouter.cs"
+    title="Application/Processes/ProcessRouter.cs"
 />
 
-Un `switch` que reparte cada hecho a quien tenga algo que hacer con él, más una llamada final a `_notifications.NotifyAsync` que se ejecuta **para todos** los eventos.
+Un `switch` que reparte cada hecho a quien tenga algo que hacer con él, más una llamada final a `NotifyAsync` que se ejecuta **para todos** los eventos.
 
 Fíjate en que vive en `Application`, no en `Infrastructure`: el enrutador es una decisión de negocio ("cuando se aprueba una publicación hay que programar su vencimiento"), no de plomería. Lo único que vive en `Infrastructure` es la suscripción que lo invoca.
 
-## Tres procesos, tres cosas distintas
+## Tres cosas que puede hacer un proceso
 
 ### 1 · Programar el futuro
 
 <Code
     code={member(visitProcessSource, 'public async Task OnConfirmedAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Application/Processes/VisitProcess.cs · OnConfirmedAsync"
+    title="Application/Processes/VisitProcess.cs · OnConfirmedAsync"
     mark={['_scheduler.ScheduleAsync']}
 />
 
-Confirmar una visita programa **tres comandos futuros**: recordatorio 24 h antes, recordatorio 2 h antes, y autocompletado 72 h después de que termine la franja.
+Ahí está la respuesta a la escena del principio: confirmar una visita programa **tres comandos futuros** —recordatorio 24 h antes, recordatorio 2 h antes, y autocompletado 72 h después de que termine la franja.
 
 Y observa la guarda `if (slotStart - leadTime > now)`: si la visita es para dentro de una hora, el recordatorio de 24 h **no se programa**. Programar un comando para el pasado no tiene sentido.
 
 <Code
     code={whole(schedulerInterface)}
     lang="csharp"
-    title="Services/Rentals/.../Application/Abstractions/ICommandScheduler.cs"
+    title="Application/Abstractions/ICommandScheduler.cs"
 />
 
 La abstracción es de una línea; la implementación, de tres:
@@ -109,7 +129,7 @@ La abstracción es de una línea; la implementación, de tres:
 <Code
     code={whole(schedulerImpl)}
     lang="csharp"
-    title="Services/Rentals/.../Infrastructure/Scheduling/WolverineCommandScheduler.cs"
+    title="Infrastructure/Scheduling/WolverineCommandScheduler.cs"
 />
 
 Wolverine guarda el mensaje en su cola durable con hora de entrega. Cuando llega el momento, lo entrega al handler correspondiente:
@@ -117,7 +137,7 @@ Wolverine guarda el mensaje en su cola durable con hora de entrega. Cuando llega
 <Code
     code={whole(scheduledHandler)}
     lang="csharp"
-    title="Services/Rentals/.../Infrastructure/Scheduling/ScheduledCommandsHandler.cs"
+    title="Infrastructure/Scheduling/ScheduledCommandsHandler.cs"
 />
 
 Cinco líneas que conectan cada comando programado con el handler de la capa de aplicación que ya existía.
@@ -127,7 +147,7 @@ Cinco líneas que conectan cada comando programado con el handler de la capa de 
 <Code
     code={member(expireHandler, 'public async Task HandleAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Listings/Commands/ExpireListing/ExpireListingHandler.cs"
+    title="Application/Listings/Commands/ExpireListing/ExpireListingHandler.cs"
     mark={['is not { } listing', 'listing.Expire(_time.GetUtcNow());']}
 />
 
@@ -141,16 +161,16 @@ if (!IsVisible || ExpiresAt is not { } expiresAt || expiresAt > now)
     return;
 ```
 
-Ese es el patrón entero de los comandos programados: **el agregado es quien decide, en el momento de la entrega, si el comando sigue teniendo sentido**. El proceso no tiene que cancelar nada cuando el mundo cambia.
+Ese es el patrón entero de los comandos programados: **el agregado decide, en el momento de la entrega, si el comando sigue teniendo sentido**. El proceso no tiene que cancelar nada cuando el mundo cambia.
 
 </Callout>
 
-### 2 · Reaccionar cambiando otros agregados
+### 2 · Cambiar otros agregados
 
 <Code
     code={member(lifecycleSource, 'public async Task OnNoLongerAvailableAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Application/Processes/ListingLifecycleProcess.cs"
+    title="Application/Processes/ListingLifecycleProcess.cs"
     mark={['visit.Cancel(VisitParty.Host, UnavailableReason, now);', 'await _uow.SaveChangesAsync(ct);']}
 />
 
@@ -170,28 +190,28 @@ Está anotado: *"Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas
 
 </Callout>
 
-### 3 · Cruzar la frontera
+### 3 · Cruzar la frontera hacia otro servicio
 
 <Code
     code={member(notificationsProcessSource, 'public Task NotifyAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Application/Processes/ListingNotificationsProcess.cs"
+    title="Application/Processes/ListingNotificationsProcess.cs"
 />
 
 Este es el punto donde un evento de dominio **se convierte en un evento de integración**.
 
-`ListingApproved` es privado de Rentals: un `record` de C#, sin versión de esquema, que ningún otro servicio conoce. Pero el negocio quiere que el propietario reciba un correo, y eso vive en otro bounded context.
+`ListingApproved` es privado de Rentals: un `record` de C#, sin versión de esquema, que ningún otro servicio conoce. Pero el negocio quiere que la propietaria reciba un correo, y eso vive en otro bounded context.
 
 La traducción es explícita, y lo que sale por el otro lado es un contrato público:
 
 <Code
     code={member(dispatcherSource, 'public async Task DispatchAsync')}
     lang="csharp"
-    title="Services/Rentals/.../Messaging/Publishers/WolverineNotificationDispatcher.cs"
+    title="Infrastructure/Messaging/Publishers/WolverineNotificationDispatcher.cs"
     mark={['new NotificationDispatchRequested']}
 />
 
-`NotificationDispatchRequested` es el protobuf que [Notifications consume](/ddd/context-map) — con su `SchemaVersion`, su `EventKey` en formato `dominio.accion` (`publicacion.aprobada`, `visita.confirmada`) y su diccionario de datos libres.
+`NotificationDispatchRequested` es el protobuf que [Notifications consume](/ddd/context-map) — con su `SchemaVersion`, su clave en formato `dominio.accion` (`publicacion.aprobada`, `visita.confirmada`) y su diccionario de datos libres.
 
 <Callout kind="concepto" title="Esta es la respuesta a la pregunta del módulo 10 de DDD">
 
@@ -202,6 +222,8 @@ Aquí está esa traducción, en un archivo con nombre propio. Lo que Rentals pub
 </Callout>
 
 ## El ciclo completo
+
+Sigue la aprobación de la publicación de doña Marta y verás las tres cosas a la vez:
 
 <div class="ddd-diagram">
     <svg viewBox="0 0 880 330" role="img" aria-labelledby="procTitle">
@@ -262,7 +284,9 @@ Aquí está esa traducción, en un archivo con nombre propio. Lo que Rentals pub
     </p>
 </div>
 
-<Callout kind="advertencia" title="Process manager, no saga (y no es lo mismo que una proyección)">
+## Lo que suele confundir
+
+<Callout kind="advertencia" title="Process manager, no saga (y sobre todo, no es una proyección)">
 
 Lo que hacen `ListingLifecycleProcess` y `VisitProcess` se llama **process manager**: escuchan eventos y **emiten comandos**. No hay compensaciones ni transacciones distribuidas, así que no es una *saga* en el sentido estricto.
 
@@ -278,6 +302,23 @@ Esa última fila es crítica: si un día reconstruyes las proyecciones, **no deb
 
 </Callout>
 
+<Callout kind="antipatron" title="Tres tentaciones al escribir un proceso">
+
+**Hacer el proceso parte de la transacción "para que no falle".** Si lo metes dentro, un fallo al enviar el correo tumba la aprobación de la publicación. La razón de que esté fuera es precisamente esa: lo accesorio no puede hacer fracasar lo esencial.
+
+**Guardar estado propio del proceso en memoria.** Un proceso se ejecuta en un scope nuevo cada vez y puede repetirse. Si necesita recordar algo entre eventos, eso es un agregado o una vista, no un campo.
+
+**Encadenar procesos sin pensar en el bucle.** Un proceso que emite un comando que produce un evento que dispara el mismo proceso es un bucle infinito perfectamente posible. Aquí no ocurre porque los métodos de agregado son idempotentes y dejan de levantar eventos cuando no hay nada que hacer — pero es una propiedad que hay que mantener a propósito.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Sagas con compensación.** Cuando un paso falla y hay que deshacer los anteriores emitiendo comandos inversos. Rentals no tiene ningún caso.
+- **Reintentos y política de *dead letter*.** Los eventos fallidos van a la cola de Marten; qué hacer con ellos después es operación.
+- **Ordenación entre procesos.** Hoy el `switch` los invoca en orden y nadie depende de eso. Con más procesos habría que pensarlo.
+- **Qué hace Notifications con el mensaje** una vez cruzada la frontera. Eso es la [guía de DDD](/ddd/context-map) y el otro servicio entero.
+
 <Callout kind="resumen" title="Para recordar">
 
 - Los procesos leen los eventos **ya guardados**, después del commit, en su propio scope y su propia transacción.
@@ -286,6 +327,16 @@ Esa última fila es crítica: si un día reconstruyes las proyecciones, **no deb
 - Modificar otros agregados desde un proceso es la forma correcta de cumplir "una transacción, un agregado".
 - La traducción de evento de dominio a **evento de integración** es explícita y es donde decides qué haces público.
 - Proyección ≠ process manager: una se puede reconstruir, el otro **no**.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Con el entorno levantado, aprueba una publicación desde el panel y abre **Buggregator** en `localhost:8000`. Ahí verás llegar el correo que Notifications envió por un hecho que ocurrió en Rentals.
+
+Dos servicios, dos bases de datos, un mensaje por el medio — y todo ello disparado por una fila que ya estaba guardada antes de que nadie reaccionara. Ese es el ciclo completo funcionando delante de ti.
+
+**Y luego:** el [módulo 11](/event-sourcing/evolucion) es el único que trata un problema sin solución limpia, y por eso es el más útil de la guía.
 
 </Callout>
 
