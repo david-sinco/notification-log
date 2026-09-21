@@ -19,6 +19,11 @@
 - [ ] Páginas de error del protocolo, acceso denegado y confirmación de cierre de sesión.
 - [ ] Apariencia por cliente en el login, según el `client_id` validado.
 - [ ] Scalar con OAuth para probar `/api/users` sin la Web.
+- [ ] **Rol según dónde se registre la cuenta.** Quien se registra en la plataforma pública (solo quiere ver contenido) queda como `Cliente`; quien se registra desde el backoffice queda como `Propietario`. Después solo un administrador puede cambiarle el rol. Hace falta el rol `Cliente`: el enum `UserRole` hoy solo tiene `Administrador`, `Propietario` y `Moderador`.
+
+## Web
+
+- [ ] **Refactorizar el front con la marca "Llave".** La identidad visual que se inventó para Llave solo vive hoy en las páginas de login y registro de Identity (`wwwroot/css/llave.css`, `wwwroot/img/llave-mark.svg`); llevarla a toda la Web.
 
 ## Integración y negocio
 
@@ -35,6 +40,7 @@
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).
 - [ ] Publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`).
 - [ ] **Usuario por cada `Owner`.** Al registrar un propietario (también si lo registra un moderador), crear su usuario en Identity para confirmar correo o teléfono y poder enviarle notificaciones. Mientras tanto, un `Owner` sin cuenta no recibe las notificaciones de sus avisos ni puede atender visitas (el anfitrión es `OwnerId`).
+- [ ] **Mismo id para el usuario y su `Owner`.** Al crear un usuario con rol de propietario hay que registrarlo en Owners con ese mismo id. Si el `Owner` ya existía, actualizar su id para que coincida con el del usuario, o crear el usuario con el id que ya tiene el `Owner`.
 - [ ] **Consultas** (`Inquiry`, un flujo por par publicación–interesado, id UUID v5 de `ListingId + SeekerId`).
   - Una sola conversación por interesado y publicación; un mensaje nuevo se añade a la existente.
   - Mensajes de 1 a 1.000 caracteres, sin teléfonos, correos ni enlaces: el contacto pasa por la plataforma.

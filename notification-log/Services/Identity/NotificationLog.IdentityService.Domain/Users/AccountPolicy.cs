@@ -36,7 +36,7 @@ public static class AccountPolicy
     public static string? ValidatePassword(string? password)
     {
         if (string.IsNullOrEmpty(password))
-            return "La contraseña es obligatoria.";
+            return null;
 
         if (password.Length is < PasswordMinLength or > PasswordMaxLength)
             return $"La contraseña debe tener entre {PasswordMinLength} y {PasswordMaxLength} caracteres.";

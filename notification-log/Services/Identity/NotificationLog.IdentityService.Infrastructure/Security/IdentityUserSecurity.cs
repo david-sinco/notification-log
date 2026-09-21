@@ -16,11 +16,14 @@ internal sealed class IdentityUserSecurity : IUserSecurity
 
     public IdentityUserSecurity(UserManager<ApplicationUser> users) => _users = users;
 
-    public async Task<AccountResult> SetPasswordAsync(User user, string password, CancellationToken ct)
+    public async Task<AccountResult> SetPasswordAsync(User user, string? password, CancellationToken ct)
     {
         var entity = await RequireAsync(user);
 
         await _users.RemovePasswordAsync(entity);
+
+        if (string.IsNullOrEmpty(password))
+            return AccountResult.Ok();
 
         var result = await _users.AddPasswordAsync(entity, password);
 

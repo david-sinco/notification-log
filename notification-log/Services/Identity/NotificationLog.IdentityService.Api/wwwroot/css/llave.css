@@ -237,6 +237,37 @@ a {
     color: var(--ink-soft);
 }
 
+.tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.25rem;
+    margin-bottom: 1.5rem;
+    padding: 0.25rem;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+}
+
+.tab {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--ink-soft);
+    border-radius: 8px;
+}
+
+    .tab:hover {
+        color: var(--ink);
+        text-decoration: none;
+    }
+
+    .tab.is-active {
+        color: var(--forest);
+        background: var(--surface);
+        box-shadow: 0 1px 2px rgba(29, 36, 38, 0.12);
+    }
+
 .field {
     margin-bottom: 1.1rem;
 }

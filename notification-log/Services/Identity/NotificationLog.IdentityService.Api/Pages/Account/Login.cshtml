@@ -2,11 +2,19 @@
 @model NotificationLog.IdentityService.Api.Pages.Account.LoginModel
 @{
     ViewData["Title"] = "Iniciar sesión";
+    var isEmail = Model.Identifier.Contains('@');
 }
 
 <p class="eyebrow">Cuentas Llave</p>
 <h1>Bienvenido de nuevo</h1>
 <p class="lead">Ingresa con el correo o el celular con el que te registraste.</p>
+
+<nav class="tabs" aria-label="Formas de iniciar sesión">
+    <a class="tab@(Model.IsCodeMode ? "" : " is-active")" aria-current="@(Model.IsCodeMode ? null : "page")"
+       asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Con contraseña</a>
+    <a class="tab@(Model.IsCodeMode ? " is-active" : "")" aria-current="@(Model.IsCodeMode ? "page" : null)"
+       asp-page="Login" asp-route-mode="code" asp-route-returnUrl="@Model.ReturnUrl">Con código</a>
+</nav>
 
 @if (Model.Message is not null)
 {
@@ -18,25 +26,72 @@
     <div class="alert alert-error" role="alert">@Model.Error</div>
 }
 
-<form method="post">
-    <input type="hidden" asp-for="ReturnUrl" />
+@if (Model.IsCodeMode)
+{
+    <form method="post" asp-page-handler="@(Model.CodeSent ? "Code" : "SendCode")">
+        <input type="hidden" asp-for="Mode" />
+        <input type="hidden" asp-for="ReturnUrl" />
 
-    <div class="field">
-        <label asp-for="Identifier">Correo o celular</label>
-        <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" autofocus />
-    </div>
+        @if (Model.CodeSent)
+        {
+            <input type="hidden" asp-for="Identifier" />
 
-    <div class="field">
-        <label asp-for="Password">Contraseña</label>
-        <div class="password">
-            <input asp-for="Password" type="password" class="input" autocomplete="current-password" />
-            <button type="button" class="password-toggle" data-toggle-password="Password" aria-pressed="false">Mostrar</button>
+            <div class="sent-to">
+                <span class="icon" aria-hidden="true">@(isEmail ? "✉" : "✆")</span>
+                <div>
+                    <small>@(isEmail ? "Enviado al correo" : "Enviado por SMS al celular")</small>
+                    <strong>@Model.Identifier</strong>
+                </div>
+            </div>
+
+            <div class="field">
+                <label asp-for="Code">Código de acceso</label>
+                <input asp-for="Code" class="input code-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" autofocus />
+            </div>
+
+            <button type="submit" class="button">Entrar</button>
+            <button type="submit" class="button-link" asp-page-handler="SendCode">¿No te llegó? Enviar otro código</button>
+        }
+        else
+        {
+            <div class="field">
+                <label asp-for="Identifier">Correo o celular</label>
+                <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" autofocus />
+                <span class="hint">Te enviamos un código de 6 dígitos al correo o por SMS, según el dato que uses.</span>
+            </div>
+
+            <button type="submit" class="button">Enviarme un código</button>
+        }
+    </form>
+}
+else
+{
+    <form method="post">
+        <input type="hidden" asp-for="ReturnUrl" />
+
+        <div class="field">
+            <label asp-for="Identifier">Correo o celular</label>
+            <input asp-for="Identifier" class="input" autocomplete="username" placeholder="nombre@correo.com o 300 123 4567" autofocus />
         </div>
-    </div>
 
-    <button type="submit" class="button">Iniciar sesión</button>
-</form>
+        <div class="field">
+            <label asp-for="Password">Contraseña</label>
+            <div class="password">
+                <input asp-for="Password" type="password" class="input" autocomplete="current-password" />
+                <button type="button" class="password-toggle" data-toggle-password="Password" aria-pressed="false">Mostrar</button>
+            </div>
+            <span class="hint">¿Tu cuenta no tiene contraseña? Entra <a asp-page="Login" asp-route-mode="code" asp-route-returnUrl="@Model.ReturnUrl">con un código</a>.</span>
+        </div>
+
+        <button type="submit" class="button">Iniciar sesión</button>
+    </form>
+}
 
 <div class="divider"></div>
+
+@if (Model.CodeSent)
+{
+    <p class="switch">¿Es otro correo o celular? <a asp-page="Login" asp-route-mode="code" asp-route-returnUrl="@Model.ReturnUrl">Empieza de nuevo</a></p>
+}
 
 <p class="switch">¿Aún no tienes cuenta? <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Crea una gratis</a></p>

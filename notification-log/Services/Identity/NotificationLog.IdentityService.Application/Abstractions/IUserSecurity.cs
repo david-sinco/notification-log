@@ -6,7 +6,7 @@ namespace NotificationLog.IdentityService.Application.Abstractions;
 
 public interface IUserSecurity
 {
-    Task<AccountResult> SetPasswordAsync(User user, string password, CancellationToken ct);
+    Task<AccountResult> SetPasswordAsync(User user, string? password, CancellationToken ct);
 
     Task<bool> CheckPasswordAsync(User user, string password, CancellationToken ct);
 
