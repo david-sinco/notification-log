@@ -1,3 +1,6 @@
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using JasperFx.CodeGeneration.Model;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.Contracts.Identity;
@@ -6,6 +9,7 @@ using Wolverine.EntityFrameworkCore;
 using Wolverine.Postgresql;
 using Wolverine.Protobuf;
 using Wolverine.RabbitMQ;
+using Wolverine.Runtime.Serialization;
 
 namespace NotificationLog.IdentityService.Infrastructure.Messaging;
 
@@ -13,6 +17,7 @@ public static class RabbitMqMessagingExtensions
 {
     public const string UsersExchange = "identity.users";
     public const string VerificationCodesExchange = "identity.verification-codes";
+    public const string AccountsQueue = "identity-accounts";
     public const string WolverineSchema = "wolverine";
 
     public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, IConfiguration configuration)
@@ -29,7 +34,20 @@ public static class RabbitMqMessagingExtensions
             opts.UseEntityFrameworkCoreTransactions();
             opts.Policies.UseDurableOutboxOnAllSendingEndpoints();
 
+            opts.ServiceLocationPolicy = ServiceLocationPolicy.AlwaysAllowed;
+            opts.Discovery.IncludeAssembly(typeof(RabbitMqMessagingExtensions).Assembly);
+
             opts.UseRabbitMq(new Uri(rabbitmq)).AutoProvision();
+
+            opts.AddSerializer(new SystemTextJsonSerializer(
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)
+                {
+                    PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate
+                }));
+
+            opts.ListenToRabbitQueue(AccountsQueue)
+                .DefaultIncomingMessage<AccountCreationRequested>()
+                .UseProtobufSerialization();
 
             opts.PublishMessage<UserCreated>()
                 .ToRabbitExchange(UsersExchange, exchange => exchange.ExchangeType = ExchangeType.Fanout)

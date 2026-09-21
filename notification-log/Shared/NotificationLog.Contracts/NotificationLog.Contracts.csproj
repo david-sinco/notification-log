@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <Protobuf Include="Notifications/notification_dispatch_requested.proto" GrpcServices="None" />
+    <Protobuf Include="Identity/account_creation_requested.proto" GrpcServices="None" />
     <Protobuf Include="Identity/person_verification_changed.proto" GrpcServices="None" />
     <Protobuf Include="Identity/user_created.proto" GrpcServices="None" />
     <Protobuf Include="Identity/verification_code_requested.proto" GrpcServices="None" />

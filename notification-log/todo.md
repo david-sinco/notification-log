@@ -15,6 +15,7 @@
 - [ ] **Reiniciar la base de Identity.** Las migraciones se rehicieron desde cero al pasar el servicio a capas (`InitialIdentity` vive ahora en Infrastructure), así que la base `identity` que ya exista tiene un historial de migraciones que no coincide: hay que borrarla para que arranque.
 - [ ] UI de administración de usuarios en la Web: listado, roles, bloquear y desbloquear.
 - [ ] Agregar o cambiar el correo o el celular de una cuenta existente, con código y evento `UserContactChanged`.
+- [ ] **Propagar los cambios de perfil.** `UserCreated` es el único evento que lleva el perfil completo y `RecipientSyncService` lo ignora si el destinatario ya existe, así que actualizar nombre, idioma o zona horaria (por ejemplo con un mensaje a la cola `identity-accounts` de una cuenta que ya está) no llega a Notification. Falta un evento de actualización de perfil, o que el consumidor haga upsert.
 - [ ] Recuperar y cambiar la contraseña.
 - [ ] Páginas de error del protocolo, acceso denegado y confirmación de cierre de sesión.
 - [ ] Apariencia por cliente en el login, según el `client_id` validado.

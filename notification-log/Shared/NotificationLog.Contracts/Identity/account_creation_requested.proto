@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package Identity.identity;
+
+option csharp_namespace = "NotificationLog.Contracts.Identity";
+
+import "google/protobuf/timestamp.proto";
+
+message AccountCreationRequested {
+  string event_id = 1;
+  google.protobuf.Timestamp occurred_at = 2;
+  int32 schema_version = 3;
+
+  string user_id = 10;
+  string identifier = 11;
+  string name = 12;
+  string locale = 13;
+  string time_zone = 14;
+  bool accepts_notifications = 15;
+  repeated string roles = 16;
+}
