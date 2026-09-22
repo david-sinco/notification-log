@@ -27,7 +27,7 @@ internal sealed class OAuthSecuritySchemeTransformer(IConfiguration configuratio
                     {
                         ["openid"] = "Identidad del usuario",
                         ["roles"] = "Roles del usuario",
-                        [OidcScopes.Rentals] = "API de Arriendos"
+                        [OidcScope.Rentals.ToScopeName()] = "API de Arriendos"
                     }
                 }
             }

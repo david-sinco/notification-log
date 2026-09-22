@@ -6,14 +6,14 @@ namespace NotificationLog.RentalService.Api.Authorization;
 
 public static class AuthorizationExtensions
 {
-    public const string RentalsScopePolicy = OidcScopes.Rentals;
+    public static readonly string RentalsScopePolicy = OidcScope.Rentals.ToScopeName();
     public const string AdministradorPolicy = nameof(UserRole.Administrador);
     public const string ModeracionPolicy = "Moderacion";
 
     public static IServiceCollection AddRentalsAuthorization(this IServiceCollection services, IConfiguration configuration)
     {
         var issuer = configuration["Oidc:Issuer"];
-        var audience = configuration[$"Oidc:Audiences:{OidcScopes.Rentals}"];
+        var audience = configuration[$"Oidc:Audiences:{OidcScope.Rentals.ToScopeName()}"];
 
         if (string.IsNullOrWhiteSpace(issuer) || string.IsNullOrWhiteSpace(audience))
             throw new InvalidOperationException("Faltan 'Oidc:Issuer' y 'Oidc:Audiences:rentals' en la configuración.");
@@ -32,7 +32,7 @@ public static class AuthorizationExtensions
         services.AddAuthorizationBuilder()
             .AddPolicy(RentalsScopePolicy, policy => policy
                 .RequireAuthenticatedUser()
-                .RequireAssertion(context => context.User.HasScope(OidcScopes.Rentals)))
+                .RequireAssertion(context => context.User.HasScope(OidcScope.Rentals.ToScopeName())))
             .AddPolicy(AdministradorPolicy, policy => policy
                 .RequireAuthenticatedUser()
                 .RequireAssertion(context => context.User.IsAdministrador()))

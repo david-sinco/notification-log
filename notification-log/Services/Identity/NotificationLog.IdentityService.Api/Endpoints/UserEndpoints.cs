@@ -1,5 +1,6 @@
 using System.Security.Claims;
-using NotificationLog.IdentityService.Api.Connect;
+using API.Shared.Extensions;
+using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Api.Contracts.Users;
 using NotificationLog.IdentityService.Application.Users.Commands.LockUser;
 using NotificationLog.IdentityService.Application.Users.Commands.SetUserRoles;
@@ -16,10 +17,10 @@ public static class UserEndpoints
     {
         var group = app.MapGroup("/api/users")
             .WithTags("Users")
-            .RequireAuthorization(ConnectExtensions.IdentityScopePolicy);
+            .RequireAuthorization(OidcScope.Identity.ToScopeName());
 
         group.MapGet("/", SearchAsync)
-            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
+            .RequireAuthorization(AuthorizationExtensions.AdministradorPolicy)
             .WithName("SearchUsers")
             .WithSummary("Busca usuarios por correo o teléfono")
             .Produces<IReadOnlyList<UserDto>>()
@@ -33,7 +34,7 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPut("/{id:guid}/roles", SetRolesAsync)
-            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
+            .RequireAuthorization(AuthorizationExtensions.AdministradorPolicy)
             .WithName("SetUserRoles")
             .WithSummary("Reemplaza los roles de un usuario")
             .Produces(StatusCodes.Status204NoContent)
@@ -41,7 +42,7 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{id:guid}/lock", LockAsync)
-            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
+            .RequireAuthorization(AuthorizationExtensions.AdministradorPolicy)
             .WithName("LockUser")
             .WithSummary("Bloquea un usuario y cierra todas sus sesiones")
             .Produces(StatusCodes.Status204NoContent)
@@ -49,7 +50,7 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         group.MapPost("/{id:guid}/unlock", UnlockAsync)
-            .RequireAuthorization(ConnectExtensions.AdministradorPolicy)
+            .RequireAuthorization(AuthorizationExtensions.AdministradorPolicy)
             .WithName("UnlockUser")
             .WithSummary("Desbloquea un usuario")
             .Produces(StatusCodes.Status204NoContent)

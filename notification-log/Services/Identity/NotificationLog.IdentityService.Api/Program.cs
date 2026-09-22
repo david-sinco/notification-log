@@ -1,4 +1,6 @@
 using System.Text.Json.Serialization;
+using API.Shared.Extensions;
+using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Api.Connect;
 using NotificationLog.IdentityService.Api.Endpoints;
 using API.Shared.Exceptions;
@@ -13,6 +15,7 @@ builder.AddServiceDefaults();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddConnect(builder.Configuration);
+builder.Services.AddScopePolicies([OidcScope.Identity]);
 
 builder.Services.AddRazorPages();
 builder.Services.ConfigureHttpJsonOptions(options =>

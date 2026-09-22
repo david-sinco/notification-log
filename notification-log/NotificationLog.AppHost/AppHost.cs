@@ -118,7 +118,7 @@ IResourceBuilder<ProjectResource> AddRental() =>
         .WithReference(rabbitmq)
         .WaitFor(rabbitmq)
         .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])
-        .WithEnvironment("Oidc__Audiences__rentals", oidcConfig["Audiences:Rentals"])
+        .WithEnvironment("Oidc__Audience", oidcConfig["Audiences:Rentals"])
         .WithEnvironment("Scalar__ClientId", scalarClientConfig["ClientId"])
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);

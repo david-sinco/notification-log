@@ -8,15 +8,14 @@ namespace NotificationLog.IdentityService.Api.Connect;
 
 public static class ConnectExtensions
 {
-    public const string IdentityScopePolicy = OidcScopes.Identity;
-    public const string AdministradorPolicy = nameof(UserRole.Administrador);
-
     public static IServiceCollection AddConnect(this IServiceCollection services, IConfiguration configuration)
     {
         var oidc = configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>();
+        var identityScope = OidcScope.Identity.ToScopeName();
 
-        if (string.IsNullOrWhiteSpace(oidc?.Issuer) || !oidc.Audiences.TryGetValue(OidcScopes.Identity, out var identityAudience))
-            throw new InvalidOperationException("Faltan 'Oidc:Issuer' y 'Oidc:Audiences:identity' en la configuración.");
+        if (string.IsNullOrWhiteSpace(oidc?.Issuer) || !oidc.Audiences.TryGetValue(identityScope, out var identityAudience))
+            throw new InvalidOperationException(
+                $"Faltan 'Oidc:Issuer' y 'Oidc:Audiences:{identityScope}' en la configuración.");
 
         services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)
             .AddCookie(SessionCookie.Scheme, options =>
@@ -45,9 +44,9 @@ public static class ConnectExtensions
                     Scopes.Phone,
                     Scopes.Roles,
                     Scopes.OfflineAccess,
-                    OidcScopes.Identity,
-                    OidcScopes.Rentals,
-                    OidcScopes.Notifications);
+                    OidcScope.Identity.ToScopeName(),
+                    OidcScope.Rentals.ToScopeName(),
+                    OidcScope.Notifications.ToScopeName());
 
                 options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));
 
@@ -67,14 +66,6 @@ public static class ConnectExtensions
                 options.AddAudiences(identityAudience);
                 options.UseAspNetCore();
             });
-
-        services.AddAuthorizationBuilder()
-            .AddPolicy(IdentityScopePolicy, policy => policy
-                .RequireAuthenticatedUser()
-                .RequireAssertion(context => context.User.HasScope(OidcScopes.Identity)))
-            .AddPolicy(AdministradorPolicy, policy => policy
-                .RequireAuthenticatedUser()
-                .RequireRole(nameof(UserRole.Administrador)));
 
         return services;
     }

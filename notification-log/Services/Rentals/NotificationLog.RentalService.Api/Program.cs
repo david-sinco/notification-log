@@ -6,6 +6,7 @@ using NotificationLog.RentalService.Api.OpenApi;
 using NotificationLog.RentalService.Application;
 using NotificationLog.RentalService.Infrastructure;
 using Scalar.AspNetCore;
+using API.Shared.Extensions;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +14,8 @@ builder.AddServiceDefaults();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
-builder.Services.AddRentalsAuthorization(builder.Configuration);
+builder.Services.AddOpenIdDictAuthorization(builder.Configuration, [OidcScope.Rentals] );
+//builder.Services.AddRentalsAuthorization(builder.Configuration);
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -36,7 +38,7 @@ if (app.Environment.IsDevelopment())
             .WithClientId(builder.Configuration["Scalar:ClientId"])
             .WithPkce(Pkce.Sha256)
             .WithRedirectUri($"{context.Request.Scheme}://{context.Request.Host}/scalar/")
-            .WithSelectedScopes(["openid", "roles", OidcScopes.Rentals])));
+            .WithSelectedScopes(["openid", "roles", OidcScope.Rentals.ToScopeName()])));
     app.MapDevIdentity();
 }
 

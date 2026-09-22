@@ -1,8 +1,19 @@
 namespace Domain.Shared.Authorization;
 
-public static class OidcScopes
+public enum OidcScope
 {
-    public const string Identity = "identity";
-    public const string Rentals = "rentals";
-    public const string Notifications = "notifications";
+    Identity,
+    Rentals,
+    Notifications
+}
+
+public static class OidcScopeExtensions
+{
+    public static string ToScopeName(this OidcScope scope) => scope switch
+    {
+        OidcScope.Identity => "identity",
+        OidcScope.Rentals => "rentals",
+        OidcScope.Notifications => "notifications",
+        _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "Scope OIDC desconocido.")
+    };
 }
