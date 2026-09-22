@@ -1,0 +1,224 @@
+---
+title: "Outbox transaccional"
+description: "Guardar el dato y el mensaje en la misma transacción, para que no pueda existir uno sin el otro. Implementado en Identity, sin usar en un camino de Rentals."
+sidebar:
+  order: 9
+  label: "9 · Outbox transaccional"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import outboxUow from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Persistence/OutboxUnitOfWork.cs?raw';
+import identityOutbox from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/IdentityOutbox.cs?raw';
+import identityMessaging from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/RabbitMqMessagingExtensions.cs?raw';
+import createAccount from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/CreateAccount/CreateAccountHandler.cs?raw';
+import registerOwner from '@code/Services/Rentals/NotificationLog.RentalService.Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs?raw';
+
+<p class="ddd-lede">
+Un caso de uso hace dos escrituras en sitios distintos: guarda el usuario en su base y publica un
+mensaje en RabbitMQ para que otro servicio se entere. Entre las dos hay un instante. Si el proceso
+muere ahí —un despliegue, un reinicio, una excepción— queda un usuario del que
+<strong>nadie se enteró jamás</strong>, y nada en el sistema lo va a reintentar, porque para la base
+de datos todo salió bien.
+</p>
+
+Ese instante tiene nombre —*dual write*— y no se arregla con cuidado ni con reintentos. Se arregla haciendo que las dos escrituras sean **una sola**.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> el mensaje saliente se guarda en la misma base y en la misma
+transacción que el dato que lo provocó, y alguien lo envía después desde ahí — así no puede existir
+uno sin el otro.
+</div>
+
+## Ya conoces la garantía: es el libro de registro de una notaría
+
+En una notaría, la escritura y su asiento en el libro **no son dos trámites**: se hacen en el mismo acto. No existe el escenario de "ya firmamos pero aún no lo hemos apuntado", porque firmar *es* apuntar.
+
+Luego, cuando toque, alguien coge del libro lo que haya que comunicar y lo comunica. Ese segundo paso puede tardar, puede fallar y puede repetirse — y no importa, porque el libro sigue ahí con la constancia de lo que hay que hacer.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+El libro de la notaría lo lee una persona que decide. Aquí lo lee un proceso que **reintenta hasta conseguirlo**, y por eso el mismo mensaje puede llegar dos veces al destinatario.
+
+O sea: el outbox garantiza que el mensaje **salga al menos una vez**, no exactamente una. La otra mitad del problema —que recibirlo dos veces no haga daño— no la resuelve este patrón; la resuelve el diseño del consumidor, y aquí se resuelve en el dominio.
+
+</Callout>
+
+## Idea 1 · Las tres formas de hacerlo mal, y por qué ninguna sirve
+
+Antes del patrón, las opciones parecen tres y todas pierden:
+
+<ol class="ddd-steps">
+    <li><strong>Guardar y luego publicar.</strong> Si el proceso muere en medio, el dato existe y el aviso no. Nadie se entera de nada y nada lo reintenta.</li>
+    <li><strong>Publicar y luego guardar.</strong> Peor: si falla el guardado, hay un aviso sobre algo que no llegó a ocurrir. Los demás servicios reaccionan a un fantasma.</li>
+    <li><strong>Una transacción que abarque la base y la cola.</strong> Exigiría transacciones distribuidas, con su coordinador y sus bloqueos. Es el remedio que nadie quiere.</li>
+</ol>
+
+**La salida** es darse cuenta de que el mensaje **también es un dato**: si se guarda en la misma base, cabe en la misma transacción. Y entonces el problema deja de ser "dos escrituras" y pasa a ser "una escritura y un envío posterior".
+
+## Idea 2 · El mensaje se persiste en la base del propio servicio
+
+<Code
+    code={span(identityMessaging, 'opts.PersistMessagesWithPostgresql(identity, WolverineSchema);', 'opts.Policies.UseDurableOutboxOnAllSendingEndpoints();')}
+    lang="csharp"
+    title="Identity · Infrastructure/Messaging/RabbitMqMessagingExtensions.cs"
+/>
+
+Tres líneas que montan el patrón entero. La primera es la importante: **los mensajes pendientes se guardan en un esquema `wolverine` dentro de la propia base de Identity** — la misma donde están los usuarios. Por eso pueden compartir transacción.
+
+La segunda enlaza ese almacén con las transacciones de EF Core, y la tercera lo aplica a todos los envíos por defecto.
+
+## Idea 3 · Quien lo usa no se entera de nada
+
+<Code
+    code={whole(identityOutbox)}
+    lang="csharp"
+    title="Identity · Infrastructure/Messaging/IdentityOutbox.cs"
+/>
+
+<Code
+    code={whole(outboxUow)}
+    lang="csharp"
+    title="Identity · Infrastructure/Persistence/OutboxUnitOfWork.cs"
+    mark={['await _outbox.SaveChangesAndFlushAsync(ct);']}
+/>
+
+Mira lo que **no** hace esta unidad de trabajo: no llama a `SaveChangesAsync` del `DbContext`. Llama al outbox, que guarda los cambios **y** deja los mensajes listos, en un solo acto.
+
+Y ahora el caso de uso que la usa:
+
+<Code
+    code={member(createAccount, 'public async Task<Guid> HandleAsync')}
+    lang="csharp"
+    title="Identity · Application/Users/Commands/CreateAccount/CreateAccountHandler.cs"
+    mark={['await _events.PublishUserCreatedAsync(user, ct);', 'await _uow.SaveChangesAsync(ct);']}
+/>
+
+Dos líneas al final: publica el evento y guarda. **Y no están en ese orden por casualidad** — publicar no envía nada, solo apunta el mensaje; el envío real lo decide la línea siguiente, la misma que guarda el usuario.
+
+**Por qué importa:** el handler es idéntico a cualquier otro de los tres servicios. Llama a `IUnitOfWork.SaveChangesAsync` como todo el mundo ([ficha 2](/patrones/repositorio)). La garantía se coló **por la implementación**, sin que la capa de aplicación tenga que saber que existe un outbox.
+
+Eso es lo mejor de este patrón aquí: el que escribe casos de uso no puede olvidarse de usarlo, porque no sabe que está usándolo.
+
+## Idea 4 · Y el camino donde no se usa
+
+<Code
+    code={member(registerOwner, 'public async Task<Guid> HandleAsync')}
+    lang="csharp"
+    title="Rentals · Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs"
+    mark={['await _uow.SaveChangesAsync(ct);', 'await _accounts.RequestAccountAsync(']}
+/>
+
+Lee las dos últimas líneas en orden: **primero guarda, después publica**. Es la opción 1 de la primera idea — exactamente la que no sirve.
+
+Rentals *tiene* la infraestructura: su configuración de Marten integra la mensajería, así que los mensajes se pueden persistir igual que en Identity. Lo que ocurre es que este camino concreto publica por un bus que **no está enlazado a esa transacción**.
+
+La ventana es pequeña y el fallo improbable: el proceso tendría que morir entre las dos líneas. Pero si ocurre, queda un propietario registrado en Rentals sin cuenta en Identity, y **nada lo reintentará**.
+
+<Callout kind="honesto" title="Por qué esto merece estar escrito">
+
+Es la diferencia entre *"tenemos outbox"* y *"usamos el outbox"*. La primera frase es cierta en este repositorio y no significa nada por sí sola: la garantía no la da tenerlo configurado, la da que el camino concreto pase por él.
+
+Es también el tipo de detalle que **solo se ve siguiendo un caso de uso entero**, no leyendo la configuración. Por eso el [recorrido completo](/arquitectura/recorrido) de la guía de arquitectura lo señala en el mismo punto.
+
+</Callout>
+
+## Cómo encaja
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 280" role="img" aria-labelledby="obxTitle">
+        <title id="obxTitle">Con outbox y sin outbox, en el mismo instante crítico</title>
+        <defs>
+            <marker id="oxArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <text x="215" y="26" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Con outbox (Identity)</text>
+        <rect x="30" y="40" width="370" height="76" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="215" y="62" text-anchor="middle" font-size="9" font-weight="600" fill="#14532d">UNA transacción</text>
+        <rect x="48" y="72" width="160" height="30" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="128" y="91" text-anchor="middle" font-size="8" fill="#334155">INSERT usuario</text>
+        <rect x="222" y="72" width="160" height="30" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="302" y="91" text-anchor="middle" font-size="8" fill="#334155">INSERT mensaje</text>
+        <text x="215" y="132" text-anchor="middle" font-size="8" fill="#14532d">o entran los dos, o no entra ninguno</text>
+
+        <line x1="215" y1="140" x2="215" y2="166" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#oxArrow)" />
+        <rect x="60" y="170" width="310" height="54" rx="10" fill="#fff" stroke="#bbf7d0" />
+        <text x="215" y="192" text-anchor="middle" font-size="8.5" fill="#334155">un proceso lee la tabla y envía</text>
+        <text x="215" y="210" text-anchor="middle" font-size="8" fill="#14532d">reintenta hasta lograrlo · puede duplicar</text>
+
+        <text x="645" y="26" text-anchor="middle" font-size="10" font-weight="700" fill="#991b1b">Sin outbox (un camino de Rentals)</text>
+        <rect x="460" y="40" width="370" height="76" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <rect x="478" y="60" width="160" height="30" rx="6" fill="#fff" stroke="#fecaca" />
+        <text x="558" y="79" text-anchor="middle" font-size="8" fill="#334155">guardar propietario</text>
+        <rect x="652" y="60" width="160" height="30" rx="6" fill="#fff" stroke="#fecaca" />
+        <text x="732" y="79" text-anchor="middle" font-size="8" fill="#334155">publicar mensaje</text>
+        <line x1="640" y1="75" x2="648" y2="75" stroke="#dc2626" stroke-width="1.4" />
+        <text x="645" y="106" text-anchor="middle" font-size="8" font-weight="600" fill="#991b1b">dos transacciones distintas</text>
+
+        <line x1="645" y1="140" x2="645" y2="166" stroke="#dc2626" stroke-width="1.4" marker-end="url(#oxArrow)" />
+        <rect x="490" y="170" width="310" height="54" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <text x="645" y="192" text-anchor="middle" font-size="8.5" fill="#991b1b">si el proceso muere aquí…</text>
+        <text x="645" y="210" text-anchor="middle" font-size="8" fill="#991b1b">propietario sin cuenta, y nadie lo reintenta</text>
+
+        <text x="430" y="262" text-anchor="middle" font-size="9" fill="#64748b">La misma infraestructura está disponible en los dos servicios. Lo que cambia es si el camino pasa por ella.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        El patrón no elimina el instante crítico: lo <strong>mueve</strong> a un sitio donde ya no importa,
+        porque lo que queda pendiente está escrito en la base.
+    </p>
+</div>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre el outbox">
+
+**"RabbitMQ ya garantiza la entrega, así que esto sobra."** Garantiza que un mensaje **que llegó a la cola** se entregue. No garantiza nada sobre un mensaje que nunca llegó porque el proceso murió antes de publicarlo. El outbox cubre justo ese hueco.
+
+**"El outbox es una cola."** Es una **tabla** en la base de datos del servicio, y esa es toda la gracia: al estar en la misma base, cabe en la misma transacción. Una cola, por definición, está fuera.
+
+**"Con publicar primero y guardar después se arregla."** Se cambia un problema por otro peor: un aviso sobre algo que no ocurrió. Los demás servicios reaccionan a un hecho falso, y deshacerlo es mucho más caro que repetirlo.
+
+**"Con outbox el mensaje llega exactamente una vez."** Llega **al menos** una vez. El proceso que vacía la tabla puede enviar y morir antes de marcar el envío, y entonces reenvía. Cualquier diseño que dependa de lo contrario está roto.
+
+**"Si el consumidor es idempotente, no hace falta outbox."** Son dos problemas distintos: la idempotencia protege de recibir **de más**, el outbox protege de no recibir **nada**. Hacen falta los dos, y aquí los dos existen.
+
+</Callout>
+
+## Lo que esta ficha deja fuera
+
+- **Cómo consigue el consumidor ser idempotente**, que aquí se resuelve en el dominio y no con una tabla de deduplicación: [Arquitectura · Mensajería](/arquitectura/mensajeria).
+- **El outbox del lado de las proyecciones**, que en Rentals no hace falta porque las vistas se actualizan dentro de la misma transacción que el evento.
+- **Un log reproducible** estilo Kafka, que resolvería un problema distinto —volver a leer la historia— y hoy no existe.
+- **El patrón inbox**, su simétrico del lado del consumidor. Tampoco está.
+
+<Callout kind="resumen" title="Para recordar">
+
+- El problema se llama **doble escritura**, y no se arregla con cuidado ni con reintentos.
+- La solución es tratar el mensaje **como un dato más** y guardarlo en la misma base y la misma transacción.
+- En Identity, la **unidad de trabajo** esconde el patrón: el handler llama a `SaveChangesAsync` como todos y no sabe nada.
+- El envío real ocurre **después**, desde la tabla, con reintentos.
+- Garantiza **al menos una vez**, nunca exactamente una. La otra mitad la pone la idempotencia del consumidor.
+- Tener la infraestructura **no es usarla**: en Rentals hay un camino que publica tras el commit.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre DbGate en `localhost:3000`, entra en la base `identity` y busca el esquema **`wolverine`**. Ahí están las tablas del outbox, en la misma base que `AspNetUsers`.
+
+Que estén juntas no es una casualidad de configuración: **es el patrón**. Verlo con los ojos hace que la explicación deje de ser abstracta.
+
+**Y luego:** la [ficha 10](/patrones/framework) recoge los patrones que nadie de este equipo eligió y que se usan todos los días — incluido el que hace posible el `SaveChangesAsync` que acabas de leer.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Explica por qué "publicar primero y guardar después" es **peor** que "guardar primero y publicar después", con un ejemplo concreto de este sistema.
+2. `RegisterNaturalOwnerHandler` publica después del commit. Propón el cambio mínimo para que use el outbox y di qué tendría que cambiar en la infraestructura de Rentals.
+3. El outbox garantiza "al menos una vez". Localiza en el código de Identity la línea que hace que recibir dos veces `AccountCreationRequested` no cree dos cuentas.
+
+</Callout>

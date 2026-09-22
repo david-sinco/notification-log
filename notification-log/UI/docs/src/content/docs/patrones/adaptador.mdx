@@ -1,314 +1,239 @@
 ---
-title: "Adapter y Anti-Corruption Layer"
+title: "Adapter y capa anticorrupción"
 description: "Scriban, SMTP y protobuf existen. `Application` no puede nombrarlos: el `.csproj` no los referencia."
 sidebar:
   order: 5
-  label: "5 · Adapter y Anti-Corruption Layer"
+  label: "5 · Adapter y anticorrupción"
 ---
 
-import { Code } from '@astrojs/starlight/components';
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member } from '../../../lib/code';
+import renderer from '@code/Services/Notification/NotificationLog.NotificationService.Application/Notifications/Services/Rendering/ITemplateRenderer.cs?raw';
+import scriban from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/Notifications/Rendering/ScribanTemplateRenderer.cs?raw';
+import userCreated from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/Messaging/Consumers/UserCreatedHandler.cs?raw';
+import accountHandler from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/Consumers/AccountCreationRequestedHandler.cs?raw';
+import provisioner from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/Publishers/WolverineAccountProvisioner.cs?raw';
 
-<Callout kind="concepto" title="Ficha rápida">
+<p class="ddd-lede">
+El sistema usa Scriban para renderizar plantillas, SMTP para mandar correos y protobuf para hablar
+entre servicios. Tres librerías con sus tipos, sus excepciones y sus manías. Y ninguna de las tres
+aparece en la capa de aplicación — no por disciplina, sino porque <strong>el
+<code>.csproj</code> no las referencia</strong>: escribir <code>ScriptObject</code> ahí ni siquiera
+compila.
+</p>
 
-- **Tipo:** Adapter es GoF estructural. Anti-Corruption Layer es DDD estratégico — la misma idea aplicada a la frontera entre dos contextos.
-- **Origen:** deliberado, y **verificable por compilación**: ver el recuadro de abajo.
-- **Dónde:** el renderizador de plantillas, los cuatro senders y los dos consumidores de mensajería.
+Esa imposibilidad no es casual. Es el resultado de dos patrones hermanos que este repositorio aplica con más rigor que ningún otro.
 
-</Callout>
+<div class="ddd-frase">
+<strong>En una frase:</strong> lo de fuera entra envuelto — cada tecnología ajena se usa detrás de
+una interfaz que la esconde, y cada mensaje de otro servicio se traduce al vocabulario propio en
+cuanto cruza la puerta.
+</div>
 
-<Callout kind="codigo" title="La prueba de que esto no es decorativo">
+## Ya conoces las dos piezas: el adaptador de enchufe y la aduana
 
-`NotificationLog.NotificationService.Application.csproj` tiene exactamente cuatro `PackageReference` —FluentValidation y dos `Abstractions` de Microsoft— y una sola `ProjectReference`: `Domain`. **No referencia Scriban, ni `NotificationLog.Contracts`, ni EF Core.** Y `Domain.csproj` no tiene ni un `ItemGroup`.
+Cuando viajas llevas un **adaptador de enchufe**: el aparato no cambia, la pared no cambia, y una pieza barata en medio hace que se entiendan. Eso es un *Adapter*: envolver algo que ya existe para que encaje en la forma que tu código esperaba.
 
-Eso significa que "la capa de aplicación no conoce protobuf" no es una convención que alguien pueda romper por descuido: *no compila*. El adaptador no es un consejo, es la única puerta que existe.
+La **aduana** es otra cosa. No adapta un aparato: revisa lo que entra al país y lo convierte en algo que las leyes de aquí entienden. Lo de fuera no circula por dentro tal cual. Eso es una *capa anticorrupción*: la frontera donde el vocabulario ajeno se traduce al propio y **desaparece**.
 
-</Callout>
+<Callout kind="advertencia" title="Dónde falla la analogía">
 
-## 5.1 · El problema
+Un adaptador de viaje lo pones cuando llegas. Aquí la forma la decide **el que va a enchufar**: la interfaz la escribe la capa de aplicación, con los tipos que a ella le convienen, y la librería tiene que amoldarse. Es la misma inversión de la [ficha 2](/patrones/repositorio).
 
-El flujo de envío necesita cuatro cosas que vienen de fuera: renderizar una plantilla (Scriban), hablar SMTP (`System.Net.Mail`), hablar HTTP con dos gateways, y recibir mensajes en protobuf generados por `Grpc.Tools`. Cada una tiene su propia forma, sus propios tipos y su propia semántica.
-
-Si esos tipos entran en `Application`, tres cosas se rompen a la vez. La primera, la más obvia: cambiar de motor de plantillas o de librería de mensajería deja de ser un cambio local. La segunda: los tests de un caso de uso necesitan construir un `ScriptObject` de Scriban o un mensaje protobuf. Y la tercera, la más cara — **el modelo ajeno empieza a contagiar al propio**. El mensaje `UserContactUpdated` viene de otro contexto, con sus reglas: los campos nunca son `null` porque proto3 no lo permite, y una cadena vacía significa algo muy concreto. Si ese mensaje viaja hasta el handler, sus reglas se convierten en las nuestras sin que nadie lo haya decidido.
-
-## 5.2 · La idea de los dos patrones
-
-**Adapter**: nosotros escribimos la interfaz que nos conviene, y una clase la implementa traduciendo a la API ajena. El resto del sistema programa contra nuestra interfaz y nunca ve la otra. La clase adaptadora es el único sitio del código donde existe el vocabulario del tercero.
-
-**Anti-Corruption Layer** es lo mismo, pero cuando el "tercero" es otro modelo de negocio en vez de una librería. Además de traducir tipos, traduce *significados*: decide qué quiere decir un campo vacío del otro lado en nuestro vocabulario. Sin esa capa, dos modelos que evolucionan por separado acaban acoplados por el formato del mensaje.
-
-## 5.3 · Cómo se ve aquí
-
-```csharp title="Application/Notifications/Services/Rendering/ITemplateRenderer.cs:7-16 (completo)"
-public interface ITemplateRenderer
-{
-    // Cada motor de plantillas necesita sus datos en una forma distinta (diccionario plano,
-    // árbol de objetos anidado, un ScriptObject de Scriban, etc.) — NotificationDispatchService no
-    // interpreta ni transforma nada, solo junta evento+destinatario y reenvía lo que
-    // BuildData le devuelva a Render, sin saber qué hay adentro.
-    object BuildData(BusinessEvent businessEvent, Recipient recipient);
-
-    RenderedMessage Render(string? subjectTemplate, string bodyTemplate, object data);
-}
-```
-
-Este es **nuestro** contrato, escrito desde la necesidad del flujo de dispatch: dame los datos, dame el texto renderizado. No menciona Scriban. Y el comentario documenta la decisión más discutible del fichero: `BuildData` devuelve `object` a propósito, porque cada motor quiere sus datos en una forma distinta y el servicio no interpreta nada — solo pasa lo que recibe. Volveremos a ese `object` en el ejercicio.
-
-```csharp title="Infrastructure/Notifications/Rendering/ScribanTemplateRenderer.cs:13-46"
-public sealed class ScribanTemplateRenderer : ITemplateRenderer
-{
-    public object BuildData(BusinessEvent businessEvent, Recipient recipient)
-    {
-        var recipientData = new ScriptObject
-        {
-            ["id"] = recipient.Id,
-            ["name"] = recipient.Name,
-            ["email"] = recipient.Email,
-            ["phone"] = recipient.Phone,
-            ["locale"] = recipient.Locale,
-            ["timeZone"] = recipient.TimeZone
-        };
-
-        foreach (var (key, value) in recipient.Attributes)
-            recipientData[key] = value;
-
-        var root = new ScriptObject { ["recipient"] = recipientData };
-
-        foreach (var (key, value) in businessEvent.Data)
-            root[key] = value;
-
-        return root;
-    }
-
-    public RenderedMessage Render(string? subjectTemplate, string bodyTemplate, object data)
-    {
-        var globals = (ScriptObject)data;
-
-        var body = RenderTemplate(bodyTemplate, globals);
-        var subject = subjectTemplate is null ? null : RenderTemplate(subjectTemplate, globals);
-
-        return RenderedMessage.Create(subject, body);
-    }
-    // ... RenderTemplate: Template.Parse + TemplateContext { StrictVariables = true }
-}
-```
-
-Los papeles:
-
-- **El cliente** es `NotificationDispatchService`, que solo ve `ITemplateRenderer`.
-- **La abstracción (*target*)** es `ITemplateRenderer`, y vive en `Application`.
-- **El adaptador** es `ScribanTemplateRenderer`, en `Infrastructure`.
-- **El adaptado (*adaptee*)** son `Template`, `TemplateContext` y `ScriptObject`, de Scriban. Estos tres nombres aparecen **únicamente** en este fichero.
-
-Y el adaptador hace lo que hacen los buenos adaptadores: no traduce solo tipos, **traduce modelos**. La línea 30 construye un árbol anidado —`recipient` como sub-objeto, los datos del evento en la raíz— porque Scriban resuelve `{{ recipient.name }}` navegando miembros, no buscando una clave con un punto dentro. Esa peculiaridad del motor queda encerrada aquí; el servicio de dispatch nunca se entera de que existe.
-
-### La versión ACL: los consumidores de mensajería
-
-```csharp title="Infrastructure/Messaging/Consumers/UserContactUpdatedHandler.cs:6-27 (completo)"
-public static class UserContactUpdatedHandler
-{
-    public static Task Handle(UserContactUpdated message, RecipientSyncService syncService, CancellationToken ct)
-    {
-        var change = MapToUserChange(message); // Protobuf -> el UserChange de Application
-        return syncService.HandleAsync(change, ct);
-    }
-
-    // email/phone vacíos ya son un valor con significado (sin dato confirmado), no "no vino" —
-    // el mensaje es un snapshot completo, así que se pasan tal cual, sin traducir "" a null. Mismo
-    // criterio para attributes: una clave ausente del map ya significa "ya no la tiene".
-    private static UserChange MapToUserChange(UserContactUpdated message) =>
-        new(
-            UserId: Guid.Parse(message.UserId),
-            Name: message.Name,
-            Email: message.Email,
-            Phone: message.Phone,
-            Locale: message.Locale,
-            TimeZone: message.TimeZone,
-            Attributes: message.Attributes.ToDictionary(kv => kv.Key, kv => (string?)kv.Value),
-            IsActive: message.IsActive);
-}
-```
-
-Una clase estática de doce líneas. Su único trabajo es que `UserContactUpdated` —el tipo generado por protobuf— muera aquí y siga `UserChange`, un `record` de `Application` (`Recipients/Services/Sync/UserChange.cs:3`).
-
-Fíjate en el comentario de las líneas 14-16: no describe qué hace el código, **declara una decisión semántica**. En el modelo de origen una cadena vacía significa "no hay valor confirmado", no "no ha cambiado" —el mensaje es un snapshot completo—, así que se traslada tal cual sin convertirla en `null`. Esa decisión es exactamente el trabajo de un ACL, y su consecuencia se ve tres capas más allá: `UpdateRecipientHandler.cs:25-35` aplica cada campo siempre, sin preguntarse si "vino o no vino".
-
-## 5.4 · Recorrido de una ejecución
-
-Un mensaje `UserContactUpdated` llega a la cola `user-changes` con `phone = ""` — el usuario borró su teléfono en el sistema de origen.
-
-<ol class="ddd-steps">
-    <li>
-        <strong><code>Infrastructure/Messaging/RabbitMq/RabbitMqMessagingExtensions.cs:47-48</code></strong> —
-        la cola está fijada a <code>UserContactUpdated</code> con
-        <code>DefaultIncomingMessage&lt;T&gt;()</code>. Wolverine elige el deserializador según el
-        <code>content_type</code> AMQP (líneas 43-45): protobuf por defecto, JSON si el mensaje se publicó a
-        mano desde la consola de RabbitMQ.
-    </li>
-    <li>
-        <strong><code>Messaging/Consumers/UserContactUpdatedHandler.cs:8</code></strong> — Wolverine abre un
-        scope, resuelve <code>RecipientSyncService</code> y llama a <code>Handle</code>. Es el último punto
-        del sistema donde el tipo protobuf es visible.
-    </li>
-    <li>
-        <strong><code>UserContactUpdatedHandler.cs:17-26</code></strong> — la traducción.
-        <code>Guid.Parse(message.UserId)</code> convierte el <code>string</code> del contrato en el tipo del
-        dominio; <code>message.Attributes.ToDictionary(...)</code> convierte el <code>MapField</code> de
-        protobuf en un diccionario de la BCL; el <code>phone = ""</code> pasa <strong>sin tocar</strong>.
-    </li>
-    <li>
-        <strong><code>Application/…/Sync/RecipientSyncService.cs:31</code></strong> — a partir de aquí ya no
-        hay nada externo. <code>ExistsAsync(change.UserId, ct)</code> decide entre crear y actualizar.
-    </li>
-    <li>
-        <strong><code>RecipientSyncService.cs:42-46</code></strong> — se construye un
-        <code>UpdateRecipientCommand</code>, tercer modelo del recorrido (protobuf → <code>UserChange</code>
-        → comando) y se llama al handler.
-    </li>
-    <li>
-        <strong><code>Application/…/UpdateRecipient/UpdateRecipientHandler.cs:39</code></strong> —
-        <code>recipient.ChangePhone(cmd.Phone)</code> con <code>""</code>. El dominio aplica su propia regla
-        en <code>Recipient.NormalizePhone</code> (<code>Recipient.cs:121-122</code>): vacío se normaliza a
-        <code>null</code>. El teléfono queda borrado, que era la intención del mensaje.
-    </li>
-    <li>
-        <strong>Efecto observable</strong> — <code>recipient.CanReceive(NotificationChannel.Sms)</code>
-        (<code>Recipient.cs:66</code>) pasa a devolver <code>false</code>, y a partir del siguiente evento el
-        canal SMS de este destinatario se salta con un aviso en
-        <code>NotificationDispatchService.cs:90-93</code>. Nada de eso conoce protobuf.
-    </li>
-</ol>
-
-<Callout kind="concepto" title="Tres modelos para el mismo dato, y no sobra ninguno">
-
-`UserContactUpdated` (contrato entre sistemas, versionable, no lo controlamos del todo) → `UserChange` (nuestro vocabulario de entrada) → `UpdateRecipientCommand` (la intención de un caso de uso) → `Recipient` (el modelo con las reglas).
-
-Parece repetición, y es lo contrario: cada salto es un punto donde el cambio del otro lado se puede absorber sin propagarse. Si mañana el contrato añade un campo o parte `name` en dos, se toca *un* fichero de traducción.
+Y la aduana de verdad deja pasar mercancía extranjera etiquetada. Aquí no: un tipo protobuf que sobreviva más allá del consumidor es un fallo de diseño, no una concesión.
 
 </Callout>
 
-## 5.5 · Qué pasaría sin el patrón
+## Idea 1 · La interfaz la dicta quien la usa, no quien la cumple
 
-Contraejemplo **hipotético**: el mensaje entra tal cual.
+<Code
+    code={whole(renderer)}
+    lang="csharp"
+    title="Notifications · Application/.../Rendering/ITemplateRenderer.cs"
+/>
 
-```csharp title="Hipotético — sin capa de traducción"
+Tres métodos y un comentario que vale por toda la ficha. Fíjate en el tipo de retorno de `BuildData`: **`object`**.
+
+Eso parece una dejadez y es justo lo contrario. Cada motor de plantillas quiere sus datos en una forma distinta —un diccionario plano, un árbol anidado, un `ScriptObject` de Scriban—, y la capa de aplicación **no quiere saber cuál**. Su trabajo es juntar evento y destinatario, pedirle al motor que prepare sus datos, y devolverle eso mismo al renderizar. No lo abre nunca.
+
+<Code
+    code={member(scriban, 'public RenderedMessage Render')}
+    lang="csharp"
+    title="Notifications · Infrastructure/.../Rendering/ScribanTemplateRenderer.cs"
+/>
+
+Aquí dentro sí hay Scriban. Y es el único sitio del sistema donde esa palabra aparece.
+
+**Por qué importa:** cambiar de motor de plantillas es reescribir **una clase**. La capa de aplicación no se entera, y el dominio menos. Esa es la cobertura, y en un sistema de notificaciones es una cobertura que se acaba usando.
+
+<Callout kind="honesto" title="El precio del `object`, dicho sin adornos">
+
+`BuildData` devuelve `object` y `Render` lo baja a lo que necesite. El compilador ya no puede comprobar que lo que sale de uno encaja en el otro: si alguien pasara otra cosa, el fallo sería en ejecución.
+
+Es un compromiso consciente —la alternativa sería un genérico que contagiaría a toda la cadena de llamadas— pero conviene saber que ahí hay un contrato que **solo sostiene la convención**. Es el punto más débil de esta ficha.
+
+</Callout>
+
+## Idea 2 · El tipo ajeno muere en la puerta
+
+<Code
+    code={whole(userCreated)}
+    lang="csharp"
+    title="Notifications · Infrastructure/Messaging/Consumers/UserCreatedHandler.cs"
+/>
+
+Cinco líneas cuyo único trabajo es convertir un contrato protobuf en un comando propio. A partir de esa línea, `UserCreated` no vuelve a aparecer: la capa de aplicación de Notifications **no sabe que existe protobuf**.
+
+El mismo patrón, en el otro extremo del sistema:
+
+<Code
+    code={whole(accountHandler)}
+    lang="csharp"
+    title="Identity · Infrastructure/Messaging/Consumers/AccountCreationRequestedHandler.cs"
+/>
+
+Aquí la traducción hace algo más que copiar campos: **valida por el camino**. El identificador llega como cadena y se convierte a `Guid` o revienta con un mensaje claro; los roles llegan como texto y se convierten al `enum` o revientan. Un dato que no encaja en el vocabulario de Identity **no entra**.
+
+**Por qué importa:** esa es la diferencia entre un mapeo y una capa anticorrupción. Un mapeo copia; una aduana **rechaza**. El día que Rentals mande un rol que Identity no tiene, el fallo ocurre en la frontera, con el nombre del rol en el mensaje — y no tres capas más adentro con un `enum` en un valor imposible.
+
+## Idea 3 · La frontera funciona igual al salir
+
+<Code
+    code={member(provisioner, 'public async Task RequestAccountAsync')}
+    lang="csharp"
+    title="Rentals · Infrastructure/Messaging/Publishers/WolverineAccountProvisioner.cs"
+/>
+
+Esta clase implementa `IAccountProvisioner`, una interfaz de la capa de aplicación de Rentals que dice, en una línea, *"consígueme una cuenta para este usuario"*. Quien la llama no sabe que hay protobuf, ni RabbitMQ, ni un servicio llamado Identity.
+
+Y fíjate en lo que hace: **construye el contrato público a propósito**. No serializa un tipo de dominio; toma los datos y los coloca en un mensaje con su identificador, su marca de tiempo y su versión de esquema.
+
+**Por qué importa:** es la decisión de qué parte de tu modelo haces pública. Un evento de dominio de Rentals puede cambiar mañana sin avisar a nadie; `AccountCreationRequested` no. Que la traducción esté en un archivo con nombre propio es lo que hace visible esa frontera.
+
+## Cómo encaja: las dos fronteras de un servicio
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 260" role="img" aria-labelledby="acTitle">
+        <title id="acTitle">Lo ajeno entra y sale envuelto; por dentro solo hay vocabulario propio</title>
+        <defs>
+            <marker id="acArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="40" width="150" height="90" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <text x="95" y="64" text-anchor="middle" font-size="9.5" font-weight="700" fill="#991b1b">Lo ajeno</text>
+        <text x="95" y="84" text-anchor="middle" font-size="8" fill="#334155">protobuf · Scriban</text>
+        <text x="95" y="100" text-anchor="middle" font-size="8" fill="#334155">SmtpClient · Marten</text>
+        <text x="95" y="120" text-anchor="middle" font-size="8" fill="#991b1b" font-style="italic">tipos de terceros</text>
+
+        <rect x="200" y="20" width="180" height="200" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="290" y="44" text-anchor="middle" font-size="9.5" font-weight="700" fill="#14532d">Infrastructure</text>
+        <text x="290" y="66" text-anchor="middle" font-size="8" fill="#334155">consumidores</text>
+        <text x="290" y="82" text-anchor="middle" font-size="8" fill="#334155">publicadores</text>
+        <text x="290" y="98" text-anchor="middle" font-size="8" fill="#334155">adaptadores</text>
+        <rect x="216" y="112" width="148" height="46" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="290" y="130" text-anchor="middle" font-size="8" font-weight="600" fill="#14532d">aquí ocurre</text>
+        <text x="290" y="146" text-anchor="middle" font-size="8" font-weight="600" fill="#14532d">la traducción</text>
+        <text x="290" y="180" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">la única capa que</text>
+        <text x="290" y="194" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">puede nombrarlos</text>
+
+        <rect x="410" y="40" width="200" height="90" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="510" y="64" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">Application</text>
+        <text x="510" y="84" text-anchor="middle" font-size="8" fill="#334155">comandos y handlers</text>
+        <text x="510" y="100" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">ITemplateRenderer</text>
+        <text x="510" y="120" text-anchor="middle" font-size="8" fill="#4338ca" font-style="italic">declara lo que necesita</text>
+
+        <rect x="650" y="40" width="190" height="90" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="745" y="64" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569">Domain</text>
+        <text x="745" y="84" text-anchor="middle" font-size="8" fill="#334155">agregados y reglas</text>
+        <text x="745" y="104" text-anchor="middle" font-size="8" font-weight="600" fill="#475569">0 paquetes NuGet</text>
+        <text x="745" y="122" text-anchor="middle" font-size="8" fill="#64748b" font-style="italic">ni se entera</text>
+
+        <line x1="172" y1="85" x2="196" y2="85" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#acArrow)" />
+        <line x1="384" y1="85" x2="406" y2="85" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#acArrow)" />
+        <line x1="614" y1="85" x2="646" y2="85" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#acArrow)" />
+
+        <text x="430" y="242" text-anchor="middle" font-size="9" fill="#64748b">La regla se puede verificar sin leer una línea: mira los PackageReference de cada capa.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Los dos patrones son el mismo movimiento en dos escalas: el Adapter envuelve una
+        <em>librería</em>, la capa anticorrupción envuelve un <em>modelo ajeno</em>.
+    </p>
+</div>
+
+## Qué pasaría sin el patrón
+
+Contraejemplo **hipotético**:
+
+```csharp
 // HIPOTÉTICO — así NO está el código
-public sealed class RecipientSyncService
+public sealed class NotificationDispatchService
 {
-    // el tipo generado por protobuf, dentro de la capa de aplicación
-    public async Task HandleAsync(UserContactUpdated message, CancellationToken ct)
+    public async Task DispatchAsync(UserCreated message, CancellationToken ct)  // ← protobuf, aquí
     {
-        var userId = Guid.Parse(message.UserId);
-
-        // proto3 no tiene null: hay que razonar sobre "" en todas partes
-        var email = string.IsNullOrEmpty(message.Email) ? null : message.Email;
-        var phone = string.IsNullOrEmpty(message.Phone) ? null : message.Phone;
-
-        // ... y este "?" ya no es una decisión nuestra, es una consecuencia del formato ajeno
+        var template = Template.Parse(version.Body);            // ← Scriban, aquí
+        var data = new ScriptObject { ["name"] = message.Name };
+        // ...
     }
 }
 ```
 
-Lo que se rompe:
+Lo que se rompe: **la capa de aplicación necesita los paquetes**, así que el `.csproj` los referencia y la regla desaparece; **cambiar de motor de plantillas pasa a ser un refactor del flujo de negocio**; y —el peor— **el esquema de otro servicio se vuelve tu tipo interno**, de modo que un cambio en el `.proto` de Identity recompila el corazón de Notifications.
 
-- **`Application` tiene que referenciar `NotificationLog.Contracts`**, y con él `Google.Protobuf`. La capa de casos de uso pasa a depender de un formato de serialización.
-- **Las reglas de proto3 se cuelan en el dominio.** Los campos generados nunca son `null`, así que el handler tiene que razonar sobre cadenas vacías en todas partes, y la distinción entre "vacío" y "ausente" —que en el modelo propio sí existe— se pierde.
-- **Cambiar el contrato obliga a tocar casos de uso.** Renombrar un campo del `.proto` rompe la compilación de `Application`, no de una clase de traducción.
-- **Los tests necesitan construir mensajes protobuf** para probar una regla de negocio.
+**Lo que se paga:** una interfaz y una clase más por cada tecnología, un salto de indirección, y la traducción escrita a mano en los dos extremos. Y en un caso, el `object` de `BuildData`.
 
-**Qué se paga:** un `record` extra por mensaje y un método de mapeo que hay que mantener sincronizado a mano. Cuando el contrato y el modelo interno son casi idénticos —como aquí— parece código duplicado, y es la queja habitual. La respuesta es que *hoy* se parecen; el adaptador existe para el día en que dejen de parecerse, que es el día en que un cambio ajeno intentará entrar.
+## Lo que suele confundir
 
-## 5.6 · Otras apariciones en el repositorio
+<Callout kind="antipatron" title="Cuatro malentendidos">
 
-| Sitio | Variación |
-| --- | --- |
-| `Messaging/Consumers/NotificationDispatchHandler.cs:15-21` | El ACL gemelo: `NotificationDispatchRequested` → `BusinessEvent`. Más simple porque el contrato es un *sobre genérico* con un mapa libre; el adaptador no interpreta el contenido, solo cambia el envase. |
-| `Infrastructure/…/Email/SmtpEmailNotificationSender.cs:12` | Adapter sobre `SmtpClient`. Traduce además el modelo de errores — ver [la ficha 4](/patrones/resultado). |
-| `Infrastructure/…/Push/HttpPushNotificationSender.cs:50-52` | Los `record` privados `SendPushRequest` y `SendPushResponse` son la forma del proveedor, declarada *dentro* del adaptador. Nadie fuera puede nombrarlos. |
-| `Persistence/Configuration/NotificationTriggerConfiguration.cs:17-24` | Adaptador entre el modelo de objetos y el relacional, con el mecanismo que da el framework: `HasConversion(key => key.Value, value => EventKey.Create(value))` traduce `EventKey` ↔ `varchar` sin que el dominio sepa que hay columnas. |
-| `Persistence/Configuration/RecipientConfiguration.cs:54-64` | El mismo mecanismo llevado más lejos: un `Dictionary<string,string>` privado del agregado se adapta a una columna JSON, con su `ValueComparer` para que el change tracker detecte cambios dentro del diccionario. |
-| `NotificationLog.Web/Api/*ApiClient.cs` | Adaptadores sobre `HttpClient` — tienen ficha propia, la [7](/patrones/gateway), porque además cumplen otro patrón. |
+**"Adapter y capa anticorrupción son lo mismo."** Comparten la mecánica y no la escala. Un adaptador envuelve **una librería** para que encaje en tu forma; una capa anticorrupción envuelve **el modelo de otro equipo** para que su vocabulario no contamine el tuyo. El primero es diseño de clases; la segunda es una frontera entre contextos.
 
-## 5.7 · Señales de alarma
+**"Si la interfaz tiene un solo implementador, sobra."** Ese argumento se oye mucho y confunde el propósito: la interfaz no está para tener dos implementaciones, está **para que la referencia del paquete no suba de capa**. Con una sola basta para conseguirlo.
 
-- **Un `using` nuevo en `Application`.** La forma más rápida de auditar esta capa es mirar su `.csproj`: cuatro paquetes y una referencia. Cualquier adición merece justificación explícita en la revisión.
-- **Un adaptador que crece con lógica de negocio.** Si `MapToUserChange` empieza a decidir *qué hacer* con los datos en vez de solo traducirlos, el negocio se ha mudado a `Infrastructure`.
-- **Excepciones del tercero escapando del adaptador.** Un `ScriptRuntimeException` de Scriban que llegue al llamante convierte el puerto en decorativo. Aquí no ocurre por casualidad: `NotificationDispatchService.cs:113` captura `Exception` genérica alrededor del renderizado, así que el tipo concreto nunca se inspecciona.
-- **Un puerto que se parece sospechosamente a la API del tercero.** Si `ITemplateRenderer` tuviera un método `PushGlobal`, no sería un puerto: sería Scriban con otro nombre.
-- **`object` en la firma de un puerto.** Está aquí y es el tema del ejercicio.
+**"Puedo reutilizar el tipo protobuf, total tiene los mismos campos."** Los mismos campos **hoy**. Ese tipo pertenece a otro servicio y cambia cuando él decida; adoptarlo es regalarle el control de tu modelo interno.
 
-<Callout kind="ejercicio" title="Ejercicio">
-
-`ITemplateRenderer` tiene dos métodos, y el primero devuelve `object`.
-
-**(a)** Localiza el único sitio del repositorio que llama a `BuildData` y el único que consume su valor. Cita ambos con línea.
-
-**(b)** Escribe el código —hipotético— que ese `object` permite escribir y que fallaría en tiempo de ejecución. Di con qué excepción y en qué línea exacta reventaría.
-
-**(c)** Propón una firma alternativa para el puerto que elimine el `object` sin romper la razón que da el comentario de `ITemplateRenderer.cs:9-12`. Argumenta si el cambio merece la pena.
-
-**Verificación:** tu propuesta de (c) debe poder implementarse tocando exactamente tres ficheros. Nómbralos.
+**"El adaptador debería traducir también los errores."** Depende, y aquí hay una respuesta pensada: el adaptador de correo traduce el rechazo del servidor a un resultado de negocio y **deja subir** el fallo de transporte. Ver la [ficha 4](/patrones/resultado).
 
 </Callout>
 
-<details class="surface-card">
-    <summary><strong>Ver solución</strong></summary>
-    <p>
-        <strong>(a)</strong> Hay un solo llamante y un solo consumidor, y están en líneas consecutivas:
-        <code>NotificationDispatchService.cs:110</code> (<code>var data = _renderer.BuildData(businessEvent, recipient);</code>)
-        y <code>NotificationDispatchService.cs:111</code>
-        (<code>message = _renderer.Render(version.Subject, version.Body, data);</code>). El valor nace y
-        muere en el mismo método, sin que nadie lo mire por dentro.
-    </p>
-    <p>
-        <strong>(b)</strong> Lo que el <code>object</code> permite es mezclar implementaciones:
-    </p>
-    <Code code={"// HIPOT\u00c9TICO \u2014 compila, porque el puerto solo promete \"object\"\nITemplateRenderer scriban = new ScribanTemplateRenderer();\nITemplateRenderer otro    = new HandlebarsTemplateRenderer();   // devolver\u00eda un Dictionary\n\nvar data = otro.BuildData(businessEvent, recipient);\nvar msg  = scriban.Render(version.Subject, version.Body, data);"} lang="csharp" title="Hipot\u00e9tico \u2014 compila hoy, revienta en ejecuci\u00f3n" />
-    <p>
-        Reventaría con <code>InvalidCastException</code> en
-        <code>ScribanTemplateRenderer.cs:40</code>: <code>var globals = (ScriptObject)data;</code>, un
-        <em>downcast</em> sin comprobar. El puerto promete "pásame lo que te devolví" y el sistema de tipos
-        no lo hace cumplir. Hoy es inofensivo porque solo hay una implementación registrada
-        (<code>Infrastructure/DependencyInjection.cs:56</code>) y el mismo objeto va y vuelve en dos líneas,
-        pero la garantía la sostiene esa coincidencia, no el compilador.
-    </p>
-    <p>
-        <strong>(c)</strong> La alternativa más limpia es <strong>eliminar <code>BuildData</code> del
-        puerto</strong> y dejar un solo método:
-    </p>
-    <Code code={"public interface ITemplateRenderer\n{\n    RenderedMessage Render(\n        string? subjectTemplate,\n        string bodyTemplate,\n        BusinessEvent businessEvent,\n        Recipient recipient);\n}"} lang="csharp" title="Propuesta" />
-    <p>
-        Respeta el motivo del comentario —cada motor sigue armando sus datos como quiera— y además lo
-        refuerza: la forma de los datos deja de ser parte del contrato y pasa a ser un detalle privado del
-        adaptador, que es donde el comentario dice que debe estar. De paso desaparece el estado que viaja
-        entre dos llamadas, y con él la posibilidad de llamarlas en orden equivocado o con datos de otra
-        implementación.
-    </p>
-    <p>
-        <strong>Los tres ficheros:</strong>
-    </p>
-    <ol class="ddd-steps">
-        <li>
-            <code>Application/Notifications/Services/Rendering/ITemplateRenderer.cs</code> — dos métodos
-            pasan a ser uno.
-        </li>
-        <li>
-            <code>Infrastructure/Notifications/Rendering/ScribanTemplateRenderer.cs</code> —
-            <code>BuildData</code> pasa a <code>private</code> y <code>Render</code> lo llama; el
-            <em>downcast</em> de la línea 40 desaparece porque el <code>ScriptObject</code> ya no sale de la
-            clase.
-        </li>
-        <li>
-            <code>Application/Notifications/Services/Dispatch/NotificationDispatchService.cs</code> — las
-            líneas 110-111 se funden en una.
-        </li>
-    </ol>
-    <p>
-        <strong>¿Merece la pena?</strong> Sí, y es barato: tres ficheros, ninguna migración, ningún cambio de
-        comportamiento. El argumento en contra —"hoy no hay dos implementaciones, el bug no puede
-        ocurrir"— es cierto y es justamente el que convierte un puerto correcto en uno frágil el día que
-        alguien añada un <code>HandlebarsTemplateRenderer</code>. Dicho esto, es una mejora de robustez, no
-        un fallo activo: si hay que priorizar, el <code>switch</code> de
-        <a href="/patrones/estrategia">la ficha 6</a> hace más daño hoy.
-    </p>
-</details>
+## Lo que esta ficha deja fuera
+
+- **Los contratos `.proto`** y su versionado, que son un asunto de integración: [Arquitectura · Mensajería](/arquitectura/mensajeria).
+- **Los patrones de relación entre contextos** —cliente/proveedor, conformista, núcleo compartido—: [DDD · Context Map](/ddd/context-map).
+- **El Gateway**, que es un adaptador con una responsabilidad extra y tiene ficha propia: [7](/patrones/gateway).
+- **Cómo se registran estos adaptadores** en el contenedor, que es plomería del framework: [ficha 10](/patrones/framework).
+
+<Callout kind="resumen" title="Para recordar">
+
+- La interfaz la escribe **quien la usa**, con los tipos que a él le convienen.
+- Cada tecnología ajena vive en **una sola clase**. Cambiarla es reescribir esa clase.
+- Un tipo de otro servicio **muere en el consumidor**: se traduce a un comando propio y no vuelve a aparecer.
+- Una aduana **valida**, no solo copia. Lo que no encaja en tu vocabulario se rechaza en la frontera.
+- Al salir funciona igual: el contrato público se construye a propósito, en un archivo con nombre.
+- La regla se comprueba mirando los `PackageReference`, no leyendo el código.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Ejecuta esto desde `notification-log/`:
+
+```bash
+grep -rn "Scriban\|SmtpClient\|Google.Protobuf" Services --include=*.cs | grep -v Infrastructure
+```
+
+Debería devolver cero líneas. Ese comando es la prueba entera de esta ficha, tarda un segundo, y es lo que conviene ejecutar cada vez que alguien añade una dependencia nueva.
+
+**Y luego:** la [ficha 6](/patrones/estrategia) mira lo que hay justo detrás de una de estas interfaces — y encuentra el patrón peor aplicado del repositorio.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `ITemplateRenderer.BuildData` devuelve `object`. Propón una firma que el compilador sí pueda verificar y di qué coste tendría en el resto de la cadena.
+2. `AccountCreationRequestedHandler` convierte cadenas a `Guid` y a `enum`, lanzando si no encajan. ¿Por qué esa validación está en la frontera y no en `CreateAccountHandler`?
+3. Alguien propone que `NotificationDispatchService` reciba directamente el `NotificationDispatchRequested` de protobuf, "para no escribir la traducción". Da tres consecuencias concretas.
+
+</Callout>

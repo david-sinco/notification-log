@@ -7,272 +7,267 @@ sidebar:
 ---
 
 import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import listingRepoInterface from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/IListingRepository.cs?raw';
+import triggerRepoInterface from '@code/Services/Notification/NotificationLog.NotificationService.Domain/Triggers/INotificationTriggerRepository.cs?raw';
+import triggerRepo from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/Persistence/Repositories/NotificationTriggerRepository.cs?raw';
+import martenRepo from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenListingRepository.cs?raw';
+import unitOfWork from '@code/Shared/Application.Shared/Abstractions/IUnitOfWork.cs?raw';
+import martenUow from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenUnitOfWork.cs?raw';
+import outboxUow from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Persistence/OutboxUnitOfWork.cs?raw';
 
-<Callout kind="concepto" title="Ficha rápida">
+<p class="ddd-lede">
+El proyecto de dominio no tiene ni un paquete NuGet. Ni EF Core, ni Marten, ni una cadena de
+conexión. Y sin embargo <code>Listing</code> necesita que alguien lo cargue y lo guarde. La pregunta
+incómoda es quién declara ese "alguien": si lo declara la capa que sabe de bases de datos, el
+dominio acaba dependiendo de ella y la regla se rompe el primer día.
+</p>
 
-- **Tipo:** arquitectónicos (Fowler, *Patterns of Enterprise Application Architecture*). No son GoF.
-- **Origen:** deliberado. EF Core ya *es* un repositorio y una unidad de trabajo; envolverlo fue una decisión.
-- **Dónde:** 4 interfaces en `Domain`, 4 implementaciones `internal` en `Infrastructure`, y un `IUnitOfWork` que `NotificationDbContext` cumple sin esfuerzo.
+La respuesta de este repositorio es darle la vuelta a quién manda: **la interfaz la escribe el que la necesita**, no el que la cumple.
 
-</Callout>
+<div class="ddd-frase">
+<strong>En una frase:</strong> el dominio declara en dos métodos lo que necesita de la persistencia,
+alguien de fuera lo implementa como pueda, y <em>cuándo</em> se confirma todo no lo decide ninguno
+de los dos.
+</div>
 
-## 2.1 · El problema
+## Ya conoces el reparto: es un guardarropa
 
-El proyecto `NotificationLog.NotificationService.Domain` no tiene ni un `PackageReference`: cero dependencias, ni siquiera EF Core. Esa restricción no es estética. Significa que las reglas de negocio se pueden leer, probar y cambiar sin arrancar una base de datos, y que cambiar SQL Server por otra cosa no toca una sola línea de dominio.
+Entregas el abrigo y te dan un resguardo. No entras al almacén, no sabes si hay perchas o estanterías, y si mañana cambian el sistema entero tú sigues haciendo exactamente lo mismo: entregar y recoger.
 
-Pero el dominio *necesita* datos. `AddConfigurationHandler` tiene que cargar un trigger y una plantilla antes de poder decidir nada. Si escribiera `_db.Triggers.Include(...)` directamente, EF Core entraría en la capa de aplicación y, con él, `Microsoft.EntityFrameworkCore` en el `.csproj` — y toda la restricción anterior se cae.
+El mostrador es el repositorio. Y hay una segunda pieza que la gente olvida: **el guardarropa no cierra la cuenta cada vez**. Dejas el abrigo, luego el paraguas, luego la bolsa — y la visita se salda una sola vez, al final. Esa es la unidad de trabajo.
 
-Hay un segundo problema, más sutil. Un caso de uso suele tocar **varios** agregados: añadir una configuración lee un trigger y una plantilla, y la sincronización de destinatarios puede crear o actualizar. Si cada repositorio guardase por su cuenta, un fallo a mitad dejaría la mitad de los cambios escritos. El comentario de `RecipientSyncService.cs:10-16` documenta exactamente ese razonamiento.
+<Callout kind="advertencia" title="Dónde falla la analogía">
 
-## 2.2 · La idea de los dos patrones
+En un guardarropa tú eliges cuándo recoger. Aquí el que guarda y el que confirma **están separados a propósito**: el repositorio no puede decidir confirmar, porque no sabe si el caso de uso ha terminado.
 
-**Repository**: el dominio declara una interfaz con las consultas que necesita, redactadas en su propio vocabulario (`GetByEventKeyAsync`, no `Where(t => ...)`). La implementación vive fuera y el dominio nunca la ve. La dirección de la dependencia se invierte: la capa de abajo depende de la interfaz que define la de arriba.
-
-**Unit of Work**: los repositorios acumulan cambios pero no los confirman. Quien decide cuándo se escribe todo —o no se escribe nada— es un objeto aparte con un solo método. Así, un caso de uso que toca tres agregados sigue siendo una sola transacción, y el punto donde eso ocurre es visible en el código: la última línea del handler.
-
-## 2.3 · Cómo se ve aquí
-
-```csharp title="Domain/Triggers/INotificationTriggerRepository.cs:3-10 (completo)"
-public interface INotificationTriggerRepository
-{
-    Task<NotificationTrigger?> GetByIdAsync(Guid id, CancellationToken ct);
-    Task<NotificationTrigger?> GetByEventKeyAsync(EventKey eventKey, CancellationToken ct);
-    Task<bool> ExistsAsync(EventKey eventKey, CancellationToken ct);
-    Task AddAsync(NotificationTrigger trigger, CancellationToken ct);
-    Task<(IReadOnlyList<NotificationTrigger> Items, int TotalCount)> ListAsync(string? search, bool? isEnabled, int page, int pageSize, CancellationToken ct);
-}
-```
-
-Piezas del patrón:
-
-- **La abstracción** es esta interfaz, y vive en `Domain`, junto a la entidad que devuelve. No en `Infrastructure`. Esa ubicación *es* el patrón: si la interfaz viviera con su implementación, no habría inversión de nada.
-- **El vocabulario es de negocio.** `GetByEventKeyAsync(EventKey, ...)` recibe un value object, no un `string`. La interfaz no sabe que existen tablas.
-- **No hay `SaveAsync`.** Hay `AddAsync`, y nada más de escritura. Los cambios sobre un agregado ya cargado no necesitan método: el *change tracker* los detecta. Confirmarlos es trabajo de otro.
-- **Tampoco hay `IQueryable`.** Devolver `IQueryable` es el error clásico: filtrar seguiría siendo trabajo del llamante y la abstracción se volvería decorativa. Aquí `ListAsync` devuelve una tupla ya materializada con su total.
-
-```csharp title="Infrastructure/Persistence/Repositories/NotificationTriggerRepository.cs:7-25"
-internal sealed class NotificationTriggerRepository(NotificationDbContext db) : INotificationTriggerRepository
-{
-    private readonly NotificationDbContext _db = db;
-
-    public Task<NotificationTrigger?> GetByIdAsync(Guid id, CancellationToken ct)
-        => _db.Triggers
-            .Include(t => t.Configurations)
-            .SingleOrDefaultAsync(t => t.Id == id, ct);
-
-    public Task<NotificationTrigger?> GetByEventKeyAsync(EventKey eventKey, CancellationToken ct)
-        => _db.Triggers
-            .Include(t => t.Configurations)
-            .SingleOrDefaultAsync(t => t.EventKey == eventKey, ct);
-
-    public Task<bool> ExistsAsync(EventKey eventKey, CancellationToken ct)
-        => _db.Triggers.AnyAsync(t => t.EventKey == eventKey, ct);
-
-    public async Task AddAsync(NotificationTrigger trigger, CancellationToken ct)
-        => await _db.Triggers.AddAsync(trigger, ct);
-
-    // ... ListAsync
-}
-```
-
-**La implementación concreta** es `internal sealed`: fuera de `Infrastructure` ni siquiera se puede nombrar. La única forma de obtenerla es pedir la interfaz. Nótese `AddAsync` (línea 24): llama a `_db.Triggers.AddAsync` y punto — **no persiste nada**, solo marca la entidad como añadida.
-
-### La unidad de trabajo
-
-```csharp title="Application/Abstractions/IUnitOfWork.cs:3-6 (completo) e Infrastructure/DependencyInjection.cs:36-42"
-// Application/Abstractions/IUnitOfWork.cs
-public interface IUnitOfWork
-{
-    Task<int> SaveChangesAsync(CancellationToken ct);
-}
-
-// Infrastructure/DependencyInjection.cs:36-42
-services.AddScoped<IUnitOfWork>(sp =>
-    sp.GetRequiredService<NotificationDbContext>());
-
-services.AddScoped<INotificationTriggerRepository, NotificationTriggerRepository>();
-services.AddScoped<INotificationTemplateRepository, NotificationTemplateRepository>();
-services.AddScoped<IRecipientRepository, RecipientRepository>();
-services.AddScoped<INotificationRepository, NotificationRepository>();
-```
-
-Un método. Lo cumple `NotificationDbContext` sin escribir código (`Persistence/Context/NotificationDbContext.cs:10` declara `: DbContext(options), IUnitOfWork` y hereda la implementación de `SaveChangesAsync`).
-
-La línea clave es el registro por lambda: `sp.GetRequiredService<NotificationDbContext>()`. No es `AddScoped<IUnitOfWork, NotificationDbContext>()`, que crearía una **segunda instancia** del contexto. Al resolverlo del propio contenedor se garantiza que el `DbContext` que usan los repositorios y el que confirma la transacción *son el mismo objeto*. Sin eso, el patrón no funcionaría: los repositorios acumularían cambios en un contexto y `SaveChangesAsync` se ejecutaría sobre otro vacío.
-
-<Callout kind="honesto" title="Una incoherencia real: IUnitOfWork no está donde deberían estar sus compañeros">
-
-Los cuatro repositorios se declaran en `Domain`. `IUnitOfWork`, en cambio, está en `Application/Abstractions/`. Los dos son puertos de persistencia, así que la asimetría no tiene una justificación fuerte.
-
-Se puede defender: "guardar" es una preocupación de orquestación (quién controla la transacción), no de modelo, y el dominio nunca invoca `SaveChangesAsync` — solo lo hacen los handlers. Con ese criterio, la ubicación actual es correcta. Pero conviene saber que es una decisión discutible y no un descuido con el que haya que ser consistente a ciegas.
+Y hay algo que el mostrador no hace: en uno de los tres servicios, confirmar la visita **también echa una carta al correo** en el mismo gesto, de forma que o pasan las dos cosas o no pasa ninguna. Esa variante tiene ficha propia, la [9](/patrones/outbox).
 
 </Callout>
 
-## 2.4 · Recorrido de una ejecución
+## Idea 1 · La interfaz vive donde se necesita, no donde se implementa
 
-`POST /api/triggers/{id}/configurations` — el caso más ilustrativo, porque toca dos agregados y una sola transacción.
+<Code
+    code={whole(listingRepoInterface)}
+    lang="csharp"
+    title="Rentals · Domain/Listings/IListingRepository.cs"
+/>
+
+Dos métodos. Ni paginación, ni filtros, ni `IQueryable`. Y sobre todo: **ninguna palabra técnica**. No aparece `DbSet`, ni `IDocumentSession`, ni `SQL`.
+
+Esa interfaz está en `Domain`, que es quien la necesita y quien dicta su forma. Quien la cumple está tres capas más abajo:
+
+<Code
+    code={whole(martenRepo)}
+    lang="csharp"
+    title="Rentals · Infrastructure/Persistence/MartenListingRepository.cs"
+/>
+
+La flecha de dependencia apunta **hacia dentro** —`Infrastructure` conoce a `Domain`, nunca al revés— aunque en ejecución el flujo vaya al contrario. Eso es la **inversión de dependencias**, y es lo que hace que el `.csproj` del dominio pueda seguir sin paquetes.
+
+**Por qué importa:** no es una cuestión de pureza. Es que el día que Rentals cambió su persistencia entera a un event store, **`Domain` no se tocó**. Esa es la cobertura que compró la prima.
+
+## Idea 2 · La misma idea, dos mundos completamente distintos detrás
+
+Aquí es donde este repositorio enseña algo que un proyecto normal no puede. Compara la interfaz de arriba con la de Notifications:
+
+<Code
+    code={whole(triggerRepoInterface)}
+    lang="csharp"
+    title="Notifications · Domain/Triggers/INotificationTriggerRepository.cs"
+/>
+
+Cinco métodos, y tres de ellos son consultas: existe, busca por clave, lista con filtros y paginación. Y la implementación lo refleja:
+
+<Code
+    code={member(triggerRepo, 'public Task<NotificationTrigger?> GetByIdAsync')}
+    lang="csharp"
+    title="Notifications · Infrastructure/Persistence/Repositories/NotificationTriggerRepository.cs"
+/>
+
+`Include`, porque hay que traer los hijos del agregado o llegará a medias. En Rentals eso no puede pasar: cargar es reproducir la historia entera del flujo, y **no existe la opción de cargar la mitad**.
+
+| | Notifications (EF Core) | Rentals (Marten, eventos) |
+| --- | --- | --- |
+| Cargar | `SELECT` con `Include` | reproducir los eventos del flujo |
+| Guardar | seguimiento de cambios y `UPDATE` | añadir eventos con versión esperada |
+| Consultar para listar | **el mismo repositorio** | otro camino: [proyecciones](/event-sourcing/proyecciones) |
+| Tamaño de la interfaz | 5 métodos | 2 métodos |
+| Riesgo de agregado a medias | real, hay que acordarse del `Include` | **imposible por construcción** |
+
+**Por qué importa:** la fila de "consultar para listar" es la interesante. En Notifications el repositorio hace las dos cosas —escribir y listar— y por eso su interfaz crece por parámetros. En Rentals las lecturas se fueron a otro sitio, y el repositorio se quedó con **una sola responsabilidad**. La segunda forma envejece mejor, y no porque Marten sea mejor: porque el modelo obligó a separarlas.
+
+## Idea 3 · Un método, tres garantías distintas
+
+<Code
+    code={whole(unitOfWork)}
+    lang="csharp"
+    title="Shared/Application.Shared/Abstractions/IUnitOfWork.cs"
+/>
+
+Un método. Es lo más pequeño que se puede escribir, y aun así es lo que permite que un handler funcione igual en los tres servicios sin enterarse de nada.
+
+Lo fascinante es que detrás hay **tres implementaciones que garantizan cosas diferentes**:
+
+<Code
+    code={span(martenUow, 'internal sealed class MartenUnitOfWork', '}')}
+    lang="csharp"
+    title="Rentals · Infrastructure/Persistence/MartenUnitOfWork.cs"
+/>
+
+En Rentals, confirmar escribe los eventos pendientes **y** las vistas que se actualizan en línea, en una sola transacción de PostgreSQL.
+
+<Code
+    code={whole(outboxUow)}
+    lang="csharp"
+    title="Identity · Infrastructure/Persistence/OutboxUnitOfWork.cs"
+    mark={['await _outbox.SaveChangesAndFlushAsync(ct);']}
+/>
+
+En Identity, confirmar guarda el dato **y el mensaje saliente** juntos — así no puede existir un usuario del que nadie se enteró. Nótese que no llama a `SaveChanges` del `DbContext`: llama al outbox, que hace las dos cosas.
+
+Y en Notifications, la implementación es el propio `DbContext`: la clase se declara `: DbContext(options), IUnitOfWork` y ya cumple el contrato, porque `SaveChangesAsync` tiene exactamente esa firma.
+
+**Por qué importa:** la capa de aplicación de los tres servicios escribe la misma línea final, y esa línea significa tres cosas distintas. Eso es exactamente lo que compra una abstracción: que quien la usa no tenga que saber cuál le tocó.
+
+## Cómo encajan las dos piezas
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 300" role="img" aria-labelledby="repoTitle">
+        <title id="repoTitle">Quién declara, quién implementa y quién confirma</title>
+        <defs>
+            <marker id="rpArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="30" y="30" width="230" height="110" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="145" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Domain</text>
+        <text x="145" y="76" text-anchor="middle" font-size="8.5" fill="#334155">declara lo que necesita</text>
+        <rect x="48" y="86" width="194" height="30" rx="6" fill="#fff" stroke="#cbd5e1" />
+        <text x="145" y="105" text-anchor="middle" font-size="8" font-family="monospace" fill="#475569">IListingRepository</text>
+        <text x="145" y="130" text-anchor="middle" font-size="8" fill="#64748b" font-style="italic">0 paquetes NuGet</text>
+
+        <rect x="315" y="30" width="230" height="110" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="430" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">Application</text>
+        <text x="430" y="76" text-anchor="middle" font-size="8.5" fill="#334155">usa las dos abstracciones</text>
+        <text x="430" y="96" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">_listings.AppendAsync(...)</text>
+        <text x="430" y="112" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">_uow.SaveChangesAsync(ct)</text>
+        <text x="430" y="132" text-anchor="middle" font-size="8" fill="#64748b" font-style="italic">no sabe qué hay debajo</text>
+
+        <rect x="600" y="30" width="230" height="110" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="715" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">Infrastructure</text>
+        <text x="715" y="76" text-anchor="middle" font-size="8.5" fill="#334155">cumple el contrato ajeno</text>
+        <text x="715" y="96" text-anchor="middle" font-size="8" font-family="monospace" fill="#14532d">MartenListingRepository</text>
+        <text x="715" y="112" text-anchor="middle" font-size="8" font-family="monospace" fill="#14532d">MartenUnitOfWork</text>
+        <text x="715" y="132" text-anchor="middle" font-size="8" fill="#64748b" font-style="italic">aquí vive la tecnología</text>
+
+        <line x1="598" y1="85" x2="550" y2="85" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#rpArrow)" />
+        <line x1="313" y1="85" x2="265" y2="85" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#rpArrow)" />
+        <text x="430" y="20" text-anchor="middle" font-size="8" fill="#64748b">las referencias de proyecto apuntan hacia la izquierda</text>
+
+        <rect x="30" y="180" width="800" height="90" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="430" y="204" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">El mismo SaveChangesAsync, tres garantías</text>
+        <text x="180" y="228" text-anchor="middle" font-size="8.5" fill="#334155">Notifications</text>
+        <text x="180" y="244" text-anchor="middle" font-size="8" fill="#64748b">UPDATE de las filas</text>
+        <text x="430" y="228" text-anchor="middle" font-size="8.5" fill="#334155">Rentals</text>
+        <text x="430" y="244" text-anchor="middle" font-size="8" fill="#64748b">eventos + vistas, una transacción</text>
+        <text x="690" y="228" text-anchor="middle" font-size="8.5" fill="#334155">Identity</text>
+        <text x="690" y="244" text-anchor="middle" font-size="8" fill="#64748b">dato + mensaje saliente, una transacción</text>
+        <text x="430" y="263" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">el handler escribe la misma línea en los tres</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Lo importante del dibujo son las dos flechas de arriba: apuntan al revés de lo que dicta la
+        intuición, y por eso el dominio puede no saber que existe una base de datos.
+    </p>
+</div>
+
+## El recorrido: confirmar una visita
 
 <ol class="ddd-steps">
-    <li>
-        <strong><code>ApiService/Endpoints/TriggerEndpoints.cs:135</code></strong> —
-        <code>AddConfigurationAsync</code> construye el comando y llama al handler. ASP.NET ya ha creado un
-        <em>scope</em> de DI para esta petición; todo lo que venga después comparte el mismo
-        <code>NotificationDbContext</code>.
-    </li>
-    <li>
-        <strong><code>Application/…/AddConfiguration/AddConfigurationHandler.cs:22</code></strong> —
-        <code>_triggers.GetByIdAsync(cmd.TriggerId, ct)</code>. Baja a
-        <code>NotificationTriggerRepository.cs:11-14</code>, que hace
-        <code>.Include(t =&gt; t.Configurations).SingleOrDefaultAsync(...)</code>. El
-        <code>Include</code> es imprescindible y es una decisión del repositorio, no del handler: un
-        agregado se carga <strong>completo</strong> o no puede defender sus invariantes.
-    </li>
-    <li>
-        <strong><code>AddConfigurationHandler.cs:25</code></strong> —
-        <code>_templates.GetByIdAsync(...)</code>. Segundo repositorio, <em>mismo</em>
-        <code>DbContext</code>. Ambos agregados quedan bajo seguimiento del mismo change tracker.
-    </li>
-    <li>
-        <strong><code>AddConfigurationHandler.cs:28-34</code></strong> — reglas que cruzan dos agregados
-        (plantilla habilitada, canal coincidente) y que por eso viven en el handler, no en el dominio.
-        Lanzan <code>AppValidationException</code> → <strong>400</strong>.
-    </li>
-    <li>
-        <strong><code>Domain/Triggers/NotificationTrigger.cs:37</code></strong> —
-        <code>trigger.AddConfiguration(template.Id, cmd.Channel)</code>. Aquí sí manda el dominio:
-        <code>EnsureChannelIsFree</code> y, si pasa, la nueva configuración se añade a la colección privada.
-        <strong>Ningún repositorio se entera.</strong> Nadie llama a <code>Update</code> ni a
-        <code>Attach</code>; el objeto ya está siendo observado.
-    </li>
-    <li>
-        <strong><code>AddConfigurationHandler.cs:38</code></strong> —
-        <code>await _uow.SaveChangesAsync(ct)</code>. EF recorre el change tracker, encuentra un
-        <code>NotificationConfiguration</code> nuevo, genera el <code>INSERT</code> y lo ejecuta
-        <strong>en una transacción</strong>. Si la petición hubiera modificado también la plantilla, iría en
-        el mismo commit.
-    </li>
-    <li>
-        <strong>Vuelta</strong> — el handler devuelve la configuración creada; el endpoint la convierte en
-        <code>201 Created</code>. Al terminar la petición, el scope se destruye y con él el
-        <code>DbContext</code>.
-    </li>
+    <li>El handler pide el agregado por la interfaz: <code>_visits.GetAsync(id, ct)</code>. No sabe si detrás hay un <code>SELECT</code> o la reproducción de un flujo.</li>
+    <li>Llama a un método de negocio del agregado, que decide y levanta un hecho.</li>
+    <li>Le entrega el agregado al repositorio: <code>AppendAsync</code>. <strong>Todavía no se ha escrito nada.</strong></li>
+    <li>Llama a <code>_uow.SaveChangesAsync(ct)</code>. Ahí se confirma todo lo acumulado durante la petición, de una vez.</li>
 </ol>
 
-<Callout kind="concepto" title="El mismo mecanismo, disparado por un mensaje en vez de por HTTP">
+El paso 3 es el que más se malinterpreta: entregar al repositorio **no es guardar**. Es apuntar la intención. Que sean dos pasos separados es lo que permite que un caso de uso toque dos agregados y los confirme juntos — o, como hace un proceso de Rentals, que cancele varias visitas en una sola transacción.
 
-Cuando el disparador es RabbitMQ, quien crea el scope es Wolverine, y `NotificationDispatchService` se resuelve dentro de él (por eso está registrado como `Scoped` en `Application/DependencyInjection.cs:76`). Todo lo demás es idéntico: repositorios y unidad de trabajo no saben si arriba había una petición HTTP o un mensaje.
-
-</Callout>
-
-## 2.5 · Qué pasaría sin los patrones
+## Qué pasaría sin el patrón
 
 Contraejemplo **hipotético**:
 
-```csharp title="Hipotético — el handler hablando con EF Core directamente"
+```csharp
 // HIPOTÉTICO — así NO está el código
-public sealed class AddConfigurationHandler(NotificationDbContext db)
+public sealed class ConfirmVisitHandler(NotificationDbContext db)   // ← el DbContext, directo
 {
-    public async Task<NotificationConfiguration> HandleAsync(AddConfigurationCommand cmd, CancellationToken ct)
+    public async Task HandleAsync(ConfirmVisitCommand cmd, CancellationToken ct)
     {
-        var trigger = await db.Triggers
-            .Include(t => t.Configurations)     // ¿y si alguien lo olvida?
-            .SingleOrDefaultAsync(t => t.Id == cmd.TriggerId, ct)
-            ?? throw new NotFoundException(nameof(NotificationTrigger), cmd.TriggerId);
-
-        var template = await db.Templates
-            .SingleOrDefaultAsync(t => t.Id == cmd.TemplateId, ct)
-            ?? throw new NotFoundException(nameof(NotificationTemplate), cmd.TemplateId);
-
-        // ... mismas reglas ...
-
-        var configuration = trigger.AddConfiguration(template.Id, cmd.Channel);
+        var visit = await db.Visits.Include(v => v.Slots).SingleAsync(v => v.Id == cmd.VisitId, ct);
+        visit.Confirm(cmd.SlotStart, DateTimeOffset.UtcNow);
         await db.SaveChangesAsync(ct);
-        return configuration;
     }
 }
 ```
 
-Lo que se pierde:
+Funciona, es más corto, y cuesta esto: **`Application` pasa a depender de EF Core**, así que el proyecto necesita el paquete; **cada handler decide su propia forma de cargar**, y el día que alguien olvide un `Include` el agregado llega a medias y sus reglas juzgan con datos falsos; y **migrar a otra persistencia deja de ser posible** sin reescribir todos los casos de uso — que es exactamente lo que Rentals hizo sin despeinarse.
 
-- **`Application` pasa a depender de EF Core**, y con él de un proveedor de base de datos. La restricción de dependencias hacia dentro deja de existir.
-- **El `Include` se convierte en responsabilidad del llamante.** El día que alguien lo olvide, `trigger.Configurations` vendrá vacío, `EnsureChannelIsFree` no encontrará conflictos y se creará una segunda configuración activa del mismo canal. El bug no es un error: es *una invariante rota en silencio*.
-- **Probar el handler exige una base de datos** (o `InMemory`, que miente sobre transacciones y consultas).
+**Y lo que se paga:** dos archivos más por agregado, un salto de indirección al leer, y la tentación permanente de ir añadiendo métodos a la interfaz hasta convertirla en un `IQueryable` con pasos extra.
 
-**Qué se paga:** ceremonia. Cada consulta nueva es un método más en la interfaz y otro en la implementación; no se puede improvisar un `Where` desde el handler, y eso a veces escuece. También hay una pérdida real de potencia — `ListAsync` acaba con cuatro y cinco parámetros de filtro (ver [la página 9](/patrones/casi-patrones), donde se propone un Specification para eso).
+## Lo que suele confundir
 
-Y conviene ser honesto con el argumento clásico: *EF Core ya implementa los dos patrones* (`DbSet` es un repositorio, `DbContext` una unidad de trabajo). Envolverlos otra vez solo se paga si de verdad quieres el dominio limpio de dependencias y tests sin base de datos. Este proyecto lo quiere y lo dice; en un CRUD sin lógica, esta capa sería burocracia.
+<Callout kind="antipatron" title="Cuatro malentendidos sobre estos dos patrones">
 
-## 2.6 · Otras apariciones en el repositorio
+**"`DbContext` ya es un Repository y un Unit of Work, así que esto sobra."** Es verdad que lo es — y esa es justo la razón de que la implementación de Notifications sea tan fina. Lo que añade el patrón no es funcionalidad: es **quién declara el contrato**. Con `DbContext` directo, lo declara EF Core; con la interfaz, lo declara el dominio.
 
-| Sitio | Variación |
-| --- | --- |
-| `Domain/Recipients/IRecipientRepository.cs:3` → `Persistence/Repositories/RecipientRepository.cs:7` | Sin `Include`: `Recipient` guarda sus atributos como columna JSON, no como entidades hijas (`RecipientConfiguration.cs:54-64`). El agregado se carga completo con una sola fila. |
-| `Domain/Templates/INotificationTemplateRepository.cs:5` | `ExistsAsync(TemplateName name, ...)` — comprobación de unicidad expresada con el value object, igual que en triggers. |
-| `Domain/Notifications/INotificationRepository.cs:3` | El más pequeño de los cuatro, y el más interesante. Ver el ejercicio. |
-| `Application/…/Sync/RecipientSyncService.cs:29-47` | Unidad de trabajo *compuesta*: el servicio no llama a `SaveChangesAsync`, delega en un handler que sí lo hace. Un único commit para toda la sincronización — el comentario de las líneas 10-16 explica el rechazo explícito de la alternativa (un comando por campo, un commit por comando). |
-| `NotificationDispatchService.cs:119-160` | La excepción del sistema: aquí *sí* hay varios commits por mensaje, uno por cada notificación registrada. Y es correcto — cada envío es un hecho independiente que debe quedar grabado aunque el siguiente falle. |
+**"Un repositorio por tabla."** No: **uno por agregado**. `NotificationConfiguration` y `TemplateVersion` son hijos y no tienen repositorio propio — se llega a ellos por su raíz. Si aparece un repositorio para un hijo, el agregado ha dejado de ser un límite.
 
-## 2.7 · Señales de alarma
+**"Poner `IQueryable` en la interfaz es más flexible."** Es la forma más rápida de anular el patrón: el llamante pasa a escribir consultas, la implementación deja de poder cambiar, y la mitad del dominio se llena de LINQ que solo una base de datos concreta entiende.
 
-- **Un método que devuelve `IQueryable`.** Convierte el repositorio en un pasaplatos y devuelve EF a la capa de aplicación por la puerta de atrás.
-- **`SaveChangesAsync` dentro del repositorio.** Mata la unidad de trabajo: cada operación pasa a ser su propia transacción y la atomicidad desaparece sin que nadie lo note.
-- **Dos `SaveChangesAsync` en un mismo handler.** Casi siempre significa que el segundo tapa un problema de orden. Si de verdad hacen falta dos commits, que sea una decisión escrita en un comentario, como en `NotificationDispatchService`.
-- **Un `Include` que falta.** El contrato "un agregado se carga entero" no está expresado en la interfaz; vive solo en la implementación. Es frágil por naturaleza y merece un vistazo en cada revisión de `Persistence/Repositories/`.
-- **La asimetría `AsNoTracking`.** `ListAsync` lo usa (`NotificationTriggerRepository.cs:32`) y `GetByIdAsync` no. Es correcto — listar es solo lectura, cargar es para modificar— pero **no está escrito en la interfaz**: nada impide que alguien mute una entidad devuelta por `ListAsync` y se pregunte por qué `SaveChangesAsync` no hace nada.
-- **Un repositorio genérico `IRepository<T>`.** Suena a ahorro y es lo contrario: obliga a que todos los agregados tengan la misma superficie. Este repositorio deliberadamente *no* lo hace, y el ejercicio muestra por qué.
-
-<Callout kind="ejercicio" title="Ejercicio">
-
-Compara las cuatro interfaces de repositorio (`Domain/Triggers/`, `Domain/Templates/`, `Domain/Recipients/`, `Domain/Notifications/`). Una de ellas **no tiene `GetByIdAsync`**.
-
-**(a)** ¿Cuál es, y qué otro método le falta también?
-
-**(b)** Explica por qué esa ausencia es *correcta* y no un hueco por rellenar. Apóyate en cómo se crean y modifican las instancias de ese agregado.
-
-**(c)** Con esa respuesta, argumenta en dos frases por qué un `IRepository<T>` genérico habría empeorado este diseño.
-
-**Verificación:** (b) debe citar los dos únicos métodos de fábrica del agregado en cuestión, y (c) debe nombrar un método concreto que ese genérico habría regalado sin necesidad.
+**"Repository sirve para poder cambiar de base de datos."** Esa justificación casi nunca se cobra, y no es la buena. La que sí se cobra todos los días es más modesta: **que el dominio y los casos de uso se puedan leer, probar y razonar sin una base de datos delante**.
 
 </Callout>
 
-<details class="surface-card">
-    <summary><strong>Ver solución</strong></summary>
-    <p>
-        <strong>(a)</strong> Es <code>INotificationRepository</code>
-        (<code>Domain/Notifications/INotificationRepository.cs:3-9</code>). Tiene exactamente dos métodos —
-        <code>ListAsync</code> y <code>AddAsync</code>— y le faltan <code>GetByIdAsync</code> y
-        <code>ExistsAsync</code>, que sí tienen los otros tres.
-    </p>
-    <p>
-        <strong>(b)</strong> Porque <code>Notification</code> es un <strong>registro inmutable de
-        entrega</strong>, no una entidad que se edite. Se crea con <code>Notification.RecordSuccess</code> o
-        <code>Notification.RecordFailure</code> (<code>Domain/Notifications/Notification.cs:32</code> y
-        <code>:58</code>) y a partir de ahí nadie la vuelve a tocar: la clase no expone ni un solo método de
-        mutación —todos sus <code>set</code> son <code>private</code>— y las dos fábricas son los únicos
-        puntos donde se asigna estado.
-    </p>
-    <p>
-        Un <code>GetByIdAsync</code> solo tiene sentido para <em>cargar un agregado y modificarlo</em>; aquí
-        nunca se modifica. Y las lecturas que existen son de consulta, no de escritura: el listado paginado
-        de <code>ListNotificationsHandler</code>, que va con <code>AsNoTracking</code>
-        (<code>NotificationRepository.cs:18</code>). La interfaz refleja el ciclo de vida real del agregado
-        —solo se escribe una vez y se lee en bloque— en lugar de ofrecer una superficie uniforme que nadie
-        pidió.
-    </p>
-    <p>
-        <strong>(c)</strong> Un <code>IRepository&lt;T&gt;</code> genérico habría dado a
-        <code>Notification</code> un <code>GetByIdAsync</code> (y probablemente un <code>Update</code> y un
-        <code>Remove</code>) que no le corresponden, invitando a que alguien "corrija" una notificación ya
-        registrada y destruya la propiedad más valiosa del log: que es un histórico fiel de lo que ocurrió.
-        El repositorio no es una capa de acceso a datos uniforme, es <strong>parte del modelo</strong>, y
-        cada agregado necesita justo los métodos que su ciclo de vida justifica — ni uno más.
-    </p>
-    <p>
-        Como comprobación adicional, mira lo que <em>sí</em> es distinto en cada interfaz:
-        <code>INotificationTriggerRepository</code> tiene <code>GetByEventKeyAsync</code>,
-        <code>INotificationTemplateRepository</code> tiene <code>ExistsAsync(TemplateName)</code> y
-        <code>IRecipientRepository</code> tiene <code>ExistsAsync(Guid)</code> —usado por
-        <code>RecipientSyncService.cs:31</code> para decidir entre crear y actualizar—. Cuatro interfaces,
-        cuatro formas distintas, cero métodos sobrantes.
-    </p>
-</details>
+## Señales de alarma en una revisión
+
+- **Un método nuevo en la interfaz que solo usa un handler.** Suele ser una consulta disfrazada; su sitio es un modelo de lectura.
+- **`Include` olvidado** en una implementación de EF: agregado a medias, reglas mintiendo.
+- **Un handler que llama a `SaveChangesAsync` dos veces.** Son dos transacciones, y la segunda puede fallar sola.
+- **La interfaz creciendo por parámetros** (`ListAsync(a, b, c, d, e...)`). Es el síntoma que la [ficha 11](/patrones/casi-patrones) propone resolver con un objeto de criterios.
+
+## Lo que esta ficha deja fuera
+
+- **Las consultas de lectura**, que en Rentals no pasan por aquí en absoluto: van contra [proyecciones](/event-sourcing/proyecciones).
+- **Cómo se reconstruye un agregado desde eventos**, que es el interior de `LoadAsync`: [Event Sourcing · Rehidratación](/event-sourcing/rehidratacion).
+- **El outbox** que esconde la unidad de trabajo de Identity: [ficha 9](/patrones/outbox).
+- **La configuración de EF Core** —mapeos, conversores, migraciones—, que es plomería y la cubre la [guía de DDD](/ddd/persistencia).
+
+<Callout kind="resumen" title="Para recordar">
+
+- La **interfaz la escribe quien la necesita** (`Domain`), no quien la implementa (`Infrastructure`).
+- Un repositorio **por agregado**, no por tabla. A los hijos se llega por su raíz.
+- Entregar al repositorio **no es guardar**: la confirmación es un paso aparte, y por eso puede abarcar varios agregados.
+- `IUnitOfWork` tiene **un método y tres garantías** distintas según el servicio.
+- La prima se cobró de verdad el día que Rentals cambió de persistencia **sin tocar `Domain`**.
+- La justificación buena no es "cambiar de base de datos": es poder leer y probar el dominio sin una.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre las ocho interfaces de repositorio del repositorio —`grep -rl "Repository" Services/*/*.Domain`— y cuenta los métodos de cada una.
+
+Vas a ver dos grupos muy separados: las de Rentals tienen dos, las de Notifications tienen cinco. Esa diferencia no es de estilo, y sabrás explicarla con la tabla de la segunda idea.
+
+**Y luego:** la [ficha 3](/patrones/comandos) mira al que llama a estas dos abstracciones — el caso de uso — y por qué aquí se escribieron sesenta y cinco a mano.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `IListingRepository` no tiene ningún método de consulta y `INotificationTriggerRepository` tiene tres. Explica la diferencia sin usar las palabras "Marten" ni "EF Core".
+2. Las tres implementaciones de `IUnitOfWork` garantizan cosas distintas. Ordénalas de la garantía más fuerte a la más débil y justifica el orden.
+3. Alguien propone añadir `Task<List<Listing>> GetByOwnerAsync(Guid ownerId, ...)` a `IListingRepository` para una pantalla nueva. Da dos razones para rechazarlo y di dónde debería ir.
+
+</Callout>
