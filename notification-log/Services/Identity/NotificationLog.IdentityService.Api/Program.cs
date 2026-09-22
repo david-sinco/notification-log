@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using NotificationLog.IdentityService.Api.Connect;
 using NotificationLog.IdentityService.Api.Endpoints;
-using NotificationLog.IdentityService.Api.Exceptions;
+using API.Shared.Exceptions;
 using NotificationLog.IdentityService.Application;
 using NotificationLog.IdentityService.Infrastructure;
 using Scalar.AspNetCore;

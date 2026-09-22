@@ -1,11 +1,13 @@
-using Application.Shared.Common;
-using Domain.Shared.Exceptions;
+﻿using Application.Shared.Common;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using Domain.Shared.Exceptions;
 
-namespace NotificationLog.RentalService.Api.Exceptions;
+namespace API.Shared.Exceptions;
 
-internal sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
+public sealed class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger) : IExceptionHandler
 {
     private readonly ILogger<GlobalExceptionHandler> _logger = logger;
 

@@ -1,6 +1,6 @@
+using API.Shared.Exceptions;
 using Microsoft.EntityFrameworkCore;
 using NotificationLog.ApiService.Endpoints;
-using NotificationLog.ApiService.Exceptions;
 using NotificationLog.NotificationService.Application;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Infrastructure;

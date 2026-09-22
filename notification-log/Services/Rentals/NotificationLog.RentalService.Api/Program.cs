@@ -1,7 +1,7 @@
+using API.Shared.Exceptions;
 using Domain.Shared.Authorization;
 using NotificationLog.RentalService.Api.Authorization;
 using NotificationLog.RentalService.Api.Endpoints;
-using NotificationLog.RentalService.Api.Exceptions;
 using NotificationLog.RentalService.Api.OpenApi;
 using NotificationLog.RentalService.Application;
 using NotificationLog.RentalService.Infrastructure;

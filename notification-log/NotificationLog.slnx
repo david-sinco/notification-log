@@ -20,6 +20,7 @@
     <Project Path="Services/Rentals/NotificationLog.RentalService.Infrastructure/NotificationLog.RentalService.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/Shared/">
+    <Project Path="Shared/API.Shared/API.Shared.csproj" Id="ad7ab09d-2640-4acc-b357-95268c08bc74" />
     <Project Path="Shared/Application.Shared/Application.Shared.csproj" Id="054d82af-aa50-4a00-b016-b605e6e355fb" />
     <Project Path="Shared/Domain.Shared/Domain.Shared.csproj" />
     <Project Path="Shared/NotificationLog.Contracts/NotificationLog.Contracts.csproj" />

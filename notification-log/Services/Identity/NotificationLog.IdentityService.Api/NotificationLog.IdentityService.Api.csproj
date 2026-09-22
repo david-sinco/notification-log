@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\..\Shared\API.Shared\API.Shared.csproj" />
     <ProjectReference Include="..\..\..\Shared\NotificationLog.ServiceDefaults\NotificationLog.ServiceDefaults.csproj" />
     <ProjectReference Include="..\NotificationLog.IdentityService.Application\NotificationLog.IdentityService.Application.csproj" />
     <ProjectReference Include="..\NotificationLog.IdentityService.Infrastructure\NotificationLog.IdentityService.Infrastructure.csproj" />
