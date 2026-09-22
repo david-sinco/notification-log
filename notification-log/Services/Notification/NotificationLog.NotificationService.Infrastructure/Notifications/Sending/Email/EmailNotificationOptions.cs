@@ -6,7 +6,7 @@ public sealed class EmailNotificationOptions
 
     public string Host { get; set; } = "localhost";
     public int Port { get; set; } = 1025;
-    public string From { get; set; } = "notificaciones@notificationlog.local";
+    public string From { get; set; } = "notificaciones@llave.local";
     public bool EnableSsl { get; set; }
     public string? Username { get; set; }
     public string? Password { get; set; }

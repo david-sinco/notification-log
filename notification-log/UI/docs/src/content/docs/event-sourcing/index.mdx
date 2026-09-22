@@ -72,7 +72,7 @@ Cuando una página de esta guía dice *"aquí esto se resuelve distinto"*, puede
 
 <Callout kind="honesto" title="Rentals está incompleto, y esta guía lo dice cada vez que toca">
 
-El portal "Llave" está en construcción. Hoy tiene tres agregados —`Listing`, `Visit`, `Owner`— y hay trabajo pendiente anotado en `notification-log/todo.md`: consultas entre interesado y propietario, favoritos, búsquedas guardadas, reportes de publicaciones.
+Rentals está en construcción. Hoy tiene tres agregados —`Listing`, `Visit`, `Owner`— y hay trabajo pendiente anotado en `notification-log/todo.md`: consultas entre interesado y propietario, favoritos, búsquedas guardadas, reportes de publicaciones.
 
 Además hay un problema real de evolución de esquema que el [módulo 11](/event-sourcing/evolucion) usa como caso de estudio: **los flujos guardados hoy no se pueden reconstruir**, porque contienen eventos de funcionalidades que ya se borraron y porque `ListingDrafted` cambió de forma.
 
@@ -95,7 +95,7 @@ Esta guía no lo esconde. Al contrario: un event store con un evento huérfano e
         <text x="120" y="46" text-anchor="middle" font-size="12" font-weight="700" fill="#475569">1 · EL TERRENO</text>
         <text x="120" y="64" text-anchor="middle" font-size="9.5" fill="#475569">¿de qué va esto?</text>
         <rect x="36" y="80" width="168" height="38" rx="8" fill="#fff" stroke="#e5e9f2" />
-        <text x="120" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">1 · El portal Llave</text>
+        <text x="120" y="97" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">1 · Arriendos: el dominio</text>
         <text x="120" y="111" text-anchor="middle" font-size="8.5" fill="#64748b">el negocio y el código</text>
         <rect x="36" y="128" width="168" height="38" rx="8" fill="#fff" stroke="#e5e9f2" />
         <text x="120" y="145" text-anchor="middle" font-size="10.5" font-weight="600" fill="#1e293b">2 · Estado vs. hechos</text>
@@ -157,7 +157,7 @@ Esta guía no lo esconde. Al contrario: un event store con un evento huérfano e
 
 | # | Módulo | Vas a aprender a... | Archivo ancla |
 | --- | --- | --- | --- |
-| 1 | [El portal Llave](/event-sourcing/dominio) | Moverte por el dominio y por el código antes de ver una sola línea de event sourcing. | `Services/Rentals/` |
+| 1 | [El dominio de arriendos](/event-sourcing/dominio) | Moverte por el dominio y por el código antes de ver una sola línea de event sourcing. | `Services/Rentals/` |
 | 2 | [Estado contra hechos](/event-sourcing/por-que) | Decidir si un dominio se beneficia de event sourcing, y cuándo no. | `Listing.cs` frente a `NotificationTrigger.cs` |
 | 3 | [El evento como hecho](/event-sourcing/eventos) | Nombrar y dar forma a un evento para que sobreviva diez años. | `Listings/Events/*.cs` |
 | 4 | [Decidir y aplicar](/event-sourcing/agregado) | Partir un agregado en las dos mitades que exige este modelo. | `Listing.cs` · `Approve` y `Apply` |
@@ -175,7 +175,7 @@ Esta guía no lo esconde. Al contrario: un event store con un evento huérfano e
 <div class="ddd-card-grid">
     <a class="ddd-card" href="/event-sourcing/dominio">
         <span class="ddd-card-num">01</span>
-        <h3>El portal Llave</h3>
+        <h3>El dominio de arriendos</h3>
         <p>Quién usa esto, qué puede pasarle a una publicación y dónde está cada carpeta.</p>
     </a>
     <a class="ddd-card" href="/event-sourcing/por-que">

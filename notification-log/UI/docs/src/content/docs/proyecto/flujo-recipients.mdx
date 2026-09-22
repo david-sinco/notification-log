@@ -8,7 +8,7 @@ sidebar:
 
 import Callout from '../../../components/Callout.astro';
 
-NotificationLog no tiene una pantalla de "crear destinatario" para uso normal — el botón de desarrollo en `/api/dev/recipients` existe solo para pruebas. En producción, los destinatarios se crean y actualizan solos, a medida que otro sistema (el que administra usuarios) informa cambios de contacto.
+Notifications no tiene una pantalla de "crear destinatario" para uso normal — el botón de desarrollo en `/api/dev/recipients` existe solo para pruebas. En producción, los destinatarios se crean y actualizan solos, a medida que otro sistema (el que administra usuarios) informa cambios de contacto.
 
 ## Paso a paso
 
@@ -35,7 +35,7 @@ NotificationLog no tiene una pantalla de "crear destinatario" para uso normal �
         <line x1="355" y1="125" x2="400" y2="125" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#recFlowArrow)" />
 
         <rect x="400" y="30" width="180" height="190" rx="10" fill="#fff7ed" stroke="#fed7aa" />
-        <text x="490" y="55" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a3412">NotificationLog</text>
+        <text x="490" y="55" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a3412">Notifications</text>
         <text x="490" y="80" text-anchor="middle" font-size="8" fill="#334155">1 · deserializa el mensaje</text>
         <text x="490" y="98" text-anchor="middle" font-size="8" fill="#334155">2 · lo traduce a tipo propio</text>
         <text x="490" y="116" text-anchor="middle" font-size="8" fill="#334155">   (UserChange)</text>
@@ -58,11 +58,11 @@ NotificationLog no tiene una pantalla de "crear destinatario" para uso normal �
 
 ### 1 · El mensaje es un snapshot completo, no un delta
 
-Cada mensaje trae **todos** los datos de contacto del usuario, no solo el campo que cambió. Eso significa que si se pierde un mensaje en el camino, el siguiente snapshot que llegue lo corrige solo — ningún destinatario queda permanentemente desincronizado por un mensaje perdido. Un email vacío en el mensaje es un valor real ("sin dato confirmado"), no "no vino" — así que NotificationLog no intenta adivinar si debe conservar el email anterior o borrarlo: siempre refleja exactamente lo que dice el último snapshot.
+Cada mensaje trae **todos** los datos de contacto del usuario, no solo el campo que cambió. Eso significa que si se pierde un mensaje en el camino, el siguiente snapshot que llegue lo corrige solo — ningún destinatario queda permanentemente desincronizado por un mensaje perdido. Un email vacío en el mensaje es un valor real ("sin dato confirmado"), no "no vino" — así que Notifications no intenta adivinar si debe conservar el email anterior o borrarlo: siempre refleja exactamente lo que dice el último snapshot.
 
 ### 2 · Un solo comando, no uno por campo
 
-Como el mensaje ya trae todo, NotificationLog no dispara un comando distinto por cada campo cambiado (uno para el email, otro para el teléfono…). Descomponerlo así rompería la atomicidad: si el tercer comando fallara, los dos anteriores ya habrían quedado guardados a medias. Un único comando aplica todos los campos sobre la misma instancia y hace un solo guardado — o entra completo, o no entra nada.
+Como el mensaje ya trae todo, Notifications no dispara un comando distinto por cada campo cambiado (uno para el email, otro para el teléfono…). Descomponerlo así rompería la atomicidad: si el tercer comando fallara, los dos anteriores ya habrían quedado guardados a medias. Un único comando aplica todos los campos sobre la misma instancia y hace un solo guardado — o entra completo, o no entra nada.
 
 ### 3 · Qué datos guarda realmente un destinatario
 

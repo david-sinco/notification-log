@@ -24,7 +24,7 @@ Cuando el código todavía no cubre un patrón —por ejemplo, un dominio que no
 
 ## De qué va el sistema
 
-NotificationLog escucha hechos de negocio publicados por otros sistemas —"un usuario se registró", "una publicación se aprobó"— y decide, según una configuración declarativa propia, si eso dispara una notificación, con qué texto y por qué canal.
+Notifications escucha hechos de negocio publicados por otros sistemas —"un usuario se registró", "una publicación se aprobó"— y decide, según una configuración declarativa propia, si eso dispara una notificación, con qué texto y por qué canal.
 
 Esa separación —*quien produce el hecho no sabe nada de plantillas ni de canales; quien notifica no sabe nada del negocio que originó el hecho*— es el hilo que conecta las cuatro partes de este tutorial.
 
@@ -132,7 +132,7 @@ Catorce módulos, cada uno con un objetivo concreto y al menos un archivo real q
     <a class="ddd-card" href="/ddd/subdominios">
         <span class="ddd-card-num">02</span>
         <h3>Subdominios</h3>
-        <p>¿Es NotificationLog core, de soporte o genérico? La respuesta decide cuánto diseño merece.</p>
+        <p>¿Es Notifications core, de soporte o genérico? La respuesta decide cuánto diseño merece.</p>
     </a>
     <a class="ddd-card" href="/ddd/bounded-context">
         <span class="ddd-card-num">03</span>

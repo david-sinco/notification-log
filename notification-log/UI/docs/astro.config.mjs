@@ -12,8 +12,8 @@ export default defineConfig({
     },
     integrations: [
         starlight({
-            title: 'NotificationLog',
-            description: 'Tutorial de DDD y arquitectura sobre un contexto de Notificaciones real.',
+            title: 'Llave',
+            description: 'Guía de DDD, event sourcing y arquitectura sobre el código real de Llave.',
             defaultLocale: 'root',
             locales: {
                 root: { label: 'Español', lang: 'es' }

@@ -1,9 +1,9 @@
 ---
-title: "El portal Llave: el negocio antes que el patrón"
+title: "Rentals: el negocio antes que el patrón"
 description: "Quién usa Rentals, qué puede pasarle a una publicación y dónde está cada carpeta. Sin event sourcing todavía."
 sidebar:
   order: 1
-  label: "1 · El portal Llave"
+  label: "1 · El dominio de arriendos"
 ---
 
 import Callout from '../../../components/Callout.astro';
@@ -25,15 +25,15 @@ pasar y quién decide, los once módulos siguientes son sintaxis.
 </p>
 
 <div class="ddd-frase">
-<strong>En una frase:</strong> "Llave" es un portal de arriendos donde un propietario publica un
+<strong>En una frase:</strong> Rentals es el contexto de arriendos de Llave: un propietario publica un
 inmueble, un moderador lo aprueba y un interesado pide verlo — y todo el servicio gira alrededor
 de esas tres cosas: la <strong>publicación</strong>, la <strong>visita</strong> y el
 <strong>propietario</strong>.
 </div>
 
-## Ya conoces el producto
+## Ya conoces el producto que modela
 
-Piensa en Idealista, Fotocasa o Airbnb, y quédate solo con dos pantallas: la del anuncio y la de "solicitar una visita". Eso es Llave.
+Piensa en Idealista, Fotocasa o Airbnb, y quédate solo con dos pantallas: la del anuncio y la de "solicitar una visita". Eso es Rentals.
 
 No hay pagos, ni contratos, ni mensajería tipo chat, ni valoraciones. Hay alguien que ofrece un inmueble y alguien que quiere verlo antes de decidir, con un moderador en medio que revisa que el anuncio no sea basura.
 
@@ -41,7 +41,7 @@ No hay pagos, ni contratos, ni mensajería tipo chat, ni valoraciones. Hay algui
 
 En un portal real, el anuncio es principalmente **contenido**: fotos, texto, precio. Se edita libremente y a nadie le importa el historial.
 
-En Llave el anuncio es principalmente un **procedimiento**: pasa por revisión, se aprueba o se rechaza con motivos, caduca al mes, se renueva, se pausa, se suspende, se reinstaura. Esa diferencia —de contenido a procedimiento— es exactamente la que hace que este dominio se beneficie de event sourcing y el catálogo de un portal cualquiera no. El [módulo 2](/event-sourcing/por-que) la desarrolla.
+En Rentals el anuncio es principalmente un **procedimiento**: pasa por revisión, se aprueba o se rechaza con motivos, caduca al mes, se renueva, se pausa, se suspende, se reinstaura. Esa diferencia —de contenido a procedimiento— es exactamente la que hace que este dominio se beneficie de event sourcing y el catálogo de un portal cualquiera no. El [módulo 2](/event-sourcing/por-que) la desarrolla.
 
 </Callout>
 
@@ -281,7 +281,7 @@ Todo lo demás es plomería alrededor de esos dos.
 
 <Callout kind="resumen" title="Para recordar">
 
-- Llave es un portal de arriendos reducido a lo esencial: **publicar, moderar, visitar**.
+- Rentals es el arriendo reducido a lo esencial: **publicar, moderar, visitar**.
 - Tres agregados: `Listing` (ocho estados, quince transiciones), `Visit` (negociación con plazos) y `Owner` (casi vacío).
 - Cuatro personas —propietario, anfitrión, interesado, moderador— y **ninguna es un agregado**: los usuarios están en Identity.
 - Los números del negocio viven en `ListingPolicy` y `VisitPolicy`.
