@@ -21,10 +21,11 @@ export default defineConfig({
             customCss: ['./src/styles/custom.css'],
             sidebar: [
                 { label: 'Proyecto', items: [{ autogenerate: { directory: 'proyecto' } }] },
-                { label: 'DDD', items: [{ autogenerate: { directory: 'ddd' } }] },
-                { label: 'Event Sourcing', items: [{ autogenerate: { directory: 'event-sourcing' } }] },
                 { label: 'Arquitectura', items: [{ autogenerate: { directory: 'arquitectura' } }] },
-                { label: 'Patrones', items: [{ autogenerate: { directory: 'patrones' } }] }
+                { label: 'Patrones', items: [{ autogenerate: { directory: 'patrones' } }] },
+                { label: 'OAuth 2.0', items: [{ autogenerate: { directory: 'oauth' } }] },
+                { label: 'DDD', items: [{ autogenerate: { directory: 'ddd' } }] },
+                { label: 'Event Sourcing', items: [{ autogenerate: { directory: 'event-sourcing' } }] }
             ]
         })
     ],

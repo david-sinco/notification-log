@@ -1,0 +1,148 @@
+---
+title: "Decisiones y deudas"
+description: "Qué se eligió a propósito y qué está a medias en la identidad de Llave — cada cosa con el archivo que la prueba y su consecuencia."
+sidebar:
+  order: 8
+  label: "8 · Decisiones y deudas"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<p class="ddd-lede">
+Llegas al código de Identity y encuentras tres cosas que en cualquier revisión levantarían la mano:
+los certificados son de desarrollo, el access token no va cifrado, y una de las tres APIs del
+sistema no comprueba absolutamente nada. La pregunta útil no es si eso está mal — es
+<strong>si está así a propósito</strong>, porque de la respuesta depende si lo arreglas esta tarde o
+si abres una discusión.
+</p>
+
+Esta página es esa respuesta, escrita. En seguridad, más que en ningún otro sitio, **una decisión sin documentar es indistinguible de un descuido**.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> casi todo lo que parece flojo aquí es una concesión de laboratorio
+con su razón — y tres cosas no lo son, están anotadas como deuda, y una de ellas no debería
+sobrevivir al primer usuario real.
+</div>
+
+## Ya conoces la distinción: es un andamio o una grieta
+
+Un andamio en una fachada es normal: está ahí a propósito, cumple una función mientras dura la obra, y todo el mundo sabe que se quita al final. Una grieta en la misma fachada es otra cosa, aunque las dos alteren la foto.
+
+Se distinguen porque **alguien lo escribió**: el andamio está en el plan de obra. En un sistema, ese plan es `todo.md` y páginas como esta.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un andamio se ve. Estas concesiones no: un certificado de desarrollo firma exactamente igual que uno real, y un sistema con la autenticación a medias **funciona perfectamente** hasta el día que importa.
+
+Por eso la tabla de abajo tiene una columna que no suele estar en los documentos de arquitectura: **qué pasa hoy** si esa deuda se materializa.
+
+</Callout>
+
+## Las decisiones, con lo que compran y lo que cuestan
+
+| # | Decisión | Se comprueba en | Qué se paga |
+| --- | --- | --- | --- |
+| 1 | **Servidor propio** con OpenIddict en vez de un proveedor | `ConnectExtensions.cs` | Operarlo: claves, certificados, disponibilidad |
+| 2 | Solo **código de autorización con PKCE obligatorio** | `ConnectExtensions.cs` · `IdentitySeeder.cs` | Dos viajes y redirecciones en vez de un formulario |
+| 3 | **Access token sin cifrar**, firmado | `DisableAccessTokenEncryption()` | El contenido es legible: no puede llevar nada sensible |
+| 4 | **Quince minutos** de vida | `SetAccessTokenLifetime` | Una ventana de daño de 15 min, y más tráfico de renovación |
+| 5 | **Una audiencia por API** | `AppHost/appsettings.json` | Cuatro puertos fijos que no se pueden descubrir por nombre |
+| 6 | **Sello de seguridad** revalidado en cada canje | `ValidateSessionHandler.cs` | Una consulta a la base en cada renovación |
+| 7 | **Login con correo o teléfono**, contraseña o código | `LoginIdentifier.cs` · `SignInWithCodeHandler.cs` | Más caminos de acceso que probar y mantener |
+| 8 | Roles y scopes en el **núcleo compartido** | `Domain.Shared/Authorization/` | Los tres servicios se acoplan a ese vocabulario |
+| 9 | **Cuentas creadas por mensaje**, sin contraseña | `CreateAccountHandler.cs` | Existe una cuenta que su dueño no pidió |
+
+<Callout kind="concepto" title="Las dos que más se discuten, con su argumento entero">
+
+**El token sin cifrar (3).** Por defecto OpenIddict cifra, y eso es más seguro. Aquí se desactiva para que el token sea un **JWT estándar** que cualquier biblioteca pueda validar — un token cifrado por OpenIddict solo lo abre OpenIddict, y eso ataría cualquier servicio futuro a esa librería. El precio es explícito y se respeta: nada sensible viaja dentro, y el sello de seguridad no sale en ningún token.
+
+**Los quince minutos (4).** Es la única palanca que existe contra un token que no se puede revocar. Bajarla aumenta el tráfico de renovación; subirla alarga la ventana en la que una cuenta bloqueada sigue operando. Quince es un valor convencional, y lo que importa es que **sea una decisión y no un valor por defecto**.
+
+</Callout>
+
+## Las deudas, con lo que pasa hoy
+
+| # | Deuda | Qué pasa hoy | Dónde está anotada |
+| --- | --- | --- | --- |
+| 1 | **Notifications no valida tokens** | Cualquiera con acceso de red a `:7506` crea disparadores, cambia plantillas y lee el registro de envíos | `todo.md` · [módulo 5](/oauth/validacion) |
+| 2 | **El panel no renueva el token** | A los quince minutos, un `401` mostrado como error genérico | `todo.md` · [módulo 6](/oauth/cliente) |
+| 3 | **Las visitas reciben `ActorId` en el cuerpo** | El cliente dice quién es él mismo, en vez de derivarlo del token | `todo.md` |
+| 4 | **Certificados de desarrollo** | Reiniciar Identity invalida todos los tokens vivos | `ConnectExtensions.cs` |
+| 5 | **Sin recuperación de contraseña** | Quien la olvide depende del código de un solo uso | `todo.md` |
+| 6 | **Réplica de verificación en Rentals** | Una copia de datos de Identity que hay que mantener sincronizada, y cuya cola ni siquiera está enlazada | `todo.md` |
+| 7 | **Sin interfaz de administración de usuarios** | Bloquear, desbloquear y asignar roles existen como API y no tienen pantalla | `todo.md` |
+
+<Callout kind="honesto" title="Las tres primeras cuentan la misma historia">
+
+No son descuidos independientes: son **pasos de una migración a medias**. El sistema está pasando de *"cada servicio se fía de lo que le digan"* a *"todo se deriva del token"*, y va servicio por servicio.
+
+Identity y Rentals ya migraron. Notifications no. Las visitas de Rentals, a medias. El panel adjunta el token pero no lo renueva.
+
+Migrar por partes es lo correcto —hacerlo de golpe en tres servicios es peor— y tiene un peligro muy concreto: **una migración a medias no se distingue de un diseño terminado**. Alguien que llegue hoy y vea `ActorId` en el cuerpo de una petición puede concluir razonablemente que así se hace aquí, y copiarlo en el siguiente endpoint.
+
+Por eso las tres están escritas en tres sitios, y por eso esta página existe.
+
+</Callout>
+
+## La única que no debería sobrevivir al primer usuario real
+
+De las siete, la número 1 es de otra categoría. Las demás son incomodidades, deudas de forma o cosas que faltan; **esa es una API de escritura sin ninguna autenticación**.
+
+Hoy no importa, porque el sistema corre en una máquina con Docker y nadie más llega a ese puerto. Y esa frase —*"nadie llega"*— es una suposición sobre la red, no una garantía del sistema. El día que esto se despliegue en cualquier sitio donde la red no sea tu salón, deja de ser cierta sin que nada avise.
+
+Lo tranquilizador es que el arreglo es pequeño: su audiencia **ya está declarada** en la configuración del orquestador, y lo que falta son las tres líneas que Rentals ya tiene ([módulo 5](/oauth/validacion)), más las políticas y un repaso a los clientes del panel que hoy no adjuntan token.
+
+## Lo que este sistema no es
+
+Conviene decirlo entero, porque casi todas las carencias que se le pueden señalar caen aquí y **no son deudas, son alcance**:
+
+- **No es un sistema de producción.** Certificados de desarrollo, secretos en el almacén local, sin rotación de claves.
+- **No tiene segundo factor.** El código de un solo uso es un método alternativo, no adicional.
+- **No federa.** No hay "entrar con Google", ni SAML, ni multi-inquilino.
+- **No está dimensionado.** Una instancia de Identity, sin caché distribuida de sesiones.
+- **No audita.** No hay registro de quién entró, desde dónde, ni de quién cambió un rol.
+
+Una deuda es algo que **el propio sistema se propuso** y no terminó. Nada de esta lista lo es.
+
+## Cómo distinguir una de otra, en cualquier código
+
+<ol class="ddd-steps">
+    <li><strong>¿Está en <code>todo.md</code>?</strong> Entonces es una deuda conocida, con su razonamiento. Arréglala.</li>
+    <li><strong>¿Hay un comentario en el código que la explique?</strong> Entonces es una decisión. Antes de cambiarla, refuta el comentario.</li>
+    <li><strong>¿Está en esta página?</strong> Mira en qué tabla cayó.</li>
+    <li><strong>¿En ninguna de las tres?</strong> Es un hallazgo — y lo primero que hay que hacer con él es <em>escribirlo</em>, aunque no lo arregles hoy.</li>
+</ol>
+
+<Callout kind="resumen" title="Para recordar">
+
+- Una decisión y una deuda **se ven igual en el código**. Lo que las distingue es que alguien las escribió.
+- Cada decisión de aquí **compra algo y paga algo**; la columna del precio es la que suele faltar.
+- Las deudas 1, 2 y 3 son **una migración a medias**, no descuidos — y por eso están documentadas en tres sitios.
+- La única grave es **Notifications sin validar**: su arreglo son unas pocas líneas y su audiencia ya existe.
+- Casi todo lo demás que "falta" es **alcance de laboratorio**, no deuda.
+- En seguridad, lo más caro no es una concesión: es una concesión **que nadie escribió**.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Haz la comprobación más incómoda de esta guía. Con el sistema arrancado, y **sin** iniciar sesión en ningún sitio:
+
+```bash
+curl -k https://localhost:7506/api/triggers
+```
+
+Te va a responder. Ese es el estado real de la deuda número 1, en una línea y sin discusión posible — y es mucho más convincente que cualquier tabla.
+
+**Y luego:** si quieres seguir, la [guía de Arquitectura](/arquitectura) cuenta cómo encaja Identity en el sistema completo, y la de [Patrones](/patrones) explica el outbox y la capa anticorrupción que aparecen aquí de pasada.
+
+</Callout>
+
+## Por dónde seguir
+
+- **[Arquitectura · Identidad](/arquitectura/identidad)** — la misma historia en dos páginas, desde el punto de vista del sistema.
+- **[Arquitectura · Decisiones](/arquitectura/decisiones)** — la lista completa de deudas del repositorio, no solo las de identidad.
+- **[Patrones · Outbox](/patrones/outbox)** y **[Adapter](/patrones/adaptador)** — los dos patrones que sostienen la creación de cuentas por mensaje.
+- **Documentación de OpenIddict** — `documentation.openiddict.com`. La biblioteca que implementa todo esto, con sus opciones y sus advertencias.
+- **RFC 6749** (OAuth 2.0), **RFC 7636** (PKCE) y la especificación de **OpenID Connect Core**. Se leen mucho mejor después de haber visto el protocolo funcionando.
+- **OAuth 2.0 Security Best Current Practice** — el documento que explica por qué los flujos *implicit* y *password* dejaron de recomendarse.

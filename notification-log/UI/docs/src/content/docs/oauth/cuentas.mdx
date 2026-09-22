@@ -1,0 +1,175 @@
+---
+title: "Cuentas que nacen por mensaje"
+description: "Registrarse no es la única forma de tener cuenta aquí: otro servicio puede pedirla, y el usuario se entera cuando le llega el código."
+sidebar:
+  order: 7
+  label: "7 · Cuentas por mensaje"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import provisioner from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/Publishers/WolverineAccountProvisioner.cs?raw';
+import accountRequest from '@code/Services/Rentals/NotificationLog.RentalService.Application/Abstractions/AccountRequest.cs?raw';
+import consumer from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/Consumers/AccountCreationRequestedHandler.cs?raw';
+import createAccount from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/CreateAccount/CreateAccountHandler.cs?raw';
+import messaging from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/RabbitMqMessagingExtensions.cs?raw';
+
+<p class="ddd-lede">
+Una inmobiliaria registra a doña Marta como propietaria en el portal. Nadie le pidió que eligiera
+una contraseña, nadie rellenó el formulario de registro, y ella no ha visto jamás la pantalla de
+Identity. Dos segundos después existe su cuenta, con su rol, y puede entrar pidiendo un código a su
+teléfono.
+</p>
+
+Eso no aparece en ningún diagrama de OAuth, porque **no es OAuth**. Es el reconocimiento de que en un sistema real las cuentas no siempre nacen de un formulario: a veces alguien con autoridad da de alta a otra persona, y el protocolo de autenticación tiene que convivir con eso.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> otro servicio puede pedir que exista una cuenta mandando un mensaje,
+e Identity la crea con el identificador que le den — sin contraseña, y verificada por el canal por
+el que la pidieron.
+</div>
+
+## Ya conoces el caso: es el alta de un empleado
+
+Nadie se da de alta a sí mismo en la nómina de una empresa. Recursos Humanos crea el expediente con los datos que le pasó quien contrató, y **después** el empleado recibe unas credenciales para entrar por primera vez.
+
+El expediente existe antes que el acceso. Y el número de empleado lo decide quien da de alta, no el sistema de acceso — porque ese número ya lo está usando el contrato que se firmó antes.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En una empresa, RRHH y el sistema de acceso suelen estar acoplados. Aquí los dos servicios **no se conocen**: Rentals no llama a Identity, le deja un mensaje y sigue con lo suyo. Si Identity está caído, el mensaje espera.
+
+Y hay algo más incómodo que la analogía suaviza: durante ese intervalo existe un propietario **sin cuenta**. El sistema lo acepta, y el [módulo 8](/oauth/decisiones) explica en qué caso eso puede quedarse así para siempre.
+
+</Callout>
+
+## Idea 1 · El identificador lo decide quien pide, no quien crea
+
+<Code
+    code={whole(accountRequest)}
+    lang="csharp"
+    title="Rentals · Application/Abstractions/AccountRequest.cs"
+/>
+
+<Code
+    code={member(provisioner, 'public async Task RequestAccountAsync')}
+    lang="csharp"
+    title="Rentals · Messaging/Publishers/WolverineAccountProvisioner.cs"
+    mark={['UserId = request.UserId.ToString(),']}
+/>
+
+Fíjate en el `UserId`: es **el mismo `Guid` del propietario** que Rentals acaba de crear. No se pide uno nuevo ni se espera una respuesta con el identificador asignado.
+
+**Por qué importa:** esa coincidencia deliberada es lo que hace que las tres bases de datos del sistema hablen de la misma persona sin una sola clave foránea entre ellas. El `Recipient` de Notifications tendrá también ese `Guid` cuando le llegue su turno.
+
+Si Identity generara su propio identificador, habría que devolverlo, guardarlo en Rentals y mantener una tabla de correspondencias — o aceptar que el propietario y su cuenta son dos cosas sin relación. La decisión de **fijar la identidad en el origen** ahorra las dos cosas.
+
+## Idea 2 · La frontera valida antes de dejar entrar nada
+
+<Code
+    code={whole(consumer)}
+    lang="csharp"
+    title="Identity · Infrastructure/Messaging/Consumers/AccountCreationRequestedHandler.cs"
+/>
+
+Lo primero que hace Identity es **traducir**: el contrato protobuf se convierte en un comando propio, y por el camino se valida lo que no encaja en su vocabulario. El identificador llega como cadena y se convierte a `Guid` o revienta con un mensaje claro; los roles llegan como texto y se convierten al `enum` o revientan con el nombre del rol dentro.
+
+**Por qué importa:** es una [capa anticorrupción](/patrones/adaptador) haciendo su trabajo. Un rol que Identity no tiene se rechaza **en la frontera**, con el nombre en el mensaje — no tres capas más adentro con un `enum` en un valor imposible. Y a partir de esa línea, protobuf no vuelve a aparecer.
+
+## Idea 3 · Crear o actualizar, y por qué eso lo hace repetible
+
+<Code
+    code={member(createAccount, 'public async Task<Guid> HandleAsync')}
+    lang="csharp"
+    title="Identity · Application/Users/Commands/CreateAccount/CreateAccountHandler.cs"
+    mark={['var user = await _users.FindByIdAsync(cmd.Id, ct) ?? await _users.FindByLoginAsync(login, ct);', 'user.Confirm(login.Channel);']}
+/>
+
+Tres decisiones que conviene leer despacio:
+
+<ol class="ddd-steps">
+    <li><strong>Busca por identificador y también por identificador de acceso.</strong> Así, si esa persona ya tenía cuenta con ese correo, no se crea una segunda: se le actualiza el perfil y se le añade el rol.</li>
+    <li><strong>La cuenta nace <em>confirmada</em></strong> en el canal por el que la pidieron. Quien la solicita ya tuvo delante a la persona; exigirle además que verifique un código para existir sería redundante.</li>
+    <li><strong>No hay contraseña.</strong> La cuenta existe sin ella, y su dueño entra pidiendo un código de un solo uso ([módulo 3](/oauth/sesion)). Ponerle una contraseña que nadie eligió sería peor que no tener ninguna.</li>
+</ol>
+
+**Por qué importa la primera:** es lo que hace al consumidor **idempotente**. La mensajería entrega *al menos una vez*, así que el mismo mensaje puede llegar dos veces — y la segunda actualiza en lugar de fallar con una clave duplicada. La idempotencia aquí no es una tabla de deduplicación: es una consulta bien puesta.
+
+## Idea 4 · Y al crearla, Identity avisa a su vez
+
+<Code
+    code={span(messaging, 'opts.ListenToRabbitQueue(AccountsQueue)', '.UseProtobufSerialization();')}
+    lang="csharp"
+    title="Identity · escucha peticiones de cuenta"
+/>
+
+Identity consume `AccountCreationRequested` de una cola, y en la misma configuración publica `UserCreated` a un *exchange* de difusión — sin saber quién escucha. Hoy escucha Notifications, que crea el destinatario con **ese mismo `Guid`** y ya puede mandarle correos.
+
+Y esa publicación ocurre **en la misma transacción** que la creación del usuario, por el [outbox](/patrones/outbox) que esconde la unidad de trabajo del servicio. No puede existir un usuario del que nadie se enteró.
+
+## El recorrido completo
+
+<ol class="ddd-steps">
+    <li><strong>Rentals</strong> registra al propietario y publica <code>AccountCreationRequested</code> con su <code>Guid</code>, su correo, su teléfono y el rol <code>Propietario</code>.</li>
+    <li><strong>Identity</strong> lo consume, traduce el contrato y crea la cuenta: sin contraseña, confirmada, con el rol.</li>
+    <li>En la <strong>misma transacción</strong>, deja apuntado <code>UserCreated</code>.</li>
+    <li>El mensaje sale al <em>exchange</em>. <strong>Notifications</strong> crea el destinatario con el mismo identificador.</li>
+    <li>Doña Marta entra al panel, pide un código a su teléfono, y a partir de ahí el flujo es el de siempre: sesión en Identity, código de autorización, tokens.</li>
+</ol>
+
+El paso 5 es el que cierra el círculo: **desde ese momento es una cuenta normal**. Nada en ella recuerda que nació por mensaje, y todo lo explicado en los seis módulos anteriores se le aplica igual.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro malentendidos sobre este camino">
+
+**"Esto es un flujo de OAuth."** No lo es, y confundirlo lleva a buscarlo en la especificación. OAuth se ocupa de **cómo se consigue un token**; cómo llega a existir una cuenta es un asunto del negocio. Aquí se resuelve con mensajería.
+
+**"Una cuenta sin contraseña está a medias."** Está completa: entra con código de un solo uso, que aquí es un método de acceso de primera clase. Lo que estaría a medias es una cuenta con una contraseña que su dueño no eligió.
+
+**"Nace confirmada, así que se salta la verificación."** Se salta la que sobra. La verificación existe para probar que el canal es tuyo; quien dio de alta ya tuvo delante a la persona y su documento. Lo que no se salta es la prueba de acceso: para entrar, el código tiene que llegarle **a ella**.
+
+**"Si Identity está caído, se pierde el alta."** El mensaje espera en la cola. Lo que sí puede perderse es otro instante distinto —el de Rentals publicando después de guardar— y eso está en el [módulo 8](/oauth/decisiones).
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **La topología de colas y exchanges** completa: [Arquitectura · Mensajería](/arquitectura/mensajeria).
+- **El recorrido de punta a punta** con las tres bases de datos: [Arquitectura · Un recorrido completo](/arquitectura/recorrido).
+- **La actualización de perfil entre servicios**, que hoy no llega: `todo.md` anota que `UserCreated` es el único mensaje con el perfil completo, y que cambiar el nombre después no se propaga.
+- **La creación de cuentas desde la administración**, que aún no tiene interfaz.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Una cuenta puede nacer **de un mensaje**, no solo de un formulario. Eso no es OAuth: es negocio.
+- El **identificador lo fija quien pide**, y por eso las tres bases hablan de la misma persona sin claves foráneas.
+- La frontera **traduce y valida**: un rol desconocido se rechaza ahí, con su nombre en el mensaje.
+- El consumidor **busca antes de crear**, y así el mismo mensaje puede llegar dos veces sin daño.
+- La cuenta nace **sin contraseña y confirmada**: se entra con código de un solo uso.
+- Identity avisa a su vez, en la **misma transacción**, y Notifications crea el destinatario con el mismo `Guid`.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Con el sistema arrancado, registra un propietario desde el panel de Rentals con un correo que no exista. Después:
+
+1. Mira en DbGate la tabla `AspNetUsers` de la base `identity`: ahí está la cuenta nueva, sin contraseña.
+2. Compara su identificador con el del propietario en `rentals.mt_events`. **Son el mismo.**
+3. Intenta entrar con ese correo pidiendo un código, y recógelo en Buggregator (`localhost:8000`).
+
+En cinco minutos habrás recorrido los siete módulos de esta guía con una cuenta que tú mismo hiciste nacer por mensaje.
+
+**Y luego:** el [módulo 8](/oauth/decisiones) cierra la guía con lo que está a propósito y lo que está a medias, cada cosa con su consecuencia.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `CreateAccountHandler` busca por identificador **y** por identificador de acceso. Describe un escenario real en el que la segunda búsqueda evita crear una cuenta duplicada.
+2. La cuenta nace confirmada. Escribe el argumento a favor y el argumento en contra, y di qué dato tendría que cambiar para que la balanza se invirtiera.
+3. Sigue el mismo `Guid` por las tres bases de datos del sistema y anota en qué tabla aparece cada vez y con qué significado.
+
+</Callout>

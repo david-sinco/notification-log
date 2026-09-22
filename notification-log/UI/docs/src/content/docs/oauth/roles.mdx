@@ -1,0 +1,186 @@
+---
+title: "Los cuatro papeles"
+description: "Quién autentica, quién pide, quién verifica y quién es dueño de la cuenta — y qué pieza de este repositorio hace cada cosa."
+sidebar:
+  order: 1
+  label: "1 · Los cuatro papeles"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import connect from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectExtensions.cs?raw';
+import scopes from '@code/Shared/Domain.Shared/Authorization/OidcScopes.cs?raw';
+import appHostSettings from '@code/NotificationLog.AppHost/appsettings.json?raw';
+
+<p class="ddd-lede">
+La documentación de OAuth está llena de frases como <em>"el cliente solicita al servidor de
+autorización un token para acceder al servidor de recursos en nombre del propietario del
+recurso"</em>. Es exacta y no significa nada la primera vez: cuatro sustantivos abstractos en una
+sola oración. Lo peor es que uno de ellos —<em>cliente</em>— no significa lo que significa en
+cualquier otra conversación técnica.
+</p>
+
+Todo se vuelve fácil en cuanto los cuatro papeles tienen cara. En este repositorio la tienen, y son piezas que ya conoces.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> son cuatro papeles, no cuatro programas — una misma persona es
+siempre el dueño, y una misma aplicación puede ser cliente de un servicio y servidor de recursos
+para otro.
+</div>
+
+## Ya conoces el reparto: es un hotel
+
+Tú eres el **huésped**: la habitación es tuya mientras dure la estancia. En **recepción** comprueban tu identidad una vez, al llegar, y te dan una **tarjeta**. Las **puertas** —la habitación, el gimnasio, el parking— leen la tarjeta y abren o no abren, sin llamar a recepción ni saber quién eres.
+
+Y hay una quinta figura que es la que más cuesta: si has reservado por una agencia, **la agencia no es el huésped**. Actúa en tu nombre, tiene sus propias credenciales frente al hotel, y nunca conoce tu documento de identidad. Esa agencia es lo que OAuth llama *cliente*.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+La tarjeta del hotel se desactiva desde recepción. Un token firmado **no**: vale hasta que caduca. Por eso aquí caduca en quince minutos y hay una comprobación extra al renovarlo ([módulo 4](/oauth/token)).
+
+Y las puertas de un hotel están todas en el mismo edificio. Aquí cada "puerta" es un servicio distinto que se despliega por su cuenta — y una de ellas, hoy, **no lee la tarjeta**.
+
+</Callout>
+
+## Los cuatro, con nombre y apellido
+
+| Papel en el estándar | Qué hace | Quién es aquí |
+| --- | --- | --- |
+| **Resource owner** — dueño del recurso | Es la persona dueña de los datos, y quien autoriza | El usuario que entra al panel |
+| **Client** — cliente | La aplicación que pide el token **en su nombre** | El panel (`web`) y Scalar (`scalar`) |
+| **Authorization server** — servidor de autorización | Autentica y emite tokens | **Identity**, en `:7191` |
+| **Resource server** — servidor de recursos | Verifica el token y sirve datos | **Rentals**, en `:7057` |
+
+**Por qué importa la segunda fila:** *cliente* no significa "el navegador", ni "la persona", ni "quien consume mi API". Significa **la aplicación registrada que solicita tokens**. En este sistema hay exactamente dos, están registrados en la base de Identity con su identificador, y uno de ellos tiene secreto ([módulo 6](/oauth/cliente)).
+
+## Idea 1 · Una sola pieza conoce las contraseñas
+
+<Code
+    code={span(connect, 'services.AddOpenIddict()', 'options.DisableAccessTokenEncryption();')}
+    lang="csharp"
+    title="Identity · Api/Connect/ConnectExtensions.cs"
+    mark={['options.SetIssuer(new Uri(oidc.Issuer));']}
+/>
+
+Ahí está declarado el servidor de autorización: tres endpoints, un flujo permitido y un emisor.
+
+Y lo importante es lo que implica para las otras piezas: **ni el panel ni Rentals ven nunca una contraseña**. El panel te manda a Identity y recibe de vuelta un código; Rentals recibe un token ya emitido. La superficie donde una credencial puede filtrarse se reduce a un servicio.
+
+**Por qué importa:** es el argumento entero a favor de separar los papeles. Si cada API autenticara, cada API tendría que hacer bien el hash de contraseñas, el bloqueo por intentos fallidos y la recuperación de cuenta. Aquí eso se escribe una vez.
+
+## Idea 2 · El mismo servicio puede tener dos papeles a la vez
+
+Mira el final de ese mismo archivo:
+
+<Code
+    code={span(connect, '.AddValidation(options =>', '});')}
+    lang="csharp"
+    title="Identity · se valida a sí mismo"
+    mark={['options.UseLocalServer();']}
+/>
+
+Identity **también es servidor de recursos**: tiene su propia API de usuarios (`/api/users`), y para protegerla añade la parte de validación. Como el emisor es él mismo, no necesita descargar nada: `UseLocalServer()` le dice que use sus propias claves.
+
+**Por qué importa:** los cuatro papeles son **roles, no aplicaciones**. Una misma pieza puede emitir tokens y consumirlos; el panel es cliente de Identity y, a la vez, servidor de cara al navegador. Pensarlos como cajas fijas es lo que lleva a preguntas sin salida del tipo *"¿pero entonces el panel qué es?"*.
+
+## Idea 3 · El scope dice para qué; la audiencia, para quién
+
+Es la distinción que más cuesta, y aquí se ve en dos archivos.
+
+<Code
+    code={whole(scopes)}
+    lang="csharp"
+    title="Shared/Domain.Shared/Authorization/OidcScopes.cs"
+/>
+
+Un **scope** es un permiso que el cliente solicita: *"quiero un token que sirva para Rentals"*. Viaja dentro del token como una lista.
+
+<Code
+    code={span(appHostSettings, '"Oidc": {', '"Notifications": "https://localhost:7506"')}
+    lang="json"
+    title="AppHost/appsettings.json · el emisor y las tres audiencias"
+/>
+
+Una **audiencia** es quién debe aceptar ese token, y aquí es la URL de cada API. Rentals rechaza cualquier token cuya audiencia no sea la suya, aunque la firma sea válida y el usuario exista.
+
+| | Scope | Audiencia |
+| --- | --- | --- |
+| Responde a | ¿Para **qué** sirve? | ¿**Quién** lo acepta? |
+| Lo pide | El cliente, al autenticarse | Nadie: se deriva del scope |
+| Se comprueba en | La política de autorización | El validador del token |
+| Si no cuadra | `403`: autenticado, sin permiso | `401`: el token no es para ti |
+
+**Por qué importa:** sin audiencias, un token obtenido para el panel serviría para llamar a **cualquier** API del sistema, incluidas las que no estaban previstas. Con audiencias, cada API solo acepta lo que se emitió pensando en ella.
+
+## Idea 4 · Y hay un quinto papel que el estándar no nombra
+
+El **usuario final no es el único que puede provocar que exista una cuenta**. En este sistema, Rentals registra un propietario y eso crea una cuenta en Identity, sin que nadie rellene un formulario.
+
+Ese camino no es OAuth: es mensajería entre servicios ([módulo 7](/oauth/cuentas)). Pero conviene saber desde ya que existe, porque rompe la intuición de que "usuario" y "alguien que se registró" son lo mismo.
+
+## El recorrido: los cuatro papeles en una sola operación
+
+Un moderador aprueba una publicación desde el panel:
+
+<ol class="ddd-steps">
+    <li><strong>La persona</strong> pulsa el botón. Es la dueña de la sesión y quien autorizó al cliente, hace rato.</li>
+    <li><strong>El cliente</strong> —el panel— tiene guardado un token que pidió en su nombre, y lo adjunta.</li>
+    <li><strong>El servidor de recursos</strong> —Rentals— comprueba la firma, el emisor y que la audiencia sea la suya.</li>
+    <li>Después mira el <strong>scope</strong> (¿este token sirve para Rentals?) y el <strong>rol</strong> (¿es moderador?).</li>
+    <li><strong>El servidor de autorización</strong> —Identity— <strong>no participa</strong>. No se le llama, no se entera, y podría estar apagado.</li>
+</ol>
+
+El paso 5 es el que resume el reparto. Identity trabaja **una vez cada quince minutos**; el resto del tiempo el sistema funciona con lo que ya emitió.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco confusiones, en orden de frecuencia">
+
+**"Cliente es quien consume mi API."** En OAuth, cliente es **la aplicación registrada que pide tokens**. Rentals consume tokens y no es un cliente: es un servidor de recursos. El panel no expone ninguna API de negocio y sí es cliente.
+
+**"OAuth sirve para autenticar."** OAuth 2.0 es **autorización**: cómo consigues y usas un token. Quién eres lo añade **OpenID Connect** encima, con el *id token* y el scope `openid`. Usar OAuth a secas para saber quién es alguien es el error clásico del tema.
+
+**"Scope y rol son lo mismo."** El scope lo pide **el cliente** y limita para qué sirve el token; el rol es **del usuario** y viaja como claim. Un administrador que entre por un cliente sin el scope `rentals` no puede tocar Rentals, y eso es correcto.
+
+**"El token lo emite quien lo recibe."** Lo emite Identity y lo recibe Rentals, que **nunca** lo genera. Por eso Rentals no necesita clave privada: le basta con la pública del emisor.
+
+**"Si Identity se cae, se cae todo."** Se cae el login y la renovación. Quien ya tenga un token válido sigue trabajando hasta que caduque — quince minutos de gracia que existen precisamente por este reparto.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo se consigue el token**, que es el baile de redirecciones del [módulo 2](/oauth/flujo).
+- **Qué lleva dentro** y cómo se decide qué claim viaja: [módulo 4](/oauth/token).
+- **Los otros flujos del estándar** —máquina a máquina, dispositivos— que este sistema no usa.
+- **El consentimiento**, esa pantalla de "¿autorizas a esta app a…?". Aquí los dos clientes son propios y está configurado como implícito, así que no aparece nunca.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Cuatro papeles: **dueño** (la persona), **cliente** (la app que pide), **servidor de autorización** (Identity) y **servidor de recursos** (Rentals).
+- Son **roles, no aplicaciones**: Identity emite tokens y además valida los suyos.
+- Una sola pieza conoce las contraseñas. Las demás solo verifican firmas.
+- **Scope** = para qué sirve. **Audiencia** = quién lo acepta. Fallan con códigos distintos: `403` y `401`.
+- Identity **no participa** en una llamada autorizada. Podría estar apagado.
+- Hay un camino por el que nace una cuenta sin que nadie se registre, y no es OAuth.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Coge el token que pegaste en jwt.io y localiza tres campos: `iss`, `aud` y `scope`.
+
+El primero te dice quién lo emitió, el segundo a quién se lo emitió y el tercero para qué sirve. Con esos tres valores puedes explicar los cuatro papeles de esta página sin mirar la tabla — y si alguno te sorprende, ahí está la pregunta que vale la pena perseguir.
+
+**Y luego:** el [módulo 2](/oauth/flujo) responde lo que esta página ha dado por hecho: cómo llegó ese token a manos del panel sin que el panel viera nunca tu contraseña.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. El panel es cliente de Identity y servidor de cara al navegador. Nombra otra pieza del sistema con dos papeles y di cuáles.
+2. Un token emitido con el scope `identity` llega a Rentals. ¿Qué falla primero: la audiencia o la política? ¿Con qué código responde cada caso?
+3. Notifications tiene audiencia declarada en la configuración y no la usa. Según la tabla de los cuatro papeles, ¿qué papel está sin cubrir y qué se puede hacer hoy contra esa API?
+
+</Callout>

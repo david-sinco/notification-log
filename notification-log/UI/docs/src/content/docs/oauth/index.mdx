@@ -1,0 +1,229 @@
+---
+title: "OAuth 2.0 y OpenID Connect, con el servidor que los implementa"
+description: "Ocho módulos sobre cómo Llave autentica y autoriza: un servidor OIDC propio, tres audiencias y dos cookies, explicados con el código de Identity."
+sidebar:
+  order: 0
+  label: "Introducción"
+---
+
+import Callout from '../../../components/Callout.astro';
+
+<p class="ddd-lede">
+Tres APIs necesitan saber quién les está hablando. La respuesta obvia —cada una con su tabla de
+usuarios y su cookie— se rompe en cuanto lo piensas dos veces: tres contraseñas por persona, tres
+sitios donde hacerlas bien, tres formularios de recuperación, y ninguna forma de que una llamada
+del panel a Rentals lleve consigo <em>quién</em> la originó. Y si mañana hay una app móvil, cuatro.
+</p>
+
+La salida no es compartir la tabla de usuarios. Es reconocer que **autenticar y autorizar son dos trabajos distintos**, dárselos a piezas distintas, y usar para ello un estándar que ya resolvió los detalles difíciles hace quince años.
+
+<div class="ddd-frase">
+<strong>La idea entera:</strong> un servicio se dedica a comprobar quién eres y emite un documento
+firmado con vencimiento; los demás <strong>verifican la firma</strong> y deciden qué te dejan hacer,
+sin conocer tu contraseña y sin preguntarle nada a nadie.
+</div>
+
+## Ya conoces el reparto: es un pasaporte con visados
+
+Una sola oficina expide tu pasaporte. Para expedirlo te pide pruebas —documentos, huellas, lo que haga falta— y ese trámite ocurre **una vez**.
+
+Después, cada país al que viajas mira el pasaporte y **no llama a la oficina que lo expidió**: comprueba el sello, la fecha de caducidad y el visado que corresponde a ese país. La oficina no se entera de tus viajes, y los países no saben nada de tus huellas.
+
+Eso es exactamente el reparto de OAuth 2.0: **un emisor, muchos verificadores**, y un documento que viaja contigo.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un pasaporte se puede retirar. Un token firmado **no se puede revocar**: vale hasta que caduca, y por eso aquí caduca en quince minutos. Este sistema añade además una comprobación extra en cada renovación, y es una de las ideas del [módulo 4](/oauth/token).
+
+Y un visado es un sello en el mismo documento. Aquí el "visado" son dos cosas separadas —el **scope**, que dice para qué sirve el token, y la **audiencia**, que dice quién debe aceptarlo— y confundirlas es el error más común del tema.
+
+</Callout>
+
+## El vocabulario mínimo
+
+Nueve palabras se repiten en todas las páginas. Cada una se presenta a fondo en su módulo; esta lista está para que ninguna te pille de sorpresa.
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">OAuth 2.0</span><span class="arrow">→</span><span>El estándar de <strong>autorización</strong>: cómo se consigue y se usa un token de acceso.</span></div>
+<div class="term-pair"><span class="biz">OpenID Connect</span><span class="arrow">→</span><span>La capa de <strong>autenticación</strong> encima de OAuth: además del acceso, dice quién eres.</span></div>
+<div class="term-pair"><span class="biz">Servidor de autorización</span><span class="arrow">→</span><span>Quien autentica y emite tokens. Aquí, el servicio Identity.</span></div>
+<div class="term-pair"><span class="biz">Servidor de recursos</span><span class="arrow">→</span><span>La API que verifica el token y sirve datos. Aquí, Rentals.</span></div>
+<div class="term-pair"><span class="biz">Cliente</span><span class="arrow">→</span><span>La aplicación que pide el token en tu nombre. Aquí, el panel y Scalar.</span></div>
+<div class="term-pair"><span class="biz">Scope</span><span class="arrow">→</span><span><em>Para qué</em> sirve el token: <code>identity</code>, <code>rentals</code>, <code>notifications</code>.</span></div>
+<div class="term-pair"><span class="biz">Audiencia</span><span class="arrow">→</span><span><em>Quién</em> debe aceptarlo. Aquí, la URL de cada API.</span></div>
+<div class="term-pair"><span class="biz">Claim</span><span class="arrow">→</span><span>Cada dato afirmado dentro del token: el sujeto, el nombre, los roles.</span></div>
+<div class="term-pair"><span class="biz">PKCE</span><span class="arrow">→</span><span>La prueba que impide que un código interceptado le sirva a otro.</span></div>
+</div>
+
+## Por qué un servidor propio y no un proveedor
+
+Es la primera pregunta razonable: existen Auth0, Entra ID, Keycloak. Aquí hay un servidor construido con **OpenIddict**, una biblioteca que implementa los estándares dentro de tu propia aplicación.
+
+| | Proveedor externo | Servidor propio (lo que hay) |
+| --- | --- | --- |
+| Tiempo hasta el primer login | Horas | Días |
+| Operación | De otro | **Tuya**: certificados, claves, disponibilidad |
+| Modelo de usuario | El suyo, con extensiones | **El tuyo**, con sus reglas de negocio |
+| Qué se aprende | A configurar un panel | **Cómo funciona el protocolo** |
+
+Para un producto real, la columna de la izquierda gana casi siempre. Para este repositorio gana la derecha por la última fila: **el objetivo es ver el protocolo por dentro**, y un proveedor lo esconde justo donde está lo interesante.
+
+Y hay una razón que también valdría en producción: el login de aquí no es estándar. Se puede entrar con correo **o con teléfono**, con contraseña **o con un código de un solo uso**, y crear la cuenta exige aceptar el envío de notificaciones. Eso son reglas de negocio, y viven mejor en un servicio propio.
+
+## El sistema, de un vistazo
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 340" role="img" aria-labelledby="oauthMapTitle">
+        <title id="oauthMapTitle">Quién autentica, quién verifica y qué viaja entre ellos</title>
+        <defs>
+            <marker id="oaArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="40" width="150" height="80" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="95" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">La persona</text>
+        <text x="95" y="84" text-anchor="middle" font-size="8" fill="#334155">dueña de la cuenta</text>
+        <text x="95" y="100" text-anchor="middle" font-size="8" fill="#64748b">escribe su clave una vez</text>
+
+        <line x1="172" y1="80" x2="206" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#oaArrow)" />
+
+        <rect x="208" y="30" width="180" height="100" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="298" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">El cliente</text>
+        <text x="298" y="74" text-anchor="middle" font-size="8" fill="#334155">panel (web) · Scalar</text>
+        <text x="298" y="90" text-anchor="middle" font-size="8" fill="#334155">pide el token en tu nombre</text>
+        <text x="298" y="110" text-anchor="middle" font-size="8" fill="#4338ca" font-style="italic">nunca ve tu contraseña</text>
+
+        <line x1="390" y1="80" x2="424" y2="80" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#oaArrow)" />
+
+        <rect x="426" y="20" width="200" height="120" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="526" y="44" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Identity :7191</text>
+        <text x="526" y="64" text-anchor="middle" font-size="8" fill="#334155">servidor de autorización</text>
+        <text x="526" y="80" text-anchor="middle" font-size="8" fill="#334155">/connect/authorize</text>
+        <text x="526" y="96" text-anchor="middle" font-size="8" fill="#334155">/connect/token</text>
+        <text x="526" y="112" text-anchor="middle" font-size="8" fill="#334155">/connect/endsession</text>
+        <text x="526" y="130" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">el único que sabe tu clave</text>
+
+        <path d="M526 144 Q 526 180 300 180" fill="none" stroke="#16a34a" stroke-width="1.5" marker-end="url(#oaArrow)" />
+        <text x="410" y="174" text-anchor="middle" font-size="8" fill="#14532d">token firmado · 15 min</text>
+
+        <rect x="208" y="196" width="180" height="60" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="298" y="218" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">El cliente lo guarda</text>
+        <text x="298" y="238" text-anchor="middle" font-size="8" fill="#334155">y lo adjunta en cada llamada</text>
+
+        <line x1="390" y1="226" x2="424" y2="226" stroke="#16a34a" stroke-width="1.5" marker-end="url(#oaArrow)" />
+
+        <rect x="426" y="176" width="200" height="50" rx="10" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="526" y="196" text-anchor="middle" font-size="9" font-weight="700" fill="#9d174d">Rentals :7057</text>
+        <text x="526" y="214" text-anchor="middle" font-size="8" fill="#334155">verifica firma y audiencia</text>
+
+        <rect x="426" y="234" width="200" height="50" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <text x="526" y="254" text-anchor="middle" font-size="9" font-weight="700" fill="#991b1b">Notifications :7506</text>
+        <text x="526" y="272" text-anchor="middle" font-size="8" fill="#991b1b">todavía no verifica nada</text>
+
+        <rect x="660" y="176" width="200" height="108" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="760" y="198" text-anchor="middle" font-size="9" font-weight="700" fill="#475569">Lo que NO ocurre</text>
+        <text x="760" y="218" text-anchor="middle" font-size="8" fill="#334155">Rentals no llama a Identity</text>
+        <text x="760" y="234" text-anchor="middle" font-size="8" fill="#334155">para validar un token</text>
+        <text x="760" y="256" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">comprueba la firma</text>
+        <text x="760" y="270" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">con la clave pública</text>
+
+        <text x="440" y="318" text-anchor="middle" font-size="9" fill="#64748b">Una sola pieza conoce las contraseñas. Las demás solo saben verificar una firma.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        La caja roja no es un error del dibujo: es una deuda real del repositorio, y el
+        <a href="/oauth/decisiones">módulo 8</a> la trata con su consecuencia.
+    </p>
+</div>
+
+## Temario
+
+| # | Módulo | Vas a entender... | Archivo ancla |
+| --- | --- | --- | --- |
+| 1 | [Los cuatro papeles](/oauth/roles) | Quién es quién, y por qué confundirlos lo confunde todo. | `ConnectExtensions.cs` |
+| 2 | [El flujo de código con PKCE](/oauth/flujo) | Por qué hay dos viajes y no uno, y qué impide robar el código. | `ConnectEndpoints.cs` |
+| 3 | [La sesión y el login](/oauth/sesion) | Las dos cookies, y el login con contraseña o con código. | `SessionCookie.cs` |
+| 4 | [El token por dentro](/oauth/token) | Qué claim viaja, cuál no, y cómo se revoca lo irrevocable. | `OidcPrincipalFactory.cs` |
+| 5 | [Verificar en el otro lado](/oauth/validacion) | Cómo una API acepta un token sin llamar a nadie. | `AuthorizationExtensions.cs` |
+| 6 | [Los clientes](/oauth/cliente) | El panel y Scalar: registro, secreto y qué guarda cada uno. | `IdentityAuthenticationExtensions.cs` |
+| 7 | [Cuentas que nacen por mensaje](/oauth/cuentas) | Registrarse no es la única forma de tener cuenta aquí. | `CreateAccountHandler.cs` |
+| 8 | [Decisiones y deudas](/oauth/decisiones) | Qué es a propósito y qué está a medias, sin adornos. | `todo.md` |
+
+## Recorre la guía
+
+<div class="ddd-card-grid">
+    <a class="ddd-card" href="/oauth/roles">
+        <span class="ddd-card-num">01</span>
+        <h3>Los cuatro papeles</h3>
+        <p>Persona, cliente, servidor de autorización y de recursos — y quién es cada uno aquí.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/flujo">
+        <span class="ddd-card-num">02</span>
+        <h3>El flujo con PKCE</h3>
+        <p>Un código que viaja por el navegador y un token que nunca lo hace.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/sesion">
+        <span class="ddd-card-num">03</span>
+        <h3>La sesión y el login</h3>
+        <p>Dos cookies distintas, y una pantalla de login que no es parte del estándar.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/token">
+        <span class="ddd-card-num">04</span>
+        <h3>El token por dentro</h3>
+        <p>Qué claim va a qué token, y el dato que no sale en ninguno.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/validacion">
+        <span class="ddd-card-num">05</span>
+        <h3>Verificar sin preguntar</h3>
+        <p>Firma, emisor, audiencia y políticas por scope y por rol.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/cliente">
+        <span class="ddd-card-num">06</span>
+        <h3>Los clientes</h3>
+        <p>Uno confidencial y uno público, registrados al arrancar con un secreto generado.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/cuentas">
+        <span class="ddd-card-num">07</span>
+        <h3>Cuentas por mensaje</h3>
+        <p>Rentals registra un propietario y aparece una cuenta. Nadie rellenó un formulario.</p>
+    </a>
+    <a class="ddd-card" href="/oauth/decisiones">
+        <span class="ddd-card-num">08</span>
+        <h3>Decisiones y deudas</h3>
+        <p>Certificados de desarrollo, una API sin proteger y un token que no se renueva.</p>
+    </a>
+</div>
+
+## Cómo está escrita cada página
+
+Todas siguen el mismo recorrido: **una escena concreta** antes de cualquier definición, **la idea en una frase**, **una comparación con algo conocido** y dónde deja de servir, **tres o cuatro ideas encadenadas** con su código real y su "por qué importa", **un recorrido** de una ejecución de verdad, y al final **lo que suele confundir**, **lo que el módulo deja fuera** y **qué hacer hoy**.
+
+Los fragmentos se importan de los `.cs` reales del repositorio, así que no pueden quedar desactualizados en silencio.
+
+<Callout kind="concepto" title="Qué conviene traer, y qué no hace falta">
+
+**No hace falta** haber montado nunca un servidor de identidad, ni conocer OpenIddict, ni saber qué es un JWT. Se explican donde aparecen.
+
+**Ayuda** haber leído el [módulo de identidad de Arquitectura](/arquitectura/identidad), que cuenta la misma historia en dos páginas y desde el punto de vista del sistema. Esta guía es su versión larga, desde dentro del servicio.
+
+</Callout>
+
+## Lo que esta guía deja fuera
+
+- **Los flujos que este sistema no usa:** *client credentials* (servicio a servicio), *device code* (televisores), y los obsoletos *implicit* y *password*. Se mencionan en el [módulo 2](/oauth/flujo) solo para explicar por qué no están.
+- **La especificación al pie de la letra.** No es una lectura del RFC: es cómo se aplica aquí. Cuando una decisión se aparta de lo habitual, se dice.
+- **Federación y proveedores externos.** No hay "entrar con Google", ni SAML, ni multi-inquilino.
+- **Segundo factor.** El login con código de un solo uso se parece, y no lo es: aquí es un método de acceso, no un segundo paso.
+- **Operación en producción:** rotación de claves, certificados reales, almacenamiento de secretos. El [módulo 8](/oauth/decisiones) dice qué falta.
+
+<Callout kind="ejercicio" title="Antes del módulo 1: mira un token de verdad">
+
+Cinco minutos, y el resto de la guía deja de ser abstracto.
+
+1. Arranca el sistema y abre `https://localhost:7057/scalar`.
+2. Autentícate con el botón de OAuth y ejecuta cualquier operación.
+3. Copia el access token y pégalo en [jwt.io](https://jwt.io).
+
+Vas a ver, en claro, casi todo lo que explican los ocho módulos: el emisor, la audiencia, los scopes, tu identificador, tus roles y la fecha de caducidad. Tenlo abierto mientras lees.
+
+</Callout>

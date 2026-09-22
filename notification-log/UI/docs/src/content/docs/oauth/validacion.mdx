@@ -1,0 +1,207 @@
+---
+title: "Verificar sin preguntar"
+description: "Cómo una API acepta un token sin llamar a quien lo emitió, y dónde acaba la autenticación y empieza la autorización."
+sidebar:
+  order: 5
+  label: "5 · Verificar sin preguntar"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import rentalsAuth from '@code/Services/Rentals/NotificationLog.RentalService.Api/Authorization/AuthorizationExtensions.cs?raw';
+import roles from '@code/Shared/Domain.Shared/Authorization/UserRole.cs?raw';
+import claimsExtensions from '@code/Shared/Domain.Shared/Authorization/ClaimsPrincipalExtensions.cs?raw';
+import ownerEndpoints from '@code/Services/Rentals/NotificationLog.RentalService.Api/Endpoints/OwnerEndpoints.cs?raw';
+import notificationProgram from '@code/Services/Notification/NotificationLog.ApiService/Program.cs?raw';
+
+<p class="ddd-lede">
+Apaga Identity desde el panel de Aspire y sigue usando el portal. Las publicaciones se listan, las
+visitas se confirman, la moderación funciona. El servicio que sabe quién eres está caído y el
+sistema no se ha enterado — durante quince minutos.
+</p>
+
+Eso no es un fallo de aislamiento: es la propiedad que se compró al elegir tokens firmados. Este módulo explica cómo se consigue, y dónde termina la comprobación técnica y empieza la decisión de negocio.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> la API no pregunta si el token es bueno — comprueba la firma con la
+clave pública del emisor, que la audiencia sea la suya, y después decide con lo que el token
+afirma.
+</div>
+
+## Ya conoces el mecanismo: es un billete con holograma
+
+El revisor del tren no llama a la central para comprobar tu billete. Mira el holograma, la fecha y el trayecto: si el sello es auténtico y el trayecto es este, pasas. La central puede estar cerrada, y el tren sigue funcionando.
+
+Lo que hace posible esa autonomía es que **falsificar el sello sea imposible y comprobarlo sea trivial**. Eso es exactamente una firma asimétrica: quien firma usa una clave que solo él tiene; quien verifica usa una pública que no sirve para firmar.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un billete robado se puede poner en una lista negra que el revisor consulta. Aquí **no hay lista negra**: la verificación es puramente local, así que un token filtrado vale hasta que caduque. Esa es la contrapartida de no llamar a nadie, y el motivo de los quince minutos del [módulo 4](/oauth/token).
+
+Y el revisor comprueba una cosa; aquí se comprueban **cuatro**, y dos de ellas no son técnicas sino de negocio.
+
+</Callout>
+
+## Idea 1 · Tres líneas convierten una API en servidor de recursos
+
+<Code
+    code={span(rentalsAuth, 'services.AddOpenIddict()', '});')}
+    lang="csharp"
+    title="Rentals · Api/Authorization/AuthorizationExtensions.cs"
+    mark={['options.SetIssuer(new Uri(issuer));', 'options.AddAudiences(audience);']}
+/>
+
+Eso es todo lo que Rentals necesita para aceptar tokens. Fíjate en lo que **no** hay: ni usuarios, ni contraseñas, ni base de identidades, ni una llamada a Identity.
+
+- **`SetIssuer`** — de quién se fía. Al arrancar descarga la configuración pública de Identity, incluidas las claves de firma.
+- **`AddAudiences`** — para quién tienen que ser los tokens. Su propia URL.
+- **`UseSystemNetHttp`** — cómo hace esa descarga inicial.
+
+**Por qué importa:** la descarga de claves ocurre **una vez**, no por petición. A partir de ahí cada token se verifica con matemática local, en microsegundos y sin red. Es lo que hace posible la escena inicial.
+
+## Idea 2 · Cuatro comprobaciones, y solo las dos primeras son técnicas
+
+| # | Qué se comprueba | Si falla | Quién lo decide |
+| --- | --- | --- | --- |
+| 1 | La **firma** es del emisor esperado | `401` | El validador |
+| 2 | La **audiencia** es la mía y no ha caducado | `401` | El validador |
+| 3 | El token trae el **scope** de este servicio | `403` | Una política |
+| 4 | El usuario tiene el **rol** que pide la operación | `403` | Una política |
+
+Las dos primeras responden *"¿este papel es auténtico y es para mí?"*. Las dos últimas, *"¿y le deja hacer esto?"*. La frontera entre `401` y `403` es exactamente ahí: **401 es "no sé quién eres", 403 es "sé quién eres y no puedes"**.
+
+## Idea 3 · Las políticas nombran los permisos una sola vez
+
+<Code
+    code={span(rentalsAuth, 'services.AddAuthorizationBuilder()', '.RequireAssertion(context => context.User.IsAdministrador() || context.User.IsModerador()));')}
+    lang="csharp"
+    title="Rentals · las tres políticas del servicio"
+/>
+
+Tres políticas con nombre:
+
+- **`rentals`** — exige el scope. Es la puerta general del servicio.
+- **`Administrador`** — exige el rol.
+- **`Moderacion`** — administrador **o** moderador. Es la única que compone dos condiciones, y por eso merece existir con nombre propio.
+
+Y los endpoints solo las nombran:
+
+<Code
+    code={span(ownerEndpoints, 'group.MapGet("/", ListAsync)', '.Produces<PagedResult<OwnerDto>>();')}
+    lang="csharp"
+    title="Rentals · un endpoint que exige moderación"
+    mark={['.RequireAuthorization(AuthorizationExtensions.ModeracionPolicy)']}
+/>
+
+**Por qué importa:** cuando aparezca el rol `Cliente` que pide `todo.md`, se añade **en un archivo**. Si cada endpoint comprobara roles a mano, el mismo cambio serían veinte ediciones y una oportunidad de olvidarse en la vigésima.
+
+## Idea 4 · Los roles y scopes son vocabulario compartido
+
+<Code
+    code={whole(roles)}
+    lang="csharp"
+    title="Shared/Domain.Shared/Authorization/UserRole.cs"
+/>
+
+<Code
+    code={whole(claimsExtensions)}
+    lang="csharp"
+    title="Shared/Domain.Shared/Authorization/ClaimsPrincipalExtensions.cs"
+/>
+
+Los roles y los scopes viven en el **núcleo compartido**, no en Identity. Es la excepción deliberada a que los servicios no compartan código, y la razón es práctica: Identity los emite, Rentals los comprueba, y si cada uno tuviera su propia copia del `enum` bastaría un valor mal escrito para que un permiso no se aplicara — sin ningún error.
+
+**Por qué importa, y hay un matiz honesto:** esto es vocabulario de Identity que los demás necesitan, no infraestructura común. Funciona porque los roles son del sistema entero. El día que aparezca un rol que solo signifique algo en Rentals, ese archivo empezará a acumular conceptos que no son de todos — y ahí habrá que replantearlo.
+
+## Idea 5 · Y una API que no comprueba nada
+
+<Code
+    code={span(notificationProgram, 'var builder = WebApplication.CreateBuilder(args);', 'builder.Services.AddOpenApi();')}
+    lang="csharp"
+    title="Notifications · Program.cs — busca la autenticación"
+/>
+
+No está. No hay `AddAuthentication`, no hay validación, no hay políticas — y en el arranque tampoco hay `UseAuthentication()`. Cualquiera con acceso de red al puerto `7506` puede crear disparadores, cambiar plantillas y leer el registro de envíos.
+
+Su audiencia **sí** está declarada en la configuración del orquestador, lista para usarse. Solo falta el código que la consuma.
+
+<Callout kind="honesto" title="Por qué está así, y por qué conviene decirlo aquí">
+
+Es una migración a medias: el sistema está pasando de "cada servicio se fía de lo que le digan" a "todo se deriva del token", **servicio por servicio**. Identity y Rentals ya migraron; Notifications no.
+
+Migrar por partes es lo correcto —hacerlo de golpe en tres servicios es peor— y tiene un peligro concreto: **una migración a medias no se distingue de un diseño terminado** si no está escrita. Alguien que llegue y vea que Notifications no valida puede concluir razonablemente que aquí no se validan las APIs internas.
+
+Por eso está en `todo.md`, en [Arquitectura · Decisiones](/arquitectura/decisiones) y en el [módulo 8](/oauth/decisiones) de esta guía.
+
+</Callout>
+
+## El recorrido: una petición autorizada, paso a paso
+
+Un moderador aprueba una publicación:
+
+<ol class="ddd-steps">
+    <li>Llega <code>POST /api/moderation/{'{'}id{'}'}/review</code> con <code>Authorization: Bearer ...</code>.</li>
+    <li><strong>El validador</strong> comprueba la firma con la clave pública que descargó al arrancar. Si no cuadra: <code>401</code>, y el resto no ocurre.</li>
+    <li>Comprueba que la <strong>audiencia</strong> sea <code>https://localhost:7057</code> y que no haya caducado. Si no: <code>401</code>.</li>
+    <li>Se construye un <code>ClaimsPrincipal</code> con lo que el token afirma. <strong>A partir de aquí, el token ya no se vuelve a mirar.</strong></li>
+    <li><strong>La política</strong> <code>Moderacion</code> pregunta por los roles de ese principal. Si no: <code>403</code>.</li>
+    <li>El endpoint ejecuta el caso de uso, que toma el identificador del usuario del propio principal.</li>
+</ol>
+
+**Identity no aparece en ningún paso.** Podría estar apagado desde ayer.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre la verificación">
+
+**"El servidor de recursos consulta al de autorización."** No, y esa es la propiedad entera. Descarga las claves públicas al arrancar y después verifica localmente. Existe un endpoint estándar para preguntar —*introspection*— y aquí no se usa ni hace falta.
+
+**"401 y 403 son intercambiables."** `401` es *"no sé quién eres"*: falta el token, está mal firmado, caducó o no es para mí. `403` es *"sé quién eres y no puedes"*. Devolver `401` en el segundo caso hace que un cliente bien hecho intente renovar el token, que es justo lo que no arregla el problema.
+
+**"El scope es el rol."** El scope lo pide **el cliente** y limita para qué sirve el token; el rol es **del usuario**. Un administrador que entre por un cliente sin el scope `rentals` no puede tocar Rentals, y es correcto.
+
+**"Si el token es válido, la operación está autorizada."** Solo pasó las dos comprobaciones técnicas. Que seas el anfitrión de *esa* visita concreta no cabe en una política: eso lo comprueba el caso de uso, con el agregado cargado ([Patrones · Command/Handler](/patrones/comandos)).
+
+**"Como Notifications está detrás del panel, nadie llega a ella."** Está publicada en un puerto y no valida nada. "Nadie llega" es una suposición sobre la red, no una garantía del sistema.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Qué lleva el token** que aquí se verifica: [módulo 4](/oauth/token).
+- **Las comprobaciones de negocio** que ninguna política puede hacer —si eres el dueño de este recurso concreto—, que viven en los casos de uso.
+- **La rotación de claves.** Al ser certificados de desarrollo generados al arrancar, reiniciar Identity invalida los tokens vivos. En producción no sería así.
+- **La autorización basada en recursos** de ASP.NET Core, que permitiría llevar el "¿es tuyo?" a una política. Aquí eso vive en los handlers.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Tres líneas convierten una API en servidor de recursos. **No hay usuarios ni contraseñas** en ella.
+- Las claves se descargan **una vez, al arrancar**. Después cada verificación es local.
+- Cuatro comprobaciones: firma y audiencia (**técnicas**, `401`), scope y rol (**de negocio**, `403`).
+- Las **políticas se nombran una vez** y los endpoints solo las citan.
+- Roles y scopes están en el núcleo compartido a propósito, con un matiz que conviene vigilar.
+- **Notifications no valida nada todavía.** Su audiencia está lista y sin usar.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Provoca los dos errores a propósito, desde Scalar o con curl:
+
+1. Llama a un endpoint de Rentals **sin** cabecera de autorización → `401`.
+2. Autentícate como un usuario sin rol de moderador y llama a la cola de moderación → `403`.
+
+Ver los dos códigos seguidos, provocados por causas distintas, fija la diferencia mejor que cualquier tabla. Y después haz la tercera: para Identity desde el dashboard y repite la llamada que funcionó. Sigue funcionando.
+
+**Y luego:** el [módulo 6](/oauth/cliente) se pone en el lugar de quien pidió ese token — cómo se registra un cliente y qué guarda de lo que recibe.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Reinicia Identity con una sesión abierta en el panel y observa qué pasa con las llamadas a Rentals. Explica el resultado con lo que sabes de los certificados de desarrollo.
+2. Un endpoint exige la política `Moderacion`. Escribe los cuatro motivos distintos por los que una petición podría ser rechazada, con su código cada uno.
+3. Añade la validación de tokens a Notifications. ¿Cuántas líneas son? ¿Qué se rompe inmediatamente en el panel, y por qué?
+
+</Callout>

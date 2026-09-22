@@ -1,0 +1,237 @@
+---
+title: "El token por dentro"
+description: "Qué claim viaja y cuál no, por qué el access token no va cifrado, y cómo se revoca algo que por definición no se puede revocar."
+sidebar:
+  order: 4
+  label: "4 · El token por dentro"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import factory from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/OidcPrincipalFactory.cs?raw';
+import claims from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/OidcClaims.cs?raw';
+import connect from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectExtensions.cs?raw';
+import endpoints from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectEndpoints.cs?raw';
+
+<p class="ddd-lede">
+Pegas un access token en jwt.io y lo ves entero: tu identificador, tu nombre, tu correo, tus roles,
+la fecha de caducidad. Sin descifrar nada, sin clave, sin permiso. La primera reacción razonable es
+pensar que algo está mal configurado — y en este sistema está así <strong>a propósito</strong>, con
+una línea que lo dice explícitamente.
+</p>
+
+Entender por qué eso es aceptable —y dónde deja de serlo— es la mitad de este módulo. La otra mitad es un dato que Identity sí conoce y que **no aparece en ningún token**.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un token es una lista de afirmaciones firmadas con fecha de
+caducidad — cualquiera puede leerlas, nadie puede cambiarlas, y lo que decide qué se incluye es el
+scope que pidió el cliente.
+</div>
+
+## Ya conoces el objeto: es una tarjeta de embarque
+
+Lleva tu nombre, el vuelo, el asiento y la puerta. No lleva tu historial de viajes ni tu número de cuenta: **solo lo que las puertas necesitan comprobar**. Se emite en el mostrador, vale para un trayecto y caduca sola.
+
+Y es legible por cualquiera que la coja del suelo. Lo que la protege no es el secreto de su contenido: es que **no se puede falsificar** y que caduca. Por eso no pasa nada porque la leas — y sí pasaría si pudieras cambiar el asiento con un bolígrafo.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Una tarjeta de embarque se puede anular llamando a la aerolínea. Un token firmado **no**: es autocontenido, y las APIs que lo verifican ni siquiera hablan con quien lo emitió. Una vez fuera, vale hasta el segundo de su caducidad.
+
+Eso obliga a dos cosas que este sistema hace: **que dure poco** —quince minutos— y que exista una comprobación en cada renovación. Es la cuarta idea, y es lo que convierte "irrevocable" en "irrevocable durante un rato corto".
+
+</Callout>
+
+## Idea 1 · Firmado, no cifrado — y es una decisión
+
+<Code
+    code={span(connect, 'options.AddDevelopmentEncryptionCertificate()', 'options.DisableAccessTokenEncryption();')}
+    lang="csharp"
+    title="Identity · Api/Connect/ConnectExtensions.cs"
+    mark={['options.DisableAccessTokenEncryption();']}
+/>
+
+Por defecto, OpenIddict **cifra** los access tokens: fuera de él son una cadena opaca que nadie puede leer, y eso es más seguro. Esa línea lo desactiva a propósito, y el intercambio es real:
+
+| | Cifrado (por defecto) | Solo firmado (lo que hay) |
+| --- | --- | --- |
+| ¿Se puede leer el contenido? | No | **Sí, cualquiera** |
+| ¿Se puede falsificar? | No | No |
+| Quién puede validarlo | Solo quien tenga la clave de cifrado | **Cualquier validador estándar** |
+| Depurar | Imposible sin herramientas | Copiar y pegar en jwt.io |
+
+**Por qué importa:** la fila de "quién puede validarlo" es la práctica. Un token cifrado por OpenIddict solo lo abre OpenIddict, así que un servicio escrito en otra tecnología no podría verificarlo. Firmado y sin cifrar es un **JWT estándar**, y eso es lo que permite que Rentals —o mañana cualquier otro— lo valide con una biblioteca corriente.
+
+Y la consecuencia que hay que aceptar con los ojos abiertos: **no metas en un token nada que no quieras que se lea**. Es la regla que explica la tercera idea.
+
+## Idea 2 · El scope decide qué claim viaja
+
+<Code
+    code={member(factory, 'public static ClaimsPrincipal CreateToken')}
+    lang="csharp"
+    title="Identity · Api/Connect/OidcPrincipalFactory.cs"
+/>
+
+Aquí se construye lo que va dentro. Se añaden todos los datos del usuario —sujeto, nombre, correo, teléfono, roles— y después una línea decide el destino de cada uno: `SetDestinations(GetDestinations)`.
+
+<Code
+    code={member(factory, 'private static IEnumerable<string> GetDestinations')}
+    lang="csharp"
+    title="Identity · el reparto de cada claim"
+/>
+
+Léelo como una tabla de decisión:
+
+| Claim | Va al access token | Va al id token | Condición |
+| --- | --- | --- | --- |
+| `name` | Sí | Sí | siempre |
+| `email` | Sí | Sí | **solo si** se pidió el scope `email` |
+| `phone_number` | Sí | Sí | **solo si** se pidió `phone` |
+| `role` | Sí | Sí | **solo si** se pidió `roles` |
+| `security_stamp` | **No** | **No** | nunca |
+| el resto | Sí | No | por defecto |
+
+**Por qué importa:** un scope no es solo un permiso sobre APIs, también es **consentimiento sobre datos**. Un cliente que no pida `email` recibe un token sin correo, aunque el usuario tenga uno. Es el principio de mínima exposición aplicado dato a dato, y aquí es una función de seis líneas.
+
+## Idea 3 · El dato que no sale en ninguno
+
+<Code
+    code={whole(claims)}
+    lang="csharp"
+    title="Identity · Api/Connect/OidcClaims.cs"
+/>
+
+Una constante. Y en la tabla de destinos, la primera rama: `security_stamp => []`. Lista vacía: **a ningún token**.
+
+Y sin embargo Identity lo necesita, porque es lo que comprueba al renovar:
+
+<Code
+    code={member(endpoints, 'private static async Task<SignedInUser?> ValidateAsync')}
+    lang="csharp"
+    title="Identity · la comprobación en cada canje"
+/>
+
+El sello viaja dentro del **authorization code** y del **refresh token** —que son artefactos internos de OpenIddict, cifrados y solo legibles por él— pero **no** en el access token que llega a Rentals.
+
+**Por qué importa:** es exactamente la regla de la primera idea en acción. El access token es legible por cualquiera, así que ahí no se mete nada sensible. El sello de seguridad es un dato interno que permite invalidar sesiones, y no tiene ningún motivo para llegar a un servidor de recursos.
+
+Si alguien "arreglara" esa rama para que el sello viajara, no rompería nada visible — y estaría publicando un detalle interno de la seguridad de las cuentas en un dato que se lee con copiar y pegar.
+
+## Idea 4 · Quince minutos, y por qué justo eso
+
+<Code
+    code={span(connect, 'options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));', 'options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));')}
+    lang="csharp"
+    title="Identity · la duración del access token"
+/>
+
+Una línea que es la respuesta entera al problema de la revocación:
+
+<ol class="ddd-steps">
+    <li><strong>Un token emitido no se puede anular.</strong> Las APIs no preguntan a nadie; comprueban la firma. Punto.</li>
+    <li><strong>Pero para seguir trabajando hace falta renovarlo</strong>, y renovar sí pasa por Identity.</li>
+    <li><strong>Y al renovar se comprueba todo otra vez</strong>: que la cuenta exista, esté verificada, no esté bloqueada y el sello coincida.</li>
+</ol>
+
+Resultado: bloquear una cuenta no corta el acceso al instante, lo corta **como mucho en quince minutos**. Esa cifra es la ventana de daño aceptada, y es la única palanca que hay: bajarla aumenta el tráfico de renovación, subirla alarga la ventana.
+
+**Por qué importa:** es el compromiso que define a los tokens autocontenidos. La alternativa —tokens de referencia, que obligan a consultar al emisor en cada petición— elimina la ventana y devuelve la dependencia que este diseño quería quitar.
+
+## Cómo encaja: los tres artefactos
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 280" role="img" aria-labelledby="tokTitle">
+        <title id="tokTitle">Qué se emite, quién lo lee y cuánto dura</title>
+
+        <rect x="20" y="30" width="260" height="200" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="150" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Access token</text>
+        <text x="150" y="74" text-anchor="middle" font-size="8" fill="#334155">firmado · NO cifrado · 15 min</text>
+        <rect x="38" y="86" width="224" height="96" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="150" y="104" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">sub · name · exp · iss · aud</text>
+        <text x="150" y="120" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">scope</text>
+        <text x="150" y="138" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">email / phone / role</text>
+        <text x="150" y="152" text-anchor="middle" font-size="7" fill="#64748b">(solo si se pidió el scope)</text>
+        <text x="150" y="172" text-anchor="middle" font-size="8" font-weight="600" fill="#991b1b">sin security_stamp</text>
+        <text x="150" y="202" text-anchor="middle" font-size="8" fill="#4338ca">lo lee Rentals</text>
+        <text x="150" y="216" text-anchor="middle" font-size="8" fill="#4338ca">y cualquiera que lo intercepte</text>
+
+        <rect x="300" y="30" width="260" height="200" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="430" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Id token</text>
+        <text x="430" y="74" text-anchor="middle" font-size="8" fill="#334155">quién eres, para el cliente</text>
+        <rect x="318" y="86" width="224" height="96" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="430" y="110" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">sub · name</text>
+        <text x="430" y="130" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">email / phone / role</text>
+        <text x="430" y="150" text-anchor="middle" font-size="7.5" fill="#64748b">según el scope pedido</text>
+        <text x="430" y="202" text-anchor="middle" font-size="8" fill="#14532d">lo lee el panel para</text>
+        <text x="430" y="216" text-anchor="middle" font-size="8" fill="#14532d">saber a quién enseñar</text>
+
+        <rect x="580" y="30" width="280" height="200" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="720" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Refresh token</text>
+        <text x="720" y="74" text-anchor="middle" font-size="8" fill="#334155">cifrado · solo lo abre Identity</text>
+        <rect x="598" y="86" width="244" height="96" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="720" y="110" text-anchor="middle" font-size="8" fill="#334155">lleva el sello de seguridad</text>
+        <text x="720" y="130" text-anchor="middle" font-size="8" fill="#334155">y los scopes concedidos</text>
+        <text x="720" y="152" text-anchor="middle" font-size="8" font-weight="600" fill="#9a3412">nunca sale hacia una API</text>
+        <text x="720" y="202" text-anchor="middle" font-size="8" fill="#9a3412">es la única forma de volver</text>
+        <text x="720" y="216" text-anchor="middle" font-size="8" fill="#9a3412">a pasar por la comprobación</text>
+
+        <text x="440" y="262" text-anchor="middle" font-size="9" fill="#64748b">Tres artefactos, tres lectores, tres duraciones. Solo el de la izquierda cruza hacia otro servicio.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        El panel guarda los tres en su cookie de sesión. Rentals solo ve el primero, y nunca sabe que
+        existen los otros dos.
+    </p>
+</div>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre los tokens">
+
+**"Un JWT es seguro porque está cifrado."** Un JWT normal está **firmado**, no cifrado: su contenido se lee con copiar y pegar. Lo que garantiza es integridad y origen, no confidencialidad.
+
+**"Como está firmado, puedo meter lo que quiera."** Al revés: como se lee, mete solo lo que el destinatario necesita. La rama `security_stamp => []` es esa regla escrita en código.
+
+**"El access token sirve para saber quién es el usuario."** Ese es el trabajo del **id token**. Usar el access token para identificar al usuario en la interfaz funciona y mezcla dos propósitos que el estándar separa — uno es para la API, el otro para el cliente.
+
+**"Si bloqueo una cuenta, deja de entrar al instante."** Deja de **renovar** al instante. El token que ya tenga sigue valiendo hasta quince minutos. Quien necesite corte inmediato necesita otro diseño.
+
+**"El refresh token es como el access token pero más largo."** Es de otra naturaleza: va cifrado, **solo lo entiende Identity**, no sirve para llamar a ninguna API, y su único uso es volver a pasar por la comprobación de la cuenta.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo verifica la firma el otro lado**, que es el [módulo 5](/oauth/validacion).
+- **La rotación de claves de firma** y el endpoint JWKS. Aquí las claves son certificados de desarrollo generados al arrancar, y eso tiene su apartado en el [módulo 8](/oauth/decisiones).
+- **Los tokens de referencia**, la alternativa opaca que sí permite revocación inmediata a cambio de consultar al emisor en cada petición.
+- **El endpoint de introspección**, que este sistema no expone porque ningún consumidor lo necesita.
+
+<Callout kind="resumen" title="Para recordar">
+
+- El access token va **firmado y sin cifrar**, a propósito: así lo valida cualquier biblioteca estándar y se puede depurar.
+- Por eso: **no metas ahí nada que no quieras que se lea**.
+- El **scope decide qué claim viaja**. Sin `email`, no hay correo en el token.
+- El **sello de seguridad no sale en ningún token**: viaja en los artefactos internos y permite invalidar sesiones.
+- **Quince minutos** es la ventana de daño aceptada, y la única palanca del diseño.
+- Tres artefactos distintos: uno para la API, uno para el cliente y uno que solo entiende el emisor.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Coge el token de jwt.io y busca dos cosas: el claim `role` y el claim `security_stamp`.
+
+El primero estará si pediste el scope `roles`; el segundo **no estará nunca**. Comprobar una ausencia es más instructivo que comprobar una presencia — es la diferencia entre leer que existe una regla y verla aplicada.
+
+**Y luego:** el [módulo 5](/oauth/validacion) se pone del otro lado y explica cómo Rentals acepta ese papel sin llamar por teléfono a quien lo firmó.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. `DisableAccessTokenEncryption` mejora una cosa y empeora otra. Nombra las dos, y di qué tendría que cambiar en el sistema para que quitarlo fuera viable.
+2. Un cliente pide los scopes `openid rentals` pero no `roles`. ¿Qué pasa cuando llama a un endpoint protegido por la política de moderación? ¿Con qué código responde?
+3. Un administrador bloquea una cuenta a las 10:00. El usuario tenía un token emitido a las 9:58. Dibuja la línea de tiempo de lo que puede hacer y hasta cuándo.
+
+</Callout>

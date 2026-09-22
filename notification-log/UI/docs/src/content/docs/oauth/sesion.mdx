@@ -1,0 +1,207 @@
+---
+title: "La sesión y el login"
+description: "Las dos cookies que casi nadie distingue, y la pantalla de acceso que no forma parte del estándar."
+sidebar:
+  order: 3
+  label: "3 · La sesión y el login"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import connect from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectExtensions.cs?raw';
+import sessionCookie from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/SessionCookie.cs?raw';
+import signIn from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/SignIn/SignInHandler.cs?raw';
+import signInWithCode from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/SignInWithCode/SignInWithCodeHandler.cs?raw';
+import loginIdentifier from '@code/Services/Identity/NotificationLog.IdentityService.Domain/Users/ValueObjects/LoginIdentifier.cs?raw';
+import validateSession from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Queries/ValidateSession/ValidateSessionHandler.cs?raw';
+import codeSender from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Common/VerificationCodeSender.cs?raw';
+
+<p class="ddd-lede">
+Cierras sesión en el panel, y al volver a entrar no te pide la contraseña: pasas directo. Parece un
+fallo de seguridad y no lo es — son <strong>dos sesiones distintas</strong>, en dos dominios
+distintos, y solo cerraste una. Entender esa pareja es lo que distingue a quien ha montado un
+servidor de identidad de quien lo ha configurado.
+</p>
+
+Y hay una segunda sorpresa: la pantalla donde escribes tu clave **no forma parte de OAuth**. El estándar dice que el usuario se autentica ahí y no dice ni una palabra de cómo. Todo lo que ocurre en esa página son reglas de negocio de este sistema.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> Identity mantiene su propia sesión con cookie para no pedirte la
+clave en cada aplicación, el panel mantiene la suya para recordarte entre páginas, y las dos son
+independientes.
+</div>
+
+## Ya conoces la pareja: es el carnet del edificio y la tarjeta de la oficina
+
+En la entrada del edificio te identificas una vez y te reconocen el resto del día. Al entrar en la oficina de una empresa concreta, esa empresa te da su propia acreditación de visita.
+
+Son dos registros distintos. Devolver la acreditación de la oficina no te expulsa del edificio: puedes entrar en la de al lado sin volver a identificarte abajo. Y eso, que en un edificio es obvio, en un navegador sorprende a todo el mundo.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En un edificio ves las dos credenciales físicamente. En el navegador las dos son cookies invisibles **en dominios distintos** —una del puerto de Identity, otra del panel—, y por eso la confusión dura tanto.
+
+Y hay algo que el edificio no tiene: cerrar sesión "del todo" exige un paso explícito que avise al de abajo. Ese paso existe, se llama `/connect/endsession`, y el panel lo usa.
+
+</Callout>
+
+## Idea 1 · Dos cookies, dos propósitos
+
+<Code
+    code={whole(sessionCookie)}
+    lang="csharp"
+    title="Identity · Api/Connect/SessionCookie.cs"
+/>
+
+Un nombre de esquema, y toda la configuración al lado:
+
+<Code
+    code={span(connect, 'services.AddAuthentication(OpenIddictValidationAspNetCoreDefaults.AuthenticationScheme)', '});')}
+    lang="csharp"
+    title="Identity · la cookie de sesión propia"
+    mark={['options.Cookie.Name = "notificationlog.identity";']}
+/>
+
+| | Cookie de **Identity** | Cookie del **panel** |
+| --- | --- | --- |
+| Nombre | `notificationlog.identity` | `notificationlog.web` |
+| Dominio | el de Identity | el del panel |
+| Para qué sirve | No pedirte la clave otra vez | Recordarte entre páginas |
+| Qué guarda dentro | Tu identificador y tu sello de seguridad | **Los tokens** ([módulo 6](/oauth/cliente)) |
+| Duración | 14 días, deslizante | La de la sesión |
+
+**Por qué importa:** esa es la explicación de la escena inicial. Cerrar sesión en el panel borra su cookie; la de Identity sigue viva, así que el siguiente `/connect/authorize` encuentra sesión y emite el código sin preguntar nada. Es el comportamiento correcto —es lo que permite el inicio de sesión único entre aplicaciones— y hay que cerrar las dos para salir de verdad.
+
+## Idea 2 · La sesión guarda lo mínimo, y se revalida siempre
+
+Fíjate en lo que se mete en esa cookie: el identificador, el nombre para mostrar y un **sello de seguridad**. Nada más: ni roles, ni correo, ni permisos.
+
+Y en cada uso se vuelve a comprobar contra la base de datos:
+
+<Code
+    code={whole(validateSession)}
+    lang="csharp"
+    title="Identity · Application/Users/Queries/ValidateSession/ValidateSessionHandler.cs"
+/>
+
+Cuatro condiciones para que una sesión siga valiendo: que el usuario exista, que esté verificado, que **el sello coincida** y que no esté bloqueado.
+
+**Por qué importa:** el sello de seguridad es un valor que cambia cuando cambia algo sensible de la cuenta. Si alguien cambia su contraseña o un administrador le quita un rol, el sello nuevo no coincide con el de la cookie — y **todas las sesiones abiertas dejan de servir de golpe**, sin necesidad de ir borrándolas una a una.
+
+Es el mismo mecanismo que usa el canje de tokens ([módulo 2](/oauth/flujo)), y la razón de que esta pareja cookie-token no sea un agujero.
+
+## Idea 3 · Identificarse por correo o por teléfono, sin dos campos
+
+<Code
+    code={member(loginIdentifier, 'public static LoginIdentifier? TryParse')}
+    lang="csharp"
+    title="Identity · Domain/Users/ValueObjects/LoginIdentifier.cs"
+/>
+
+El formulario tiene **un solo campo** de identificador. Este value object decide qué le han escrito:
+
+- **Si lleva `@`**, es correo: se pasa a minúsculas y se valida el formato.
+- **Si lleva letras y no lleva `@`**, no es nada. Se rechaza.
+- **Si no**, es teléfono: se limpian los separadores, se traduce el prefijo `00` a `+`, y si no trae prefijo se le pone el del país por defecto.
+
+**Por qué importa:** la normalización es la parte silenciosa. `300 123 4567`, `+573001234567` y `0057 300 1234567` acaban siendo **el mismo identificador**, así que nadie se crea una segunda cuenta por escribir el teléfono de otra forma. Es un [Factory Method](/patrones/factory) de manual, protegiendo una invariante que el negocio no perdonaría.
+
+## Idea 4 · Dos formas de demostrar que eres tú
+
+<Code
+    code={member(signIn, 'public async Task<SignInAttempt> HandleAsync')}
+    lang="csharp"
+    title="Identity · entrar con contraseña"
+/>
+
+<Code
+    code={member(signInWithCode, 'public async Task<SignInAttempt> HandleAsync')}
+    lang="csharp"
+    title="Identity · entrar con código de un solo uso"
+/>
+
+Los dos handlers tienen **la misma forma** y solo cambian en una línea: uno comprueba la contraseña, el otro un código. Todo lo demás —bloqueo, registro del intento fallido, reinicio del contador, exigir que el canal esté verificado— es idéntico.
+
+Tres detalles que merecen atención:
+
+<ol class="ddd-steps">
+    <li><strong>Un identificador inexistente y una contraseña incorrecta devuelven lo mismo</strong>: <code>InvalidCredentials</code>. No se filtra si la cuenta existe.</li>
+    <li><strong>El bloqueo se comprueba antes y después.</strong> Antes para no dejar probar; después porque el intento fallido puede ser el que active el bloqueo.</li>
+    <li><strong>Hay que estar verificado en el canal por el que entras.</strong> Tener el correo confirmado no te deja entrar por teléfono.</li>
+</ol>
+
+**Por qué importa:** el código de un solo uso es un **método de acceso**, no un segundo factor. Sustituye a la contraseña, no se suma a ella. Confundirlos lleva a creer que este sistema tiene 2FA, y no lo tiene.
+
+Y el código viaja por donde ya sabes:
+
+<Code
+    code={whole(codeSender)}
+    lang="csharp"
+    title="Identity · Application/Users/Common/VerificationCodeSender.cs"
+/>
+
+Se genera, se publica un mensaje y **se guarda en la misma transacción** — el [outbox](/patrones/outbox) otra vez. Quien lo entrega por correo o SMS es Notifications, que para esto es un servicio más.
+
+## El recorrido: del primer día a la segunda aplicación
+
+<ol class="ddd-steps">
+    <li><strong>Registro.</strong> Identificador, nombre, idioma, zona horaria y aceptación del envío de notificaciones — que aquí es <strong>obligatoria</strong>, porque la cuenta no sirve de nada si no se le puede mandar el código.</li>
+    <li><strong>Verificación.</strong> Llega un código al correo o al teléfono. Hasta confirmarlo, la cuenta existe y no puede entrar.</li>
+    <li><strong>Login.</strong> Con contraseña o pidiendo un código. Al acertar, Identity crea su cookie de sesión.</li>
+    <li><strong>Vuelta al panel</strong> con el código de autorización, que se canjea por tokens. El panel crea <strong>su</strong> cookie.</li>
+    <li><strong>Otra aplicación</strong> —Scalar, por ejemplo— redirige a Identity, que encuentra su cookie todavía viva y emite un código <strong>sin preguntar nada</strong>. Eso es inicio de sesión único.</li>
+    <li><strong>Cerrar sesión</strong> en el panel borra su cookie y llama a <code>/connect/endsession</code>, que borra también la de Identity.</li>
+</ol>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco confusiones sobre la sesión">
+
+**"Hay una sola sesión."** Hay dos, en dominios distintos. Y en cuanto haya un tercer cliente, tres — cada uno con la suya, todas apoyadas en la de Identity.
+
+**"El login es parte de OAuth."** No. El estándar dice *"aquí el usuario se autentica"* y calla. Que se pueda entrar con teléfono, que haya código de un solo uso y que haga falta aceptar notificaciones son **reglas de este negocio**, y por eso viven en su dominio y no en la configuración del servidor.
+
+**"El código de un solo uso es 2FA."** Es un método **alternativo**, no adicional. Un segundo factor se exige *además* de la contraseña; este la sustituye.
+
+**"Si borro la cookie del panel, he cerrado sesión."** Has cerrado la de la oficina. La del edificio sigue abierta catorce días, deslizantes.
+
+**"La cookie guarda los permisos."** Guarda identificador, nombre y sello. Los roles se leen de la base al emitir el token, así que quitar un rol tiene efecto en la siguiente emisión — no hace falta esperar a que caduque una cookie.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Las páginas Razor** de login, registro y verificación. Son la interfaz de Identity y su implementación no tiene nada particular.
+- **La recuperación de contraseña**, que no existe todavía y está anotada en `todo.md`.
+- **Cómo se genera y valida el código**, que lo hace ASP.NET Identity con sus proveedores de token estándar.
+- **La entrega del código**, que es trabajo de Notifications y se cuenta en la [guía del proyecto](/proyecto/flujo-notificacion).
+
+<Callout kind="resumen" title="Para recordar">
+
+- **Dos cookies** en dos dominios: la de Identity evita repetir la clave entre aplicaciones; la del panel te recuerda entre páginas.
+- La sesión guarda **lo mínimo** y se revalida contra la base en cada uso.
+- El **sello de seguridad** invalida todas las sesiones de golpe cuando cambia algo sensible.
+- Un solo campo de identificador: el value object decide si es correo o teléfono y **normaliza**.
+- Contraseña y código de un solo uso son **dos caminos al mismo sitio**, con las mismas defensas. No son 2FA.
+- La pantalla de login **no es OAuth**: es donde viven las reglas de negocio de acceso.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Con sesión iniciada, abre las herramientas del navegador → Aplicación → Cookies, y mira los **dos** orígenes: el del panel y el de Identity. Vas a ver `notificationlog.web` en uno y `notificationlog.identity` en el otro.
+
+Ahora borra **solo** la del panel y recarga. Vuelves a entrar sin escribir nada. Esa es la escena con la que empezaba el módulo, provocada a propósito y entendida.
+
+**Y luego:** el [módulo 4](/oauth/token) abre lo que el paso 4 del recorrido trajo de vuelta — y explica por qué hay un dato que Identity conoce y no mete en ningún token.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Un administrador le quita el rol de moderador a alguien que tiene sesión abierta. Describe cuándo deja de poder moderar: ¿al instante, en la siguiente página, o cuando caduque el token? Justifícalo con las dos comprobaciones de esta página.
+2. `SignInHandler` comprueba el bloqueo **dos veces**. Explica el escenario concreto que cubre la segunda.
+3. Escribe tres formas distintas de teclear el mismo teléfono y sigue `LoginIdentifier.TryParse` con cada una. ¿Acaban las tres en el mismo valor?
+
+</Callout>

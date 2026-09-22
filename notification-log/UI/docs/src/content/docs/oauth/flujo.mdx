@@ -1,0 +1,241 @@
+---
+title: "El flujo de código con PKCE"
+description: "Por qué hay dos viajes y no uno, qué va por el navegador y qué no, y la prueba que impide que un código robado sirva de algo."
+sidebar:
+  order: 2
+  label: "2 · El flujo con PKCE"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import endpoints from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectEndpoints.cs?raw';
+import connect from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectExtensions.cs?raw';
+import webAuth from '@code/UI/NotificationLog.Web/Authentication/IdentityAuthenticationExtensions.cs?raw';
+
+<p class="ddd-lede">
+La forma directa de resolver esto sería: el panel te enseña un formulario, tú escribes la
+contraseña, el panel se la manda a Identity y recibe un token. Tres pasos, cero redirecciones, y
+todo el mundo lo entiende a la primera. Ese flujo existió en el estándar, se llamaba
+<em>password grant</em>, y hoy está formalmente desaconsejado.
+</p>
+
+El motivo es de una línea: **obliga al panel a ver tu contraseña**. Y si la ve, puede guardarla, registrarla en un log por accidente, o filtrarla el día que alguien comprometa el panel — que es la pieza con más superficie de ataque del sistema.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> tu contraseña solo se escribe en el sitio del servidor de identidad,
+y lo que vuelve al cliente es un <strong>código de un solo uso</strong> que él canjea por el token
+desde su propio servidor, demostrando que es quien lo pidió.
+</div>
+
+## Ya conoces el mecanismo: es recoger un paquete con resguardo
+
+Vas a la oficina de paquetería. Te identificas **en el mostrador** —no en la tienda que te lo envió— y te dan un **resguardo**. Ese papel no sirve para nada por sí solo: hay que presentarlo en otra ventanilla, y allí comprueban que quien lo presenta es quien lo pidió.
+
+Ese doble paso parece burocracia y es justo lo contrario: **el resguardo puede perderse por el camino sin consecuencias**, porque sin la segunda prueba no vale nada. La cosa valiosa nunca viaja por la calle.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En la paquetería la segunda prueba es tu cara. Aquí es un cálculo: el cliente se inventa un secreto al empezar, manda solo su **huella**, y al canjear presenta el secreto original. El servidor comprueba que uno produce la otra.
+
+Eso tiene nombre —**PKCE**— y resuelve algo que la analogía no tiene: aquí el "resguardo" viaja por el navegador del usuario, que es territorio hostil.
+
+</Callout>
+
+## Idea 1 · Dos viajes, y solo uno pasa por el navegador
+
+El flujo tiene dos peticiones a Identity, y la diferencia entre ellas es la clave de todo:
+
+| | Primer viaje · `/connect/authorize` | Segundo viaje · `/connect/token` |
+| --- | --- | --- |
+| Quién lo hace | **El navegador**, redirigido | **El servidor del panel**, por detrás |
+| Qué lleva | Quién pregunta y qué pide | El código, el secreto del cliente y la prueba PKCE |
+| Qué devuelve | Un **código** de un solo uso | El **token** de acceso y el de refresco |
+| Quién lo ve | El usuario, en la barra de direcciones | Nadie más que los dos extremos |
+
+**Por qué importa:** lo que aparece en una URL acaba en el historial, en los registros del servidor y en la cabecera `Referer`. Por eso lo que viaja ahí es el código —inútil sin la segunda prueba— y no el token.
+
+## Idea 2 · El primer viaje: ¿hay sesión, o hay que pedir credenciales?
+
+<Code
+    code={member(endpoints, 'private static async Task<IResult> AuthorizeAsync')}
+    lang="csharp"
+    title="Identity · Api/Connect/ConnectEndpoints.cs · authorize"
+    mark={['return Results.Challenge(new AuthenticationProperties { RedirectUri = returnUrl }, [SessionCookie.Scheme]);']}
+/>
+
+Léelo como una bifurcación:
+
+- **Si ya hay sesión** en Identity —su propia cookie— y sigue siendo válida, se emite el código directamente. Por eso al volver a entrar al panel no te vuelve a pedir la contraseña.
+- **Si no la hay**, `Results.Challenge` te manda a la pantalla de login, con la URL original guardada para volver. Esa pantalla es el [módulo 3](/oauth/sesion).
+- **Si el cliente pidió `prompt=none`** —"no le preguntes nada al usuario"— y no hay sesión, se responde un error en vez de enseñar un formulario. Es lo que permite comprobar una sesión en silencio.
+
+**Por qué importa:** este endpoint es el único sitio donde el usuario y el servidor de identidad se ven las caras. Todo lo demás del protocolo ocurre entre máquinas.
+
+## Idea 3 · PKCE: la prueba que hace inútil un código robado
+
+<Code
+    code={span(connect, 'options.AllowAuthorizationCodeFlow()', '.RequireProofKeyForCodeExchange();')}
+    lang="csharp"
+    title="Identity · los flujos permitidos"
+    mark={['.RequireProofKeyForCodeExchange();']}
+/>
+
+`RequireProofKeyForCodeExchange` no es una opción: es un **requisito**. Un cliente que no aporte la prueba no puede canjear nada, ni siquiera con el código correcto.
+
+El mecanismo, en tres pasos:
+
+<ol class="ddd-steps">
+    <li>Antes de empezar, el cliente genera un secreto al azar —el <em>verifier</em>— y calcula su hash —el <em>challenge</em>.</li>
+    <li>En el <strong>primer viaje</strong> manda solo el hash. Es lo único que aparece en la URL.</li>
+    <li>En el <strong>segundo viaje</strong> manda el secreto original. Identity lo vuelve a hashear y comprueba que coincide con el del paso 2.</li>
+</ol>
+
+**Por qué importa:** quien intercepte el código solo tiene eso. Para canjearlo necesitaría el secreto original, que nunca salió del cliente y que no se puede deducir del hash. Sin PKCE, robar el código sería robar la sesión.
+
+PKCE nació para aplicaciones móviles, donde no hay forma de guardar un secreto. Aquí el panel **sí** tiene secreto, así que PKCE es una segunda capa — y exigirlo igualmente es lo correcto: la protección del secreto de cliente y la del código son dos problemas distintos.
+
+## Idea 4 · El segundo viaje vuelve a comprobar que sigues existiendo
+
+<Code
+    code={member(endpoints, 'private static async Task<IResult> ExchangeAsync')}
+    lang="csharp"
+    title="Identity · Api/Connect/ConnectEndpoints.cs · token"
+/>
+
+Este endpoint atiende **dos** casos con el mismo código: canjear un código recién emitido, y renovar con un *refresh token*. En los dos, OpenIddict reconstruye el principal con lo que guardó, y entonces ocurre lo interesante:
+
+`ValidateAsync` no se fía de ese principal. Va a la base de datos y comprueba que el usuario **sigue existiendo, sigue verificado, no está bloqueado y su sello de seguridad no ha cambiado**.
+
+**Por qué importa:** es lo que convierte un sistema de tokens autocontenidos en algo revocable a medias. Un token ya emitido vale hasta que caduque —eso no hay quien lo cambie— pero **no se puede renovar** si entretanto bloquearon la cuenta. El daño máximo queda acotado a quince minutos. El sello de seguridad tiene su explicación en el [módulo 4](/oauth/token).
+
+## Cómo encaja: el baile completo
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 400" role="img" aria-labelledby="flowTitle">
+        <title id="flowTitle">Del clic en una página protegida al token guardado</title>
+        <defs>
+            <marker id="flArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <line x1="110" y1="56" x2="110" y2="380" stroke="#e5e9f2" stroke-width="1" />
+        <line x1="420" y1="56" x2="420" y2="380" stroke="#e5e9f2" stroke-width="1" />
+        <line x1="760" y1="56" x2="760" y2="380" stroke="#e5e9f2" stroke-width="1" />
+
+        <text x="110" y="32" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Navegador</text>
+        <text x="110" y="46" text-anchor="middle" font-size="7.5" fill="#64748b">territorio hostil</text>
+        <text x="420" y="32" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Panel (servidor)</text>
+        <text x="420" y="46" text-anchor="middle" font-size="7.5" fill="#64748b">el cliente</text>
+        <text x="760" y="32" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Identity</text>
+
+        <rect x="150" y="66" width="240" height="24" rx="5" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="270" y="82" text-anchor="middle" font-size="8" fill="#334155">1 · entra a una página protegida</text>
+        <line x1="120" y1="78" x2="146" y2="78" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#flArrow)" />
+
+        <rect x="180" y="100" width="420" height="36" rx="5" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="390" y="116" text-anchor="middle" font-size="8" fill="#334155">2 · el panel genera verifier + challenge y redirige</text>
+        <text x="390" y="130" text-anchor="middle" font-size="7.5" font-family="monospace" fill="#64748b">/connect/authorize?...&amp;code_challenge=HASH</text>
+        <line x1="410" y1="118" x2="120" y2="118" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3,2" marker-end="url(#flArrow)" />
+
+        <line x1="120" y1="152" x2="750" y2="152" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#flArrow)" />
+        <text x="430" y="146" text-anchor="middle" font-size="7.5" fill="#64748b">3 · el navegador va a Identity, con el hash en la URL</text>
+
+        <rect x="560" y="164" width="300" height="52" rx="6" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="710" y="182" text-anchor="middle" font-size="8" fill="#334155">4 · ¿hay cookie de sesión válida?</text>
+        <text x="710" y="198" text-anchor="middle" font-size="7.5" fill="#9a3412">si no, login (o registro + verificación)</text>
+        <text x="710" y="211" text-anchor="middle" font-size="7.5" fill="#9a3412">si sí, sigue sin preguntar nada</text>
+
+        <line x1="750" y1="234" x2="120" y2="234" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#flArrow)" />
+        <text x="430" y="228" text-anchor="middle" font-size="7.5" fill="#64748b">5 · vuelve con un CÓDIGO de un solo uso en la URL</text>
+
+        <line x1="120" y1="262" x2="410" y2="262" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#flArrow)" />
+        <text x="265" y="256" text-anchor="middle" font-size="7.5" fill="#64748b">6 · el código llega al panel</text>
+
+        <rect x="440" y="276" width="420" height="38" rx="6" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="650" y="294" text-anchor="middle" font-size="8" font-weight="600" fill="#14532d">7 · canje servidor a servidor — el navegador NO participa</text>
+        <text x="650" y="308" text-anchor="middle" font-size="7.5" fill="#334155">código + client_secret + verifier original</text>
+        <line x1="430" y1="295" x2="436" y2="295" stroke="#16a34a" stroke-width="1.4" />
+
+        <rect x="560" y="322" width="300" height="38" rx="6" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="710" y="340" text-anchor="middle" font-size="8" fill="#334155">8 · hash(verifier) == challenge, ¿y sigues activo?</text>
+        <text x="710" y="354" text-anchor="middle" font-size="7.5" fill="#9a3412">sello de seguridad, bloqueo, verificación</text>
+
+        <rect x="240" y="368" width="360" height="24" rx="5" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="420" y="384" text-anchor="middle" font-size="8" font-weight="600" fill="#4338ca">9 · tokens al panel, que los guarda en su cookie</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Fíjate en el paso 7: es la única línea que no toca el navegador, y es justo por donde viaja lo que
+        vale. Todo lo que pasó por la izquierda era inútil por sí solo.
+    </p>
+</div>
+
+## Por qué no los otros flujos
+
+<Code
+    code={span(webAuth, 'options.ResponseType = "code";', 'options.GetClaimsFromUserInfoEndpoint = false;')}
+    lang="csharp"
+    title="Web · el cliente pide explícitamente este flujo"
+/>
+
+| Flujo | Qué hacía | Por qué no está aquí |
+| --- | --- | --- |
+| **Implicit** | Devolvía el token directamente en la URL | El token acababa en el historial y en los registros. Desaconsejado. |
+| **Password** | El cliente manda usuario y contraseña | Obliga al cliente a ver la contraseña. Es el problema del que parte esta página. |
+| **Client credentials** | Token para la aplicación, sin usuario | Tendría sentido entre servicios — y aquí los servicios **no se llaman por HTTP**, se mandan mensajes. |
+| **Device code** | Para televisores y consolas | No hay ningún cliente sin navegador. |
+
+**Por qué importa la tercera fila:** es el flujo que más gente espera encontrar y no está, y la razón no es de seguridad sino de arquitectura. Cuando Rentals necesita algo de Identity, no le hace una petición: publica un mensaje ([módulo 7](/oauth/cuentas)).
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre el flujo">
+
+**"Tantas redirecciones son un rodeo."** Cada una tiene una función: la primera lleva al usuario donde sí puede escribir su clave, la segunda trae un dato inútil por sí solo. Quitar cualquiera de las dos obliga a que la contraseña o el token pasen por donde no deben.
+
+**"El código es el token."** El código es de **un solo uso**, dura segundos y no sirve para llamar a ninguna API. Canjearlo dos veces falla — y OpenIddict trata ese intento como lo que parece: un robo.
+
+**"Con HTTPS no hace falta PKCE."** HTTPS protege el tránsito. No protege del historial del navegador, de un registro del servidor, de una extensión, ni de otra aplicación registrada con el mismo esquema de redirección. PKCE cubre justo eso.
+
+**"El navegador guarda el token."** No: lo guarda **el servidor del panel**, dentro de su cookie de sesión cifrada. El navegador solo lleva la cookie ([módulo 6](/oauth/cliente)).
+
+**"Renovar el token es transparente."** Lo sería si el cliente lo implementara. Aquí **no está hecho**: el panel adjunta el token pero no lo renueva. A los quince minutos, un `401`. Está en el [módulo 8](/oauth/decisiones).
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **La pantalla de login** a la que redirige el paso 4, con sus dos formas de entrar: [módulo 3](/oauth/sesion).
+- **Qué contiene el token** que llega al final: [módulo 4](/oauth/token).
+- **El parámetro `state`** y la protección contra CSRF en la redirección, que el cliente de ASP.NET Core gestiona solo.
+- **La pantalla de consentimiento.** Los dos clientes son propios y el consentimiento está configurado como implícito, así que nunca aparece.
+
+<Callout kind="resumen" title="Para recordar">
+
+- La contraseña se escribe **solo** en el sitio de Identity. El cliente nunca la ve.
+- Hay **dos viajes**: uno por el navegador que trae un código, y uno servidor a servidor que trae el token.
+- Lo que viaja por la URL es **inútil sin la segunda prueba**.
+- **PKCE** es obligatorio: sin el secreto original, un código robado no se puede canjear.
+- Al canjear se **vuelve a comprobar** que la cuenta sigue activa. Eso acota el daño a quince minutos.
+- Los otros flujos no están, y uno de ellos falta por razones de arquitectura, no de seguridad.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre las herramientas de desarrollo del navegador, pestaña **Red**, con la opción de conservar el registro entre navegaciones. Entra al panel desde cero.
+
+Vas a ver los pasos 3 y 5 del diagrama: la ida a `/connect/authorize` con `code_challenge` en la URL, y la vuelta con `code=`. Y vas a ver algo más informativo todavía: **el paso 7 no aparece**, porque ocurre entre servidores. Ese hueco en el registro es el patrón funcionando.
+
+**Y luego:** el [módulo 3](/oauth/sesion) entra en la pantalla a la que te redirigió el paso 4 — que no es parte del estándar y es donde viven las reglas de negocio de este sistema.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Alguien copia la URL de vuelta del paso 5, con el código dentro, y la pega en otro navegador. ¿Qué falla exactamente, y en qué paso?
+2. El panel tiene secreto de cliente **y** usa PKCE. Explica qué ataque cubre cada uno y por qué no son redundantes.
+3. `ExchangeAsync` vuelve a consultar la base de datos en cada canje. Describe el escenario concreto que esa consulta evita y di qué pasa con el token que ya se emitió.
+
+</Callout>

@@ -15,21 +15,28 @@ respecto al código que documentan: si un método se renombra, falla la compilac
 ## Secciones
 
 - **[Proyecto](/proyecto)** — qué hace la aplicación, cómo se levanta y cómo fluye una notificación.
+- **[Arquitectura](/arquitectura)** — cómo está montado el sistema: tres servicios, dos motores de
+  base de datos, un bus de mensajes y el orquestador que lo arranca todo.
+- **[Patrones](/patrones)** — los patrones de diseño que están de verdad en este código, incluidos
+  los que están a medias y los que faltan.
+- **[OAuth 2.0](/oauth)** — cómo se autentica y se autoriza: el servidor de identidad propio, el
+  flujo con PKCE, el token y quién lo verifica.
 - **[DDD](/ddd)** — lenguaje ubicuo, subdominios, value objects, entidades, agregados, repositorios y
-  persistencia, sobre el servicio de Notificaciones.
+  persistencia, sobre el servicio de Notifications.
 - **[Event Sourcing](/event-sourcing)** — eventos como fuente de verdad, rehidratación, flujos,
-  proyecciones y procesos, sobre el servicio de Arriendos.
-- **[Arquitectura](/arquitectura)** — capas, estilos, decisiones tomadas y su evolución.
-- **[Patrones](/patrones)** — los patrones de diseño que aparecen en este código.
+  proyecciones y procesos, sobre el servicio de Rentals.
 
 ## Por dónde empezar
+
+Si vienes a **entender este sistema**, empieza por [Proyecto](/proyecto) y sigue por
+[Arquitectura](/arquitectura). Con esas dos ya puedes moverte por el repositorio sin preguntar.
 
 Si vienes a **aprender modelado**, el orden es [DDD](/ddd) → [Event Sourcing](/event-sourcing): la
 segunda guía da por sabidos los conceptos tácticos de la primera y los aplica a un modelo donde el
 estado se calcula en lugar de guardarse.
 
-Si vienes a **entender este sistema**, empieza por [Proyecto](/proyecto) y sigue por
-[Arquitectura](/arquitectura).
+Si vienes a **tocar la autenticación**, [OAuth 2.0](/oauth) es autosuficiente: no hace falta haber
+leído las demás.
 
-Las dos guías de modelado terminan en una página de **tareas** sobre el propio repositorio, que es
-donde se comprueba de verdad si el resto se entendió.
+Las dos guías de modelado terminan en una página de **tareas** sobre el propio repositorio, y la de
+patrones en una de **ejercicios**. Ahí es donde se comprueba de verdad si el resto se entendió.

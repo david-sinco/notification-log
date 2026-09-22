@@ -1,0 +1,206 @@
+---
+title: "Los clientes"
+description: "Dos aplicaciones registradas, una con secreto y otra sin él, y un secreto que nadie escribió a mano."
+sidebar:
+  order: 6
+  label: "6 · Los clientes"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import seeder from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Seeding/IdentitySeeder.cs?raw';
+import clientOptions from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Seeding/ClientSeedOptions.cs?raw';
+import webAuth from '@code/UI/NotificationLog.Web/Authentication/IdentityAuthenticationExtensions.cs?raw';
+import tokenHandler from '@code/UI/NotificationLog.Web/Authentication/AccessTokenHandler.cs?raw';
+import authEndpoints from '@code/UI/NotificationLog.Web/Authentication/AuthenticationEndpoints.cs?raw';
+import appHost from '@code/NotificationLog.AppHost/AppHost.cs?raw';
+
+<p class="ddd-lede">
+Un servidor de identidad no emite tokens a cualquiera que los pida: solo a aplicaciones que conoce
+de antemano, registradas con su identificador, sus direcciones de retorno y sus permisos. Si esa
+lista estuviera abierta, cualquiera podría montar una página que redirigiera a Identity y recibir
+tokens de tus usuarios.
+</p>
+
+Aquí hay exactamente dos aplicaciones registradas, son muy distintas entre sí, y ninguna tiene su configuración escrita a mano en un archivo.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un cliente es una aplicación dada de alta en el servidor con lo que
+puede pedir y adónde puede volver — y de los dos que hay, solo uno puede guardar un secreto.
+</div>
+
+## Ya conoces la distinción: es una agencia frente a un folleto
+
+Una agencia de viajes tiene oficina, caja fuerte y responsabilidad: puede custodiar tu pasaporte mientras tramita algo. Un folleto que alguien te da por la calle no custodia nada — cualquiera puede imprimir uno idéntico.
+
+En OAuth la diferencia tiene nombre. Un **cliente confidencial** corre en un servidor que controlas y puede guardar un secreto. Un **cliente público** —una app móvil, una página que corre entera en el navegador— no puede: cualquiera puede abrirlo y leer lo que lleve dentro.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un folleto no puede hacer nada. Un cliente público sí opera con normalidad: lo que no puede es **demostrar que es él**. Por eso no lleva secreto y depende enteramente de PKCE y de la lista de direcciones de retorno.
+
+Y hay algo que la analogía no capta: aquí lo que distingue a uno de otro no es una etiqueta, es **si el registro tiene secreto o no**. El tipo se deduce del dato.
+
+</Callout>
+
+## Idea 1 · Los dos clientes, y por qué son de clases distintas
+
+| | `web` — el panel | `scalar` — la documentación interactiva |
+| --- | --- | --- |
+| Dónde corre | En el servidor (Blazor Server) | **En el navegador** |
+| Tipo | **Confidencial** | **Público** |
+| ¿Tiene secreto? | Sí, generado por el orquestador | No, y no podría tenerlo |
+| Scopes que pide | `identity`, `rentals` | `identity`, `rentals`, `notifications` |
+| Para qué sirve | Usar el producto | Probar las APIs con un usuario real |
+
+**Por qué importa:** Scalar no puede guardar un secreto porque **es JavaScript en tu navegador**: cualquiera que abra las herramientas de desarrollo lo vería. Su seguridad descansa en dos cosas: que PKCE es obligatorio, y que la dirección de retorno está registrada, así que un código emitido para Scalar solo puede volver a Scalar.
+
+## Idea 2 · El registro se siembra al arrancar, no se escribe a mano
+
+<Code
+    code={whole(clientOptions)}
+    lang="csharp"
+    title="Identity · Infrastructure/Seeding/ClientSeedOptions.cs"
+/>
+
+<Code
+    code={member(seeder, 'private async Task SeedClientsAsync')}
+    lang="csharp"
+    title="Identity · Infrastructure/Seeding/IdentitySeeder.cs"
+    mark={['ClientType = string.IsNullOrEmpty(client.ClientSecret) ? ClientTypes.Public : ClientTypes.Confidential,', 'Requirements = { Requirements.Features.ProofKeyForCodeExchange }']}
+/>
+
+Tres decisiones en ese descriptor merecen nombre:
+
+- **El tipo se deduce del secreto.** Si viene vacío, público; si viene, confidencial. Una decisión menos que tomar y una menos que equivocarse.
+- **PKCE es un requisito del cliente**, no solo del servidor. Aunque alguien reconfigurara el servidor, estos dos clientes seguirían obligados.
+- **El consentimiento es implícito.** Los dos clientes son propios, así que no tiene sentido enseñarle al usuario una pantalla de *"¿autorizas a esta aplicación a…?"*. Con un cliente de terceros sería justo al revés.
+
+Y fíjate en el final: si el cliente ya existe, **se actualiza**. Cambiar un scope o una dirección de retorno en la configuración se aplica al siguiente arranque, sin migración ni intervención manual.
+
+## Idea 3 · El secreto se genera solo, y llega a los dos extremos
+
+<Code
+    code={span(appHost, 'var webClientSecret = builder.AddParameter(', 'persist: true);')}
+    lang="csharp"
+    title="AppHost.cs · el secreto del cliente web"
+/>
+
+Ese valor **no está en el repositorio**. Se genera la primera vez, se guarda en los secretos de usuario de la máquina, y se inyecta en los dos sitios que tienen que coincidir: el registro del cliente en Identity y la configuración del panel.
+
+```csharp
+// en Identity — el cliente que se siembra en la base
+.WithEnvironment("Seed__Clients__0__ClientSecret", webClientSecret)
+
+// en la Web — el mismo secreto, para poder canjear el código
+.WithEnvironment("Identity__ClientSecret", webClientSecret)
+```
+
+**Por qué importa:** es el patrón que evita el error más común de los sistemas con OIDC — un secreto copiado a mano en dos sitios que acaban divergiendo, con un `invalid_client` imposible de diagnosticar. Aquí no pueden divergir porque **son la misma variable**.
+
+## Idea 4 · Qué configura el cliente, y qué guarda
+
+<Code
+    code={member(webAuth, 'public static IServiceCollection AddIdentityAuthentication')}
+    lang="csharp"
+    title="Web · Authentication/IdentityAuthenticationExtensions.cs"
+    mark={['options.SaveTokens = true;', 'options.UsePkce = true;']}
+/>
+
+Dos esquemas conviviendo, y conviene distinguirlos porque es lo que más confunde:
+
+- **La cookie** es la sesión **del panel**: lo que te mantiene dentro entre páginas.
+- **OpenID Connect** es el esquema de **desafío**: cuando alguien no autenticado entra a una página protegida, se le manda a Identity.
+
+Y tres líneas que deciden el comportamiento:
+
+<ol class="ddd-steps">
+    <li><strong><code>SaveTokens = true</code></strong> — guarda el access token, el id token y el refresh token <strong>dentro de la cookie de sesión</strong>, en el servidor. Sin esto no habría nada que adjuntar después.</li>
+    <li><strong><code>MapInboundClaims = false</code></strong> — no renombra los claims a los nombres largos de Microsoft. Lo que llega es <code>sub</code> y <code>role</code>, tal cual, y por eso el <a href="/oauth/validacion">núcleo compartido</a> puede leerlos igual en el panel y en las APIs.</li>
+    <li><strong><code>GetClaimsFromUserInfoEndpoint = false</code></strong> — no hace una llamada extra: todo lo que el panel necesita saber ya viene en el id token.</li>
+</ol>
+
+Y de ahí lo saca este manejador, que se engancha a los clientes HTTP que llaman a APIs protegidas:
+
+<Code
+    code={whole(tokenHandler)}
+    lang="csharp"
+    title="Web · Authentication/AccessTokenHandler.cs"
+/>
+
+## Idea 5 · Cerrar sesión toca las dos puertas
+
+<Code
+    code={member(authEndpoints, 'public static IEndpointRouteBuilder MapAuthentication')}
+    lang="csharp"
+    title="Web · Authentication/AuthenticationEndpoints.cs"
+/>
+
+Tres endpoints diminutos, y el del medio es el interesante: al cerrar sesión se firma la salida de **los dos esquemas** — la cookie del panel y OpenID Connect, que a su vez redirige a `/connect/endsession` de Identity.
+
+Cerrar solo el primero dejaría la sesión de Identity viva, y volver a entrar sería instantáneo ([módulo 3](/oauth/sesion)).
+
+Fíjate también en `LocalUrl`: comprueba que la dirección de retorno empiece por `/` y no por `//` ni `/\`. Es la defensa contra una **redirección abierta** — alguien pasando `?returnUrl=https://sitio-malo` para que el panel te mande ahí después de autenticarte.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre los clientes">
+
+**"Cliente es el navegador."** El navegador es el medio de transporte. El cliente es **la aplicación registrada** — y en el caso del panel, corre en el servidor.
+
+**"Un cliente público es inseguro."** Es un cliente que **no puede demostrar quién es**. No es un defecto, es una circunstancia: una app móvil o una página en el navegador están en esa situación por definición. Lo que lo hace seguro es PKCE y la lista de direcciones de retorno.
+
+**"El secreto del cliente autentica al usuario."** Autentica **a la aplicación**. Son dos cosas distintas y ocurren en pasos distintos del flujo.
+
+**"Registrar una dirección de retorno es burocracia."** Es una de las dos defensas de un cliente público. Sin ella, cualquiera podría lanzar el flujo con su propia dirección y recibir códigos de tus usuarios.
+
+**"Con `SaveTokens` el token está en el navegador."** Está en la cookie de sesión **cifrada, en el servidor**. El navegador solo lleva la cookie, que no se puede leer ni desde JavaScript.
+
+</Callout>
+
+<Callout kind="honesto" title="Lo que este cliente todavía no hace">
+
+`AccessTokenHandler` adjunta el token y **no lo renueva**. El refresh token está ahí —se pide el scope `offline_access` y `SaveTokens` lo guarda— pero nadie lo usa.
+
+Con tokens de quince minutos, eso significa que una sesión larga acaba mandando un token caducado y recibiendo un `401` que el panel muestra como un error genérico, en lugar de renovar en silencio y reintentar.
+
+Es la deuda más visible para un usuario de todas las de esta guía, y está anotada en `todo.md` con esas palabras: *"…y lo renueve con el refresh token"*.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo se resuelve la dirección de Identity** desde el panel, que es la excepción al descubrimiento por nombre: [Arquitectura · AppHost](/arquitectura/apphost).
+- **Los clientes que no existen:** no hay app móvil, ni cliente de máquina a máquina, ni terceros.
+- **La rotación del secreto**, que hoy es regenerar el parámetro y reiniciar.
+- **El registro dinámico de clientes**, que el estándar contempla y aquí no hace falta con dos.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Un cliente es **una aplicación registrada** con su identificador, sus retornos y sus permisos.
+- **Confidencial** (el panel, en el servidor) frente a **público** (Scalar, en el navegador). El tipo se deduce de si hay secreto.
+- El registro **se siembra al arrancar** y se actualiza solo si cambia la configuración.
+- El secreto **se genera y se reparte** desde un único parámetro, así que no puede divergir entre los dos extremos.
+- `SaveTokens` guarda los tres tokens **en el servidor**, dentro de la cookie de sesión.
+- Cerrar sesión toca **las dos** puertas; y la dirección de retorno se valida para evitar redirecciones abiertas.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre DbGate, entra en la base `identity` y busca la tabla de aplicaciones de OpenIddict. Vas a ver las dos filas: `web` y `scalar`, con sus permisos, sus retornos y —en una sola— un secreto cifrado.
+
+Esas dos filas son el registro de clientes entero del sistema. Ver que caben en una pantalla desmonta la idea de que OAuth es un mundo enorme: lo grande es el protocolo, no la configuración.
+
+**Y luego:** el [módulo 7](/oauth/cuentas) cuenta el camino por el que aparece una cuenta sin que nadie haya rellenado ninguno de los formularios de esta guía.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Comprueba que lo entendiste">
+
+1. Scalar no tiene secreto y funciona igual. Nombra las dos defensas que lo sostienen y describe qué pasaría si se quitara cada una.
+2. El secreto del panel se inyecta en **dos** sitios desde un único parámetro. ¿Qué error concreto evita eso, y qué síntoma tendría si se escribiera a mano en los dos?
+3. Implementa la renovación con el refresh token en `AccessTokenHandler`. ¿Qué tiene que ocurrir cuando la renovación también falla?
+
+</Callout>
