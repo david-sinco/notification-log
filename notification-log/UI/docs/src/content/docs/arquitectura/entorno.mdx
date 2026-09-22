@@ -1,0 +1,227 @@
+---
+title: "Entorno y observabilidad"
+description: "Qué ves cuando algo falla en seis procesos a la vez, y qué piezas del entorno no existirían en producción."
+sidebar:
+  order: 10
+  label: "10 · Entorno y observabilidad"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span, member } from '../../../lib/code';
+import serviceDefaults from '@code/Shared/NotificationLog.ServiceDefaults/Extensions.cs?raw';
+import appHost from '@code/NotificationLog.AppHost/AppHost.cs?raw';
+import notificationDevSettings from '@code/Services/Notification/NotificationLog.ApiService/appsettings.Development.json?raw';
+import webProgram from '@code/UI/NotificationLog.Web/Program.cs?raw';
+
+<p class="ddd-lede">
+Alguien registra un propietario y el correo de bienvenida no llega. El panel respondió
+<code>201</code>, así que Rentals hizo lo suyo. ¿Y después? Hay seis procesos corriendo, cada uno
+con su consola, y el fallo puede estar en cualquiera de cinco saltos. En un monolito abrirías el
+log y buscarías la excepción. Aquí, ¿cuál log?
+</p>
+
+Un sistema repartido en procesos no se depura leyendo consolas. Se depura con tres cosas que hay que montar **antes** de necesitarlas — y en este repositorio están montadas con una línea por servicio.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> cada servicio llama a <code>AddServiceDefaults()</code> y con eso
+queda instrumentado; el dashboard reconstruye lo que pasó atravesando procesos, y dos contenedores
+de desarrollo enseñan lo que el sistema manda al exterior.
+</div>
+
+## Ya conoces la idea: es el cuadro de mandos de un coche
+
+No abres el capó para saber si te queda gasolina. Miras una aguja que alguien conectó al depósito cuando fabricó el coche, junto a otras que resumen la temperatura, las revoluciones y los kilómetros. La instrumentación no se añade cuando el motor falla: **viene puesta de fábrica**, y por eso sirve.
+
+Y hay una jerarquía útil: los indicadores te dicen **que** algo va mal, y el diagnóstico del taller te dice **qué**. Las dos cosas hacen falta, y en ese orden.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un coche tiene un solo motor. Aquí hay seis procesos, y lo que hace falta no es un panel por proceso sino **una aguja que cruce los seis**: poder decir *"esta petición del panel provocó esta escritura en Rentals y este mensaje que Identity consumió"*.
+
+Eso tiene nombre —traza distribuida— y es la pieza que un conjunto de logs sueltos no puede darte por mucho que los mires.
+
+</Callout>
+
+## Idea 1 · Una línea, y el servicio queda instrumentado
+
+<Code
+    code={member(serviceDefaults, 'public static TBuilder AddServiceDefaults<TBuilder>')}
+    lang="csharp"
+    title="Shared/NotificationLog.ServiceDefaults/Extensions.cs"
+/>
+
+Los cinco ejecutables llaman a esto en su primera línea útil. A cambio reciben cuatro cosas que nadie configura por separado:
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">OpenTelemetry</span><span class="arrow">→</span><span>Trazas, métricas y logs con un formato estándar, no atado a ningún proveedor.</span></div>
+<div class="term-pair"><span class="biz">Comprobaciones de salud</span><span class="arrow">→</span><span><code>/health</code> y <code>/alive</code>, que es lo que AppHost consulta antes de arrancar a quien espera.</span></div>
+<div class="term-pair"><span class="biz">Descubrimiento</span><span class="arrow">→</span><span>La traducción de <code>https+http://rental</code> a una dirección real.</span></div>
+<div class="term-pair"><span class="biz">Resiliencia</span><span class="arrow">→</span><span>Reintentos, tiempos de espera y cortacircuitos en todos los <code>HttpClient</code>.</span></div>
+</div>
+
+**Por qué importa:** la observabilidad es el ejemplo clásico de algo que se pospone y luego no se añade nunca, porque hacerlo a posteriori significa tocar los seis procesos. Concentrarla en un proyecto compartido convierte "instrumentar un servicio nuevo" en una línea.
+
+<Code
+    code={member(serviceDefaults, 'private static TBuilder AddOpenTelemetryExporters<TBuilder>')}
+    lang="csharp"
+    title="ServiceDefaults · el exportador solo se activa si hay dónde enviar"
+/>
+
+Esa comprobación es la que hace que esto no moleste fuera de Aspire: si la variable `OTEL_EXPORTER_OTLP_ENDPOINT` no está —porque nadie la inyectó— la telemetría simplemente no se exporta y el servicio arranca igual.
+
+## Idea 2 · La traza atraviesa procesos
+
+Lo que convierte el dashboard en algo útil no es que junte los logs de seis sitios: es que sabe que **son la misma operación**.
+
+Una **traza** es el recorrido completo de una operación; cada tramo dentro de un proceso es un **span**. Al cruzar de un proceso a otro por HTTP, el identificador de la traza viaja en una cabecera; al hacerlo por mensaje, viaja en las propiedades del mensaje.
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 250" role="img" aria-labelledby="traceTitle">
+        <title id="traceTitle">Una traza distribuida vista en el dashboard</title>
+
+        <text x="30" y="34" font-size="9.5" font-weight="700" fill="#475569">Traza · registrar propietario</text>
+        <text x="760" y="34" font-size="8" fill="#64748b">~180 ms</text>
+        <line x1="30" y1="44" x2="850" y2="44" stroke="#e5e9f2" stroke-width="1" />
+
+        <rect x="30" y="56" width="700" height="24" rx="4" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="40" y="72" font-size="8" fill="#4338ca">web · POST /rentals/owners (página)</text>
+
+        <rect x="80" y="86" width="560" height="24" rx="4" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="90" y="102" font-size="8" fill="#9a3412">web · HTTP POST → rental</text>
+
+        <rect x="120" y="116" width="480" height="24" rx="4" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="130" y="132" font-size="8" fill="#14532d">rental · POST /api/owners/natural</text>
+
+        <rect x="160" y="146" width="240" height="24" rx="4" fill="#fff" stroke="#cbd5e1" />
+        <text x="170" y="162" font-size="8" fill="#334155">rental · Marten SaveChanges</text>
+
+        <rect x="410" y="146" width="150" height="24" rx="4" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="420" y="162" font-size="8" fill="#9d174d">rental · publish → rabbitmq</text>
+
+        <rect x="580" y="176" width="180" height="24" rx="4" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="590" y="192" font-size="8" fill="#9d174d">identity · consume mensaje</text>
+
+        <rect x="620" y="206" width="140" height="24" rx="4" fill="#fff" stroke="#cbd5e1" />
+        <text x="630" y="222" font-size="8" fill="#334155">identity · INSERT usuario</text>
+
+        <line x1="560" y1="170" x2="580" y2="176" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,2" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Cada barra es un span y la anidación enseña quién llamó a quién. El salto por mensaje —la línea
+        punteada— es el que un conjunto de logs sueltos nunca te habría dejado reconstruir.
+    </p>
+</div>
+
+**Por qué importa:** con esto, la pregunta *"¿dónde se perdió?"* deja de ser una investigación y pasa a ser una lectura. Y la que no se puede responder mirando trazas —*"¿por qué ese mensaje nunca llegó a una cola?"*— tiene su propia herramienta, que es la siguiente.
+
+## Idea 3 · Tres ventanas, tres preguntas distintas
+
+| Herramienta | Dirección | Responde a |
+| --- | --- | --- |
+| **Dashboard de Aspire** | lo abre el propio comando | ¿Qué recursos están vivos? ¿Qué pasó en esta petición? ¿Qué se registró? |
+| **RabbitMQ (administración)** | enlazada desde el dashboard | ¿Se publicó el mensaje? ¿Hay alguien escuchando esa cola? |
+| **DbGate** | `localhost:3000` | ¿Quedó escrito? ¿Con qué forma? |
+
+Las tres cubren un tramo distinto del recorrido del [módulo 9](/arquitectura/recorrido), y casi cualquier incidencia se localiza recorriéndolas en ese orden.
+
+## Idea 4 · Todo lo que sale del sistema acaba en un solo sitio
+
+<Code
+    code={span(appHost, 'var buggregator = builder.AddContainer("buggregator"', '.WithParentRelationship(messaging);')}
+    lang="csharp"
+    title="AppHost.cs · Buggregator"
+    mark={['CLIENT_SUPPORTED_EVENTS']}
+/>
+
+**Buggregator** recibe dos canales de salida: SMTP en el puerto `1025` y un receptor de SMS en `/sms`. La variable `CLIENT_SUPPORTED_EVENTS=smtp,sms` apaga sus otros módulos — y un módulo apagado ni siquiera abre su puerto.
+
+Y del lado del servicio, la conexión es simple hasta el aburrimiento:
+
+<Code
+    code={whole(notificationDevSettings)}
+    lang="json"
+    title="Notifications · appsettings.Development.json"
+/>
+
+Puertos fijos de la máquina, no nombres de recurso: el contenedor publica `8000` y `1025` en el host, y la API de desarrollo apunta ahí. En producción, esas mismas claves apuntarían a un proveedor real **sin cambiar una línea de código**, porque el remitente de cada canal se construye desde esa configuración.
+
+**Por qué importa:** tener un único destino para correos y SMS elimina la pregunta *"¿se envió o no?"*. Si no está en Buggregator, no salió.
+
+## Idea 5 · Las dos piezas restantes del entorno
+
+<Code
+    code={span(webProgram, 'builder.AddRedisOutputCache("cache");', 'builder.AddRedisOutputCache("cache");')}
+    lang="csharp"
+    title="Web/Program.cs · la caché de salida"
+/>
+
+**Redis** guarda respuestas ya renderizadas del panel. Es la única pieza que se puede apagar sin consecuencias funcionales.
+
+**Y la documentación** —este sitio— es un recurso más:
+
+<Code
+    code={member(appHost, 'void AddDocs()')}
+    lang="csharp"
+    title="AppHost.cs · la guía arranca con el sistema"
+/>
+
+Un `npm run dev` orquestado junto a lo que documenta. La razón de que esté ahí es práctica: una guía que se arranca con el mismo comando que el sistema se lee mientras se explora, y se actualiza cuando el código cambia porque sus fragmentos se importan de los archivos reales.
+
+## El recorrido: por qué no llegó el correo
+
+Vuelve a la escena inicial. Cuatro paradas, en orden, y cada una descarta un tramo:
+
+<ol class="ddd-steps">
+    <li><strong>Dashboard → Trazas.</strong> Busca la petición. ¿Llegó a Rentals? ¿Terminó bien? Si la traza acaba en rojo, el problema está antes de salir.</li>
+    <li><strong>RabbitMQ → Queues.</strong> ¿Pasó algo por <code>identity-accounts</code>? Si el contador nunca subió, el mensaje no se publicó. Si subió y no baja, <strong>nadie está consumiendo</strong>.</li>
+    <li><strong>Dashboard → Logs, filtrando por el servicio consumidor.</strong> Si el mensaje llegó y falló, la excepción está ahí con el nombre del handler.</li>
+    <li><strong>Buggregator.</strong> Si todo lo anterior salió bien y aquí no hay nada, el problema no es de plomería: es de configuración de negocio — probablemente no hay un disparador o una plantilla para esa clave, que es un asunto del panel de Notifications.</li>
+</ol>
+
+Ese último paso es el que más veces acierta, y es el que sin las tres paradas anteriores no habrías podido descartar.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro cosas que no son lo que parecen">
+
+**"Los endpoints de salud están expuestos en producción."** No: `MapDefaultEndpoints` solo los publica en Development, y el comentario del propio archivo explica por qué — publicar el detalle de las comprobaciones dice más de lo que conviene sobre la infraestructura.
+
+**"La telemetría necesita configuración."** No hay ninguna cadena de conexión de observabilidad en el repositorio. El exportador se activa solo si AppHost inyecta el endpoint OTLP, y ese es todo el acuerdo.
+
+**"Buggregator es un servidor de correo."** Es una trampa de correo: acepta el SMTP y lo enseña en una web, sin entregar nada a nadie. Lo mismo con los SMS, que autodetecta por la forma del cuerpo en vez de imitar a un proveedor concreto.
+
+**"El dashboard sirve en producción."** No: vive dentro del proceso de AppHost, que en producción no existe. Lo que sí sirve en producción es lo que hay debajo — OpenTelemetry es estándar y se puede apuntar a cualquier colector sin tocar el código.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Un backend de observabilidad real.** Toda la telemetría vive mientras AppHost esté arrancado. No hay retención, ni consultas históricas, ni alertas.
+- **Métricas de negocio.** Hay métricas técnicas —peticiones, latencia, tiempo de ejecución— y ninguna del tipo *"notificaciones fallidas por canal"*, que sería lo primero que un panel de operación necesitaría.
+- **Correlación con los mensajes fallidos.** Wolverine tiene colas de mensajes muertos y nada las vigila.
+- **Las pruebas de integración**, que arrancan este mismo grafo con `Aspire.Hosting.Testing` y por tanto necesitan Docker. Viven en `NotificationLog.Tests`.
+- **Despliegue.** Ni contenedores de producción, ni CI, ni manifiestos. Es la frontera deliberada de esta guía.
+
+<Callout kind="resumen" title="Para recordar">
+
+- **Una línea por servicio** —`AddServiceDefaults()`— da telemetría, salud, descubrimiento y resiliencia.
+- Lo que hace útil el dashboard es la **traza distribuida**: la misma operación vista a través de varios procesos, incluso cruzando mensajes.
+- Tres ventanas, tres preguntas: **dashboard** (qué pasó), **RabbitMQ** (se publicó y se consumió), **DbGate** (quedó escrito).
+- **Buggregator es el único destino** de correos y SMS: si no está ahí, no salió.
+- Los endpoints de salud **solo se publican en desarrollo**, a propósito.
+- **Redis, DbGate, Buggregator y la documentación** no son el producto: son el entorno.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Provoca un fallo y persíguelo. Con el sistema arrancado, para el recurso `identity` desde el dashboard y registra un propietario.
+
+Vas a ver que el panel responde igual, que el mensaje se queda esperando en `identity-accounts`, y que nada se rompe. Arranca Identity otra vez y observa cómo el contador de la cola baja solo y la cuenta aparece.
+
+Eso es la mensajería asíncrona haciendo exactamente lo que prometió, y verlo una vez vale más que el [módulo 6](/arquitectura/mensajeria) entero.
+
+**Y luego:** el [módulo 11](/arquitectura/decisiones) cierra la guía con la lista de decisiones y deudas, cada una con el archivo que la prueba.
+
+</Callout>

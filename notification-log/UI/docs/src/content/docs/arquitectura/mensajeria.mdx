@@ -1,0 +1,311 @@
+---
+title: "Mensajes: el camino asíncrono"
+description: "Cinco colas, dos exchanges, contratos protobuf y el outbox que hace que un mensaje no se pueda perder."
+sidebar:
+  order: 6
+  label: "6 · El camino asíncrono"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span, member } from '../../../lib/code';
+import identityMessaging from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/RabbitMqMessagingExtensions.cs?raw';
+import notificationMessaging from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/Messaging/RabbitMq/RabbitMqMessagingExtensions.cs?raw';
+import rentalsMessaging from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/RabbitMqMessagingExtensions.cs?raw';
+import outboxUnitOfWork from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Persistence/OutboxUnitOfWork.cs?raw';
+import accountProvisioner from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/Publishers/WolverineAccountProvisioner.cs?raw';
+import dispatchProto from '@code/Shared/NotificationLog.Contracts/Notifications/notification_dispatch_requested.proto?raw';
+
+<p class="ddd-lede">
+Registras un propietario en el panel de Rentals. Dos segundos después, sin que nadie haya pulsado
+nada más, hay una cuenta nueva en Identity, un destinatario nuevo en Notifications y un correo
+esperando en la bandeja de desarrollo. Buscas la llamada HTTP que encadenó todo eso y no existe:
+en el repositorio no hay una sola línea en la que un servicio llame a otro por HTTP.
+</p>
+
+Todo lo que cruza una frontera entre servicios va por el otro camino — el asíncrono, donde nadie espera respuesta y donde las garantías son distintas.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> los servicios se hablan dejando mensajes en RabbitMQ, con contratos
+protobuf versionados que son lo único público de cada uno, y sin esperar contestación de nadie.
+</div>
+
+## Ya conoces la diferencia: es el correo frente al teléfono
+
+Por teléfono preguntas y esperas; si el otro no está, no hay conversación. Por correo dejas el mensaje y sigues con lo tuyo; si el destinatario está de vacaciones, la carta le espera.
+
+Y de ahí salen las dos consecuencias que definen este camino. La buena: **el otro puede estar caído y el mensaje no se pierde**. La incómoda: no sabes cuándo lo leerá, no puedes preguntarle si le llegó, y si dudas y mandas la carta dos veces, le llegan dos.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+El correo postal entrega una vez o ninguna. RabbitMQ entrega **al menos una vez**: ante la duda, reintenta. Eso significa que un consumidor tiene que poder recibir el mismo mensaje dos veces sin romper nada, y es una obligación, no una precaución.
+
+Y hay una figura que el correo no tiene: el **exchange**, que reparte la misma carta a todos los buzones suscritos sin que el remitente sepa cuántos son.
+
+</Callout>
+
+## Idea 1 · Dos formas de repartir, y aquí se usan las dos
+
+<Code
+    code={span(identityMessaging, 'opts.PublishMessage<UserCreated>()', '.UseProtobufSerialization();')}
+    lang="csharp"
+    title="Identity · publica al exchange, no a una cola"
+/>
+
+Un **exchange fanout** es una lista de distribución: quien publica no nombra destinatarios, y cada cola suscrita recibe su propia copia. Identity publica `UserCreated` a `identity.users` **sin saber quién escucha** — hoy Notifications, mañana cualquiera.
+
+La otra forma es la directa:
+
+<Code
+    code={span(rentalsMessaging, 'opts.PublishMessage<NotificationDispatchRequested>()', '.UseProtobufSerialization();')}
+    lang="csharp"
+    title="Rentals · publica a una cola concreta"
+/>
+
+Aquí sí hay un destinatario: la cola `notification-dispatch`, que consume Notifications. El mensaje es una **petición dirigida**, no un anuncio.
+
+La topología completa del sistema son cinco colas y dos exchanges:
+
+| Origen | Mensaje | Va a | Lo consume |
+| --- | --- | --- | --- |
+| Identity | `UserCreated` | exchange `identity.users` *(fanout)* | `notification-identity-users` |
+| Identity | `PersonVerificationChanged` | exchange `identity.users` *(fanout)* | `notification-identity-users` |
+| Identity | `VerificationCodeRequested` | exchange `identity.verification-codes` *(fanout)* | `notification-verification-codes` |
+| Rentals | `AccountCreationRequested` | cola `identity-accounts` | Identity |
+| Rentals | `NotificationDispatchRequested` | cola `notification-dispatch` | Notifications |
+
+**Por qué importa la distinción:** un anuncio —*"se creó un usuario"*— permite que aparezcan consumidores nuevos sin tocar al emisor. Una petición dirigida —*"manda esta notificación"*— crea una dependencia explícita, y por eso se reserva para cuando de verdad se le está pidiendo algo a alguien concreto.
+
+<Callout kind="concepto" title="Por qué hay dos exchanges y no uno">
+
+El comentario en el código de Notifications lo explica: `VerificationCodeRequested` **lleva el código de verificación dentro**. Si viajara por `identity.users`, ese código llegaría a todos los suscriptores del fanout, incluidos los que no tienen nada que ver con autenticar a nadie.
+
+Separarlo en su propio exchange es una frontera de seguridad, no de organización.
+
+</Callout>
+
+## Idea 2 · Lo público de un servicio es su `.proto`, no sus clases
+
+<Code
+    code={whole(dispatchProto)}
+    lang="protobuf"
+    title="Shared/NotificationLog.Contracts/Notifications/notification_dispatch_requested.proto"
+/>
+
+Un **contrato** es este archivo. De él se genera la clase C# para todo el que lo necesite, y es lo único que un servicio promete mantener.
+
+Los tres campos de cabecera se repiten en los cinco contratos del repositorio: `event_id`, `occurred_at` y `schema_version`. El último es el que permite cambiar el mensaje sin romper a quien todavía lee la versión anterior.
+
+**Por qué protobuf y no JSON**, que sería más fácil de leer:
+
+<ol class="ddd-steps">
+    <li><strong>Un esquema explícito.</strong> El contrato es un archivo que se revisa en un pull request, no una forma implícita que emerge de una clase C#.</li>
+    <li><strong>Números de campo, no nombres.</strong> Renombrar una propiedad no rompe a nadie; quitar un número sí. La compatibilidad es una regla escrita, no una convención.</li>
+    <li><strong>Un lenguaje neutral.</strong> Si mañana un servicio se escribe en otra cosa, el contrato sigue valiendo.</li>
+</ol>
+
+La velocidad y el tamaño, que es lo primero que suele decirse de protobuf, aquí no importan nada.
+
+<Callout kind="honesto" title="Y por eso también se acepta JSON a mano">
+
+<Code
+    code={span(notificationMessaging, 'opts.UseProtobufSerialization();', '}));')}
+    lang="csharp"
+    title="Notifications · dos serializadores registrados a propósito"
+/>
+
+Protobuf es el serializador por defecto, y además se registra System.Text.Json. Wolverine elige según la propiedad `content_type` del mensaje AMQP.
+
+La razón es práctica y está anotada en el propio código: **todavía no hay un productor real para todos los flujos**, así que hay que poder escribir un mensaje a mano desde la interfaz de administración de RabbitMQ y que el sistema lo entienda. Es una concesión de desarrollo, y está documentada como tal.
+
+</Callout>
+
+## Idea 3 · El outbox: por qué en Identity un mensaje no se puede perder
+
+Este es el problema que todo sistema con mensajería tiene y casi ninguno resuelve. Guardas el usuario en la base, publicas `UserCreated`, y entre las dos cosas el proceso muere. Resultado: un usuario que existe y del que nadie se enteró — o, si publicas primero, un mensaje sobre un usuario que no llegó a existir.
+
+La solución es un **outbox**: guardar el mensaje **en la misma transacción** que el dato, y publicarlo después desde ahí.
+
+<Code
+    code={span(identityMessaging, 'opts.PersistMessagesWithPostgresql(identity, WolverineSchema);', 'opts.Policies.UseDurableOutboxOnAllSendingEndpoints();')}
+    lang="csharp"
+    title="Identity · los mensajes se persisten en su propia base"
+/>
+
+Wolverine crea un esquema `wolverine` **dentro de la base de Identity**, y ahí escribe los mensajes pendientes. Y la unidad de trabajo del servicio no llama a `SaveChanges` del `DbContext`: llama al outbox, que hace las dos cosas juntas.
+
+<Code
+    code={whole(outboxUnitOfWork)}
+    lang="csharp"
+    title="Identity · Persistence/OutboxUnitOfWork.cs"
+    mark={['await _outbox.SaveChangesAndFlushAsync(ct);']}
+/>
+
+**Por qué importa:** la capa de aplicación de Identity no sabe nada de esto. Sus handlers llaman a `IUnitOfWork.SaveChangesAsync` igual que los de los otros dos servicios; la garantía se coló por la implementación.
+
+<Callout kind="honesto" title="Rentals no lo hace así, y la diferencia es real">
+
+<Code
+    code={member(accountProvisioner, 'public async Task RequestAccountAsync')}
+    lang="csharp"
+    title="Rentals · Messaging/Publishers/WolverineAccountProvisioner.cs"
+    mark={['await _bus.PublishAsync(message);']}
+/>
+
+Rentals tiene mensajería durable configurada —`IntegrateWithWolverine()` sobre Marten hace que los mensajes se persistan—, pero mira **quién llama a este método**: `RegisterNaturalOwnerHandler` lo invoca **después** de `SaveChangesAsync`, con un `IMessageBus` que no está enlazado a esa transacción.
+
+O sea: el propietario se guarda, y luego se publica. Si el proceso muere justo en medio, queda un propietario en Rentals sin cuenta en Identity, y nada lo va a reintentar.
+
+Es una ventana pequeña y un fallo poco probable. Pero es exactamente la clase de detalle que distingue "tenemos outbox" de "usamos el outbox": la infraestructura está, y este camino concreto no pasa por ella.
+
+</Callout>
+
+## Idea 4 · El consumidor tiene que aguantar el mismo mensaje dos veces
+
+RabbitMQ entrega **al menos una vez**. Si un consumidor procesa el mensaje y muere antes de confirmar, el mensaje vuelve.
+
+Este sistema lo resuelve sin código de deduplicación, apoyándose en el dominio:
+
+- `RecipientSyncService` aplica una **instantánea completa** del usuario. Aplicarla dos veces deja el mismo estado.
+- Los métodos de los agregados de Rentals **no levantan evento si no hay nada que hacer** ([módulo 4 de Event Sourcing](/event-sourcing/agregado)).
+- `CreateAccountHandler` de Identity recibe el `Guid` que le manda Rentals, no genera uno nuevo: crear la misma cuenta dos veces choca con la clave primaria en vez de duplicar.
+
+**Por qué importa:** la idempotencia aquí no es una tabla de mensajes procesados, es una **propiedad del diseño**. Es más barata de mantener y más fácil de razonar — y también más fácil de romper sin darse cuenta el día que alguien añada un consumidor que incremente un contador.
+
+## Cómo encaja: la topología completa
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 360" role="img" aria-labelledby="msgTitle">
+        <title id="msgTitle">Los cinco mensajes del sistema y su recorrido</title>
+        <defs>
+            <marker id="msArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="30" width="170" height="90" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="105" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">RENTALS</text>
+        <text x="105" y="76" text-anchor="middle" font-size="8" fill="#334155">AccountCreationRequested</text>
+        <text x="105" y="94" text-anchor="middle" font-size="8" fill="#334155">NotificationDispatchRequested</text>
+        <text x="105" y="112" text-anchor="middle" font-size="7.5" fill="#64748b">publica tras el commit</text>
+
+        <rect x="20" y="180" width="170" height="110" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="105" y="204" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">IDENTITY</text>
+        <text x="105" y="226" text-anchor="middle" font-size="8" fill="#334155">UserCreated</text>
+        <text x="105" y="244" text-anchor="middle" font-size="8" fill="#334155">PersonVerificationChanged</text>
+        <text x="105" y="262" text-anchor="middle" font-size="8" fill="#334155">VerificationCodeRequested</text>
+        <text x="105" y="280" text-anchor="middle" font-size="7.5" font-weight="600" fill="#9a3412">outbox transaccional</text>
+
+        <rect x="300" y="24" width="280" height="44" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="440" y="42" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">cola · identity-accounts</text>
+        <text x="440" y="58" text-anchor="middle" font-size="7.5" fill="#14532d">petición dirigida</text>
+
+        <rect x="300" y="80" width="280" height="44" rx="8" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="440" y="98" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">cola · notification-dispatch</text>
+        <text x="440" y="114" text-anchor="middle" font-size="7.5" fill="#14532d">petición dirigida</text>
+
+        <rect x="300" y="146" width="280" height="62" rx="8" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="440" y="166" text-anchor="middle" font-size="9" font-weight="700" fill="#9d174d">exchange · identity.users (fanout)</text>
+        <text x="440" y="184" text-anchor="middle" font-size="7.5" fill="#334155">→ notification-identity-users</text>
+        <text x="440" y="200" text-anchor="middle" font-size="7.5" fill="#991b1b">→ rentals-person-verification (sin enlace)</text>
+
+        <rect x="300" y="222" width="280" height="52" rx="8" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="440" y="242" text-anchor="middle" font-size="9" font-weight="700" fill="#9d174d">exchange · identity.verification-codes</text>
+        <text x="440" y="260" text-anchor="middle" font-size="7.5" fill="#334155">→ notification-verification-codes</text>
+
+        <rect x="690" y="80" width="170" height="130" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="775" y="104" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">NOTIFICATIONS</text>
+        <text x="775" y="128" text-anchor="middle" font-size="8" fill="#334155">crea el Recipient</text>
+        <text x="775" y="146" text-anchor="middle" font-size="8" fill="#334155">actualiza su contacto</text>
+        <text x="775" y="164" text-anchor="middle" font-size="8" fill="#334155">envía el código</text>
+        <text x="775" y="182" text-anchor="middle" font-size="8" fill="#334155">resuelve y despacha</text>
+        <text x="775" y="200" text-anchor="middle" font-size="7.5" fill="#14532d" font-style="italic">no sabe por qué</text>
+
+        <line x1="192" y1="52" x2="296" y2="46" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+        <line x1="192" y1="96" x2="296" y2="100" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+        <line x1="192" y1="226" x2="296" y2="180" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+        <line x1="192" y1="262" x2="296" y2="246" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+
+        <path d="M582 46 Q 640 46 640 200 Q 640 250 192 250" fill="none" stroke="#94a3b8" stroke-width="1.3" marker-end="url(#msArrow)" />
+        <line x1="582" y1="102" x2="686" y2="120" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+        <line x1="582" y1="178" x2="686" y2="150" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+        <line x1="582" y1="248" x2="686" y2="180" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#msArrow)" />
+
+        <text x="440" y="316" text-anchor="middle" font-size="9" fill="#64748b">Identity no sabe que Notifications existe: publica a un exchange y se desentiende.</text>
+        <text x="440" y="336" text-anchor="middle" font-size="9" fill="#64748b">Rentals sí sabe a qué colas escribe, porque les está pidiendo algo concreto.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        La línea roja del centro es real: la cola de Rentals está declarada y su consumidor existe, pero
+        ninguna línea del repositorio la enlaza al exchange. Se explica justo abajo.
+    </p>
+</div>
+
+<Callout kind="honesto" title="Una cola que no recibe nada, y se puede comprobar">
+
+Notifications declara sus dos exchanges **y los enlaza a sus colas** en el mismo sitio. Rentals, en cambio, solo declara la cola `rentals-person-verification`: no hay ni un `BindQueue` en todo el repositorio que la ate a `identity.users`.
+
+Eso significa que, salvo que alguien cree el enlace a mano en la interfaz de RabbitMQ, ese consumidor **nunca se ejecuta** y la réplica de verificación de Rentals se queda vacía.
+
+Encaja con lo que `todo.md` ya decidió: esa réplica sobra y hay que quitarla, junto con la cola, el consumidor y el documento. Si en cambio se decide conservarla, el enlace tiene que declararse en el código, como hace Notifications.
+
+</Callout>
+
+## El recorrido: un mensaje de punta a punta
+
+Sigue `UserCreated` desde que se decide hasta que alguien hace algo con él:
+
+<ol class="ddd-steps">
+    <li><strong>Identity crea la cuenta</strong> y, en la misma transacción, escribe el mensaje en su tabla de outbox. Si el proceso muere aquí, la transacción entera se deshace.</li>
+    <li><strong>Wolverine lo envía</strong> al exchange <code>identity.users</code> y lo marca como enviado.</li>
+    <li><strong>RabbitMQ lo copia</strong> a cada cola enlazada. Hoy, una.</li>
+    <li><strong>Notifications lo recibe</strong> en <code>notification-identity-users</code>, lo deserializa como protobuf y se lo pasa a <code>UserCreatedHandler</code>.</li>
+    <li><strong>El handler traduce</strong> el contrato a un comando propio y llama a <code>RecipientSyncService</code>. A partir de aquí, protobuf ya no existe.</li>
+    <li><strong>Si algo falla</strong>, el mensaje no se confirma y vuelve a entregarse. Como el servicio aplica una instantánea completa, repetirlo es inofensivo.</li>
+</ol>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco ideas equivocadas sobre la mensajería">
+
+**"El mensaje llega exactamente una vez."** Llega **al menos** una vez. Cualquier diseño que dependa de lo contrario está roto, y suele descubrirse en producción, con un correo enviado por duplicado.
+
+**"Los mensajes llegan en orden."** Con un solo consumidor y una sola cola, normalmente sí. Con reintentos y varios consumidores, no. Ningún flujo de este sistema depende del orden entre mensajes distintos.
+
+**"Un evento de dominio y un mensaje son lo mismo."** `ListingApproved` es un `record` privado de Rentals; `NotificationDispatchRequested` es un contrato público. Convertir uno en otro es una traducción explícita, y tiene su sitio propio: el [módulo 10 de Event Sourcing](/event-sourcing/procesos).
+
+**"Con un fanout, todos los servicios se enteran."** Se entera **cada cola enlazada**, y enlazar es un acto explícito. La línea roja del diagrama es justamente eso: publicar no sirve de nada si nadie se ató al exchange.
+
+**"Protobuf se eligió por rendimiento."** Se eligió por tener un **esquema revisable y versionado**. Con este volumen de mensajes, el rendimiento del serializador es irrelevante.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Un log reproducible.** RabbitMQ garantiza la entrega, no la relectura: no se puede reconstruir el estado de un servicio nuevo reprocesando la historia. `todo.md` lo tiene anotado como pendiente, y la solución habitual es un log estilo Kafka.
+- **Las colas de mensajes fallidos.** Wolverine tiene *dead letter queues*; qué hacer con lo que cae ahí no está definido en este sistema.
+- **Sagas y compensaciones.** No hay transacciones distribuidas que deshacer. Lo más parecido son los *process managers* de Rentals, en la [guía de Event Sourcing](/event-sourcing/procesos).
+- **Cómo evolucionar un contrato.** `schema_version` está en los cinco `.proto` y todavía no se ha usado. El razonamiento sobre compatibilidad está en el [módulo 11 de Event Sourcing](/event-sourcing/evolucion), aplicado a eventos internos.
+
+<Callout kind="resumen" title="Para recordar">
+
+- **Ningún servicio llama a otro por HTTP.** Todo lo que cruza una frontera es un mensaje.
+- **Exchange fanout** para anunciar sin saber quién escucha; **cola directa** para pedirle algo a alguien concreto.
+- Lo público de un servicio es su **`.proto`**, con `schema_version`, y se traduce al vocabulario propio nada más llegar.
+- El **outbox** de Identity guarda el mensaje en la misma transacción que el dato. Rentals tiene la infraestructura pero publica después del commit.
+- La entrega es **al menos una vez**: la idempotencia la aporta el diseño del dominio, no una tabla de deduplicación.
+- Publicar no basta: **una cola sin enlace no recibe nada**, y en el repositorio hay un caso.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre la interfaz de administración de RabbitMQ desde el dashboard de Aspire y mira dos pestañas:
+
+1. **Exchanges** — busca `identity.users` y entra: verás qué colas están enlazadas. Comprueba tú mismo cuántas son.
+2. **Queues** — registra un propietario desde el panel y observa cómo sube y baja el contador de `identity-accounts` en tiempo real.
+
+Ver los mensajes moverse hace que todo este módulo deje de ser un diagrama.
+
+**Y luego:** el [módulo 7](/arquitectura/identidad) sigue el otro hilo que atraviesa el sistema entero — quién eres, y cómo lo sabe cada servicio.
+
+</Callout>

@@ -155,7 +155,7 @@ Cada filtro nuevo modifica **cuatro** sitios: la interfaz en `Domain`, la implem
 
 <Callout kind="honesto" title="Lo que NO está en esta lista, y por qué">
 
-Faltan cosas importantes en este sistema —un *outbox* para que publicar y guardar sean atómicos, idempotencia en el consumo, reintentos con *circuit breaker*, autenticación— y ninguna aparece aquí. No es un olvido: son decisiones de **arquitectura**, no de diseño de clases, y están tratadas donde corresponde, en [Arquitectura · Distribuido](/arquitectura/distribuido).
+Faltan cosas importantes en este sistema —un *outbox* para que publicar y guardar sean atómicos, idempotencia en el consumo, reintentos con *circuit breaker*, autenticación— y ninguna aparece aquí. No es un olvido: son decisiones de **arquitectura**, no de diseño de clases, y están tratadas donde corresponde, en [Arquitectura · Mensajería](/arquitectura/mensajeria).
 
 Mezclar los dos niveles es el error más común de estas guías: acabas proponiendo un patrón de diseño para un problema que ningún patrón de diseño resuelve.
 
@@ -236,7 +236,7 @@ Vas a decidir el futuro del mecanismo de eventos de dominio.
         La solución conocida es el patrón <strong>Outbox</strong>: guardar los eventos <em>en la misma
         transacción</em>, en una tabla, y despacharlos después desde un proceso aparte que reintenta. Eso ya
         no es un patrón de diseño sino de integración, y está tratado en
-        <a href="/arquitectura/distribuido">Arquitectura · Distribuido</a>. Si los manejadores fuesen
+        <a href="/arquitectura/mensajeria">Arquitectura · Mensajería</a>. Si los manejadores fuesen
         siempre locales y síncronos, la opción B dentro de la misma transacción explícita sería suficiente;
         en cuanto uno publique a RabbitMQ, hace falta el outbox.
     </p>

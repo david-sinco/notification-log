@@ -1,0 +1,257 @@
+---
+title: "AppHost: la topología escrita como código"
+description: "El único archivo donde está quién existe, quién espera a quién y quién puede hablar con quién."
+sidebar:
+  order: 2
+  label: "2 · AppHost"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { span, member, lineWith } from '../../../lib/code';
+import appHost from '@code/NotificationLog.AppHost/AppHost.cs?raw';
+import appHostSettings from '@code/NotificationLog.AppHost/appsettings.json?raw';
+import rentalsDi from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/DependencyInjection.cs?raw';
+import webProgram from '@code/UI/NotificationLog.Web/Program.cs?raw';
+
+<p class="ddd-lede">
+Vas a ejecutar solo la API de Rentals, como harías en cualquier proyecto: botón de play sobre
+<code>NotificationLog.RentalService.Api</code>. Arranca y muere al instante:
+<em>"Falta la cadena de conexión 'rentals'"</em>. Abres <code>appsettings.json</code> del proyecto
+y no hay ninguna sección <code>ConnectionStrings</code>. Buscas en todo el repositorio la palabra
+<code>rentals</code> junto a un <code>Host=</code> y no aparece.
+</p>
+
+No está porque **no existe**. La cadena se genera en tiempo de arranque, con la contraseña que el contenedor de PostgreSQL acabó de recibir, y se le entrega al proceso como variable de entorno. Quien hace eso es un proyecto que no atiende ni una petición de negocio.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> AppHost es un programa de C# cuya única salida es la topología —
+quién existe, en qué orden arranca, quién puede hablar con quién y con qué credenciales — y es el
+único sitio del repositorio donde esa información está escrita.
+</div>
+
+## Ya conoces la idea: es el cuadro eléctrico de una casa
+
+Ningún electrodoméstico sabe de qué circuito cuelga. La lavadora tiene un enchufe y ya está; quién le da corriente, con qué protección y en qué orden se conectan los circuitos está declarado en un solo sitio, en el cuadro, con cada línea etiquetada.
+
+La ventaja no es estética: cuando hay que cambiar algo —añadir un circuito, mover una toma— se cambia **en el cuadro**, no abriendo paredes en cada habitación.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un cuadro eléctrico es pasivo: reparte lo que llega. AppHost es activo: **arranca** lo que hay al otro lado de cada línea, incluidos los contenedores, y fabrica las credenciales sobre la marcha.
+
+Y hay algo que un cuadro no hace: sabe **esperar**. Puede retener el arranque de un servicio hasta que su base de datos responda, que es la mitad de los problemas de arranque de un sistema distribuido.
+
+</Callout>
+
+## Idea 1 · Un recurso se declara, y referenciarlo inyecta su configuración
+
+<Code
+    code={span(appHost, 'var postgres = builder.AddPostgres("postgres")', 'var rentalsDb = postgres.AddDatabase("rentals");')}
+    lang="csharp"
+    title="AppHost.cs · el motor y sus dos bases"
+/>
+
+Un **recurso** es cada cosa que AppHost conoce: un contenedor, un proyecto, una base de datos dentro de un motor. Aquí se declara PostgreSQL con un volumen —para que los datos sobrevivan al reinicio— y dentro dos bases lógicas.
+
+Y ahora la línea que lo conecta todo:
+
+<Code
+    code={member(appHost, 'IResourceBuilder<ProjectResource> AddRental()')}
+    lang="csharp"
+    title="AppHost.cs · el servicio de Rentals"
+    mark={['.WithReference(rentalsDb)', '.WaitFor(rentalsDb)']}
+/>
+
+`WithReference(rentalsDb)` significa *"este proyecto necesita esa base"*, y su efecto concreto es que el proceso arranca con una variable de entorno `ConnectionStrings__rentals` ya rellena. Por eso el código del servicio puede limitarse a pedirla:
+
+<Code
+    code={lineWith(rentalsDi, 'var connectionString = configuration.GetConnectionString("rentals")')}
+    lang="csharp"
+    title="Rentals · Infrastructure/DependencyInjection.cs"
+/>
+
+**Por qué importa:** el servicio nunca contiene una credencial ni una dirección. Eso hace que el mismo binario sirva para desarrollo, para pruebas y para producción sin tocar un archivo de configuración — cambia quién le pasa las variables, no él.
+
+## Idea 2 · Las direcciones son nombres, no puertos
+
+Mira cómo el panel declara a quién llama:
+
+<Code
+    code={span(webProgram, 'builder.Services.AddHttpClient<TriggersApiClient>', 'builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://notification"));')}
+    lang="csharp"
+    title="Web/Program.cs · clientes tipados hacia Notifications"
+/>
+
+`https+http://notification` no es una URL: es el **nombre del recurso** tal como aparece en AppHost, con una preferencia de esquema (HTTPS si existe, si no HTTP). El **descubrimiento de servicios** lo traduce en tiempo de ejecución a la dirección real.
+
+Y funciona porque AppHost declaró la relación:
+
+<Code
+    code={span(appHost, 'void AddWeb() =>', '.WithParentRelationship(ui);')}
+    lang="csharp"
+    title="AppHost.cs · el panel y sus tres destinos"
+    mark={['.WithReference(notification)', '.WithReference(rental)', '.WithReference(identity)']}
+/>
+
+**Por qué importa:** ningún puerto de servicio aparece escrito en el código de otro servicio. Si mañana Rentals se despliega en cinco instancias detrás de un balanceador, el panel no cambia.
+
+<Callout kind="concepto" title="La excepción: los cinco puertos que sí son fijos">
+
+<Code
+    code={span(appHostSettings, '"Oidc": {', '"Notifications": "https://localhost:7506"')}
+    lang="json"
+    title="AppHost/appsettings.json · las direcciones que OIDC obliga a fijar"
+/>
+
+Un servidor de identidad no puede funcionar con nombres internos: el **issuer** viaja dentro del token, el navegador del usuario tiene que llegar a él, y las URLs de retorno se registran de antemano. Por eso Identity, Rentals, Notifications y la Web tienen puerto fijo, declarado aquí y en los `launchSettings.json`.
+
+Es la única parte de la topología que no se resuelve por nombre, y tiene su módulo: el [7](/arquitectura/identidad).
+
+</Callout>
+
+## Idea 3 · El orden de arranque es una declaración, no una carrera
+
+En el fragmento de `AddRental` conviven dos llamadas parecidas y muy distintas:
+
+- **`WithReference(x)`** — *"necesito su configuración"*. Inyecta variables.
+- **`WaitFor(x)`** — *"no me arranques hasta que x esté sano"*. Retiene el proceso.
+
+Y para saber qué es "sano", cada servicio expone un endpoint:
+
+<Code
+    code={lineWith(appHost, '.WithHttpHealthCheck("/health")')}
+    lang="csharp"
+    title="AppHost.cs · comprobación de salud"
+/>
+
+**Por qué importa:** sin esto, el arranque de un sistema con contenedores es una lotería. SQL Server tarda decenas de segundos en aceptar conexiones, y un servicio que intente migrar antes de tiempo se cae. La alternativa habitual —reintentos y `Thread.Sleep`— acaba escondiendo problemas reales.
+
+## Idea 4 · Los secretos se generan y se reparten
+
+<Code
+    code={span(appHost, 'var webClientSecret = builder.AddParameter(', 'persist: true);')}
+    lang="csharp"
+    title="AppHost.cs · el secreto del cliente OIDC"
+/>
+
+Ese valor no está en ningún archivo del repositorio. Se genera la primera vez, se **persiste** en los secretos de usuario de la máquina, y se inyecta en los **dos** sitios que tienen que coincidir: el registro del cliente en Identity y la configuración del panel.
+
+<Code
+    code={[
+        '// en Identity — el cliente que se registra en la base',
+        '.WithEnvironment("Seed__Clients__0__ClientSecret", webClientSecret)',
+        '',
+        '// en la Web — el mismo secreto, para poder pedir el token',
+        '.WithEnvironment("Identity__ClientSecret", webClientSecret)'
+    ].join('\n')}
+    lang="csharp"
+    title="El mismo parámetro, dos destinos"
+/>
+
+**Por qué importa:** es el patrón que evita el error más común de los sistemas con OIDC — un secreto copiado a mano en dos sitios que acaban divergiendo. Aquí no pueden divergir porque son la misma variable.
+
+## Cómo encaja: el viaje de una cadena de conexión
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 300" role="img" aria-labelledby="wireTitle">
+        <title id="wireTitle">De la declaración en AppHost al código que la usa</title>
+        <defs>
+            <marker id="wiArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="40" width="200" height="90" rx="10" fill="#f1f5f9" stroke="#cbd5e1" />
+        <text x="120" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">1 · AppHost declara</text>
+        <text x="120" y="86" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">AddPostgres("postgres")</text>
+        <text x="120" y="102" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">.AddDatabase("rentals")</text>
+        <text x="120" y="120" text-anchor="middle" font-size="8" fill="#64748b">contraseña generada</text>
+
+        <line x1="222" y1="85" x2="258" y2="85" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#wiArrow)" />
+
+        <rect x="260" y="40" width="200" height="90" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="360" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">2 · Arranca el contenedor</text>
+        <text x="360" y="86" text-anchor="middle" font-size="8.5" fill="#334155">puerto asignado al vuelo</text>
+        <text x="360" y="104" text-anchor="middle" font-size="8.5" fill="#334155">volumen montado</text>
+        <text x="360" y="122" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">espera a estar sano</text>
+
+        <line x1="462" y1="85" x2="498" y2="85" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#wiArrow)" />
+
+        <rect x="500" y="40" width="200" height="90" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="600" y="64" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">3 · WithReference</text>
+        <text x="600" y="86" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">ConnectionStrings__rentals</text>
+        <text x="600" y="104" text-anchor="middle" font-size="8.5" fill="#334155">= "Host=...;Password=..."</text>
+        <text x="600" y="122" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">variable de entorno</text>
+
+        <line x1="600" y1="132" x2="600" y2="168" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#wiArrow)" />
+
+        <rect x="420" y="172" width="360" height="80" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="600" y="196" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">4 · El servicio la pide como configuración</text>
+        <text x="600" y="218" text-anchor="middle" font-size="8" font-family="monospace" fill="#334155">configuration.GetConnectionString("rentals")</text>
+        <text x="600" y="238" text-anchor="middle" font-size="8.5" fill="#4338ca" font-style="italic">no sabe que hay un contenedor detrás</text>
+
+        <rect x="40" y="172" width="340" height="80" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <text x="210" y="196" text-anchor="middle" font-size="10" font-weight="700" fill="#991b1b">Sin AppHost</text>
+        <text x="210" y="218" text-anchor="middle" font-size="8.5" fill="#991b1b">la variable no existe</text>
+        <text x="210" y="238" text-anchor="middle" font-size="8.5" font-family="monospace" fill="#991b1b">"Falta la cadena de conexión 'rentals'"</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Ese es el motivo de la escena inicial, y la razón de la regla del repositorio: los proyectos no se
+        ejecutan sueltos, nunca.
+    </p>
+</div>
+
+## El recorrido: qué hace AppHost, línea a línea, al arrancar
+
+<ol class="ddd-steps">
+    <li><strong>Declara los grupos.</strong> <code>databases</code>, <code>messaging</code>, <code>apis</code>, <code>ui</code>. Son puramente visuales: ordenan el dashboard y se excluyen del manifiesto de despliegue.</li>
+    <li><strong>Declara la infraestructura.</strong> Redis, SQL Server con volumen, PostgreSQL con volumen y sus dos bases, RabbitMQ con plugin de administración, Buggregator.</li>
+    <li><strong>Declara DbGate</strong>, al que hay que pasarle a mano las credenciales de los dos motores — porque no es una integración de Aspire, sino un contenedor genérico.</li>
+    <li><strong>Genera el secreto del cliente web</strong> si no existe ya.</li>
+    <li><strong>Declara los tres servicios</strong>, cada uno con sus referencias, sus esperas, su comprobación de salud y sus variables de OIDC.</li>
+    <li><strong>Declara el panel y la documentación.</strong> El panel es el único con <code>WithExternalHttpEndpoints</code>: es lo único pensado para abrirse desde fuera.</li>
+    <li><strong>Arranca todo</strong> respetando las esperas, y publica el dashboard.</li>
+</ol>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro malentendidos sobre el orquestador">
+
+**"Es un `docker-compose.yml` en C#."** Se parece en lo que declara, y se diferencia en dos cosas que importan: arranca también **proyectos .NET** compilándolos, y las referencias generan configuración tipada en vez de cadenas que hay que repetir en los dos lados.
+
+**"Entonces el sistema depende de Aspire para funcionar."** En desarrollo, sí. En producción, los servicios siguen siendo aplicaciones ASP.NET normales que leen variables de entorno: quien se las dé puede ser Kubernetes, un App Service o un `docker run`. AppHost sabe generar ese manifiesto, y este repositorio no lo usa.
+
+**"Puedo ejecutar una API sola si le pongo el `appsettings` a mano."** Puedes, y vas a estar depurando una copia divergente de la topología. Es exactamente lo que AppHost existe para evitar, y por eso el `CLAUDE.md` del repositorio lo dice como regla.
+
+**"`WithReference` y `WaitFor` son lo mismo."** Uno pasa configuración, el otro retiene el arranque. Se usan casi siempre juntos, y se pueden usar por separado: el panel referencia a Notifications pero **no** lo espera, porque puede arrancar y mostrar un error si esa API tarda.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **El manifiesto de despliegue.** AppHost puede generar descriptores para Kubernetes o Azure; aquí nunca se ejecuta.
+- **Cómo se resuelve un nombre por dentro.** Basta con saber que existe una variable `services__rental__https__0` y que el `HttpClient` la consulta; el mecanismo lo explica el [módulo 5](/arquitectura/http).
+- **Qué hace cada contenedor de desarrollo.** [Módulo 10](/arquitectura/entorno).
+- **Pruebas de integración con `Aspire.Hosting.Testing`**, que arrancan este mismo grafo desde un test. Existen en `NotificationLog.Tests` y no se desarrollan aquí.
+
+<Callout kind="resumen" title="Para recordar">
+
+- AppHost es **la única fuente de verdad** de la topología: recursos, credenciales, orden y direcciones.
+- `WithReference` inyecta configuración; `WaitFor` retiene el arranque hasta que el otro esté sano.
+- Las direcciones entre servicios son **nombres** (`https+http://rental`), no puertos.
+- La excepción son los cinco puertos fijos, que OIDC obliga a fijar porque viajan dentro del token.
+- Los secretos se **generan y se reparten** desde un único parámetro, así que no pueden divergir.
+- Ningún proyecto se ejecuta suelto: sin AppHost, las variables que necesita no existen.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre `NotificationLog.AppHost/AppHost.cs` —son unas ciento cincuenta líneas— y léelo entero de una sentada. Es, con diferencia, el archivo con mayor densidad de información del repositorio: en ese rato vas a saber más del sistema que leyendo cualquier servicio completo.
+
+Mientras lo lees, busca una sola cosa: **cuántas veces aparece un número de puerto**. La respuesta te dice cuánta topología está realmente acoplada.
+
+**Y luego:** el [módulo 3](/arquitectura/servicios) entra en las tres cajas grandes que AppHost arranca, y explica por qué son tres y no una.
+
+</Callout>

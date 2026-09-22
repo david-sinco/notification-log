@@ -1,0 +1,229 @@
+---
+title: "El sistema de un vistazo"
+description: "Diecisiete recursos arrancan con un comando. Qué es cada uno, cuál escribiste tú y cuáles puedes ignorar."
+sidebar:
+  order: 1
+  label: "1 · El sistema de un vistazo"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span } from '../../../lib/code';
+import solution from '@code/NotificationLog.slnx?raw';
+import appHost from '@code/NotificationLog.AppHost/AppHost.cs?raw';
+
+<p class="ddd-lede">
+Arrancas el sistema y el dashboard se llena. Hay algo llamado <code>notification</code>, algo
+llamado <code>rental</code>, algo llamado <code>sql-client</code> y algo llamado
+<code>buggregator</code>. Abres la solución esperando encontrar esos nombres y te encuentras
+diecisiete proyectos con nombres distintos, la mayoría de los cuales no arrancan solos. Nada
+coincide.
+</p>
+
+Antes de entender cómo se comunican las piezas hay que saber **cuáles son piezas**. Este módulo es el inventario: qué escribiste tú, qué viene hecho, y qué solo existe mientras desarrollas.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> de todo lo que arranca, solo <strong>cinco cosas son código de este
+repositorio</strong>; cuatro son infraestructura que viene en un contenedor, y dos existen
+únicamente para que tú puedas mirar lo que pasa.
+</div>
+
+## Ya conoces el reparto: es un edificio de oficinas
+
+Alquilas tres plantas y las amueblas: eso es tu código. El edificio te da agua, luz, ascensores y sala de correo: eso es la infraestructura, que tú no construyes pero sin la cual no trabajas. Y en el sótano está el cuarto del conserje, con el cuadro de luces y el registro de paquetes: nadie de fuera lo ve nunca, pero es lo primero que miras cuando algo va mal.
+
+Los tres grupos se mantienen por separado, se sustituyen por separado y se entienden por separado. Cuando en el dashboard no reconozcas un nombre, la primera pregunta es a cuál de los tres pertenece.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En un edificio, el agua y la luz ya están cuando llegas. Aquí **las arranca tu propio código**: el mismo comando que compila los servicios levanta SQL Server, PostgreSQL, Redis y RabbitMQ como contenedores. Es una diferencia importante, porque significa que la infraestructura de desarrollo está versionada junto al código — y es el tema del [módulo 2](/arquitectura/apphost).
+
+</Callout>
+
+## Lo primero: cinco cosas se ejecutan, doce no
+
+<Code
+    code={whole(solution)}
+    lang="xml"
+    title="NotificationLog.slnx — los diecisiete proyectos"
+/>
+
+De esa lista, **solo cinco proyectos son procesos**: las tres APIs, la web y el orquestador. Los demás son bibliotecas que alguno de esos cinco referencia.
+
+| Proyecto ejecutable | Qué es | Puerto |
+| --- | --- | --- |
+| `NotificationLog.AppHost` | El orquestador. No atiende peticiones de negocio. | el dashboard |
+| `NotificationLog.IdentityService.Api` | Cuentas, login y emisión de tokens. | `7191` |
+| `NotificationLog.RentalService.Api` | El portal de arriendos "Llave". | `7057` |
+| `NotificationLog.ApiService` | La API de Notifications. | `7506` |
+| `NotificationLog.Web` | El panel de administración, en Blazor Server. | `7189` |
+
+Y hay un sexto proceso que no es un proyecto .NET: **este sitio de documentación**, que AppHost arranca como aplicación de Vite.
+
+<Callout kind="advertencia" title="El nombre que más confunde del repositorio">
+
+`NotificationLog.ApiService` **no es la API del sistema**: es la API del servicio de *Notifications*, uno de los tres. Se llama así porque fue el primero que existió, cuando el repositorio solo tenía ese contexto.
+
+Los otros dos sí siguen la convención: `NotificationLog.<Servicio>Service.Api`. Es una inconsistencia histórica, y saberlo ahorra media hora de desconcierto.
+
+</Callout>
+
+## Segundo: cuatro contenedores son la infraestructura
+
+Ninguno lo escribiste tú, y los cuatro arrancan como contenedores Docker:
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">SQL Server</span><span class="arrow">→</span><span>La base de Notifications. Con volumen, así que sobrevive a los reinicios.</span></div>
+<div class="term-pair"><span class="biz">PostgreSQL</span><span class="arrow">→</span><span>Dos bases dentro: <code>identity</code> y <code>rentals</code>.</span></div>
+<div class="term-pair"><span class="biz">RabbitMQ</span><span class="arrow">→</span><span>El bus de mensajes, con su plugin de administración.</span></div>
+<div class="term-pair"><span class="biz">Redis</span><span class="arrow">→</span><span>Caché de salida del panel. La pieza más prescindible de las cuatro.</span></div>
+</div>
+
+**Por qué importa:** que la infraestructura esté declarada en el repositorio significa que "funciona en mi máquina" deja de ser una frase. Cualquiera que clone esto obtiene exactamente las mismas versiones de los mismos motores, con los mismos nombres de base de datos.
+
+## Tercero: dos contenedores son solo para mirar
+
+<Code
+    code={span(appHost, 'var buggregator = builder.AddContainer("buggregator"', '.WithParentRelationship(messaging);')}
+    lang="csharp"
+    title="AppHost.cs · Buggregator"
+    mark={['CLIENT_SUPPORTED_EVENTS']}
+/>
+
+**Buggregator** (`localhost:8000`) es el destino de todo lo que el sistema manda al exterior: los correos salen por SMTP al puerto `1025` y los SMS por HTTP a `/sms`. En lugar de integrarse con un proveedor real, Notifications los envía aquí y tú los lees en el navegador.
+
+**DbGate** (`localhost:3000`) es un cliente SQL en el navegador, ya conectado a los dos motores. Aparece en el dashboard como `sql-client`.
+
+Los dos son **dev-only**: no forman parte del producto, y en un despliegue real no existirían. El [módulo 10](/arquitectura/entorno) los usa a fondo.
+
+## Cómo encaja: el árbol de la solución
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 400" role="img" aria-labelledby="treeTitle">
+        <title id="treeTitle">Los proyectos de la solución y quién referencia a quién</title>
+        <defs>
+            <marker id="trArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="330" y="16" width="220" height="44" rx="10" fill="#f1f5f9" stroke="#cbd5e1" />
+        <text x="440" y="36" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">AppHost</text>
+        <text x="440" y="51" text-anchor="middle" font-size="8" fill="#64748b">referencia a los cinco de abajo para arrancarlos</text>
+
+        <line x1="380" y1="62" x2="180" y2="94" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+        <line x1="425" y1="62" x2="345" y2="94" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+        <line x1="455" y1="62" x2="525" y2="94" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+        <line x1="500" y1="62" x2="700" y2="94" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+
+        <rect x="90" y="98" width="180" height="40" rx="8" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="180" y="122" text-anchor="middle" font-size="9.5" font-weight="600" fill="#4338ca">Web (Blazor)</text>
+
+        <rect x="278" y="98" width="134" height="40" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="345" y="122" text-anchor="middle" font-size="9.5" font-weight="600" fill="#9a3412">Identity.Api</text>
+
+        <rect x="458" y="98" width="134" height="40" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="525" y="122" text-anchor="middle" font-size="9.5" font-weight="600" fill="#9a3412">Rental.Api</text>
+
+        <rect x="630" y="98" width="140" height="40" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="700" y="117" text-anchor="middle" font-size="9.5" font-weight="600" fill="#9a3412">ApiService</text>
+        <text x="700" y="130" text-anchor="middle" font-size="7.5" fill="#9a3412">(Notifications)</text>
+
+        <line x1="345" y1="140" x2="345" y2="168" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+        <line x1="525" y1="140" x2="525" y2="168" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+        <line x1="700" y1="140" x2="700" y2="168" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#trArrow)" />
+
+        <rect x="278" y="172" width="134" height="110" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="345" y="192" text-anchor="middle" font-size="8.5" fill="#334155">Infrastructure</text>
+        <text x="345" y="212" text-anchor="middle" font-size="8.5" fill="#334155">Application</text>
+        <text x="345" y="232" text-anchor="middle" font-size="8.5" fill="#334155">Domain</text>
+        <text x="345" y="262" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">Identity</text>
+
+        <rect x="458" y="172" width="134" height="110" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="525" y="192" text-anchor="middle" font-size="8.5" fill="#334155">Infrastructure</text>
+        <text x="525" y="212" text-anchor="middle" font-size="8.5" fill="#334155">Application</text>
+        <text x="525" y="232" text-anchor="middle" font-size="8.5" fill="#334155">Domain</text>
+        <text x="525" y="262" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">Rentals</text>
+
+        <rect x="630" y="172" width="140" height="110" rx="8" fill="#fff" stroke="#fed7aa" />
+        <text x="700" y="192" text-anchor="middle" font-size="8.5" fill="#334155">Infrastructure</text>
+        <text x="700" y="212" text-anchor="middle" font-size="8.5" fill="#334155">Application</text>
+        <text x="700" y="232" text-anchor="middle" font-size="8.5" fill="#334155">Domain</text>
+        <text x="700" y="252" text-anchor="middle" font-size="8.5" fill="#334155">Tests</text>
+        <text x="700" y="272" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">Notifications</text>
+
+        <rect x="60" y="310" width="760" height="70" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="440" y="332" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Shared — lo único que los tres servicios comparten</text>
+        <text x="180" y="354" text-anchor="middle" font-size="8.5" fill="#334155">Domain.Shared</text>
+        <text x="350" y="354" text-anchor="middle" font-size="8.5" fill="#334155">Application.Shared</text>
+        <text x="530" y="354" text-anchor="middle" font-size="8.5" fill="#334155">Contracts (.proto)</text>
+        <text x="710" y="354" text-anchor="middle" font-size="8.5" fill="#334155">ServiceDefaults</text>
+        <text x="440" y="372" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">piezas base, excepciones comunes, contratos de mensajes y el bloque de telemetría</text>
+
+        <line x1="345" y1="286" x2="345" y2="306" stroke="#16a34a" stroke-width="1.1" stroke-dasharray="3,3" marker-end="url(#trArrow)" />
+        <line x1="525" y1="286" x2="525" y2="306" stroke="#16a34a" stroke-width="1.1" stroke-dasharray="3,3" marker-end="url(#trArrow)" />
+        <line x1="700" y1="286" x2="700" y2="306" stroke="#16a34a" stroke-width="1.1" stroke-dasharray="3,3" marker-end="url(#trArrow)" />
+        <line x1="180" y1="142" x2="180" y2="306" stroke="#16a34a" stroke-width="1.1" stroke-dasharray="3,3" marker-end="url(#trArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Fíjate en lo que <strong>no</strong> hay: ninguna flecha horizontal entre los tres servicios. No se
+        referencian entre sí ni por asomo — solo coinciden en <code>Shared</code>.
+    </p>
+</div>
+
+**Por qué importa:** esa ausencia de flechas horizontales es la propiedad arquitectónica más importante del repositorio. Si `Rentals` pudiera referenciar a `Notifications`, la frontera entre ambos sería una sugerencia; al no poder, es una restricción que el compilador hace cumplir.
+
+## El recorrido: qué pasa al arrancar, en orden
+
+El comando es uno, pero la secuencia tiene cinco escalones y el dashboard los muestra:
+
+<ol class="ddd-steps">
+    <li><strong>Contenedores de datos y bus.</strong> SQL Server, PostgreSQL, Redis y RabbitMQ. Son los primeros porque todo lo demás los espera.</li>
+    <li><strong>Herramientas de desarrollo.</strong> DbGate espera a los dos motores; Buggregator arranca en paralelo.</li>
+    <li><strong>Las tres APIs.</strong> Cada una espera su base y el bus. Al arrancar, cada una <strong>crea o migra su propio esquema</strong> ([módulo 8](/arquitectura/datos)).</li>
+    <li><strong>El panel.</strong> Espera a Identity —sin servidor de tokens no hay login posible— y a Redis.</li>
+    <li><strong>La documentación.</strong> Un <code>npm run dev</code> que no depende de nada.</li>
+</ol>
+
+Ese orden no es casualidad ni suerte de temporización: está declarado con `WaitFor` en AppHost, y es lo que evita el clásico arranque en el que un servicio muere porque su base todavía no aceptaba conexiones.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro cosas que parecen otra cosa">
+
+**"Los tres servicios son un monolito, están en la misma solución."** Estar en la misma solución es comodidad de desarrollo, no acoplamiento. Lo que los hace independientes es que no se referencian, no comparten base de datos y se comunican por contratos. Podrían vivir en tres repositorios y no cambiaría una línea de sus capas internas.
+
+**"`Shared` es el punto débil: si todos dependen de ahí, están acoplados."** Depende de qué haya dentro. `Domain.Shared` tiene ocho archivos sin lógica de negocio; `Contracts` son los mensajes, que *tienen* que ser compartidos por definición. El día que alguien meta ahí una regla de negocio de un servicio concreto, entonces sí. El [módulo 4](/arquitectura/capas) lo vigila.
+
+**"La documentación es parte del producto."** No: es un recurso de desarrollo más, como DbGate. Está en AppHost para que arranque junto al sistema que documenta.
+
+**"Cada servicio debería tener su propio RabbitMQ y su propia base."** Comparten *motor*, no *datos*. Una instancia de PostgreSQL con dos bases separadas es una decisión de coste en desarrollo; la frontera sigue siendo real porque ningún servicio tiene la cadena de conexión del otro.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo se declara todo esto.** Aquí hemos visto el resultado; el archivo que lo produce es el [módulo 2](/arquitectura/apphost).
+- **Por qué los servicios son exactamente estos tres.** [Módulo 3](/arquitectura/servicios).
+- **Qué hay dentro de cada carpeta de capa.** [Módulo 4](/arquitectura/capas).
+- **Los puertos de RabbitMQ y del dashboard**, que Aspire asigna dinámicamente y cambian entre arranques. Solo los cinco puertos de las aplicaciones son fijos.
+
+<Callout kind="resumen" title="Para recordar">
+
+- De diecisiete proyectos, **cinco se ejecutan**: tres APIs, el panel y el orquestador.
+- `NotificationLog.ApiService` es la API de **Notifications**, no del sistema. Es el nombre heredado.
+- Cuatro contenedores son infraestructura (SQL Server, PostgreSQL, RabbitMQ, Redis) y **dos son solo para mirar** (Buggregator, DbGate).
+- Los tres servicios **no se referencian entre sí**. Solo coinciden en `Shared`.
+- El orden de arranque está declarado, no es suerte: primero los datos, luego las APIs, luego el panel.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Con el sistema arrancado, abre el dashboard y clasifica **cada recurso de la lista** en uno de los tres grupos: código tuyo, infraestructura, o herramienta de desarrollo.
+
+Después abre el recurso `rental` y mira sus variables de entorno. Vas a encontrar cadenas de conexión y URLs que **no están en ningún archivo del proyecto Rentals**. De dónde salen es exactamente la pregunta que responde el módulo siguiente.
+
+**Y luego:** el [módulo 2](/arquitectura/apphost) abre el único archivo donde está escrita toda la topología.
+
+</Callout>

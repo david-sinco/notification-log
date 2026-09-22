@@ -1,0 +1,273 @@
+---
+title: "Identidad de punta a punta"
+description: "Del login del panel al token que Rentals valida: un servidor OIDC propio, tres audiencias y dos cookies distintas."
+sidebar:
+  order: 7
+  label: "7 · Identidad"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span, member } from '../../../lib/code';
+import connectExtensions from '@code/Services/Identity/NotificationLog.IdentityService.Api/Connect/ConnectExtensions.cs?raw';
+import webAuth from '@code/UI/NotificationLog.Web/Authentication/IdentityAuthenticationExtensions.cs?raw';
+import tokenHandler from '@code/UI/NotificationLog.Web/Authentication/AccessTokenHandler.cs?raw';
+import rentalsAuth from '@code/Services/Rentals/NotificationLog.RentalService.Api/Authorization/AuthorizationExtensions.cs?raw';
+import oidcScopes from '@code/Shared/Domain.Shared/Authorization/OidcScopes.cs?raw';
+import appHostSettings from '@code/NotificationLog.AppHost/appsettings.json?raw';
+
+<p class="ddd-lede">
+Entras al panel y te redirige a otra dirección, con otro diseño, en otro puerto. Escribes tu correo,
+te llega un código, vuelves al panel y ya estás dentro. Nada de eso pasó en el panel: pasó en un
+servicio distinto, que no sabe que el panel existe más allá de una URL registrada — y que acaba de
+emitir un papel firmado que el panel va a enseñar cada vez que hable con las otras dos APIs.
+</p>
+
+La identidad es el único hilo que atraviesa el sistema entero. Este módulo lo sigue desde el primer clic hasta la última autorización.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> hay un servidor de identidad propio que autentica una vez y emite
+tokens con <strong>audiencia y alcance</strong>; cada API valida el token que le corresponde y no
+sabe nada de contraseñas.
+</div>
+
+## Ya conoces el mecanismo: es el control de accesos de un edificio
+
+Te identificas **una vez**, en recepción, y te dan una tarjeta. La tarjeta no dice tu contraseña: dice quién eres, a qué plantas puedes subir y hasta qué hora vale.
+
+En cada planta hay un lector que no llama a recepción para preguntar: **comprueba la firma de la tarjeta** y mira si esa planta está en la lista. Recepción puede estar cerrada y los lectores siguen funcionando hasta que las tarjetas caduquen.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Una tarjeta física se puede retirar; un token emitido **no se puede revocar**: vale hasta que caduca, y aquí eso son quince minutos. Por eso la vida es corta y por eso existe un mecanismo para renovarla sin volver a escribir la contraseña.
+
+Y hay una diferencia de reparto: la tarjeta no la lleva el usuario en el bolsillo. La guarda el panel, en el servidor, porque el navegador nunca habla con las APIs ([módulo 5](/arquitectura/http)).
+
+</Callout>
+
+## Idea 1 · Identity es un servidor OIDC de verdad, no un login casero
+
+<Code
+    code={span(connectExtensions, 'services.AddOpenIddict()', 'options.DisableAccessTokenEncryption();')}
+    lang="csharp"
+    title="Identity · Connect/ConnectExtensions.cs"
+    mark={['options.AllowAuthorizationCodeFlow()', '.RequireProofKeyForCodeExchange();', 'options.SetAccessTokenLifetime(TimeSpan.FromMinutes(15));']}
+/>
+
+Tres endpoints estándar —`connect/authorize`, `connect/token`, `connect/endsession`— y un flujo concreto:
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">Authorization Code</span><span class="arrow">→</span><span>El usuario se autentica en Identity; el panel recibe un código de un solo uso y lo canjea por tokens desde el servidor.</span></div>
+<div class="term-pair"><span class="biz">PKCE</span><span class="arrow">→</span><span>Una prueba que impide usar el código si alguien lo intercepta. Aquí es obligatoria.</span></div>
+<div class="term-pair"><span class="biz">Refresh token</span><span class="arrow">→</span><span>Permite pedir un access token nuevo sin volver a pedir credenciales.</span></div>
+<div class="term-pair"><span class="biz">Scope</span><span class="arrow">→</span><span>Para qué sirve el token: <code>identity</code>, <code>rentals</code>, <code>notifications</code>.</span></div>
+<div class="term-pair"><span class="biz">Audiencia</span><span class="arrow">→</span><span>Quién debe aceptarlo. Cada API valida la suya.</span></div>
+</div>
+
+**Por qué importa:** usar el estándar en lugar de inventar un login significa que las tres APIs validan tokens con una librería, no con código propio — y que mañana un cliente móvil o una herramienta externa puede autenticarse sin añadir nada al servidor.
+
+## Idea 2 · Tres audiencias, y por eso los puertos son fijos
+
+<Code
+    code={whole(oidcScopes)}
+    lang="csharp"
+    title="Shared/Domain.Shared/Authorization/OidcScopes.cs"
+/>
+
+<Code
+    code={span(appHostSettings, '"Oidc": {', '"Notifications": "https://localhost:7506"')}
+    lang="json"
+    title="AppHost/appsettings.json · el emisor y las tres audiencias"
+/>
+
+La **audiencia** de cada API es su propia URL. Un token pedido con el scope `rentals` lleva la audiencia `https://localhost:7057`, y Rentals rechaza cualquier token que no la tenga.
+
+Esto explica la excepción del [módulo 2](/arquitectura/apphost): estas cuatro direcciones **no pueden** resolverse por descubrimiento de servicios, porque el emisor viaja firmado dentro del token y el navegador del usuario tiene que poder llegar a él. Son las únicas direcciones fijas del sistema.
+
+**Por qué importa:** separar por audiencia es lo que impide que un token obtenido para el panel sirva para llamar a una API que no estaba prevista. Es la diferencia entre "está autenticado" y "está autorizado a hablar con este servicio concreto".
+
+## Idea 3 · El panel canjea el código y guarda los tokens
+
+<Code
+    code={member(webAuth, 'public static IServiceCollection AddIdentityAuthentication')}
+    lang="csharp"
+    title="Web/Authentication/IdentityAuthenticationExtensions.cs"
+    mark={['options.ResponseType = "code";', 'options.SaveTokens = true;']}
+/>
+
+Dos esquemas conviviendo, y conviene distinguirlos porque es lo que más confunde:
+
+- **La cookie** (`notificationlog.web`) es la sesión **del panel**. Es lo que mantiene al usuario dentro entre página y página.
+- **OpenID Connect** es el esquema de **desafío**: cuando alguien no autenticado entra a una página protegida, se le manda a Identity.
+
+`SaveTokens = true` es la línea que importa para todo lo demás: guarda el access token y el refresh token dentro de esa cookie, en el servidor. De ahí los saca este manejador:
+
+<Code
+    code={whole(tokenHandler)}
+    lang="csharp"
+    title="Web/Authentication/AccessTokenHandler.cs"
+/>
+
+Doce líneas que añaden `Authorization: Bearer ...` a cada petición saliente. Se engancha solo a los clientes que llaman a APIs protegidas — usuarios, propietarios, publicaciones y moderación.
+
+<Callout kind="honesto" title="Lo que este manejador todavía no hace">
+
+`todo.md` lo dice con precisión: *"Enviar el access token desde la Web con un `DelegatingHandler` que agregue `Authorization: Bearer` **y lo renueve con el refresh token**"*.
+
+La primera mitad está hecha; la segunda no. Con tokens de quince minutos, una sesión larga acaba enviando un token caducado y recibiendo un `401` que el panel muestra como un error genérico, en lugar de renovarlo en silencio.
+
+El refresh token está ahí —se pide el scope `offline_access` y se guarda con `SaveTokens`—, solo falta usarlo.
+
+</Callout>
+
+## Idea 4 · Cada API valida por su cuenta, y autoriza con políticas
+
+<Code
+    code={member(rentalsAuth, 'public static IServiceCollection AddRentalsAuthorization')}
+    lang="csharp"
+    title="Rentals · Api/Authorization/AuthorizationExtensions.cs"
+    mark={['options.SetIssuer(new Uri(issuer));', 'options.AddAudiences(audience);']}
+/>
+
+Rentals no tiene usuarios, ni contraseñas, ni base de identidades. Lo único que hace es **validar**: comprobar que el token lo firmó el emisor que conoce y que lleva su audiencia.
+
+Y encima de eso, tres políticas:
+
+| Política | Exige | Se usa en |
+| --- | --- | --- |
+| `rentals` | Que el token traiga el scope `rentals` | Todas las rutas del servicio |
+| `Administrador` | El rol correspondiente | Operaciones de administración |
+| `Moderacion` | Rol de administrador **o** de moderador | Aprobar, rechazar, suspender |
+
+**Por qué importa:** las políticas están escritas una vez, en un archivo, y los endpoints solo las nombran. Cuando mañana aparezca el rol `Cliente` que `todo.md` pide, se añade aquí y no en veinte endpoints.
+
+## Cómo encaja: el viaje entero de una sesión
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 400" role="img" aria-labelledby="authTitle">
+        <title id="authTitle">Del login hasta una llamada autorizada a Rentals</title>
+        <defs>
+            <marker id="auArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <line x1="110" y1="60" x2="110" y2="360" stroke="#e5e9f2" stroke-width="1" />
+        <line x1="400" y1="60" x2="400" y2="360" stroke="#e5e9f2" stroke-width="1" />
+        <line x1="690" y1="60" x2="690" y2="360" stroke="#e5e9f2" stroke-width="1" />
+
+        <text x="110" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Navegador</text>
+        <text x="110" y="48" text-anchor="middle" font-size="7.5" fill="#64748b">del usuario</text>
+        <text x="400" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Web :7189</text>
+        <text x="400" y="48" text-anchor="middle" font-size="7.5" fill="#64748b">servidor Blazor</text>
+        <text x="690" y="34" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Identity :7191</text>
+
+        <rect x="150" y="70" width="200" height="26" rx="5" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="250" y="87" text-anchor="middle" font-size="8" fill="#334155">1 · entra a una página protegida</text>
+        <line x1="120" y1="83" x2="146" y2="83" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#auArrow)" />
+
+        <rect x="440" y="106" width="200" height="26" rx="5" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="540" y="123" text-anchor="middle" font-size="8" fill="#334155">2 · redirige a /connect/authorize</text>
+        <line x1="410" y1="119" x2="436" y2="119" stroke="#94a3b8" stroke-width="1.2" marker-end="url(#auArrow)" />
+
+        <rect x="530" y="142" width="240" height="42" rx="5" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="650" y="159" text-anchor="middle" font-size="8" fill="#334155">3 · login o registro, con código</text>
+        <text x="650" y="174" text-anchor="middle" font-size="7.5" fill="#9a3412">cookie propia: notificationlog.identity</text>
+
+        <rect x="150" y="196" width="200" height="26" rx="5" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="250" y="213" text-anchor="middle" font-size="8" fill="#334155">4 · vuelve con un código</text>
+        <line x1="680" y1="196" x2="360" y2="208" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="3,2" marker-end="url(#auArrow)" />
+
+        <rect x="440" y="232" width="200" height="42" rx="5" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="540" y="249" text-anchor="middle" font-size="8" fill="#334155">5 · canjea el código (servidor)</text>
+        <text x="540" y="264" text-anchor="middle" font-size="7.5" fill="#14532d">con client_secret + PKCE</text>
+        <line x1="410" y1="253" x2="436" y2="253" stroke="#16a34a" stroke-width="1.3" marker-end="url(#auArrow)" />
+        <line x1="644" y1="253" x2="680" y2="253" stroke="#16a34a" stroke-width="1.3" marker-end="url(#auArrow)" />
+
+        <rect x="290" y="286" width="220" height="42" rx="5" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="400" y="303" text-anchor="middle" font-size="8" fill="#334155">6 · guarda los tokens en su cookie</text>
+        <text x="400" y="318" text-anchor="middle" font-size="7.5" fill="#4338ca">notificationlog.web · SaveTokens</text>
+
+        <rect x="560" y="340" width="300" height="46" rx="8" fill="#fef3c7" stroke="#fde68a" />
+        <text x="710" y="358" text-anchor="middle" font-size="8.5" font-weight="700" fill="#92400e">7 · cada llamada a Rentals :7057</text>
+        <text x="710" y="374" text-anchor="middle" font-size="8" fill="#92400e">Authorization: Bearer ... → valida emisor y audiencia</text>
+        <line x1="440" y1="330" x2="600" y2="338" stroke="#d97706" stroke-width="1.3" marker-end="url(#auArrow)" />
+
+        <text x="240" y="366" text-anchor="middle" font-size="8.5" fill="#64748b">El navegador nunca ve un token:</text>
+        <text x="240" y="382" text-anchor="middle" font-size="8.5" fill="#64748b">viven en la cookie de sesión, en el servidor.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Dos cookies distintas en dos dominios distintos: la de Identity mantiene al usuario logueado
+        <em>ahí</em>, la del panel mantiene su sesión <em>aquí</em>. Cerrar sesión toca las dos.
+    </p>
+</div>
+
+## El recorrido: qué pasa cuando un moderador aprueba una publicación
+
+<ol class="ddd-steps">
+    <li>El moderador ya tiene sesión: cookie del panel, con un access token dentro.</li>
+    <li>Pulsa <strong>Aprobar</strong>. La página llama a <code>ModerationApiClient</code>.</li>
+    <li><code>AccessTokenHandler</code> saca el token de la cookie y lo pone en la cabecera.</li>
+    <li>Rentals valida la firma contra <code>https://localhost:7191</code> y comprueba que la audiencia sea la suya.</li>
+    <li>La política <code>Moderacion</code> mira los <em>claims</em> de rol: administrador o moderador.</li>
+    <li>El endpoint ejecuta el caso de uso. Ni el handler ni el agregado vuelven a preguntar quién es: eso ya se resolvió.</li>
+</ol>
+
+Fíjate en el paso 4: **Rentals no llama a Identity**. Valida con la clave pública del emisor. Si Identity está caído, este flujo sigue funcionando hasta que el token caduque.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco confusiones sobre identidad en este sistema">
+
+**"Autenticación y autorización son lo mismo."** La primera la hace Identity una vez y produce un token; la segunda la hace **cada API en cada petición**, mirando scope y roles. Un token válido no da permiso para nada por sí solo.
+
+**"Rentals consulta a Identity en cada petición."** No: valida criptográficamente. Esa es la ventaja de los tokens firmados, y también su límite — por eso no se pueden revocar antes de tiempo.
+
+**"Hay una sola cookie."** Hay dos, en dos orígenes distintos: la de Identity (`notificationlog.identity`, catorce días, deslizante) y la del panel (`notificationlog.web`). Cerrar sesión en el panel sin cerrar la de Identity hace que volver a entrar sea instantáneo, porque Identity todavía te reconoce.
+
+**"El token está en el navegador."** Está en el servidor del panel, dentro de la cookie de sesión cifrada. El navegador solo lleva la cookie.
+
+**"Con OIDC ya está todo protegido."** No. En este sistema, **Notifications no valida tokens en absoluto**: su API no tiene autenticación configurada. Está en `todo.md` y es la deuda de seguridad más grande del repositorio.
+
+</Callout>
+
+<Callout kind="honesto" title="Las tres deudas de identidad, en una lista">
+
+Están todas anotadas en `todo.md`, y conviene verlas juntas porque cuentan cómo se migra un sistema a identidad real: por partes, con las partes migradas y las que no conviviendo.
+
+1. **Notifications no valida tokens.** Su audiencia está declarada en AppHost y su API no la usa. Cualquiera con acceso de red a `:7506` puede llamarla.
+2. **Las visitas de Rentals reciben `ActorId` en el cuerpo**, es decir, el cliente dice quién es. Publicaciones y propietarios ya lo toman del token; visitas todavía no.
+3. **El panel no renueva el token.** Funciona hasta el minuto quince de sesión.
+
+Ninguna de las tres es un error de diseño: son pasos de una migración a medias. El problema de una migración a medias es que **no se distingue de un diseño terminado** si no está escrito en algún sitio. Por eso está escrito.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **El registro y el login por dentro.** Identity tiene páginas Razor propias (`/Account/Login`, `/Register`, `/Verify`) con verificación por código; son su interfaz, no arquitectura del sistema.
+- **La gestión de usuarios.** Bloquear, desbloquear y asignar roles existen como endpoints y su UI está pendiente.
+- **La revocación de sesiones.** Hay un `ISessionRevoker` implementado sobre OpenIddict; cuándo se dispara es detalle del servicio.
+- **La autenticación de Scalar.** La documentación interactiva de Rentals se autentica con su propio cliente OIDC, y es la razón de la única configuración de CORS del sistema.
+- **Secretos y certificados en producción.** Hoy se usan certificados de desarrollo generados por OpenIddict.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Identity es un **servidor OIDC completo**: código de autorización con PKCE, refresh tokens y tres scopes.
+- Cada API tiene su **audiencia**, que es su URL — por eso esos cuatro puertos son fijos y no se descubren.
+- El panel **canjea el código en el servidor** y guarda los tokens en su cookie de sesión.
+- `AccessTokenHandler` los adjunta; **todavía no los renueva**.
+- Cada API **valida por su cuenta**, sin llamar a Identity, y autoriza con políticas nombradas.
+- **Notifications no valida nada todavía.** Es la deuda de seguridad más importante del repositorio.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Entra al panel, y con la sesión iniciada abre las herramientas de desarrollo del navegador → Application → Cookies. Vas a ver `notificationlog.web` y, en el origen de Identity, `notificationlog.identity`.
+
+Después pega un access token en [jwt.io](https://jwt.io) —lo puedes obtener autenticándote en Scalar de Rentals— y mira sus campos: `iss`, `aud`, `scope`, `role`, `exp`. Todo lo que este módulo explica está escrito ahí dentro, en claro.
+
+**Y luego:** el [módulo 8](/arquitectura/datos) baja al último nivel — dónde acaba guardado todo, y quién crea cada esquema.
+
+</Callout>

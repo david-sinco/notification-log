@@ -1,0 +1,264 @@
+---
+title: "Las capas dentro de un servicio"
+description: "La misma estructura repetida tres veces, la regla que la hace verificable y el núcleo compartido que no puede crecer."
+sidebar:
+  order: 4
+  label: "4 · Las capas"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member, span } from '../../../lib/code';
+import domainCsproj from '@code/Services/Rentals/NotificationLog.RentalService.Domain/NotificationLog.RentalService.Domain.csproj?raw';
+import appCsproj from '@code/Services/Rentals/NotificationLog.RentalService.Application/NotificationLog.RentalService.Application.csproj?raw';
+import listingRepoInterface from '@code/Services/Rentals/NotificationLog.RentalService.Domain/Listings/IListingRepository.cs?raw';
+import listingRepoImpl from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Persistence/MartenListingRepository.cs?raw';
+import unitOfWork from '@code/Shared/Application.Shared/Abstractions/IUnitOfWork.cs?raw';
+import confirmHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Visits/Commands/ConfirmVisit/ConfirmVisitHandler.cs?raw';
+
+<p class="ddd-lede">
+Cada servicio son cuatro proyectos, y al principio parece burocracia: para añadir un campo hay que
+tocar tres de ellos, y no está claro cuál es cuál. La tentación —"esto cabría en dos"— dura hasta
+que abres el archivo más corto del repositorio y entiendes qué está protegiendo.
+</p>
+
+Ese archivo es el `.csproj` del proyecto de dominio. No tiene ni un paquete NuGet. Ni EF Core, ni Marten, ni JSON, ni logging. Y esa ausencia no es minimalismo: es la única regla de arquitectura de este sistema que **el compilador hace cumplir**.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> cuatro capas por servicio, con las dependencias apuntando siempre
+hacia dentro, y una regla verificable que lo garantiza — el núcleo no tiene permiso para conocer
+ninguna tecnología.
+</div>
+
+## Ya conoces la idea: es una receta de cocina
+
+Una receta dice *"200 g de harina de trigo"*. No dice de qué marca, ni de qué supermercado, ni si viene en bolsa o a granel. Por eso la misma receta funciona en dos países y sobrevive a que cierre tu tienda habitual.
+
+El reparto es idéntico: la receta define **qué hace falta**, y otro decide **de dónde sale**. Cambiar de proveedor no obliga a reescribir la receta; reescribir la receta sí obliga a revisar la compra.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Una receta no puede exigirle nada al supermercado. Aquí sí: el dominio **declara la interfaz** que la infraestructura está obligada a implementar. Es como si la receta viniera con el formulario de pedido ya impreso y el proveedor tuviera que rellenarlo.
+
+Eso tiene nombre —inversión de dependencias— y es la tercera idea de este módulo. Es la diferencia entre "el núcleo no depende de la tecnología" y "el núcleo manda sobre la tecnología".
+
+</Callout>
+
+## Idea 1 · Las cuatro capas, con su contenido real
+
+| Capa | Qué contiene | Qué **no** puede haber | Ejemplo en Rentals |
+| --- | --- | --- | --- |
+| **Domain** | Agregados, value objects, eventos, interfaces de repositorio, políticas | Ningún paquete. Ninguna palabra técnica. | `Listing.cs`, `ListingPolicy.cs` |
+| **Application** | Un caso de uso por carpeta: comando, handler y validador. Los puertos hacia fuera. | Nada de SQL, HTTP ni protobuf. | `ConfirmVisit/`, `ISoftRuleChecks.cs` |
+| **Infrastructure** | Las implementaciones: base de datos, mensajería, envíos, proyecciones. | Reglas de negocio. | `MartenListingRepository.cs` |
+| **Api** | Endpoints, contratos HTTP, traducción de errores, autorización. | Decisiones. | `VisitEndpoints.cs` |
+
+Los tres servicios repiten exactamente esa estructura, con nombres distintos dentro. Que la forma exterior sea idéntica es lo que permite comparar los tres interiores, que no se parecen en nada ([módulo 3](/arquitectura/servicios)).
+
+**Por qué importa:** llegar a un servicio que no conoces y saber en qué carpeta buscar sin preguntar es una propiedad medible en minutos ahorrados. Es la ventaja principal de repetir una estructura aunque el contenido cambie.
+
+## Idea 2 · La regla que se puede verificar en cinco segundos
+
+<Code
+    code={whole(domainCsproj)}
+    lang="xml"
+    title="Rentals · NotificationLog.RentalService.Domain.csproj"
+/>
+
+Cero `PackageReference`. Una sola referencia de proyecto, a `Domain.Shared`, que tampoco tiene paquetes.
+
+Compáralo con la capa de encima:
+
+<Code
+    code={whole(appCsproj)}
+    lang="xml"
+    title="Rentals · NotificationLog.RentalService.Application.csproj"
+    mark={['<PackageReference Include="FluentValidation" Version="12.1.1" />']}
+/>
+
+`Application` sí tiene un paquete —FluentValidation— y una referencia hacia `Domain`. Nunca al revés.
+
+**Por qué importa:** casi todas las reglas de arquitectura son acuerdos que se erosionan. Esta no: el día que alguien necesite EF Core dentro del dominio, tendrá que **añadir un paquete a ese archivo**, y eso es visible en cualquier revisión de código. La regla no se documenta, se mira.
+
+## Idea 3 · La interfaz vive arriba, la implementación abajo
+
+<Code
+    code={whole(listingRepoInterface)}
+    lang="csharp"
+    title="Domain/Listings/IListingRepository.cs — dos métodos, ninguna tecnología"
+/>
+
+Esa interfaz está en **Domain**, que es quien la necesita y quien dicta su forma. Y quien la cumple está tres capas más abajo:
+
+<Code
+    code={whole(listingRepoImpl)}
+    lang="csharp"
+    title="Infrastructure/Persistence/MartenListingRepository.cs"
+/>
+
+La flecha de dependencia apunta hacia dentro —`Infrastructure` conoce a `Domain`, no al contrario— aunque en tiempo de ejecución el flujo vaya al revés. Eso es la **inversión de dependencias**: el que manda define el contrato, el que obedece lo implementa.
+
+Lo mismo ocurre con la unidad de trabajo, que es lo más pequeño que se puede escribir:
+
+<Code
+    code={whole(unitOfWork)}
+    lang="csharp"
+    title="Shared/Application.Shared/Abstractions/IUnitOfWork.cs"
+/>
+
+Un método. Y sin embargo es lo que permite que el mismo handler funcione sobre `DbContext` en Notifications y sobre una sesión de Marten en Rentals, sin enterarse.
+
+## Idea 4 · Un caso de uso es una carpeta, no un `MediatR`
+
+<Code
+    code={member(confirmHandler, 'public async Task HandleAsync')}
+    lang="csharp"
+    title="Application/Visits/Commands/ConfirmVisit/ConfirmVisitHandler.cs"
+/>
+
+Cada caso de uso es una carpeta con tres archivos: el **comando** (un `record` con los datos), el **handler** (una clase normal) y, si hace falta, el **validador**. El handler se registra explícitamente en el `DependencyInjection` de su capa y se inyecta directamente en el endpoint.
+
+No hay mediador, no hay `IRequest<T>`, no hay pipeline de comportamientos. Es una decisión deliberada y tiene su [página propia en la guía de Patrones](/patrones/comandos).
+
+**Por qué importa aquí:** significa que puedes leer un caso de uso de arriba abajo sin saltar a la configuración de un framework. Y el precio —lo que un pipeline te daría gratis, como validación o logging automáticos— se paga escribiendo esas dos líneas en cada handler.
+
+## Cómo encaja: las cuatro flechas
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 330" role="img" aria-labelledby="layersTitle">
+        <title id="layersTitle">Las cuatro capas y la dirección de sus dependencias</title>
+        <defs>
+            <marker id="lyArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="30" y="30" width="180" height="250" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="120" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Api</text>
+        <text x="120" y="76" text-anchor="middle" font-size="8.5" fill="#334155">endpoints</text>
+        <text x="120" y="92" text-anchor="middle" font-size="8.5" fill="#334155">contratos HTTP</text>
+        <text x="120" y="108" text-anchor="middle" font-size="8.5" fill="#334155">errores → códigos</text>
+        <text x="120" y="124" text-anchor="middle" font-size="8.5" fill="#334155">autorización</text>
+        <text x="120" y="152" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">traduce, no decide</text>
+        <text x="120" y="240" text-anchor="middle" font-size="8.5" fill="#9a3412">arranca el proceso</text>
+        <text x="120" y="256" text-anchor="middle" font-size="8.5" fill="#9a3412">y compone la DI</text>
+
+        <rect x="232" y="30" width="180" height="250" rx="12" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="322" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">Infrastructure</text>
+        <text x="322" y="76" text-anchor="middle" font-size="8.5" fill="#334155">EF Core / Marten</text>
+        <text x="322" y="92" text-anchor="middle" font-size="8.5" fill="#334155">RabbitMQ</text>
+        <text x="322" y="108" text-anchor="middle" font-size="8.5" fill="#334155">SMTP, HTTP saliente</text>
+        <text x="322" y="124" text-anchor="middle" font-size="8.5" fill="#334155">proyecciones</text>
+        <text x="322" y="152" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">cumple contratos ajenos</text>
+
+        <rect x="434" y="30" width="180" height="250" rx="12" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="524" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">Application</text>
+        <text x="524" y="76" text-anchor="middle" font-size="8.5" fill="#334155">un caso de uso</text>
+        <text x="524" y="92" text-anchor="middle" font-size="8.5" fill="#334155">por carpeta</text>
+        <text x="524" y="108" text-anchor="middle" font-size="8.5" fill="#334155">puertos hacia fuera</text>
+        <text x="524" y="124" text-anchor="middle" font-size="8.5" fill="#334155">procesos y servicios</text>
+        <text x="524" y="152" text-anchor="middle" font-size="8" fill="#4338ca" font-style="italic">orquesta, no decide</text>
+
+        <rect x="636" y="30" width="190" height="250" rx="12" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="731" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#475569">Domain</text>
+        <text x="731" y="76" text-anchor="middle" font-size="8.5" fill="#334155">agregados</text>
+        <text x="731" y="92" text-anchor="middle" font-size="8.5" fill="#334155">value objects</text>
+        <text x="731" y="108" text-anchor="middle" font-size="8.5" fill="#334155">eventos y políticas</text>
+        <text x="731" y="124" text-anchor="middle" font-size="8.5" fill="#334155">interfaces de repositorio</text>
+        <rect x="654" y="140" width="154" height="34" rx="6" fill="#fff" stroke="#cbd5e1" />
+        <text x="731" y="155" text-anchor="middle" font-size="8.5" font-weight="700" fill="#475569">0 paquetes NuGet</text>
+        <text x="731" y="168" text-anchor="middle" font-size="7.5" fill="#64748b">la regla verificable</text>
+        <text x="731" y="200" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">decide, y no sabe</text>
+        <text x="731" y="215" text-anchor="middle" font-size="8" fill="#475569" font-style="italic">que existe una base de datos</text>
+
+        <line x1="212" y1="200" x2="230" y2="200" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lyArrow)" />
+        <line x1="414" y1="200" x2="432" y2="200" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lyArrow)" />
+        <line x1="616" y1="200" x2="634" y2="200" stroke="#94a3b8" stroke-width="1.6" marker-end="url(#lyArrow)" />
+
+        <path d="M120 286 Q 400 322 700 286" fill="none" stroke="#94a3b8" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#lyArrow)" />
+        <text x="410" y="318" text-anchor="middle" font-size="8" fill="#64748b">Api referencia a las cuatro: es quien compone la inyección de dependencias</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Las flechas son referencias de proyecto, no llamadas. En ejecución el flujo va al revés — del
+        endpoint al dominio — pero el conocimiento va siempre hacia la derecha.
+    </p>
+</div>
+
+## Idea 5 · El núcleo compartido es diminuto, y tiene que seguir siéndolo
+
+Dos proyectos de `Shared/` los referencian los tres servicios:
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">Domain.Shared</span><span class="arrow">→</span><span><code>AggregateRoot</code>, <code>Entity</code>, <code>DomainEvent</code>, <code>DomainException</code>, roles y scopes. Ocho archivos.</span></div>
+<div class="term-pair"><span class="biz">Application.Shared</span><span class="arrow">→</span><span><code>IUnitOfWork</code> y las tres excepciones que la API traduce a códigos HTTP. Cinco archivos.</span></div>
+</div>
+
+Un **núcleo compartido** es la excepción a la regla de que los contextos no comparten código, y por eso conviene vigilarlo: todo lo que entra ahí acopla a los tres servicios de golpe.
+
+La prueba para saber si algo pertenece a `Shared`: **¿tendría sentido en un cuarto servicio que todavía no existe?** `AggregateRoot`, sí. `ListingStatus`, evidentemente no.
+
+<Callout kind="honesto" title="Un caso que está justo en el límite">
+
+`Domain.Shared/Authorization` contiene `UserRole` con los roles del sistema —`Administrador`, `Propietario`, `Moderador`— y los scopes de OIDC.
+
+Eso **no es infraestructura común**: es vocabulario de Identity que los otros dos servicios necesitan para autorizar. Está ahí porque la alternativa —repetir el enum en tres sitios— es peor, pero conviene saber que si mañana aparece un rol solo de Rentals, ese archivo empieza a acumular conceptos que no son de todos.
+
+</Callout>
+
+## El recorrido: añadir un campo a una publicación
+
+Supongamos que las publicaciones necesitan un campo nuevo, por ejemplo si admiten mascotas. El recorrido enseña las cuatro capas en orden de dentro hacia fuera:
+
+<ol class="ddd-steps">
+    <li><strong>Domain.</strong> El value object <code>PropertyDetails</code> gana un campo, y el evento <code>ListingDetailsUpdated</code> también. Aquí se decide si es obligatorio y qué valores son válidos.</li>
+    <li><strong>Application.</strong> El comando y el validador lo transportan. Ninguna decisión nueva: solo pasa el dato.</li>
+    <li><strong>Infrastructure.</strong> La proyección de lectura lo guarda para que la pantalla lo pueda mostrar. En Notifications, en cambio, este paso sería una migración de EF Core.</li>
+    <li><strong>Api.</strong> El contrato de la petición y la respuesta lo incluyen.</li>
+    <li><strong>Web</strong>, que no es una capa sino otro proyecto: el modelo del cliente tipado y el formulario.</li>
+</ol>
+
+Cinco sitios para un campo puede parecer mucho. La contrapartida es que en ninguno de los cinco hay que preguntarse *si* el cambio es correcto: la única capa donde eso se decide es la primera, y las otras cuatro solo transportan.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre las capas">
+
+**"Infrastructure está por debajo de Application, así que Application debería referenciarla."** Al revés, y es el punto entero: `Infrastructure` referencia a `Application` para poder implementar sus interfaces. En el árbol de proyectos, la capa "de abajo" es la que más referencias tiene.
+
+**"Api es una capa más del mismo tipo."** Es un caso aparte: referencia a las cuatro porque es quien **compone** la inyección de dependencias. Alguien tiene que conocer todas las piezas para unirlas, y ese alguien es el arranque del proceso.
+
+**"Esto es arquitectura hexagonal / limpia / cebolla."** Las tres describen la misma idea con distinto vocabulario, y discutir el nombre no cambia una línea. Lo que importa es la propiedad concreta: el dominio no tiene paquetes, y las interfaces están donde se necesitan, no donde se implementan.
+
+**"`Shared` rompe la independencia de los servicios."** La rompería si tuviera reglas de negocio. Hoy tiene trece archivos sin lógica de dominio, y esa es la vara de medir: cuando alguien añada el decimocuarto, la pregunta es si serviría en un servicio que no existe todavía.
+
+**"Cuatro proyectos por servicio es sobreingeniería para un laboratorio."** Para un CRUD lo sería. Aquí paga por sí solo en un sitio concreto: Rentals cambió su persistencia entera a un event store **sin tocar `Domain`**, y esa es exactamente la prueba de que la separación no era decorativa.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Tests de arquitectura.** Nada impide automáticamente que `Application` referencie a `Infrastructure`: hoy la regla la sostienen los `.csproj` y la revisión. Una prueba con NetArchTest o similar lo haría explícito, y **no existe**.
+- **El interior del dominio.** Agregados, invariantes y value objects son las guías de [DDD](/ddd) y [Event Sourcing](/event-sourcing).
+- **Los patrones concretos** que aparecen en estas capas —repositorio, fábrica, adaptador, estrategia— están catalogados en la [guía de Patrones](/patrones).
+- **Cómo se registran los servicios en la DI.** Cada capa tiene su `DependencyInjection.cs` y el detalle se ve en los módulos [6](/arquitectura/mensajeria) y [8](/arquitectura/datos).
+
+<Callout kind="resumen" title="Para recordar">
+
+- Cuatro capas por servicio, **iguales en los tres**: Domain, Application, Infrastructure, Api.
+- Las dependencias apuntan **hacia dentro**; en ejecución el flujo va al revés.
+- La regla es verificable: **`Domain.csproj` no tiene ni un paquete NuGet**.
+- Las **interfaces viven donde se necesitan** (Domain), las implementaciones donde se pueden cumplir (Infrastructure).
+- Un caso de uso es **una carpeta con tres archivos**, sin mediador.
+- El **núcleo compartido** es la excepción, y la prueba para ampliarlo es si serviría en un servicio que aún no existe.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre los tres `.csproj` de dominio del repositorio —Identity, Rentals, Notifications— uno detrás de otro. Tardas un minuto.
+
+Los tres son casi idénticos y ninguno tiene paquetes. Esa uniformidad es la única prueba que necesitas de que la regla se está cumpliendo hoy; comprobarla de vez en cuando es más barato que cualquier documento de arquitectura.
+
+**Y luego:** con las piezas y las capas claras, el [módulo 5](/arquitectura/http) empieza a conectarlas — por el camino síncrono, que es el que ve el usuario.
+
+</Callout>

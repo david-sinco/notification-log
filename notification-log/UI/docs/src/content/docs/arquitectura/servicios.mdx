@@ -1,0 +1,238 @@
+---
+title: "Tres servicios, y por qué son tres"
+description: "Dónde están las fronteras del sistema, qué posee cada servicio y por qué los tres están construidos por dentro de forma distinta."
+sidebar:
+  order: 3
+  label: "3 · Tres servicios"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, member } from '../../../lib/code';
+import userCreatedHandler from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/Messaging/Consumers/UserCreatedHandler.cs?raw';
+import identityReplica from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/IdentityReplica/MartenIdentityReplica.cs?raw';
+import userCreatedProto from '@code/Shared/NotificationLog.Contracts/Identity/user_created.proto?raw';
+
+<p class="ddd-lede">
+Te piden algo trivial: mostrar el teléfono del propietario en la ficha de una publicación. Abres la
+base de <code>rentals</code> buscando una tabla de usuarios y no existe. Lo único que hay son
+<code>Guid</code> sueltos: <code>OwnerId</code>, <code>CreatedBy</code>, <code>VisitorId</code>,
+<code>HostId</code>. Ninguno apunta a nada que esa base de datos contenga.
+</p>
+
+No es un descuido ni una tabla que falte. Es la decisión estructural más importante del sistema, y entenderla explica casi todo lo demás: **los datos de un usuario no son de Rentals**, y Rentals no tiene forma de leerlos directamente.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> hay tres contextos de negocio —quién eres, qué arriendas, qué se te
+comunica— y cada uno es un servicio dueño absoluto de sus datos; lo que necesita del otro lo pide
+o lo recibe, nunca lo consulta.
+</div>
+
+## Ya conoces el reparto: son tres departamentos de una empresa
+
+Recursos Humanos tiene el expediente de cada empleado. Ventas tiene los contratos. Facturación tiene las facturas. Los tres necesitan saber cosas de la misma persona, y **ninguno entra en el archivador del otro**: mandan un formulario, o reciben una copia de lo que les afecta.
+
+Cuando Ventas necesita el nombre de un cliente para imprimirlo en un contrato, no va a pedir la carpeta entera a RRHH: se queda con una ficha reducida, con lo justo, y la actualiza cuando RRHH avisa de un cambio.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+En una empresa, si hace falta, siempre puedes bajar al archivo y mirar. Aquí **no se puede**: cada servicio tiene su cadena de conexión y solo la suya, así que el atajo no está disponible ni para emergencias.
+
+Y hay un coste que los departamentos no pagan: esas fichas reducidas pueden ir desfasadas unos segundos, porque se actualizan por mensaje. Es el precio exacto de la independencia, y se ve entero en el [módulo 6](/arquitectura/mensajeria).
+
+</Callout>
+
+## Idea 1 · Qué posee cada servicio, y qué no sabe
+
+| | **Identity** | **Rentals** | **Notifications** |
+| --- | --- | --- | --- |
+| Responde a la pregunta | ¿Quién eres y qué puedes hacer? | ¿Qué se publica, quién lo visita? | ¿Qué se le comunica a alguien, y cómo? |
+| Es dueño de | Cuentas, credenciales, roles, tokens | Publicaciones, visitas, propietarios | Disparadores, plantillas, envíos |
+| **No sabe** | Que existen publicaciones | Contraseñas ni roles | Por qué ocurrió el hecho que notifica |
+| Base de datos | PostgreSQL · `identity` | PostgreSQL · `rentals` | SQL Server |
+| Puerto | `7191` | `7057` | `7506` |
+| Guía que lo explica por dentro | — | [Event Sourcing](/event-sourcing) | [DDD](/ddd) |
+
+La fila más informativa es la tercera. **Notifications no sabe por qué manda un correo**: recibe un mensaje que dice *"ocurrió `publicacion.aprobada`, aquí tienes estos datos"* y su trabajo es resolver qué plantilla corresponde y por qué canal se envía. No tiene ni el concepto de publicación.
+
+**Por qué importa:** esa ignorancia es lo que hace que Notifications sirva para cualquier otro servicio que se añada mañana sin tocar una línea. Si supiera de publicaciones, sería una funcionalidad de Rentals con otro nombre.
+
+## Idea 2 · La frontera real es la base de datos
+
+Se puede fingir que dos módulos son independientes mientras compartan tablas; basta un `JOIN` para que la separación se evapore. Aquí no se puede, y por una razón muy concreta: **ningún servicio tiene la cadena de conexión de otro**. Las reparte AppHost una por una ([módulo 2](/arquitectura/apphost)).
+
+Eso convierte una intención de diseño en una imposibilidad técnica. Si mañana alguien quisiera hacer ese `JOIN`, tendría que empezar por pedir credenciales que el sistema no le da — y esa fricción es justo la que hace visible que está cruzando una frontera.
+
+## Idea 3 · Lo que cruza son contratos, no tipos
+
+<Code
+    code={whole(userCreatedProto)}
+    lang="protobuf"
+    title="Shared/NotificationLog.Contracts/Identity/user_created.proto"
+/>
+
+Un **contrato** es un `.proto` que vive en `Shared` y del que se genera código C# para quien lo necesite. Es lo único que un servicio le promete a otro.
+
+Fíjate en lo que **no** cruza: no viaja la clase `User` de Identity, ni su `ApplicationUser` de Entity Framework, ni nada que tenga comportamiento. Viaja una lista plana de campos con un número de versión de esquema.
+
+Y del otro lado, quien lo recibe lo traduce inmediatamente a su propio vocabulario:
+
+<Code
+    code={whole(userCreatedHandler)}
+    lang="csharp"
+    title="Notifications · UserCreatedHandler — el contrato se traduce y desaparece"
+/>
+
+Cinco líneas cuyo único trabajo es convertir `UserCreated` en un `CreateRecipientCommand`. A partir de ahí, el tipo protobuf no vuelve a aparecer: la capa de aplicación de Notifications no sabe que existe protobuf.
+
+**Por qué importa:** mientras el contrato no cambie, Identity puede reescribirse entero —cambiar de ORM, de base de datos, de modelo— sin que Notifications se entere. Eso es lo que la independencia significa en la práctica.
+
+## Idea 4 · Cada servicio recibe una copia reducida de lo que necesita
+
+Notifications no consulta usuarios: **tiene los suyos**, en un agregado llamado `Recipient` cuyo `Id` *es* el identificador del usuario en Identity. Se rellena solo, escuchando los mensajes de arriba.
+
+Rentals hace lo mismo con un dato distinto:
+
+<Code
+    code={whole(identityReplica)}
+    lang="csharp"
+    title="Rentals · MartenIdentityReplica — una réplica local, no una llamada"
+/>
+
+Ese `PersonVerificationDocument` **no vive en Identity**: vive en la base de Rentals, y se actualiza cuando Identity publica que alguien verificó su teléfono. Sirve para una sola regla: no se puede pedir una visita sin teléfono verificado.
+
+<Callout kind="honesto" title="Y esta réplica concreta sobra, según el propio repositorio">
+
+`todo.md` la tiene marcada para eliminar, con el razonamiento escrito: cuando alguien pide una visita ya se le crea su cuenta, y esa cuenta trae el teléfono verificado, así que la regla se puede validar sin mantener una copia sincronizada.
+
+Es un buen ejemplo de que **la replicación tiene coste**: cada copia local es un mensaje más que escuchar, un documento más que mantener y una ventana más de desfase. Se hace cuando la alternativa —una llamada HTTP en cada comando, que falla si el otro servicio está caído— es peor. Aquí resultó no serlo.
+
+</Callout>
+
+## Idea 5 · Misma forma por fuera, tres interiores distintos
+
+Los tres servicios tienen exactamente las mismas cuatro capas y la misma forma de caso de uso. Y por dentro no se parecen en nada:
+
+| | Identity | Notifications | Rentals |
+| --- | --- | --- | --- |
+| Persistencia | EF Core + ASP.NET Identity | EF Core + SQL Server | **Marten, event store** |
+| Modelo de escritura | Filas | Filas | **Eventos** |
+| Modelo de lectura | Las mismas filas | Los mismos repositorios | **Proyecciones separadas** |
+| Concurrencia | La de ASP.NET Identity | **Sin protección** | Por versión de flujo |
+| Mensajería saliente | **Outbox transaccional** | — | Publicación tras el commit |
+
+**Por qué importa, y esto es lo que hace especial al repositorio:** no es una inconsistencia, es el objetivo. Tener el mismo tipo de problema resuelto de tres formas, en el mismo sistema y con las mismas herramientas, convierte cada decisión en una comparación verificable en vez de en una opinión. La guía de [Event Sourcing](/event-sourcing) se apoya en eso página tras página.
+
+En un producto real, esta variedad sería una decisión a justificar servicio por servicio — y la justificación válida es la del [módulo 2 de Event Sourcing](/event-sourcing/por-que): el modelo se elige por la forma del dominio, no por uniformidad.
+
+## Cómo encaja: quién sabe qué de quién
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 340" role="img" aria-labelledby="ctxTitle">
+        <title id="ctxTitle">Los tres contextos, lo que poseen y lo que replican</title>
+        <defs>
+            <marker id="ctArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="340" y="20" width="200" height="120" rx="12" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="440" y="44" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">IDENTITY</text>
+        <text x="440" y="64" text-anchor="middle" font-size="8.5" fill="#334155">User · credenciales · roles</text>
+        <text x="440" y="82" text-anchor="middle" font-size="8.5" fill="#334155">emite los tokens</text>
+        <rect x="358" y="94" width="164" height="32" rx="6" fill="#fff" stroke="#fed7aa" />
+        <text x="440" y="114" text-anchor="middle" font-size="8" font-family="monospace" fill="#9a3412">PostgreSQL · identity</text>
+
+        <rect x="40" y="190" width="240" height="130" rx="12" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="160" y="214" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">RENTALS</text>
+        <text x="160" y="234" text-anchor="middle" font-size="8.5" fill="#334155">Listing · Visit · Owner</text>
+        <rect x="58" y="244" width="204" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="160" y="263" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">PostgreSQL · rentals</text>
+        <rect x="58" y="280" width="204" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3,2" />
+        <text x="160" y="298" text-anchor="middle" font-size="8" fill="#64748b">réplica: verificación de teléfono</text>
+
+        <rect x="600" y="190" width="240" height="130" rx="12" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="720" y="214" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">NOTIFICATIONS</text>
+        <text x="720" y="234" text-anchor="middle" font-size="8.5" fill="#334155">Trigger · Template · Notification</text>
+        <rect x="618" y="244" width="204" height="30" rx="6" fill="#fff" stroke="#bbf7d0" />
+        <text x="720" y="263" text-anchor="middle" font-size="8" font-family="monospace" fill="#14532d">SQL Server</text>
+        <rect x="618" y="280" width="204" height="28" rx="6" fill="#f8fafc" stroke="#cbd5e1" stroke-dasharray="3,2" />
+        <text x="720" y="298" text-anchor="middle" font-size="8" fill="#64748b">réplica: Recipient (contacto)</text>
+
+        <path d="M370 144 Q 260 165 200 186" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ctArrow)" />
+        <text x="252" y="152" text-anchor="middle" font-size="7.5" fill="#64748b">PersonVerificationChanged</text>
+
+        <path d="M510 144 Q 620 165 680 186" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ctArrow)" />
+        <text x="640" y="152" text-anchor="middle" font-size="7.5" fill="#64748b">UserCreated</text>
+
+        <path d="M280 240 Q 440 210 598 240" fill="none" stroke="#94a3b8" stroke-width="1.4" marker-end="url(#ctArrow)" />
+        <text x="440" y="212" text-anchor="middle" font-size="7.5" fill="#64748b">NotificationDispatchRequested</text>
+
+        <path d="M200 192 Q 300 150 372 128" fill="none" stroke="#94a3b8" stroke-width="1.4" stroke-dasharray="4,3" marker-end="url(#ctArrow)" />
+        <text x="300" y="186" text-anchor="middle" font-size="7.5" fill="#64748b">AccountCreationRequested</text>
+
+        <text x="440" y="334" text-anchor="middle" font-size="9" fill="#64748b">Las cajas punteadas son copias locales de datos ajenos. Todas las flechas son mensajes, ninguna es una consulta.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Identity es el único que no depende de nadie. Los otros dos dependen de él para existir como
+        usuarios, y entre ellos solo en una dirección: Rentals cuenta cosas, Notifications las comunica.
+    </p>
+</div>
+
+## El recorrido: dónde vive el teléfono de una persona
+
+Vuelve a la escena inicial. Un mismo número de teléfono existe en tres sitios y ninguno es una copia sobrante:
+
+<ol class="ddd-steps">
+    <li><strong>En Identity</strong> es una credencial: sirve para iniciar sesión con código y hay que verificarlo.</li>
+    <li><strong>En Notifications</strong> es una dirección de entrega: el <code>Recipient</code> lo guarda para poder mandar un SMS, y llegó por <code>UserCreated</code>.</li>
+    <li><strong>En Rentals</strong> es un dato de contacto del <code>Owner</code>, escrito por quien registró al propietario — y además, aparte, existe la réplica de si está verificado.</li>
+</ol>
+
+Los tres pueden divergir, y eso **no es un error del diseño**: el teléfono del propietario de un inmueble no tiene por qué ser el de la cuenta con la que alguien entra al portal. Son tres conceptos distintos que casualmente se escriben igual.
+
+**Y la respuesta a la tarea original:** para mostrar el teléfono en la ficha de la publicación se usa el del `Owner`, que Rentals ya tiene. No hace falta llamar a nadie.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco confusiones habituales sobre las fronteras">
+
+**"Esto son microservicios."** La etiqueta no aporta nada y sí confunde: no hay despliegue independiente, ni equipos separados, ni tolerancia a fallos entre servicios. Lo que hay son **contextos delimitados con datos propios**, que es la parte del diseño que importa. Cómo se desplieguen es otra decisión.
+
+**"El mismo usuario en tres bases es duplicación de datos."** Duplicación sería tener el mismo concepto tres veces. Aquí hay tres conceptos —una cuenta, un destinatario, un propietario— que comparten identificador. El `Id` del `Recipient` *es* el del usuario, y eso es correlación, no copia.
+
+**"Si Identity se cae, se cae todo."** Se cae el login, y con él cualquier operación nueva del panel. Pero Rentals sigue respondiendo a quien ya tenga un token válido, y Notifications sigue enviando: sus réplicas locales no necesitan que Identity esté vivo. Esa es exactamente la ventaja que se compró con la replicación.
+
+**"Deberían compartir la tabla de usuarios, sería mucho más simple."** Sería más simple hoy y sería el final de las fronteras: la primera consulta con `JOIN` convierte tres servicios en un monolito con tres carpetas, y a partir de ahí ningún cambio de esquema es local.
+
+**"Los tres interiores distintos son deuda técnica."** En un producto lo serían si no estuvieran justificados. Aquí es el propósito del repositorio — pero fíjate en que la comparación solo es honesta porque la forma exterior sí es idéntica, y eso es el módulo siguiente.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo viajan de verdad esos mensajes**: colas, exchanges, serialización y durabilidad son el [módulo 6](/arquitectura/mensajeria).
+- **Cómo se autoriza una petición entre fronteras.** [Módulo 7](/arquitectura/identidad).
+- **El interior de cada dominio.** Los agregados de Notifications están en la [guía de DDD](/ddd) y los de Rentals en la de [Event Sourcing](/event-sourcing).
+- **Cómo se decide dónde va una frontera nueva.** Aquí se describen las tres que hay; el método para encontrarlas es DDD estratégico, y está en [bounded context](/ddd/bounded-context) y [context map](/ddd/context-map).
+
+<Callout kind="resumen" title="Para recordar">
+
+- Tres contextos: **quién eres** (Identity), **qué arriendas** (Rentals), **qué se te comunica** (Notifications).
+- La frontera real no es una carpeta: es que **cada servicio solo tiene su propia cadena de conexión**.
+- Lo que cruza son **contratos `.proto`**, que se traducen al vocabulario propio y desaparecen.
+- Cada servicio mantiene **copias reducidas** de lo que necesita de otro, actualizadas por mensaje. Tienen coste, y una de ellas ya sobra.
+- Notifications **no sabe por qué** notifica: por eso sirve para cualquier servicio futuro.
+- Misma forma por fuera, tres interiores distintos — a propósito, para poder compararlos.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre DbGate (`localhost:3000`) y mira las tres bases una detrás de otra: `identity`, `rentals` y la de SQL Server.
+
+Busca en cada una la palabra "user". Vas a encontrar tres cosas distintas con el mismo identificador y ninguna clave foránea entre ellas. Ver eso en las tablas reales vale más que cualquier diagrama de contextos.
+
+**Y luego:** el [módulo 4](/arquitectura/capas) entra dentro de una de las cajas y explica la estructura que los tres repiten — y la regla que impide que se degrade.
+
+</Callout>

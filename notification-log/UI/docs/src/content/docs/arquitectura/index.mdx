@@ -1,6 +1,6 @@
 ---
-title: "Los conceptos, y el sistema donde comprobarlos"
-description: "Esta guía tiene dos mitades que se necesitan. La primera enseña arquitectura de software —qué decisiones son arquitectura, cómo se eligen, qué duele al distribuir, cómo se evita que todo se degrade con el tiempo— y la segunda recorre las capas de este proyecto con archivos reales: `Domain`, `Application`, `Infrastructure` y la pareja `API`/`Web`. Ningún concepto se explica con la tienda online imaginaria de siempre: se explica señalando un archivo de este repositorio que puedes abrir y comprobar."
+title: "La arquitectura de este sistema"
+description: "Once módulos sobre cómo está montado NotificationLog: tres servicios, dos motores de base de datos, un bus de mensajes y un orquestador que lo arranca todo con un comando. Sin teoría general de arquitectura: solo este repositorio, archivo por archivo."
 sidebar:
   order: 0
   label: "Introducción"
@@ -8,157 +8,258 @@ sidebar:
 
 import Callout from '../../../components/Callout.astro';
 
-Esta guía tiene dos mitades que se necesitan. La primera enseña arquitectura de software —qué decisiones son arquitectura, cómo se eligen, qué duele al distribuir, cómo se evita que todo se degrade con el tiempo— y la segunda recorre las capas de este proyecto con archivos reales: `Domain`, `Application`, `Infrastructure` y la pareja `API`/`Web`. Ningún concepto se explica con la tienda online imaginaria de siempre: se explica señalando un archivo de este repositorio que puedes abrir y comprobar.
+<p class="ddd-lede">
+Clonas el repositorio, ejecutas <code>dotnet run --project NotificationLog.AppHost</code> y en el
+navegador se abre un panel donde se ven diecisiete recursos arrancando: tres APIs, una web, un
+sitio de documentación, SQL Server, PostgreSQL, Redis, RabbitMQ y dos contenedores más que no
+sabes qué hacen. Nadie te dio un diagrama. No hay un <code>docker-compose.yml</code> que leer. Y la
+pregunta obvia —<em>¿por dónde entro?</em>— no tiene respuesta en el código de ninguno de los
+proyectos, porque la respuesta no está dentro de ninguno: está en cómo se relacionan.
+</p>
 
-Y donde este sistema no hace lo que el concepto recomienda —no hay ADRs, no hay outbox, no hay autenticación, no hay tests de arquitectura— la guía lo dice de frente y explica qué costaría arreglarlo. Un sistema real nunca se parece a la foto del libro; aprender a leer esa diferencia es buena parte del trabajo.
+Esta guía es ese diagrama que nadie te dio. No enseña arquitectura de software en general —para eso hay libros— sino **cómo está montado este sistema concreto**, qué decide cada pieza, y por qué se decidió así.
 
-Hay una pregunta que atraviesa las once páginas y que conviene repetir en cada decisión que discutas con tu equipo: **"¿qué atributo de calidad estamos comprando, y cuál estamos pagando?"**. No existen arquitecturas buenas; existen compromisos adecuados a un contexto. Si una propuesta solo enumera ventajas, el análisis todavía no está terminado.
-
-## Bloque A · Los conceptos (sesiones 1 a 5)
-
-Cinco módulos pensados como cinco sesiones de unos 90 minutos: concepto, aplicación inmediata a este sistema y discusión del trade-off. Cada uno termina con ejercicios que producen algo commiteable.
-
-<div class="ddd-card-grid">
-    <a class="ddd-card" href="/arquitectura/fundamentos">
-        <span class="ddd-card-num">01</span>
-        <h3>Fundamentos</h3>
-        <p>Qué es arquitectura (lo caro de revertir), atributos de calidad con número, trade-offs, ADRs y
-        el modelo C4 — con el diagrama de contenedores real de este sistema.</p>
-    </a>
-    <a class="ddd-card" href="/arquitectura/estructura">
-        <span class="ddd-card-num">02</span>
-        <h3>Estructura</h3>
-        <p>Acoplamiento y cohesión medidos con un número, la regla de dependencia, capas frente a
-        hexagonal, monolito modular y los tests de arquitectura que aquí faltan.</p>
-    </a>
-    <a class="ddd-card" href="/arquitectura/estilos">
-        <span class="ddd-card-num">03</span>
-        <h3>Estilos</h3>
-        <p>Monolito, microservicios y eventos — coreografía frente a orquestación, y por qué este sistema
-        usa las dos en tramos distintos.</p>
-    </a>
-    <a class="ddd-card" href="/arquitectura/distribuido">
-        <span class="ddd-card-num">04</span>
-        <h3>Distribuido</h3>
-        <p>Falacias de la red, CAP y consistencia eventual, outbox e idempotencia, contratos, resiliencia
-        y observabilidad. La sesión donde más huecos reales aparecen.</p>
-    </a>
-    <a class="ddd-card" href="/arquitectura/evolucion">
-        <span class="ddd-card-num">05</span>
-        <h3>Evolución</h3>
-        <p>Fitness functions, ley de Conway, deuda técnica, modernización de legacy, seguridad y coste
-        como atributos, y el catálogo de antipatrones con veredicto.</p>
-    </a>
+<div class="ddd-frase">
+<strong>La idea entera:</strong> son <strong>tres servicios independientes</strong> que no comparten
+ni una tabla, hablan entre ellos de dos formas —HTTP cuando alguien espera respuesta, mensajes
+cuando no—, y un <strong>orquestador</strong> que es el único sitio donde está escrito quién habla
+con quién.
 </div>
 
-## Bloque B · Este sistema, capa por capa
+## Ya conoces la forma: es un aeropuerto pequeño
 
-La regla que sostiene todo el proyecto es una sola: **las dependencias apuntan hacia adentro**. `Domain` no conoce a nadie. `Application` solo conoce a `Domain`. `Infrastructure` conoce a los dos anteriores e implementa sus interfaces. `API` y `Web` son los bordes que hablan con el mundo exterior — HTTP, un navegador — y traducen hacia y desde ese núcleo. Es la misma regla que ya viste aplicada al modelo de dominio en [el módulo 11 del tutorial de DDD](/ddd/arquitectura); aquí la recorremos capa por capa, con más detalle de infraestructura real: Entity Framework, RabbitMQ, Aspire.
+Tres terminales, cada una con su propio equipaje, su propio personal y sus propios mostradores. Nadie entra a la terminal de al lado a coger una maleta: si necesita algo, lo **pide**. Y hay dos formas de pedirlo: por radio, esperando respuesta inmediata, o dejando un aviso en una cinta transportadora que el otro recogerá cuando pueda.
+
+Por encima de todo hay una **torre de control**: no mueve maletas ni atiende pasajeros, pero es la única que sabe qué terminal existe, en qué puerta está y con quién se comunica.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un aeropuerto se diseña una vez y se construye. Este sistema está a medias a propósito: hay un servicio maduro, uno reciente y uno en construcción, y la guía lo dice en cada página en vez de dibujar el aeropuerto terminado.
+
+Y la torre de control de aquí hace algo que ninguna torre real hace: **arranca las terminales**. El orquestador no solo describe la topología, la ejecuta — incluidos los contenedores de base de datos. Eso es el [módulo 2](/arquitectura/apphost).
+
+</Callout>
+
+## El vocabulario mínimo
+
+Ocho palabras se repiten en todas las páginas. Cada una se presenta a fondo en su módulo, con el archivo delante; esta lista está aquí para que ninguna te pille de sorpresa.
+
+<div class="surface-card">
+<div class="term-pair"><span class="biz">AppHost</span><span class="arrow">→</span><span>El proyecto orquestador. La única fuente de verdad de la topología.</span></div>
+<div class="term-pair"><span class="biz">Recurso</span><span class="arrow">→</span><span>Cada cosa que AppHost arranca: un proyecto, un contenedor, una base de datos.</span></div>
+<div class="term-pair"><span class="biz">Servicio</span><span class="arrow">→</span><span>Un contexto de negocio con sus cuatro capas y su base propia. Aquí hay tres.</span></div>
+<div class="term-pair"><span class="biz">Descubrimiento de servicios</span><span class="arrow">→</span><span>Escribir <code>https+http://rental</code> en vez de un puerto. Aspire lo resuelve.</span></div>
+<div class="term-pair"><span class="biz">Contrato</span><span class="arrow">→</span><span>Un <code>.proto</code> compartido. Lo único que un servicio le promete a otro.</span></div>
+<div class="term-pair"><span class="biz">Exchange / cola</span><span class="arrow">→</span><span>Los dos modos de RabbitMQ: repartir a todos, o entregar a uno.</span></div>
+<div class="term-pair"><span class="biz">Outbox</span><span class="arrow">→</span><span>Guardar el mensaje en la misma transacción que el dato, para que no se pierda.</span></div>
+<div class="term-pair"><span class="biz">ServiceDefaults</span><span class="arrow">→</span><span>El bloque común que todo servicio ejecutable referencia: telemetría, salud, reintentos.</span></div>
+</div>
+
+## El sistema, de un vistazo
 
 <div class="ddd-diagram">
-    <svg viewBox="0 0 820 260" role="img" aria-labelledby="arqMapTitle">
-        <title id="arqMapTitle">Cuatro capas y sus dependencias hacia adentro</title>
+    <svg viewBox="0 0 900 430" role="img" aria-labelledby="sysMapTitle">
+        <title id="sysMapTitle">Las piezas del sistema y cómo se comunican</title>
         <defs>
-            <marker id="arqMapArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
-                <path d="M0,0 L8,4 L0,8 Z" fill="#4f46e5" />
+            <marker id="sysArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
             </marker>
         </defs>
 
-        <rect x="640" y="20" width="160" height="220" rx="10" fill="#fff7ed" stroke="#fed7aa" />
-        <text x="720" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#9a3412">API / Web</text>
-        <text x="720" y="58" text-anchor="middle" font-size="8.5" fill="#9a3412">Minimal API · Blazor</text>
+        <rect x="20" y="14" width="860" height="46" rx="10" fill="#f1f5f9" stroke="#cbd5e1" stroke-dasharray="5,3" />
+        <text x="450" y="34" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">NotificationLog.AppHost — arranca y conecta todo lo de abajo</text>
+        <text x="450" y="50" text-anchor="middle" font-size="8.5" fill="#64748b">puertos, cadenas de conexión, variables de entorno, orden de arranque</text>
 
-        <rect x="460" y="20" width="160" height="220" rx="10" fill="#f8fafc" stroke="#e5e9f2" />
-        <text x="540" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#475569">Infrastructure</text>
-        <text x="540" y="58" text-anchor="middle" font-size="8.5" fill="#475569">EF Core · RabbitMQ · Wolverine</text>
+        <rect x="20" y="82" width="200" height="86" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="120" y="104" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">Web (Blazor Server)</text>
+        <text x="120" y="122" text-anchor="middle" font-size="8.5" fill="#334155">el panel de administración</text>
+        <text x="120" y="138" text-anchor="middle" font-size="8.5" fill="#334155">+ login por OIDC</text>
+        <text x="120" y="157" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">:7189</text>
 
-        <rect x="280" y="20" width="160" height="220" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
-        <text x="360" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#14532d">Application</text>
-        <text x="360" y="58" text-anchor="middle" font-size="8.5" fill="#14532d">Commands · Queries · Puertos</text>
+        <rect x="20" y="186" width="200" height="66" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="120" y="208" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">Docs (Astro)</text>
+        <text x="120" y="226" text-anchor="middle" font-size="8.5" fill="#334155">esta guía, servida por el</text>
+        <text x="120" y="241" text-anchor="middle" font-size="8.5" fill="#334155">propio orquestador</text>
 
-        <rect x="100" y="20" width="160" height="220" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
-        <text x="180" y="42" text-anchor="middle" font-size="11" font-weight="700" fill="#4338ca">Domain</text>
-        <text x="180" y="58" text-anchor="middle" font-size="8.5" fill="#4338ca">0 PackageReference</text>
+        <line x1="222" y1="112" x2="288" y2="112" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#sysArrow)" />
+        <text x="255" y="105" text-anchor="middle" font-size="7.5" fill="#4338ca">HTTP</text>
 
-        <line x1="640" y1="130" x2="620" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
-        <line x1="460" y1="130" x2="440" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
-        <line x1="280" y1="130" x2="260" y2="130" stroke="#4f46e5" stroke-width="1.6" marker-end="url(#arqMapArrow)" />
+        <rect x="292" y="82" width="180" height="80" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="382" y="104" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Identity</text>
+        <text x="382" y="122" text-anchor="middle" font-size="8.5" fill="#334155">cuentas, login, tokens</text>
+        <text x="382" y="138" text-anchor="middle" font-size="8.5" fill="#334155">OpenIddict · :7191</text>
+        <text x="382" y="154" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">PostgreSQL · identity</text>
 
-        <text x="530" y="110" text-anchor="middle" font-size="8" fill="#94a3b8">implementa puertos de</text>
-        <text x="350" y="110" text-anchor="middle" font-size="8" fill="#94a3b8">orquesta contra</text>
-        <text x="720" y="180" text-anchor="middle" font-size="8" fill="#9a3412">llama comandos/queries de</text>
+        <rect x="292" y="176" width="180" height="80" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="382" y="198" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Rentals</text>
+        <text x="382" y="216" text-anchor="middle" font-size="8.5" fill="#334155">portal de arriendos</text>
+        <text x="382" y="232" text-anchor="middle" font-size="8.5" fill="#334155">event sourcing · :7057</text>
+        <text x="382" y="248" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">PostgreSQL · rentals</text>
+
+        <rect x="292" y="270" width="180" height="80" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="382" y="292" text-anchor="middle" font-size="10.5" font-weight="700" fill="#9a3412">Notifications</text>
+        <text x="382" y="310" text-anchor="middle" font-size="8.5" fill="#334155">plantillas y envíos</text>
+        <text x="382" y="326" text-anchor="middle" font-size="8.5" fill="#334155">capas clásicas · :7506</text>
+        <text x="382" y="342" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">SQL Server</text>
+
+        <rect x="540" y="140" width="150" height="150" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="615" y="164" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">RabbitMQ</text>
+        <text x="615" y="186" text-anchor="middle" font-size="8" fill="#334155">identity.users</text>
+        <text x="615" y="202" text-anchor="middle" font-size="8" fill="#334155">identity.verification-codes</text>
+        <text x="615" y="222" text-anchor="middle" font-size="8" fill="#334155">identity-accounts</text>
+        <text x="615" y="238" text-anchor="middle" font-size="8" fill="#334155">notification-dispatch</text>
+        <text x="615" y="254" text-anchor="middle" font-size="8" fill="#334155">rentals-person-verification</text>
+        <text x="615" y="276" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">contratos protobuf</text>
+
+        <line x1="474" y1="128" x2="536" y2="170" stroke="#16a34a" stroke-width="1.5" marker-end="url(#sysArrow)" />
+        <line x1="474" y1="212" x2="536" y2="212" stroke="#16a34a" stroke-width="1.5" marker-end="url(#sysArrow)" />
+        <line x1="474" y1="300" x2="536" y2="260" stroke="#16a34a" stroke-width="1.5" marker-end="url(#sysArrow)" />
+        <text x="505" y="196" text-anchor="middle" font-size="7.5" fill="#14532d">mensajes</text>
+
+        <rect x="712" y="82" width="168" height="74" rx="10" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="796" y="104" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">Buggregator</text>
+        <text x="796" y="122" text-anchor="middle" font-size="8.5" fill="#334155">recibe los correos y SMS</text>
+        <text x="796" y="138" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">:8000 · smtp :1025</text>
+
+        <rect x="712" y="172" width="168" height="74" rx="10" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="796" y="194" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">DbGate</text>
+        <text x="796" y="212" text-anchor="middle" font-size="8.5" fill="#334155">cliente SQL en el navegador</text>
+        <text x="796" y="228" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">:3000</text>
+
+        <rect x="712" y="262" width="168" height="74" rx="10" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="796" y="284" text-anchor="middle" font-size="10" font-weight="700" fill="#9d174d">Redis</text>
+        <text x="796" y="302" text-anchor="middle" font-size="8.5" fill="#334155">caché de salida del panel</text>
+
+        <line x1="474" y1="312" x2="708" y2="120" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#sysArrow)" />
+        <text x="600" y="330" text-anchor="middle" font-size="7.5" fill="#64748b">correo y SMS salientes</text>
+
+        <text x="450" y="390" text-anchor="middle" font-size="9" fill="#64748b">Ningún servicio lee la base de datos de otro. Todo lo que cruza una frontera es una petición HTTP o un mensaje.</text>
+        <text x="450" y="410" text-anchor="middle" font-size="9" font-weight="600" fill="#475569">Y ninguna flecha de este diagrama está escrita dentro de un servicio: todas viven en AppHost.</text>
     </svg>
     <p class="ddd-diagram-caption">
-        Las flechas son la única dirección de dependencia de compilación permitida. Nadie a la izquierda
-        conoce a nadie a la derecha.
+        Los puertos son fijos y están en <code>NotificationLog.AppHost/appsettings.json</code>. El resto
+        de direcciones no existen en ningún sitio: se resuelven por nombre.
     </p>
 </div>
 
+## Temario
+
+| # | Módulo | Vas a entender... | Archivo ancla |
+| --- | --- | --- | --- |
+| 1 | [El sistema de un vistazo](/arquitectura/mapa) | Qué pieza es cada cosa de las que arrancan, y qué hace. | `NotificationLog.slnx` |
+| 2 | [AppHost: la topología como código](/arquitectura/apphost) | Por qué nunca se ejecuta un proyecto suelto. | `AppHost.cs` |
+| 3 | [Tres servicios y por qué son tres](/arquitectura/servicios) | Dónde están las fronteras y qué las justifica. | `Services/*` |
+| 4 | [Las capas dentro de un servicio](/arquitectura/capas) | La misma estructura repetida tres veces, y la regla que la sostiene. | `*.Domain.csproj` |
+| 5 | [HTTP: el camino síncrono](/arquitectura/http) | Cómo el panel habla con tres APIs sin saber dónde están. | `Web/Program.cs` |
+| 6 | [Mensajes: el camino asíncrono](/arquitectura/mensajeria) | Las cinco colas, los contratos protobuf y el outbox. | `RabbitMqMessagingExtensions.cs` |
+| 7 | [Identidad de punta a punta](/arquitectura/identidad) | Del login del panel al token que valida Rentals. | `ConnectExtensions.cs` |
+| 8 | [Datos: tres motores, tres estilos](/arquitectura/datos) | Por qué hay SQL Server y PostgreSQL, y quién crea qué al arrancar. | `DependencyInjection.cs` |
+| 9 | [Un recorrido completo](/arquitectura/recorrido) | Un clic que acaba escribiendo en tres bases de datos distintas. | `RegisterNaturalOwnerHandler.cs` |
+| 10 | [Entorno y observabilidad](/arquitectura/entorno) | Qué ves cuando algo falla, y qué contenedores son solo de desarrollo. | `ServiceDefaults/Extensions.cs` |
+| 11 | [Decisiones y deudas](/arquitectura/decisiones) | Qué se decidió a propósito y qué está a medias, sin adornos. | `todo.md` |
+
+## Recorre la guía
+
 <div class="ddd-card-grid">
-    <a class="ddd-card" href="/arquitectura/dominio">
+    <a class="ddd-card" href="/arquitectura/mapa">
+        <span class="ddd-card-num">01</span>
+        <h3>El sistema de un vistazo</h3>
+        <p>Diecisiete recursos arrancando. Qué es cada uno y cuáles puedes ignorar.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/apphost">
+        <span class="ddd-card-num">02</span>
+        <h3>AppHost</h3>
+        <p>La topología escrita en C#, y por qué es la única fuente de verdad.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/servicios">
+        <span class="ddd-card-num">03</span>
+        <h3>Tres servicios</h3>
+        <p>Dónde están las fronteras, y por qué cada uno está construido distinto.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/capas">
+        <span class="ddd-card-num">04</span>
+        <h3>Las capas</h3>
+        <p>Domain, Application, Infrastructure, Api — y la regla verificable.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/http">
+        <span class="ddd-card-num">05</span>
+        <h3>El camino síncrono</h3>
+        <p>Clientes tipados, descubrimiento por nombre y un contrato de errores.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/mensajeria">
         <span class="ddd-card-num">06</span>
-        <h3>Dominio</h3>
-        <p>Los cuatro agregados — <code>NotificationTrigger</code>, <code>NotificationTemplate</code>,
-        <code>Recipient</code>, <code>Notification</code> — y por qué su <code>.csproj</code> no tiene ni un
-        <code>PackageReference</code>.</p>
+        <h3>El camino asíncrono</h3>
+        <p>Cinco colas, dos exchanges, contratos protobuf y un outbox real.</p>
     </a>
-    <a class="ddd-card" href="/arquitectura/aplicacion">
+    <a class="ddd-card" href="/arquitectura/identidad">
         <span class="ddd-card-num">07</span>
-        <h3>Aplicación</h3>
-        <p>Comandos y queries organizados por feature, los puertos que define y cuál de esas piezas ya
-        está enchufada de punta a punta y cuál todavía espera un productor real.</p>
+        <h3>Identidad</h3>
+        <p>Un servidor OIDC propio, y qué pasa con el token en cada salto.</p>
     </a>
-    <a class="ddd-card" href="/arquitectura/infraestructura">
+    <a class="ddd-card" href="/arquitectura/datos">
         <span class="ddd-card-num">08</span>
-        <h3>Infraestructura</h3>
-        <p>EF Core como implementación de los repositorios, y Wolverine + RabbitMQ como implementación
-        actual de la mensajería — con Protobuf de por medio.</p>
+        <h3>Datos</h3>
+        <p>Dos motores, cuatro esquemas, tres formas de crear el esquema al arrancar.</p>
     </a>
-    <a class="ddd-card" href="/arquitectura/presentacion">
+    <a class="ddd-card" href="/arquitectura/recorrido">
         <span class="ddd-card-num">09</span>
-        <h3>API + Web</h3>
-        <p>Minimal API con <code>ProblemDetails</code>, y un Blazor Server aparte que le habla por HTTP
-        con descubrimiento de servicios de Aspire — no un monolito de una sola app.</p>
+        <h3>Un recorrido completo</h3>
+        <p>Registrar un propietario toca los tres servicios. Paso a paso.</p>
+    </a>
+    <a class="ddd-card" href="/arquitectura/entorno">
+        <span class="ddd-card-num">10</span>
+        <h3>Entorno y observabilidad</h3>
+        <p>Trazas, salud, y los dos contenedores que solo existen para desarrollar.</p>
     </a>
     <a class="ddd-card" href="/arquitectura/decisiones">
-        <span class="ddd-card-num">10</span>
-        <h3>Decisiones</h3>
-        <p>Siete decisiones de arquitectura reales, verificadas archivo por archivo — con las piezas que
-        todavía están a medio camino marcadas sin adornos.</p>
-    </a>
-    <a class="ddd-card" href="/arquitectura/ejercicios">
         <span class="ddd-card-num">11</span>
-        <h3>Ejercicios</h3>
-        <p>Siete ejercicios sobre este repositorio, uno o dos por sesión, cada uno con un entregable
-        concreto: un ADR, un diagrama, un test que se pone rojo cuando debe.</p>
+        <h3>Decisiones y deudas</h3>
+        <p>Cada decisión con el archivo que la prueba, y lo que falta con su consecuencia.</p>
     </a>
 </div>
 
-## Si vas a impartir esto
+## Cómo está escrita cada página
 
-Tres errores hunden cualquier formación de arquitectura, y los tres son fáciles de cometer:
+Todas siguen el mismo recorrido, para que sepas siempre dónde estás:
 
 <ol class="ddd-steps">
-    <li>
-        <strong>Enseñar un catálogo de estilos.</strong> El equipo memoriza "microservicios frente a
-        monolito" y sale creyendo que arquitectura es elegir una caja. Arquitectura es elegir qué se
-        sacrifica.
-    </li>
-    <li>
-        <strong>Presentarla como algo del arquitecto.</strong> Si el mensaje es "esto lo decide otro", nadie
-        aplica nada. El mensaje correcto es que todos toman decisiones arquitectónicas cada semana; la
-        diferencia está en si son conscientes y quedan registradas.
-    </li>
-    <li>
-        <strong>Omitir el coste.</strong> Cada patrón de esta guía tiene un precio en complejidad operativa.
-        Preséntalo siempre junto al beneficio, o acabarás con un equipo con síndrome de arquitectura de CV.
-    </li>
+    <li><strong>Una escena concreta:</strong> algo que se rompe, o que no encuentras, antes de cualquier definición.</li>
+    <li><strong>La idea en una frase</strong>, en el recuadro destacado.</li>
+    <li><strong>Una comparación con algo conocido</strong>, y dónde deja de servir.</li>
+    <li><strong>Tres o cuatro ideas encadenadas</strong>, cada una con su archivo real delante y su "por qué importa". Las palabras nuevas se definen donde aparecen.</li>
+    <li><strong>Un diagrama</strong> que junta las piezas y <strong>un recorrido</strong> donde se ven funcionando.</li>
+    <li><strong>Lo que suele confundir</strong>, <strong>lo que el módulo deja fuera</strong> y <strong>qué hacer a continuación</strong>.</li>
 </ol>
 
-El formato que funciona en cada bloque es el mismo: **concepto (10 min) → aplicarlo a nuestro sistema (10 min) → discusión del trade-off (10 min)**. La segunda parte es la que hace que se recuerde, y es la razón de que esta guía use este repositorio como material de práctica en lugar de un ejemplo inventado.
+Los fragmentos de código se importan de los archivos reales del repositorio, así que no pueden quedar desactualizados en silencio.
 
-<Callout kind="honesto" title="Cómo se relaciona con el tutorial de DDD">
+<Callout kind="concepto" title="Qué relación tiene esto con las otras guías">
 
-El [tutorial de DDD](/ddd) cubre el modelado táctico —agregados, value objects, invariantes— y tiene su propio módulo de arquitectura centrado en Clean Architecture y CQRS. Esta guía trabaja el nivel de encima: qué decisiones son arquitectura, cómo se eligen entre alternativas, qué pasa cuando el sistema se distribuye y cómo se evita que se degrade. Se solapan poco y a propósito; donde lo hacen, cada página enlaza a la otra en vez de repetirla.
+Esta guía se ocupa de **lo que hay entre los servicios y alrededor de ellos**. Lo que pasa *dentro* está en las otras tres, y se enlazan en el punto exacto donde hace falta:
+
+- [Proyecto](/proyecto) — qué hace el sistema desde el punto de vista funcional. Si no sabes qué es un trigger o una plantilla, empieza ahí.
+- [DDD](/ddd) — el modelado táctico del servicio de Notifications: agregados, value objects, repositorios.
+- [Event Sourcing](/event-sourcing) — el interior de Rentals, que guarda hechos en vez de estado.
+- [Patrones](/patrones) — los patrones de diseño que aparecen en el código, con sus nombres.
+
+</Callout>
+
+## Lo que esta guía deja fuera
+
+- **Teoría general de arquitectura.** No hay una explicación de qué son los microservicios ni de cuándo elegirlos. Hay explicaciones de por qué *aquí* se eligió lo que se eligió.
+- **Despliegue en producción.** Todo lo que verás corre en una máquina con Docker. No hay Kubernetes, ni CI/CD, ni infraestructura como código más allá de AppHost.
+- **Escalado y rendimiento.** Ninguna pieza está dimensionada para carga, y varias decisiones (`DaemonMode.Solo`, caché en memoria) lo dan por hecho.
+- **Seguridad más allá de la autenticación.** Hay OIDC y políticas por rol; no hay auditoría de accesos, rotación de secretos ni cifrado en reposo.
+- **El interior de cada dominio.** Los agregados, las reglas de negocio y los patrones tácticos son las otras guías.
+
+<Callout kind="ejercicio" title="Antes de pasar al módulo 1: arráncalo">
+
+Cinco minutos, y el resto de la guía deja de ser abstracto.
+
+1. Asegúrate de que **Docker Desktop** está corriendo.
+2. Desde `notification-log/`: `dotnet run --project NotificationLog.AppHost`.
+3. Se abrirá el **dashboard de Aspire**. Quédate un minuto mirando la lista de recursos y el orden en que pasan a verde.
+
+Ese panel es el mapa vivo de todo lo que cuenta esta guía. Los módulos siguientes lo van recorriendo de izquierda a derecha.
 
 </Callout>

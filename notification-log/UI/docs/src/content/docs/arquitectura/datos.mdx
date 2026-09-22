@@ -1,0 +1,247 @@
+---
+title: "Datos: dos motores, tres estilos"
+description: "Dónde acaba guardado cada cosa, quién crea el esquema al arrancar y por qué no hay una sola clave foránea entre servicios."
+sidebar:
+  order: 8
+  label: "8 · Datos"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span, member } from '../../../lib/code';
+import notificationDi from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/DependencyInjection.cs?raw';
+import notificationProgram from '@code/Services/Notification/NotificationLog.ApiService/Program.cs?raw';
+import identityDi from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/DependencyInjection.cs?raw';
+import rentalsDi from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/DependencyInjection.cs?raw';
+import appHost from '@code/NotificationLog.AppHost/AppHost.cs?raw';
+
+<p class="ddd-lede">
+Borras todos los contenedores y arrancas de cero. Nadie ejecuta un script de base de datos, nadie
+corre <code>dotnet ef database update</code>, y sin embargo al minuto hay tablas en SQL Server,
+tablas en PostgreSQL y un esquema de event store completo. Tres servicios crearon su propia casa,
+cada uno de una forma distinta, y ninguno pidió permiso.
+</p>
+
+Este módulo baja al último nivel: dónde acaba guardada cada cosa, quién decide su forma y por qué entre las tres bases no hay ni una relación.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> dos motores, cuatro esquemas y tres estilos de persistencia
+distintos — cada servicio crea y versiona el suyo al arrancar, y ninguno puede leer el del otro.
+</div>
+
+## Ya conoces la idea: son tres inquilinos con su propia llave
+
+Tres pisos en dos edificios. Cada inquilino amuebla el suyo como quiera, y la forma de amueblarlo no le importa a nadie más: uno tiene estanterías, otro cajas apiladas, el tercero un archivo cronológico.
+
+Lo que sí importa es que **ninguno tiene la llave del piso del vecino**. Si necesita algo de allí, llama al timbre — o espera a que se lo dejen en el buzón.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Los inquilinos entran con una llave que ya existía. Aquí **cada servicio construye su propio piso al llegar**: crea las tablas, aplica las migraciones y siembra los datos iniciales, en cada arranque.
+
+Eso tiene una consecuencia que la analogía no captura: si dos versiones distintas del mismo servicio arrancan a la vez sobre la misma base, las dos intentarán construir. Es una de las cosas que hay que revisar antes de escalar.
+
+</Callout>
+
+## Idea 1 · Dos motores, y el reparto no es casual
+
+<Code
+    code={span(appHost, 'var sql = builder.AddSqlServer("sql")', 'var rentalsDb = postgres.AddDatabase("rentals");')}
+    lang="csharp"
+    title="AppHost.cs · los dos motores y sus tres bases"
+/>
+
+| Servicio | Motor | Base / esquema | Por qué ese |
+| --- | --- | --- | --- |
+| Notifications | SQL Server | `NotificationLog` | Fue el primero, y el escenario que quería enseñar era EF Core sobre SQL Server. |
+| Identity | PostgreSQL | `identity` | ASP.NET Identity y OpenIddict sobre Npgsql, más el esquema `wolverine` del outbox. |
+| Rentals | PostgreSQL | `rentals` | **Marten exige PostgreSQL**: su event store se apoya en el tipo `jsonb`. |
+
+**Por qué importa:** tener dos motores en el mismo sistema es una decisión que en un producto habría que justificar —duplica lo que hay que operar, respaldar y vigilar— y aquí está justificada por el propósito del repositorio: enseñar los dos modelos de persistencia lado a lado. La razón de Rentals, además, no es negociable: sin PostgreSQL no hay Marten.
+
+## Idea 2 · Tres formas de crear el esquema al arrancar
+
+### Notifications — migraciones de EF Core
+
+<Code
+    code={span(notificationProgram, 'using (var scope = app.Services.CreateScope())', '}')}
+    lang="csharp"
+    title="Notifications · Program.cs"
+    mark={['await db.Database.MigrateAsync();']}
+/>
+
+Migraciones generadas con `dotnet ef migrations add` y aplicadas al arrancar. El esquema está versionado en el repositorio, archivo a archivo, y cada cambio deja rastro en un commit.
+
+<Code
+    code={member(notificationDi, 'public static IServiceCollection AddInfrastructure')}
+    lang="csharp"
+    title="Notifications · Infrastructure/DependencyInjection.cs"
+    mark={['sql.EnableRetryOnFailure(']}
+/>
+
+Fíjate en `EnableRetryOnFailure`: SQL Server en contenedor tarda en aceptar conexiones y corta alguna. Es la contrapartida de arrancar la infraestructura junto al código.
+
+### Identity — migraciones más un sembrador
+
+<Code
+    code={member(identityDi, 'public static async Task MigrateIdentityDatabaseAsync')}
+    lang="csharp"
+    title="Identity · Infrastructure/DependencyInjection.cs"
+/>
+
+Mismo mecanismo, y con un detalle: **en ese único `DbContext` conviven tres esquemas de terceros**. Las tablas de ASP.NET Identity (usuarios, roles, claims), las de OpenIddict (aplicaciones, autorizaciones, tokens) y las de Wolverine (el outbox del [módulo 6](/arquitectura/mensajeria)).
+
+<Code
+    code={span(identityDi, 'services.AddDbContextWithWolverineIntegration<IdentityServiceDbContext>(', '.AddTokenProvider<PhoneNumberTokenProvider<ApplicationUser>>(TokenOptions.DefaultPhoneProvider);')}
+    lang="csharp"
+    title="Identity · un DbContext que hospeda tres cosas"
+/>
+
+Además hay un `IdentitySeeder` registrado como servicio alojado: crea los roles, el administrador inicial y **los clientes de OIDC** —el panel y Scalar— con el secreto que AppHost generó. Sin ese paso, nadie podría iniciar sesión en un sistema recién levantado.
+
+### Rentals — sin migraciones
+
+<Code
+    code={span(rentalsDi, 'services.AddMarten(options => MartenStoreConfiguration.Configure(options, connectionString))', '.AddSubscriptionWithServices<DomainEventsSubscription>(ServiceLifetime.Singleton);')}
+    lang="csharp"
+    title="Rentals · Infrastructure/DependencyInjection.cs"
+    mark={['.ApplyAllDatabaseChangesOnStartup()']}
+/>
+
+Marten **deduce el esquema** de los tipos registrados y lo crea o lo ajusta al arrancar. No hay carpeta de migraciones, no hay `dotnet ef`, y el esquema no está versionado en el repositorio.
+
+**Por qué importa la diferencia:** con migraciones, el esquema es un artefacto revisable y el cambio es explícito. Con Marten, el esquema es una consecuencia del código y el cambio es automático — cómodo mientras el modelo se mueve, y exactamente el hábito que causó el problema del [módulo 11 de Event Sourcing](/event-sourcing/evolucion), donde la base acabó sin poder reconstruirse.
+
+## Idea 3 · Dentro de cada base, tres modelos distintos
+
+| | Notifications | Identity | Rentals |
+| --- | --- | --- | --- |
+| Qué se guarda | Estado actual | Estado actual | **Hechos** |
+| Escritura | `UPDATE` | `UPDATE` | `append` de eventos |
+| Lectura | Los mismos repositorios | Los mismos repositorios | **Documentos proyectados** |
+| Esquema | Migraciones versionadas | Migraciones versionadas | Generado por Marten |
+| Concurrencia | **Sin protección** | La de ASP.NET Identity | Por versión de flujo |
+| Guía que lo explica | [DDD · Persistencia](/ddd/persistencia) | — | [Event Sourcing](/event-sourcing/persistencia) |
+
+La fila de concurrencia es la más honesta. Notifications puede aceptar dos peticiones simultáneas que dejen el mismo trigger con dos configuraciones activas del mismo canal; está documentado en la guía de DDD y sigue abierto. Rentals no puede, y no por mérito propio: el control de versión viene con el modelo de eventos.
+
+## Idea 4 · Redis no guarda nada importante
+
+<Code
+    code={span(appHost, 'var cache = builder.AddRedis("cache")', '.WithParentRelationship(databases);')}
+    lang="csharp"
+    title="AppHost.cs · Redis"
+/>
+
+Se usa para una sola cosa: la **caché de salida** del panel, que guarda respuestas ya renderizadas para no repetir trabajo entre peticiones iguales.
+
+Es la única pieza de datos del sistema que se puede borrar entera sin consecuencias. Si Redis desaparece, el panel va más lento y nada más.
+
+## Cómo encaja: el mapa de almacenamiento
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 340" role="img" aria-labelledby="dataTitle">
+        <title id="dataTitle">Dónde guarda cada servicio y qué hay en cada esquema</title>
+
+        <rect x="30" y="30" width="250" height="230" rx="12" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="155" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#4338ca">SQL Server</text>
+        <text x="155" y="70" text-anchor="middle" font-size="8" fill="#4338ca">base NotificationLog</text>
+        <rect x="48" y="84" width="214" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="155" y="103" text-anchor="middle" font-size="8.5" fill="#334155">NotificationTriggers</text>
+        <rect x="48" y="118" width="214" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="155" y="137" text-anchor="middle" font-size="8.5" fill="#334155">NotificationTemplates</text>
+        <rect x="48" y="152" width="214" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="155" y="171" text-anchor="middle" font-size="8.5" fill="#334155">Recipients</text>
+        <rect x="48" y="186" width="214" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="155" y="205" text-anchor="middle" font-size="8.5" fill="#334155">Notifications (log de envíos)</text>
+        <text x="155" y="238" text-anchor="middle" font-size="8" fill="#4338ca" font-style="italic">migraciones de EF Core</text>
+
+        <rect x="310" y="30" width="540" height="230" rx="12" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="580" y="54" text-anchor="middle" font-size="10.5" font-weight="700" fill="#14532d">PostgreSQL</text>
+
+        <rect x="328" y="70" width="250" height="172" rx="10" fill="#fff" stroke="#bbf7d0" />
+        <text x="453" y="90" text-anchor="middle" font-size="9.5" font-weight="700" fill="#14532d">base identity</text>
+        <rect x="344" y="100" width="218" height="26" rx="5" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="453" y="117" text-anchor="middle" font-size="8" fill="#334155">AspNetUsers · Roles · Claims</text>
+        <rect x="344" y="130" width="218" height="26" rx="5" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="453" y="147" text-anchor="middle" font-size="8" fill="#334155">OpenIddict: apps y tokens</text>
+        <rect x="344" y="160" width="218" height="26" rx="5" fill="#fef3c7" stroke="#fde68a" />
+        <text x="453" y="177" text-anchor="middle" font-size="8" fill="#92400e">esquema wolverine · outbox</text>
+        <text x="453" y="206" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">migraciones de EF Core</text>
+        <text x="453" y="222" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">+ sembrador de roles y clientes</text>
+
+        <rect x="590" y="70" width="244" height="172" rx="10" fill="#fff" stroke="#bbf7d0" />
+        <text x="712" y="90" text-anchor="middle" font-size="9.5" font-weight="700" fill="#14532d">base rentals · esquema rentals</text>
+        <rect x="606" y="100" width="212" height="26" rx="5" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="712" y="117" text-anchor="middle" font-size="8" fill="#9a3412">mt_events · los hechos</text>
+        <rect x="606" y="130" width="212" height="26" rx="5" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="712" y="147" text-anchor="middle" font-size="8" fill="#334155">mt_doc_listingview · vistas</text>
+        <rect x="606" y="160" width="212" height="26" rx="5" fill="#f8fafc" stroke="#e5e9f2" />
+        <text x="712" y="177" text-anchor="middle" font-size="8" fill="#334155">visitdecision · réplicas</text>
+        <text x="712" y="206" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">esquema generado por Marten</text>
+        <text x="712" y="222" text-anchor="middle" font-size="8" fill="#14532d" font-style="italic">en cada arranque</text>
+
+        <rect x="30" y="278" width="820" height="44" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <text x="440" y="298" text-anchor="middle" font-size="9.5" font-weight="700" fill="#991b1b">Entre las tres bases no hay ni una clave foránea, ni una vista, ni una consulta cruzada</text>
+        <text x="440" y="314" text-anchor="middle" font-size="8.5" fill="#991b1b">Los identificadores coinciden a propósito: el Recipient de Notifications tiene el mismo Guid que el usuario de Identity</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Redis no aparece porque no guarda datos del sistema: solo respuestas ya calculadas que se pueden
+        tirar en cualquier momento.
+    </p>
+</div>
+
+## El recorrido: el mismo usuario en las tres bases
+
+<ol class="ddd-steps">
+    <li><strong>En <code>identity</code></strong> hay una fila en <code>AspNetUsers</code> con su hash de contraseña, su correo y sus roles. Es el original.</li>
+    <li><strong>En SQL Server</strong> hay un <code>Recipient</code> con <strong>el mismo <code>Guid</code></strong> como clave primaria, y solo lo necesario para entregarle algo: nombre, correo, teléfono, idioma, si acepta notificaciones.</li>
+    <li><strong>En <code>rentals</code></strong> ese <code>Guid</code> aparece dentro de eventos —<code>ListingDrafted.CreatedBy</code>, <code>VisitRequested.VisitorId</code>— como un dato más del hecho, sin tabla que lo respalde.</li>
+</ol>
+
+Los tres se pueden consultar por el mismo identificador y **ninguna base sabe que las otras existen**. Si mañana alguien borra un usuario en Identity, Rentals seguirá teniendo eventos con su `Guid` dentro — y eso es correcto: el hecho ocurrió, y borrarlo sería reescribir la historia.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cinco malentendidos sobre la capa de datos">
+
+**"Si comparten el mismo PostgreSQL, comparten datos."** Comparten el proceso del motor, que en desarrollo es una decisión de coste. Son bases distintas con credenciales distintas, y cambiar a dos instancias no tocaría una línea de código.
+
+**"Aplicar migraciones al arrancar es una mala práctica."** En desarrollo es lo correcto y ahorra un paso manual. En producción, con varias instancias, es un problema real: dos procesos migrando a la vez. La solución habitual —un paso de despliegue aparte— no está resuelta aquí.
+
+**"Marten sin migraciones es más cómodo."** Es más cómodo mientras el modelo se mueve y más peligroso después: el esquema deja de ser revisable y los cambios dejan de ser explícitos. La guía de Event Sourcing documenta exactamente el daño que eso acabó causando.
+
+**"Faltan claves foráneas entre servicios."** No faltan: están prohibidas por el diseño. Una clave foránea entre dos bases de servicios distintos sería el final de las fronteras del [módulo 3](/arquitectura/servicios).
+
+**"El `DbContext` de Identity está haciendo demasiado."** Hospeda tres esquemas de terceros y es lo normal: ASP.NET Identity, OpenIddict y el outbox de Wolverine se integran así a propósito, y meterlos en el mismo contexto es lo que permite que el outbox comparta transacción con el guardado del usuario.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **El modelado dentro de cada base.** Agregados, value objects y proyecciones están en las guías de [DDD](/ddd/persistencia) y [Event Sourcing](/event-sourcing/persistencia).
+- **Respaldos, réplicas y retención.** No hay nada de eso, y los volúmenes solo sirven para no perder los datos entre reinicios locales.
+- **Migrar en producción con varias instancias.** Mencionado arriba como riesgo; sin resolver.
+- **Rendimiento e índices.** Solo hay un índice declarado a mano, en la réplica de verificación de Rentals. Con este volumen no ha hecho falta más.
+- **Un log reproducible entre servicios**, que permitiría reconstruir un servicio nuevo desde la historia. Está en `todo.md` y hoy no existe.
+
+<Callout kind="resumen" title="Para recordar">
+
+- **Dos motores, cuatro esquemas**: SQL Server para Notifications; PostgreSQL con `identity`, `rentals` y el esquema `wolverine` dentro.
+- Rentals usa PostgreSQL porque **Marten lo exige**; el resto del reparto es histórico y pedagógico.
+- Tres formas de crear el esquema: **migraciones** (Notifications), **migraciones + sembrador** (Identity), **generación automática** (Rentals).
+- Dentro de cada base, tres modelos: estado, estado, y **hechos**.
+- **Ni una clave foránea entre servicios.** Los identificadores coinciden a propósito; las relaciones no existen.
+- **Redis es prescindible**: solo guarda respuestas ya calculadas.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre DbGate en `localhost:3000` y recorre los dos motores con una pregunta en la cabeza: **¿cuántas tablas hay que yo no escribí?**
+
+En `identity` vas a encontrar las de ASP.NET Identity, las de OpenIddict y el esquema `wolverine`. En `rentals`, las `mt_*` de Marten. Saber distinguir las tablas del dominio de las que pone un framework es lo que evita confundir un problema de negocio con uno de plomería.
+
+**Y luego:** el [módulo 9](/arquitectura/recorrido) junta todo lo visto hasta ahora en un solo recorrido, desde un clic hasta las tres bases.
+
+</Callout>

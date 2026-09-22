@@ -1,96 +1,212 @@
 ---
-title: "Decisiones de arquitectura, verificadas archivo por archivo"
-description: "Siete decisiones reales de este proyecto, cada una con el archivo que la prueba — y las piezas que todavía están a medio camino, marcadas sin adornos."
+title: "Decisiones y deudas"
+description: "Qué se decidió a propósito y qué está a medias — cada cosa con el archivo que la prueba y el precio que se pagó."
 sidebar:
-  order: 10
-  label: "10 · Decisiones de arquitectura, verificadas archivo por archivo"
+  order: 11
+  label: "11 · Decisiones y deudas"
 ---
 
 import Callout from '../../../components/Callout.astro';
 
-Esta página no resume una conversación de diseño que tuvo el equipo — resume lo que el código dice hoy, con el mismo criterio de honestidad que ya sigue [el tutorial de DDD](/ddd): si algo todavía no está construido, se marca como tal en vez de darlo por hecho.
+<p class="ddd-lede">
+Llevas una semana en el repositorio y tienes que cambiar algo. Encuentras que la API de
+Notifications no pide autenticación, que el panel manda el identificador del usuario dentro del
+cuerpo de la petición, y que hay una cola con un consumidor que nunca se ejecuta. La pregunta no es
+si eso está mal: la pregunta es <strong>si está así a propósito</strong>. Y de la respuesta depende
+si lo arreglas esta tarde o si abres una discusión de tres días.
+</p>
 
-## 1 · Mensajería: Wolverine + RabbitMQ hoy, con una migración prevista en el propio código
+Este módulo es esa respuesta, escrita. Cada decisión con el archivo que la prueba; cada deuda con la consecuencia que tiene hoy.
 
-El bus de mensajería real y funcionando en este proyecto es RabbitMQ, orquestado por Wolverine — no un mock, no un simulador. Pero el propio comentario que acompaña su registro en `Infrastructure/DependencyInjection.cs` deja escrita la intención de reemplazarlo:
+<div class="ddd-frase">
+<strong>En una frase:</strong> en un sistema a medias, lo que distingue una decisión de una deuda no
+es cómo se ve en el código — es si alguien la escribió — y por eso estar escritas es parte de la
+arquitectura.
+</div>
 
-```csharp title="Infrastructure/DependencyInjection.cs (comentario original)"
-// Ejemplo de mensajería con RabbitMQ (Messaging/RabbitMq): consume UserChange y llama a
-// RecipientSyncService. Cuando se integre Kafka, este llamado se reemplaza por el
-// equivalente en Messaging/Kafka sin tocar Application.
-services.AddRabbitMqMessaging(configuration);
-```
+## Ya conoces la distinción: es una pared maestra o un tabique
 
-Es un dato interesante precisamente porque no depende de que confíes en esta guía: puedes abrir ese archivo tú mismo y leer la misma frase. Verás el resto de la implementación en la [página de Infraestructura](/arquitectura/infraestructura).
+Antes de tirar una pared en una casa hay que saber cuál es. Las dos se ven igual desde el salón; una sostiene el piso de arriba y la otra la puso alguien en los ochenta para separar un cuarto.
 
-## 2 · Contratos: Protobuf compartido, sin acoplar a un cliente de mensajería
+El plano de la casa existe justamente para eso. Y cuando no existe, la respuesta prudente es no tocar nada — que es la forma más cara de trabajar, porque paraliza también lo que sí se podía cambiar.
 
-`NotificationLog.Contracts` —el proyecto que define los mensajes que cruzan entre servicios— solo referencia `Google.Protobuf` y `Grpc.Tools` (para compilar el `.proto` en tiempo de build). Nada de `Confluent.Kafka`, nada de un cliente de RabbitMQ: el contrato del mensaje es independiente de por dónde viaja.
+<Callout kind="advertencia" title="Dónde falla la analogía">
 
-```csharp title="Shared/NotificationLog.Contracts.csproj (completo)"
-<ItemGroup>
-  <PackageReference Include="Google.Protobuf" Version="3.36.1" />
-  <PackageReference Include="Grpc.Tools" Version="2.72.0">
-    <PrivateAssets>all</PrivateAssets>
-  </PackageReference>
-</ItemGroup>
+En una casa, las paredes maestras no cambian. Aquí sí: una decisión puede dejar de ser buena cuando cambian las circunstancias, y una deuda puede pasar a ser aceptable para siempre si el riesgo no se materializa.
 
-<ItemGroup>
-  <Protobuf Include="Users/user_contact_updated.proto" GrpcServices="None" />
-  <Protobuf Include="Notifications/notification_dispatch_requested.proto" GrpcServices="None" />
-</ItemGroup>
-```
-
-Esa independencia es lo que hace posible el punto anterior: cambiar de bus de mensajería no obligaría a tocar un solo `.proto`.
-
-## 3 · El event key nombra un hecho — y ese formato se aplica en tiempo de creación
-
-`EventKey.Create` impone el formato `dominio.accion` con una expresión regular (ver [página de Dominio](/arquitectura/dominio)), así que ningún trigger puede llamarse `email_transaccion_v2` aunque quisiera — el propio value object lo rechaza antes de que exista.
-
-<Callout kind="honesto" title="Lo que no existe todavía: renombrar un event key sin perder el historial">
-
-`NotificationDbContext` tiene cuatro `DbSet`: `Triggers`, `Templates`, `Recipients`, `Notifications`. Nada más. Si un evento cambiara de nombre en el sistema productor, hoy habría que crear un `NotificationTrigger` nuevo a mano — no hay ninguna tabla ni mecanismo de alias que traduzca automáticamente un `EventKey` viejo a uno nuevo en la ingesta. Es una extensión razonable, simplemente todavía no construida.
+Por eso las dos tablas de abajo no son un veredicto, sino el estado de hoy con su razón — que es lo que permite revisarlas dentro de seis meses sin reconstruir el razonamiento desde cero.
 
 </Callout>
 
-## 4 · Sin Schema Registry: la compatibilidad depende del NuGet compartido
+## Las decisiones, con el archivo que las prueba
 
-No hay ningún Schema Registry (Confluent o de otro tipo) desplegado ni referenciado en `AppHost.cs`. La compatibilidad de esquema hoy depende de dos cosas: que productor y consumidor compilen contra el mismo paquete `NotificationLog.Contracts`, y de la disciplina del campo `schema_version` dentro de cada mensaje Protobuf (ver [módulo de Context Map](/ddd/context-map) del tutorial de DDD).
+Cada una compra algo y paga algo. La última columna es la que suele faltar en los documentos de arquitectura.
 
-<Callout kind="honesto" title="El campo existe; nada lo valida todavía">
+| # | Decisión | Se comprueba en | Qué se paga |
+| --- | --- | --- | --- |
+| 1 | **La topología vive en un solo sitio**, y los proyectos no se ejecutan sueltos. | `AppHost.cs` | No se puede depurar un servicio sin levantar Docker. |
+| 2 | **Tres servicios sin referencias cruzadas ni base compartida.** | los `.csproj` y `AppHost.cs` | Réplicas locales de datos ajenos y consistencia eventual. |
+| 3 | **El dominio no tiene ni un paquete NuGet.** | `*.Domain.csproj` | Traducciones a mano entre capas, y más archivos por cambio. |
+| 4 | **CQRS a mano: una carpeta por caso de uso, sin mediador.** | `Application/*/Commands/` | Dos líneas repetidas en cada handler que un pipeline daría gratis. |
+| 5 | **Lo público de un servicio es un `.proto` versionado.** | `Shared/NotificationLog.Contracts/` | Hay que mantener contratos y traducirlos en los dos extremos. |
+| 6 | **Event sourcing solo en Rentals**, no en los tres. | `MartenStoreConfiguration.cs` | Dos modelos mentales conviviendo en el mismo repositorio. |
+| 7 | **El error de negocio es un `422` con su mensaje**, no un `400` genérico. | `GlobalExceptionHandler.cs` | Cada excepción nueva hay que mapearla a propósito. |
+| 8 | **Identity guarda dato y mensaje en la misma transacción.** | `OutboxUnitOfWork.cs` | Un esquema más (`wolverine`) dentro de su base. |
+| 9 | **Todo lo saliente va a un único destino de desarrollo.** | `AppHost.cs` · `appsettings.Development.json` | Nunca se prueba contra un proveedor real. |
+| 10 | **Los enums del event store se guardan como texto.** | `MartenStoreConfiguration.cs` | Algo más de espacio, a cambio de que reordenarlos no reinterprete la historia. |
 
-`schema_version` está definido en ambos `.proto`, pero ningún handler de `Infrastructure/Messaging/Consumers` lo lee hoy. Un mensaje con una versión de esquema más nueva de la que este servicio entiende se procesaría igual, sin ningún aviso. Endurecer esa validación es exactamente la [tarea 8 del tutorial de DDD](/ddd/tareas).
+<Callout kind="concepto" title="Una decisión que parece un error y está documentada en el propio código">
+
+`ServiceLocationPolicy.AlwaysAllowed` aparece en la configuración de Wolverine de los tres servicios, y desactiva una comprobación que normalmente conviene tener.
+
+El comentario en `Notifications/Messaging/RabbitMq/RabbitMqMessagingExtensions.cs` explica por qué: los repositorios y validadores son `internal` **a propósito**, y `IUnitOfWork` se registra con una lambda. Wolverine no puede generar código que los instancie directamente, así que la alternativa sería **hacer públicos tipos que se quieren encapsulados**.
+
+Se relajó la política en vez de romper la encapsulación. Es un buen ejemplo de lo que significa que una decisión esté escrita: sin ese comentario, el siguiente que pase por ahí lo "arregla".
+
+</Callout>
+
+## Las deudas, con la consecuencia que tienen hoy
+
+Todas salen de `notification-log/todo.md` o son comprobables abriendo el archivo que se indica.
+
+| # | Deuda | Consecuencia hoy | Dónde se ve |
+| --- | --- | --- | --- |
+| 1 | **Notifications no valida tokens.** | Cualquiera con acceso de red a `:7506` puede llamar a su API. Es la deuda de seguridad más grande. | `ApiService/Program.cs` |
+| 2 | **Las visitas reciben `ActorId` en el cuerpo.** | El cliente dice quién es él mismo. Publicaciones y propietarios ya lo toman del token. | `ConfirmVisitCommand.cs` |
+| 3 | **El panel no renueva el access token.** | A los quince minutos de sesión, un `401` que se muestra como error genérico. | `AccessTokenHandler.cs` |
+| 4 | **Rentals publica después del commit.** | Ventana pequeña en la que un propietario queda sin cuenta si el proceso muere. | `RegisterNaturalOwnerHandler.cs` |
+| 5 | **`rentals-person-verification` no está enlazada a su exchange.** | El consumidor existe y nunca se ejecuta; la réplica se queda vacía. | `RabbitMqMessagingExtensions.cs` de Rentals |
+| 6 | **La base de Rentals no se puede reconstruir.** | Hay eventos de funcionalidades borradas y un evento que cambió de forma. Hay que reiniciar el esquema. | [Event Sourcing · módulo 11](/event-sourcing/evolucion) |
+| 7 | **No hay log reproducible entre servicios.** | RabbitMQ garantiza entrega, no relectura: un servicio nuevo no puede reconstruirse desde la historia. | `todo.md` |
+| 8 | **Las migraciones se aplican al arrancar.** | Correcto en desarrollo; con varias instancias en producción, dos procesos migrando a la vez. | `Program.cs` de Notifications e Identity |
+| 9 | **"No es tuyo" devuelve `400` en visitas** y `403` en el resto. | Un contrato de errores incoherente entre agregados del mismo servicio. | `ConfirmVisitHandler.cs` |
+| 10 | **No hay pruebas de arquitectura.** | Nada impide automáticamente que `Application` referencie a `Infrastructure`. | ausencia en `NotificationLog.Tests` |
+
+<Callout kind="honesto" title="Las deudas 1, 2 y 3 cuentan la misma historia">
+
+Las tres son de identidad, y las tres son **pasos de una migración a medias**: el sistema está pasando de "cada servicio se fía de lo que le digan" a "todo se deriva del token", agregado por agregado.
+
+Eso es lo correcto —migrar de golpe un sistema con tres servicios es peor— y tiene un peligro concreto: **una migración a medias no se distingue de un diseño terminado** si no está escrita. Alguien que llegue hoy y vea `ActorId` en el cuerpo puede pensar razonablemente que así es como se hace aquí, y copiarlo en el siguiente endpoint.
+
+Por eso están en `todo.md` con su razonamiento, y por eso están aquí.
 
 </Callout>
 
-## 5 · Modelo de datos: cuatro tablas raíz, jerarquías anidadas en vez de tablas sueltas
+## Cómo se distingue una de otra
 
-`NotificationDbContext` expone exactamente cuatro `DbSet` — `Triggers` (que incluye `NotificationConfiguration` como tabla hija, no como `DbSet` propio), `Templates` (con `TemplateVersion` igual de anidada), `Recipients` y `Notifications`. Ninguna tabla adicional de catálogos, logs o auditoría por separado: el propio `Notification` ya cumple el rol de auditoría de envíos.
+<div class="ddd-diagram">
+    <svg viewBox="0 0 860 300" role="img" aria-labelledby="matTitle">
+        <title id="matTitle">Madurez de cada preocupación por servicio</title>
 
-## 6 · Event-driven, no event sourced
+        <text x="30" y="34" font-size="9.5" font-weight="700" fill="#475569">Preocupación</text>
+        <text x="330" y="34" text-anchor="middle" font-size="9.5" font-weight="700" fill="#9a3412">Identity</text>
+        <text x="500" y="34" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">Rentals</text>
+        <text x="690" y="34" text-anchor="middle" font-size="9.5" font-weight="700" fill="#14532d">Notifications</text>
+        <line x1="30" y1="44" x2="830" y2="44" stroke="#cbd5e1" stroke-width="1" />
 
-El sistema se comunica por eventos (mensajes que cruzan la mensajería), pero no es event sourced: guarda estado actual en tablas, no un log de eventos como fuente de verdad. Se confirma en el propio modelo: `Notification` es el registro más cercano a un "evento" que existe, pero es un **resultado** inmutable de un envío (éxito o fallo), no la fuente de la que se reconstruye el estado de un trigger o un destinatario. `NotificationTrigger`, `NotificationTemplate` y `Recipient` guardan su estado actual directamente en sus columnas, mutado por sus propios métodos — el patrón clásico de un dominio persistido por estado, no por eventos.
+        <text x="30" y="72" font-size="8.5" fill="#334155">Separación en capas</text>
+        <rect x="270" y="60" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="330" y="72" text-anchor="middle" font-size="7.5" fill="#14532d">completa</text>
+        <rect x="440" y="60" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="500" y="72" text-anchor="middle" font-size="7.5" fill="#14532d">completa</text>
+        <rect x="630" y="60" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="690" y="72" text-anchor="middle" font-size="7.5" fill="#14532d">completa</text>
 
-## 7 · Sin mediador: handlers inyectados directo
+        <text x="30" y="102" font-size="8.5" fill="#334155">Autenticación de la API</text>
+        <rect x="270" y="90" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="330" y="102" text-anchor="middle" font-size="7.5" fill="#14532d">emisor y validador</text>
+        <rect x="440" y="90" width="120" height="16" rx="4" fill="#fde68a" /><text x="500" y="102" text-anchor="middle" font-size="7.5" fill="#92400e">parcial (visitas)</text>
+        <rect x="630" y="90" width="120" height="16" rx="4" fill="#fecaca" /><text x="690" y="102" text-anchor="middle" font-size="7.5" fill="#991b1b">ninguna</text>
 
-Ni un `using MediatR` en todo el repositorio. Cada endpoint recibe su handler como parámetro inyectado (ver [módulo 11 del tutorial de DDD](/ddd/arquitectura) para el razonamiento completo: con quince casos de uso, el beneficio real de un mediador —los *behaviors*— no compensaba el coste de la indirección adicional).
+        <text x="30" y="132" font-size="8.5" fill="#334155">Publicación fiable (outbox)</text>
+        <rect x="270" y="120" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="330" y="132" text-anchor="middle" font-size="7.5" fill="#14532d">transaccional</text>
+        <rect x="440" y="120" width="120" height="16" rx="4" fill="#fde68a" /><text x="500" y="132" text-anchor="middle" font-size="7.5" fill="#92400e">tras el commit</text>
+        <rect x="630" y="120" width="120" height="16" rx="4" fill="#e5e9f2" /><text x="690" y="132" text-anchor="middle" font-size="7.5" fill="#475569">no publica</text>
 
-## El estado real del proyecto, en una sola tabla
+        <text x="30" y="162" font-size="8.5" fill="#334155">Concurrencia protegida</text>
+        <rect x="270" y="150" width="120" height="16" rx="4" fill="#fde68a" /><text x="330" y="162" text-anchor="middle" font-size="7.5" fill="#92400e">la del framework</text>
+        <rect x="440" y="150" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="500" y="162" text-anchor="middle" font-size="7.5" fill="#14532d">por versión</text>
+        <rect x="630" y="150" width="120" height="16" rx="4" fill="#fecaca" /><text x="690" y="162" text-anchor="middle" font-size="7.5" fill="#991b1b">sin protección</text>
 
-Juntando las piezas honestas que aparecen a lo largo de esta guía y la de DDD:
+        <text x="30" y="192" font-size="8.5" fill="#334155">Esquema versionado</text>
+        <rect x="270" y="180" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="330" y="192" text-anchor="middle" font-size="7.5" fill="#14532d">migraciones</text>
+        <rect x="440" y="180" width="120" height="16" rx="4" fill="#fecaca" /><text x="500" y="192" text-anchor="middle" font-size="7.5" fill="#991b1b">generado</text>
+        <rect x="630" y="180" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="690" y="192" text-anchor="middle" font-size="7.5" fill="#14532d">migraciones</text>
 
-| Pieza | Estado | Dónde verificarlo |
-| --- | --- | --- |
-| Remitentes Email / SMS / Push | Construido | `Infrastructure/Notifications/Sending/{Email,Sms,Push}` |
-| Renderizador de plantillas (Scriban) | Construido | `ScribanTemplateRenderer.cs`, registrado como singleton |
-| Remitente de WhatsApp | Stub deliberado (siempre falla) | `NotImplementedWhatsAppNotificationSender.cs` |
-| Consumer de despacho de notificaciones | Construido, sin productor real | cola `notification-dispatch` en `RabbitMqMessagingExtensions.cs` |
-| Validación de `schema_version` | No construida | [tarea 8 del tutorial de DDD](/ddd/tareas) |
-| Eventos de dominio (`Raise`) | Mecanismo listo, sin usar | [módulo 10 del tutorial de DDD](/ddd/domain-events) |
-| Tabla de alias de `EventKey` | No construida | — (cuatro `DbSet` en `NotificationDbContext`, nada más) |
+        <text x="30" y="222" font-size="8.5" fill="#334155">Funcionalidad completa</text>
+        <rect x="270" y="210" width="120" height="16" rx="4" fill="#fde68a" /><text x="330" y="222" text-anchor="middle" font-size="7.5" fill="#92400e">falta la UI</text>
+        <rect x="440" y="210" width="120" height="16" rx="4" fill="#fde68a" /><text x="500" y="222" text-anchor="middle" font-size="7.5" fill="#92400e">tres agregados de siete</text>
+        <rect x="630" y="210" width="120" height="16" rx="4" fill="#bbf7d0" /><text x="690" y="222" text-anchor="middle" font-size="7.5" fill="#14532d">el más maduro</text>
 
-<Callout kind="ejercicio" title="Cómo verificar cualquier afirmación de esta página tú mismo">
+        <text x="430" y="268" text-anchor="middle" font-size="9" fill="#64748b">Ninguna columna está completa, y las tres están incompletas en sitios distintos.</text>
+        <text x="430" y="286" text-anchor="middle" font-size="9" font-weight="600" fill="#475569">Eso es lo normal en un sistema vivo; lo anormal sería una tabla toda verde.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        La fila de concurrencia resume la guía entera: Rentals la tiene porque el modelo de eventos se la
+        regala, y Notifications no la tiene porque con tablas hay que acordarse de añadirla.
+    </p>
+</div>
 
-Cada fila de esa tabla se puede confirmar o refutar en minutos: abrir el archivo señalado, o buscar el nombre de la clase en todo el repositorio. Ese es el mismo criterio que sigue toda esta guía y la de DDD: nada se afirma sin un archivo real detrás.
+La prueba práctica para clasificar cualquier cosa que encuentres:
+
+<ol class="ddd-steps">
+    <li><strong>¿Está en <code>todo.md</code>?</strong> Entonces es una deuda conocida, con su razonamiento. Arréglala.</li>
+    <li><strong>¿Hay un comentario en el código que la explique?</strong> Entonces es una decisión. Antes de cambiarla, refuta el comentario.</li>
+    <li><strong>¿Está en esta página?</strong> Mira en qué tabla cayó.</li>
+    <li><strong>¿Ninguna de las tres?</strong> Entonces es un hallazgo — y lo primero que hay que hacer con él es <em>escribirlo</em>, aunque no lo arregles hoy.</li>
+</ol>
+
+## Lo que este sistema no es
+
+Conviene decirlo entero, porque casi todas las "carencias" que se le pueden señalar caen aquí:
+
+- **No es un sistema de producción.** No hay despliegue, ni CI, ni contenedores de producción, ni gestión de secretos más allá de los de desarrollo.
+- **No está dimensionado.** `DaemonMode.Solo`, migraciones al arrancar y una sola instancia de cada cosa lo dan por hecho.
+- **No es tolerante a fallos de forma general.** Lo es donde la mensajería lo regala; no hay reintentos de negocio, ni compensaciones, ni degradación planificada.
+- **No es un producto.** Es un laboratorio con tres contextos reales, construidos con el rigor de un producto para poder usarse como material de estudio.
+
+Nada de eso es una deuda: es el alcance. Una deuda es algo que **el propio sistema se propuso** y no terminó.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Tres reflejos que conviene frenar">
+
+**"Si está mal, lo arreglo."** Antes de arreglar algo de la primera tabla, hay que refutar la razón por la que está así. Las decisiones de ahí compran algo; quitarlas sin sustituir lo que compraban deja un agujero que aparece más tarde.
+
+**"Si no está en `todo.md`, es que está bien."** `todo.md` recoge lo que alguien se paró a escribir. La deuda número 5 de la tabla —la cola sin enlazar— no estaba: se encontró leyendo el código para escribir esta guía.
+
+**"Las deudas hay que pagarlas todas."** No: hay que **conocerlas** todas y pagar las que importan. La número 9 —el `400` que debería ser `403`— puede vivir ahí un año sin que pase nada. La número 1 no debería pasar de la primera semana con datos reales.
 
 </Callout>
+
+## Audita tú el sistema
+
+Cuatro comprobaciones que puedes hacer hoy, y que no dependen de esta guía para seguir siendo válidas:
+
+<ol class="ddd-steps">
+    <li><strong>Abre los tres <code>Domain.csproj</code>.</strong> ¿Siguen sin paquetes? Es la regla del <a href="/arquitectura/capas">módulo 4</a> y se comprueba en un minuto.</li>
+    <li><strong>Busca en todo el repositorio un <code>HttpClient</code> que apunte de un servicio a otro.</strong> No debería haber ninguno: entre servicios todo va por mensajes.</li>
+    <li><strong>Entra en RabbitMQ y revisa los enlaces de los dos exchanges.</strong> Una cola sin enlace es un consumidor muerto, y ya hay uno.</li>
+    <li><strong>Cuenta los puertos escritos a mano en el código.</strong> Deberían ser solo los de OIDC, y solo en <code>AppHost</code> y los <code>launchSettings</code>.</li>
+</ol>
+
+Si alguna de las cuatro empieza a fallar, la arquitectura se está erosionando — y esa es información mucho más útil que cualquier documento que las describa.
+
+<Callout kind="resumen" title="Para recordar">
+
+- Una decisión y una deuda **se ven igual en el código**. Lo que las distingue es que alguien las escribió.
+- Cada decisión de este sistema **compra algo y paga algo**; la columna del precio es la que suele faltar.
+- Las deudas de identidad —API sin validar, `ActorId` en el cuerpo, token sin renovar— son **una migración a medias**, no descuidos.
+- Hay deudas **encontradas leyendo el código**, no solo anotadas: una cola sin enlazar y la ausencia de pruebas de arquitectura.
+- **No es un sistema de producción**, y casi todo lo que le falta en ese terreno es alcance, no deuda.
+- Lo que mantiene esto sano no es el documento: son **cuatro comprobaciones** que cualquiera puede repetir.
+
+</Callout>
+
+## Por dónde seguir
+
+Esta guía cubre lo que hay **entre** los servicios. Lo que pasa dentro está en las otras tres, y en este orden tienen sentido:
+
+- **[Proyecto](/proyecto)** — qué hace el sistema desde el punto de vista funcional, sin código.
+- **[DDD](/ddd)** — el modelado táctico sobre Notifications: agregados, value objects, repositorios, y la grieta de concurrencia que aparece en la tabla de arriba.
+- **[Event Sourcing](/event-sourcing)** — el interior de Rentals, incluida la historia completa de por qué su base no se puede reconstruir.
+- **[Patrones](/patrones)** — los patrones de diseño que aparecen en este código, con su nombre y su archivo.
+
+Y el material pendiente está donde debe estar: en `notification-log/todo.md`, con su razonamiento, no en esta página.
+

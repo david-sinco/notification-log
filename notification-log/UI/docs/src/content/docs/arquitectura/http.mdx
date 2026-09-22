@@ -1,0 +1,254 @@
+---
+title: "HTTP: el camino síncrono"
+description: "Cómo el panel habla con tres APIs sin saber dónde están, y qué pasa cuando una de ellas dice que no."
+sidebar:
+  order: 5
+  label: "5 · El camino síncrono"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span, member } from '../../../lib/code';
+import listingsClient from '@code/UI/NotificationLog.Web/Api/Rentals/Listings/ListingsApiClient.cs?raw';
+import rentalsApi from '@code/UI/NotificationLog.Web/Api/Rentals/RentalsApi.cs?raw';
+import responseExtensions from '@code/UI/NotificationLog.Web/Api/ApiResponseExtensions.cs?raw';
+import apiException from '@code/UI/NotificationLog.Web/Api/ApiException.cs?raw';
+import exceptionHandler from '@code/Services/Rentals/NotificationLog.RentalService.Api/Exceptions/GlobalExceptionHandler.cs?raw';
+import serviceDefaults from '@code/Shared/NotificationLog.ServiceDefaults/Extensions.cs?raw';
+
+<p class="ddd-lede">
+Abres una página del panel esperando encontrar lo de siempre: un <code>DbContext</code> inyectado,
+o al menos un repositorio. Lo que hay es <code>@inject ListingsApiClient</code>. Buscas la cadena
+de conexión del panel y no existe; buscas una referencia al proyecto de dominio de Rentals y
+tampoco. El panel pinta tablas de publicaciones <strong>sin tener acceso a ninguna publicación</strong>.
+</p>
+
+Ese es el camino síncrono: la mitad del sistema en la que alguien pregunta y espera respuesta. Y la regla que lo gobierna es sencilla de enunciar y fácil de romper sin darse cuenta.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> el panel no comparte con las APIs más que JSON — las llama por
+nombre, no por dirección, y cuando una dice que no, lo dice en un formato que el panel sabe leer.
+</div>
+
+## Ya conoces el reparto: es pedir comida a domicilio
+
+Pides por teléfono, te traen un plato y nunca entras en la cocina. No sabes qué marca de sartén usan, ni si han cambiado de proveedor, ni cómo tienen organizada la nevera. Solo conoces **la carta** —lo que puedes pedir— y **el plato** que llega.
+
+Y cuando algo va mal, la cocina no te manda su error interno: te dicen *"se acabó el pescado"*, en un formato que entiendes y sobre el que puedes decidir qué hacer.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Tú, al pedir, eres un cliente final. El panel **es un servidor**: está hecho en Blazor Server, así que el navegador solo recibe actualizaciones de pantalla por WebSocket y todas las llamadas HTTP salen de la máquina del servidor, no del navegador del usuario.
+
+Eso cambia dos cosas que importan: las APIs nunca están expuestas al navegador —solo el panel lo está— y el token del usuario vive en el servidor, no en el cliente. Lo segundo es el [módulo 7](/arquitectura/identidad).
+
+</Callout>
+
+## Idea 1 · Un cliente tipado por recurso, y ni un `HttpClient` suelto
+
+<Code
+    code={span(listingsClient, 'public sealed class ListingsApiClient', 'public Task SubmitForReviewAsync(Guid id, CancellationToken ct)')}
+    lang="csharp"
+    title="Web/Api/Rentals/Listings/ListingsApiClient.cs"
+/>
+
+Un **cliente tipado** es una clase que envuelve un `HttpClient` y expone métodos con nombre de negocio: `DraftAsync`, `SubmitForReviewAsync`, `ChangePriceAsync`. Las páginas llaman a esos métodos; ninguna construye una URL ni elige un verbo HTTP.
+
+Hay ocho en el panel, uno por familia de recursos: publicaciones, moderación, visitas, propietarios, usuarios, disparadores, plantillas, destinatarios y envíos.
+
+**Por qué importa:** si mañana una ruta cambia de `/api/listings/{id}/submit` a otra cosa, hay exactamente **un** archivo que tocar. Sin esta capa, la ruta estaría repetida en cada página que la usa, y cambiarla sería una búsqueda de texto.
+
+## Idea 2 · La dirección es un nombre, y la resiliencia viene puesta
+
+<Code
+    code={span(rentalsApi, 'internal static class RentalsApi', 'public const string BaseAddress = "https+http://rental";')}
+    lang="csharp"
+    title="Web/Api/Rentals/RentalsApi.cs · la única dirección de Rentals en todo el panel"
+/>
+
+`https+http://rental` es el nombre del recurso en AppHost, con una preferencia de esquema. El **descubrimiento de servicios** lo traduce en tiempo de ejecución ([módulo 2](/arquitectura/apphost)).
+
+Y hay algo que ningún cliente pide y todos tienen:
+
+<Code
+    code={span(serviceDefaults, 'builder.Services.ConfigureHttpClientDefaults(http =>', '});')}
+    lang="csharp"
+    title="ServiceDefaults/Extensions.cs · lo que recibe cada HttpClient del sistema"
+    mark={['http.AddStandardResilienceHandler();']}
+/>
+
+`AddStandardResilienceHandler` añade reintentos, tiempo de espera y cortacircuitos a **todos** los `HttpClient` de cualquier proceso que llame a `AddServiceDefaults()`. Nadie lo configura por cliente.
+
+<Callout kind="advertencia" title="Y aquí hay una trampa que conviene ver">
+
+Reintentar automáticamente es seguro para un `GET`. Para un `POST` que aprueba una publicación, un reintento puede ejecutar la operación **dos veces** si la primera llegó y solo se perdió la respuesta.
+
+El sistema sobrevive a eso porque los métodos de los agregados son idempotentes —aprobar algo ya aprobado no vuelve a levantar el hecho, como explica el [módulo 4 de Event Sourcing](/event-sourcing/agregado)—, pero es una propiedad que se sostiene **por el diseño del dominio**, no por la política de reintentos. Conviene saberlo antes de añadir un endpoint que no la tenga.
+
+</Callout>
+
+## Idea 3 · El contrato de errores es tan importante como el de datos
+
+Cuando el dominio dice que no, la API lo traduce a un formato estándar:
+
+<Code
+    code={member(exceptionHandler, 'public async ValueTask<bool> TryHandleAsync')}
+    lang="csharp"
+    title="Rentals · Api/Exceptions/GlobalExceptionHandler.cs"
+/>
+
+**ProblemDetails** es el formato estándar de errores HTTP (RFC 7807): un JSON con `status`, `title`, `detail` y, para validaciones, un diccionario de errores por campo. Este `switch` es **el contrato de errores de la API**:
+
+| Excepción | Código | Significa |
+| --- | --- | --- |
+| `NotFoundException` | `404` | No existe |
+| `AppValidationException` | `400` | El mensaje está mal formado |
+| `ForbiddenException` | `403` | No es tuyo |
+| `DomainException` | **`422`** | Te he entendido, y el negocio dice que no |
+| cualquier otra | `500` | Se registra y no se cuenta nada |
+
+Del otro lado, el panel lo lee una sola vez, en un sitio:
+
+<Code
+    code={whole(responseExtensions)}
+    lang="csharp"
+    title="Web/Api/ApiResponseExtensions.cs"
+/>
+
+<Code
+    code={whole(apiException)}
+    lang="csharp"
+    title="Web/Api/ApiException.cs"
+/>
+
+Cada método de cada cliente llama a `EnsureSuccessAsync`, y a partir de ahí las páginas ya no tratan con códigos HTTP: capturan `ApiException` y la muestran con el componente `ErrorAlert`. Los errores por campo llegan al formulario correspondiente.
+
+**Por qué importa:** ese `422` es el que hace que un error de negocio se pueda mostrar al usuario tal cual, con su mensaje en español escrito en el agregado. Sin un contrato de errores, la alternativa habitual es un `400` genérico con un texto que nadie puede interpretar programáticamente.
+
+## Idea 4 · El panel tiene sus propios modelos
+
+`ListingSummaryDto` existe **dos veces**: una en `Rentals.Application` y otra en `Web/Api/Rentals/Listings/ListingModels.cs`. Son dos `record` con los mismos campos y ninguna relación entre ellos.
+
+Parece duplicación, y es una frontera:
+
+<ol class="ddd-steps">
+    <li><strong>El panel no referencia ningún proyecto de dominio.</strong> Si lo hiciera, cualquier cambio interno de Rentals recompilaría la interfaz de usuario.</li>
+    <li><strong>Lo que viaja es JSON</strong>, y un JSON no tiene tipo: la clase del panel es su interpretación de ese JSON, y puede quedarse con menos campos de los que llegan.</li>
+    <li><strong>Los dos modelos pueden evolucionar por separado</strong>, que es justo lo que se quiere entre dos procesos que se despliegan por separado.</li>
+</ol>
+
+**Por qué importa:** es la misma decisión que los contratos `.proto` del [módulo 6](/arquitectura/mensajeria), aplicada al camino síncrono. Compartir un DLL de DTOs es cómodo el primer mes y convierte dos procesos en uno a partir del tercero.
+
+## Cómo encaja: el viaje de una petición
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 320" role="img" aria-labelledby="httpTitle">
+        <title id="httpTitle">De un clic en el panel a una respuesta de la API</title>
+        <defs>
+            <marker id="htArrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="30" width="150" height="70" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="95" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#475569">Navegador</text>
+        <text x="95" y="74" text-anchor="middle" font-size="8.5" fill="#334155">clic en "Aprobar"</text>
+        <text x="95" y="90" text-anchor="middle" font-size="8" fill="#64748b">WebSocket, no HTTP</text>
+
+        <line x1="172" y1="65" x2="206" y2="65" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#htArrow)" />
+
+        <rect x="208" y="30" width="180" height="140" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="298" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#4338ca">Web (servidor)</text>
+        <text x="298" y="76" text-anchor="middle" font-size="8.5" fill="#334155">ModerationApiClient</text>
+        <text x="298" y="94" text-anchor="middle" font-size="8.5" fill="#334155">+ token del usuario</text>
+        <text x="298" y="112" text-anchor="middle" font-size="8.5" fill="#334155">+ resiliencia estándar</text>
+        <rect x="224" y="124" width="148" height="30" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="298" y="143" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">https+http://rental</text>
+
+        <line x1="390" y1="100" x2="424" y2="100" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#htArrow)" />
+        <text x="407" y="92" text-anchor="middle" font-size="7" fill="#64748b">?</text>
+
+        <rect x="426" y="60" width="150" height="80" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="501" y="84" text-anchor="middle" font-size="9.5" font-weight="700" fill="#14532d">Descubrimiento</text>
+        <text x="501" y="104" text-anchor="middle" font-size="8" fill="#334155">nombre → dirección</text>
+        <text x="501" y="122" text-anchor="middle" font-size="8" font-family="monospace" fill="#64748b">https://localhost:7057</text>
+
+        <line x1="578" y1="100" x2="612" y2="100" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#htArrow)" />
+
+        <rect x="614" y="30" width="230" height="140" rx="10" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="729" y="54" text-anchor="middle" font-size="10" font-weight="700" fill="#9a3412">Rentals.Api</text>
+        <text x="729" y="76" text-anchor="middle" font-size="8.5" fill="#334155">endpoint → comando</text>
+        <text x="729" y="94" text-anchor="middle" font-size="8.5" fill="#334155">handler → agregado</text>
+        <text x="729" y="112" text-anchor="middle" font-size="8.5" fill="#334155">evento guardado</text>
+        <text x="729" y="136" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">204 No Content</text>
+        <text x="729" y="152" text-anchor="middle" font-size="8" fill="#9a3412" font-style="italic">o ProblemDetails</text>
+
+        <rect x="208" y="210" width="636" height="80" rx="10" fill="#fef2f2" stroke="#fecaca" />
+        <text x="526" y="234" text-anchor="middle" font-size="10" font-weight="700" fill="#991b1b">Si el negocio dice que no</text>
+        <text x="526" y="256" text-anchor="middle" font-size="8.5" fill="#991b1b">DomainException → 422 + ProblemDetails → EnsureSuccessAsync → ApiException → ErrorAlert</text>
+        <text x="526" y="276" text-anchor="middle" font-size="8.5" fill="#991b1b">el mensaje que ve el usuario es el que escribió el agregado, palabra por palabra</text>
+
+        <line x1="729" y1="174" x2="600" y2="206" stroke="#dc2626" stroke-width="1.3" stroke-dasharray="4,3" marker-end="url(#htArrow)" />
+    </svg>
+    <p class="ddd-diagram-caption">
+        Todo el tramo de la derecha ocurre entre procesos del servidor. El navegador solo participa en el
+        primer salto, y nunca ve una API.
+    </p>
+</div>
+
+## El recorrido: aprobar una publicación desde la cola de moderación
+
+<ol class="ddd-steps">
+    <li>Un moderador pulsa <strong>Aprobar</strong> en <code>ModerationQueue.razor</code>. El evento llega al servidor por el circuito de Blazor.</li>
+    <li>La página llama a <code>ModerationApiClient.ReviewAsync(id, ...)</code>. No sabe qué ruta es.</li>
+    <li>El <code>HttpClient</code> de ese cliente añade el <strong>token del usuario</strong> —vía <code>AccessTokenHandler</code>— y resuelve <code>rental</code> a una dirección real.</li>
+    <li>La API valida el token, autoriza por rol, ejecuta el caso de uso y devuelve <code>204</code>.</li>
+    <li>La página recarga la lista con otra llamada y vuelve a pintar.</li>
+</ol>
+
+Y si la publicación ya no estaba en revisión, el paso 4 devuelve `422` con *"Solo se puede aprobar una publicación en revisión."*, el paso 5 no ocurre, y el moderador ve ese mismo texto en un aviso.
+
+**Fíjate en lo que no hay en ninguno de los cinco pasos:** una URL escrita en una página, un código HTTP interpretado a mano, o un tipo de dominio cruzando la frontera.
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Cuatro cosas que se malinterpretan del camino síncrono">
+
+**"Blazor Server llama a la API desde el navegador."** No. El navegador mantiene un WebSocket con el panel y nada más; las llamadas HTTP salen del servidor del panel. Por eso las APIs no necesitan CORS para el panel — solo Scalar lo necesita, y por eso Identity lo configura solo para ese origen.
+
+**"Compartir los DTOs entre la API y el panel ahorraría código."** Ahorraría teclear y costaría independencia: un cambio en un DTO obligaría a desplegar los dos a la vez. La duplicación aquí es deliberada y es la misma idea que un contrato de mensajería.
+
+**"Con la resiliencia estándar ya estoy a salvo de fallos."** Estás a salvo de fallos **transitorios**. Un reintento sobre una operación no idempotente puede duplicarla, y un cortacircuito abierto significa que el panel falla igual, solo que más rápido.
+
+**"El panel debería leer la base de datos directamente para los listados, sería más rápido."** Sería más rápido y borraría la frontera del [módulo 3](/arquitectura/servicios): el panel pasaría a depender del esquema interno de tres servicios, y cualquier migración se volvería un despliegue coordinado.
+
+</Callout>
+
+## Lo que este módulo deja fuera
+
+- **Cómo se obtiene el token** que el panel adjunta. [Módulo 7](/arquitectura/identidad).
+- **La comunicación entre servicios**, que no usa HTTP en absoluto: ningún servicio llama a otro por HTTP. Todo lo que cruza va por mensajes, [módulo 6](/arquitectura/mensajeria).
+- **gRPC.** Hay protobuf en el repositorio, pero solo como formato de mensajes; no hay ni un servicio gRPC.
+- **Versionado de la API.** No hay rutas `/v1/`, ni cabeceras de versión. Con un solo consumidor —el panel— no ha hecho falta todavía.
+- **La caché de salida en Redis**, que el panel usa para respuestas que no cambian entre peticiones. [Módulo 10](/arquitectura/entorno).
+
+<Callout kind="resumen" title="Para recordar">
+
+- El panel **no tiene base de datos**: todo lo que muestra llega por HTTP desde las tres APIs.
+- Un **cliente tipado por recurso** concentra rutas y verbos en un solo archivo.
+- La dirección es **un nombre**, y la resiliencia la pone `ServiceDefaults` sin que nadie la pida.
+- **ProblemDetails es el contrato de errores**, y `DomainException → 422` es lo que permite mostrar el mensaje del dominio tal cual.
+- El panel tiene **sus propios modelos**: lo que cruza es JSON, no tipos.
+- Ningún servicio llama a otro por HTTP. Este camino es solo **panel → APIs**.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Abre `https://localhost:7057/scalar` con el sistema arrancado. Es la documentación interactiva de la API de Rentals, generada de los propios endpoints.
+
+Busca una operación que sepas que va a fallar —aprobar una publicación que está en borrador— y ejecútala. Vas a recibir un `422` con el mensaje exacto que escribió el agregado. Eso es el contrato de errores funcionando de punta a punta, y es lo que la página del panel muestra en un recuadro rojo.
+
+**Y luego:** el [módulo 6](/arquitectura/mensajeria) explica el otro camino — el que usan los servicios entre sí, donde nadie espera respuesta.
+
+</Callout>

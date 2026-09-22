@@ -1,0 +1,277 @@
+---
+title: "Un recorrido completo"
+description: "Registrar un propietario: un formulario que acaba escribiendo en tres bases de datos distintas, sin una sola llamada entre servicios."
+sidebar:
+  order: 9
+  label: "9 · Un recorrido completo"
+---
+
+import Callout from '../../../components/Callout.astro';
+import { Code } from '@astrojs/starlight/components';
+import { whole, span, member } from '../../../lib/code';
+import ownerEndpoints from '@code/Services/Rentals/NotificationLog.RentalService.Api/Endpoints/OwnerEndpoints.cs?raw';
+import registerHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs?raw';
+import accountProvisioner from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/Publishers/WolverineAccountProvisioner.cs?raw';
+import accountHandler from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/Consumers/AccountCreationRequestedHandler.cs?raw';
+import createAccount from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/CreateAccount/CreateAccountHandler.cs?raw';
+import userCreatedHandler from '@code/Services/Notification/NotificationLog.NotificationService.Infrastructure/Messaging/Consumers/UserCreatedHandler.cs?raw';
+
+<p class="ddd-lede">
+Hasta aquí has visto las piezas por separado: el orquestador, las fronteras, las capas, los dos
+caminos de comunicación, la identidad y las bases de datos. Este módulo no presenta nada nuevo —
+coge <strong>un formulario</strong> y lo sigue hasta que ha dejado rastro en tres bases de datos
+distintas, gestionadas por tres procesos que no se conocen entre sí.
+</p>
+
+El caso: un administrador registra a doña Marta como propietaria. Un formulario con seis campos.
+
+<div class="ddd-frase">
+<strong>En una frase:</strong> un <code>POST</code> a Rentals escribe un evento, publica un mensaje,
+Identity crea la cuenta y anuncia el hecho, y Notifications se entera y prepara el envío — sin que
+ninguno de los tres llame a los otros.
+</div>
+
+## Ya conoces la forma: es un trámite administrativo
+
+Entregas un impreso en una ventanilla. Esa oficina hace lo suyo, y **de su propia iniciativa** manda un aviso a otra, que a su vez comunica a una tercera. Tú te vas con tu resguardo antes de que ninguna de las otras dos haya empezado.
+
+Si alguna tarda, tu trámite no se deshace. Si alguna falla, el aviso se queda en su bandeja esperando. Y lo único que viaja entre oficinas son formularios normalizados, no expedientes internos.
+
+<Callout kind="advertencia" title="Dónde falla la analogía">
+
+Un trámite real se puede consultar: *"¿por dónde va lo mío?"*. Aquí no hay número de expediente ni estado global: cada servicio sabe lo suyo y nadie sabe si la cadena terminó.
+
+Lo más parecido a esa consulta son las **trazas distribuidas** del dashboard, que enseñan el recorrido a posteriori. Es el [módulo 10](/arquitectura/entorno).
+
+</Callout>
+
+## Paso 1 · El panel recoge el formulario
+
+La página llama a su cliente tipado, que añade el token del usuario y resuelve `rental` a una dirección real. Nada de eso lo decide la página: lo hacen el `HttpClient` y su manejador, configurados en el arranque ([módulo 5](/arquitectura/http)).
+
+## Paso 2 · El endpoint traduce y no decide
+
+<Code
+    code={member(ownerEndpoints, 'private static async Task<IResult> RegisterNaturalAsync')}
+    lang="csharp"
+    title="Rentals · Api/Endpoints/OwnerEndpoints.cs"
+/>
+
+Seis líneas. Convierte el cuerpo en un comando, pasa el `ClaimsPrincipal` —de donde saldrá quién está registrando— y devuelve un `201` con el identificador.
+
+Lo único que este endpoint decide es **el código de respuesta**. Todo lo demás ocurre una capa más adentro.
+
+## Paso 3 · El handler orquesta, el agregado decide
+
+<Code
+    code={member(registerHandler, 'public async Task<Guid> HandleAsync')}
+    lang="csharp"
+    title="Rentals · Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs"
+    mark={['await _uow.SaveChangesAsync(ct);', 'await _accounts.RequestAccountAsync(']}
+/>
+
+Seis operaciones, y cada una es de un tipo distinto:
+
+| Línea | Qué hace | Dónde vive esa decisión |
+| --- | --- | --- |
+| `OwnerIdResolver.ResolveAsync` | Decide el identificador del propietario | `Application` |
+| `ValidateAndThrowAppAsync` | Comprueba la forma del mensaje | Validador |
+| `PersonName.Create`, `ContactInfo.Create` | Valida los datos como conceptos de negocio | **Value objects del dominio** |
+| `ExistsWithDocumentAsync` | Regla que mira *otros* propietarios | Proyección de lectura |
+| `Owner.RegisterNatural` | Crea el agregado levantando un hecho | **El agregado** |
+| `AppendAsync` + `SaveChangesAsync` | Escribe el evento y sus vistas, en una transacción | `Infrastructure` |
+
+Al terminar `SaveChangesAsync`, en la base `rentals` hay **una fila nueva en `mt_events`** con un `NaturalOwnerRegistered`, y las vistas de lectura ya actualizadas en la misma transacción.
+
+## Paso 4 · El mensaje sale hacia Identity
+
+<Code
+    code={member(accountProvisioner, 'public async Task RequestAccountAsync')}
+    lang="csharp"
+    title="Rentals · Messaging/Publishers/WolverineAccountProvisioner.cs"
+/>
+
+El evento de dominio `NaturalOwnerRegistered` **no sale de Rentals**. Lo que sale es un contrato público, construido a propósito: `AccountCreationRequested`, con su `EventId`, su marca de tiempo, su `SchemaVersion` y el rol `Propietario` ya traducido a texto.
+
+Fíjate en el `UserId`: es **el mismo `Guid` del propietario**. Esa coincidencia deliberada es lo que hará que, tres saltos más adelante, las tres bases hablen de la misma persona sin ninguna relación entre ellas.
+
+Y aquí está la respuesta al `201` que el panel ya recibió: para cuando este mensaje se publica, **la petición HTTP ya terminó**. El resto ocurre sin que nadie espere.
+
+<Callout kind="honesto" title="La ventana que este paso deja abierta">
+
+`RequestAccountAsync` se llama **después** de `SaveChangesAsync`, con un bus que no participa en esa transacción. Si el proceso muriera justo entre las dos líneas, quedaría un propietario registrado en Rentals sin cuenta en Identity, y nada lo reintentaría.
+
+Identity resuelve el mismo problema con un outbox ([módulo 6](/arquitectura/mensajeria)); Rentals tiene la infraestructura para hacerlo y este camino no pasa por ella. Es pequeño, es real, y es el tipo de detalle que solo se ve siguiendo un caso entero.
+
+</Callout>
+
+## Paso 5 · Identity crea la cuenta
+
+<Code
+    code={whole(accountHandler)}
+    lang="csharp"
+    title="Identity · Messaging/Consumers/AccountCreationRequestedHandler.cs"
+/>
+
+Lo primero que hace el consumidor es **traducir**: convierte el contrato protobuf en un comando propio y valida por el camino que el `Guid` y los roles sean legales. A partir de aquí, protobuf no vuelve a aparecer.
+
+<Code
+    code={member(createAccount, 'public async Task<Guid> HandleAsync')}
+    lang="csharp"
+    title="Identity · Application/Users/Commands/CreateAccount/CreateAccountHandler.cs"
+    mark={['var user = await _users.FindByIdAsync(cmd.Id, ct) ?? await _users.FindByLoginAsync(login, ct);', 'await _events.PublishUserCreatedAsync(user, ct);', 'await _uow.SaveChangesAsync(ct);']}
+/>
+
+Tres cosas que merecen atención:
+
+<ol class="ddd-steps">
+    <li><strong>Busca antes de crear</strong>, por id y por identificador de acceso. Eso es lo que hace el consumidor <strong>idempotente</strong>: si el mensaje llega dos veces, la segunda actualiza el perfil en lugar de fallar.</li>
+    <li><strong>Usa el <code>Guid</code> que vino en el mensaje</strong>, no uno nuevo. La correlación entre servicios se decide en el origen.</li>
+    <li><strong>Publica y guarda en el mismo <code>SaveChangesAsync</code></strong>. Ese <code>IUnitOfWork</code> es el outbox: o se guarda el usuario y el mensaje, o no se guarda ninguno de los dos.</li>
+</ol>
+
+## Paso 6 · El anuncio se reparte
+
+`UserCreated` sale al exchange `identity.users`, que es un **fanout**: Identity no sabe quién escucha. RabbitMQ deja una copia en cada cola enlazada — hoy, la de Notifications.
+
+## Paso 7 · Notifications se entera
+
+<Code
+    code={whole(userCreatedHandler)}
+    lang="csharp"
+    title="Notifications · Messaging/Consumers/UserCreatedHandler.cs"
+/>
+
+Otra traducción de cinco líneas, y `RecipientSyncService` aplica la instantánea: crea el `Recipient` en SQL Server con **el mismo `Guid`**, o lo actualiza si ya existía.
+
+A partir de ese momento, doña Marta es alguien a quien el sistema sabe escribir: cuando un día se apruebe una de sus publicaciones, Notifications resolverá su plantilla y le mandará un correo sin necesitar preguntarle nada a nadie.
+
+## Cómo encaja: el recorrido entero
+
+<div class="ddd-diagram">
+    <svg viewBox="0 0 880 430" role="img" aria-labelledby="e2eTitle">
+        <title id="e2eTitle">De un formulario a tres bases de datos</title>
+        <defs>
+            <marker id="e2Arrow" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+                <path d="M0,0 L8,4 L0,8 Z" fill="#94a3b8" />
+            </marker>
+        </defs>
+
+        <rect x="20" y="24" width="150" height="56" rx="10" fill="#f8fafc" stroke="#cbd5e1" />
+        <text x="95" y="46" text-anchor="middle" font-size="9.5" font-weight="700" fill="#475569">Panel</text>
+        <text x="95" y="64" text-anchor="middle" font-size="8" fill="#334155">formulario + token</text>
+
+        <line x1="172" y1="52" x2="204" y2="52" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#e2Arrow)" />
+        <text x="188" y="44" text-anchor="middle" font-size="7" fill="#64748b">HTTP</text>
+
+        <rect x="206" y="24" width="300" height="130" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="356" y="46" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">RENTALS</text>
+        <text x="356" y="66" text-anchor="middle" font-size="8" fill="#334155">endpoint → comando → handler</text>
+        <text x="356" y="82" text-anchor="middle" font-size="8" fill="#334155">value objects + regla de documento</text>
+        <text x="356" y="98" text-anchor="middle" font-size="8" fill="#334155">Owner.RegisterNatural</text>
+        <rect x="226" y="108" width="260" height="34" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="356" y="122" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">rentals.mt_events + vistas</text>
+        <text x="356" y="135" text-anchor="middle" font-size="7.5" fill="#64748b">una transacción</text>
+
+        <line x1="510" y1="52" x2="542" y2="52" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#e2Arrow)" />
+        <text x="527" y="44" text-anchor="middle" font-size="7" fill="#16a34a">201</text>
+        <rect x="544" y="24" width="180" height="56" rx="10" fill="#f0fdf4" stroke="#bbf7d0" />
+        <text x="634" y="46" text-anchor="middle" font-size="9" font-weight="700" fill="#14532d">El usuario ya terminó</text>
+        <text x="634" y="64" text-anchor="middle" font-size="8" fill="#14532d">todo lo demás pasa después</text>
+
+        <line x1="356" y1="156" x2="356" y2="184" stroke="#ea580c" stroke-width="1.5" marker-end="url(#e2Arrow)" />
+        <text x="470" y="176" text-anchor="middle" font-size="7.5" fill="#9a3412">publica tras el commit (sin outbox)</text>
+
+        <rect x="206" y="186" width="300" height="38" rx="8" fill="#fff7ed" stroke="#fed7aa" />
+        <text x="356" y="203" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9a3412">cola · identity-accounts</text>
+        <text x="356" y="217" text-anchor="middle" font-size="7.5" fill="#334155">AccountCreationRequested · protobuf</text>
+
+        <line x1="356" y1="226" x2="356" y2="252" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#e2Arrow)" />
+
+        <rect x="206" y="254" width="300" height="118" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="356" y="276" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">IDENTITY</text>
+        <text x="356" y="296" text-anchor="middle" font-size="8" fill="#334155">traduce el contrato → comando</text>
+        <text x="356" y="312" text-anchor="middle" font-size="8" fill="#334155">busca antes de crear (idempotente)</text>
+        <rect x="226" y="322" width="260" height="38" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="356" y="337" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">identity.AspNetUsers + outbox</text>
+        <text x="356" y="351" text-anchor="middle" font-size="7.5" font-weight="600" fill="#14532d">la misma transacción</text>
+
+        <line x1="510" y1="313" x2="546" y2="313" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#e2Arrow)" />
+
+        <rect x="548" y="254" width="300" height="38" rx="8" fill="#fdf2f8" stroke="#fbcfe8" />
+        <text x="698" y="271" text-anchor="middle" font-size="8.5" font-weight="700" fill="#9d174d">exchange · identity.users (fanout)</text>
+        <text x="698" y="285" text-anchor="middle" font-size="7.5" fill="#334155">UserCreated · no sabe quién escucha</text>
+
+        <line x1="698" y1="294" x2="698" y2="248" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#e2Arrow)" />
+
+        <rect x="548" y="120" width="300" height="126" rx="10" fill="#eef2ff" stroke="#c7d2fe" />
+        <text x="698" y="142" text-anchor="middle" font-size="9.5" font-weight="700" fill="#4338ca">NOTIFICATIONS</text>
+        <text x="698" y="162" text-anchor="middle" font-size="8" fill="#334155">traduce el contrato → comando</text>
+        <text x="698" y="178" text-anchor="middle" font-size="8" fill="#334155">aplica la instantánea del usuario</text>
+        <rect x="568" y="188" width="260" height="38" rx="6" fill="#fff" stroke="#c7d2fe" />
+        <text x="698" y="203" text-anchor="middle" font-size="8" font-family="monospace" fill="#4338ca">SQL Server · Recipients</text>
+        <text x="698" y="217" text-anchor="middle" font-size="7.5" fill="#64748b">mismo Guid que el propietario</text>
+
+        <rect x="20" y="390" width="828" height="30" rx="8" fill="#f1f5f9" stroke="#cbd5e1" />
+        <text x="434" y="409" text-anchor="middle" font-size="9" fill="#475569">Tres procesos, tres bases, cinco traducciones — y ninguna llamada HTTP entre servicios.</text>
+    </svg>
+    <p class="ddd-diagram-caption">
+        Los dos recuadros de transacción son la diferencia que enseña este recorrido: Identity escribe dato
+        y mensaje juntos; Rentals los escribe uno después del otro.
+    </p>
+</div>
+
+## Lo que este recorrido demuestra
+
+<ol class="ddd-steps">
+    <li><strong>El usuario no espera a la cadena.</strong> Recibe su <code>201</code> cuando Rentals ha terminado lo suyo; los otros dos servicios trabajan después.</li>
+    <li><strong>Nadie llama a nadie.</strong> Rentals no conoce la URL de Identity, y Identity no sabe que Notifications existe.</li>
+    <li><strong>Cada frontera es una traducción.</strong> Contrato → comando propio, cinco veces en el recorrido. Ningún tipo de dominio cruza.</li>
+    <li><strong>La correlación viaja en un <code>Guid</code>.</strong> Un mismo identificador en tres bases sin una sola clave foránea.</li>
+    <li><strong>Las garantías no son iguales en todos los saltos.</strong> Uno es transaccional, el otro no — y eso solo se ve recorriendo el caso entero.</li>
+</ol>
+
+## Lo que suele confundir
+
+<Callout kind="antipatron" title="Tres reacciones habituales ante este recorrido">
+
+**"Es mucho más complicado que un `INSERT` en tres tablas."** Lo es, y el intercambio hay que decirlo entero: se paga complejidad para que cada servicio pueda evolucionar, desplegarse y fallar por separado. En un sistema con un solo equipo y un solo despliegue, tres tablas serían la respuesta correcta.
+
+**"Si Identity está caído, se pierde el registro."** No: el mensaje espera en `identity-accounts` hasta que vuelva. Lo que sí se pierde es el mensaje que Rentals no llegó a publicar si muere entre el commit y el publish — que es una ventana distinta y mucho más pequeña.
+
+**"Debería haber una transacción que abarque los tres servicios."** No existe tal cosa sin transacciones distribuidas, y no se quieren: el precio es bloquear tres bases a la vez. Lo que se usa es **consistencia eventual** — el estado final es correcto, con un retraso de milisegundos.
+
+</Callout>
+
+## Lo que este recorrido deja fuera
+
+- **El envío del correo de bienvenida**, que depende de que exista un disparador y una plantilla configurados para esa clave en el panel de Notifications. El flujo funcional completo está en la [guía del proyecto](/proyecto/flujo-notificacion).
+- **Los reintentos y fallos** de cada salto: qué pasa si un consumidor lanza una excepción, y dónde acaba el mensaje.
+- **El recorrido inverso**, cuando Rentals publica `NotificationDispatchRequested` porque se aprobó una publicación. Es la misma mecánica con otro contrato.
+- **Lo que ocurre dentro de cada dominio.** Aquí se ha seguido el trazo entre servicios; las decisiones internas son las guías de [DDD](/ddd) y [Event Sourcing](/event-sourcing).
+
+<Callout kind="resumen" title="Para recordar">
+
+- Un `POST` a un servicio puede acabar escribiendo en **tres bases**, sin que ninguno llame a otro.
+- El usuario **no espera**: la respuesta llega cuando termina el primer servicio.
+- Cada frontera es una **traducción de contrato a comando propio**. Ningún tipo de dominio cruza.
+- La correlación entre servicios es **un `Guid` decidido en el origen**, no una clave foránea.
+- Identity escribe **dato y mensaje en la misma transacción**; Rentals publica después del commit.
+- El consumidor **busca antes de crear**: así el mismo mensaje se puede entregar dos veces sin daño.
+
+</Callout>
+
+<Callout kind="ejercicio" title="Tu siguiente paso, hoy">
+
+Hazlo entero y míralo por los cuatro sitios a la vez. Con el sistema arrancado:
+
+1. Registra un propietario desde el panel de Rentals.
+2. En **DbGate**, busca el evento nuevo en `rentals.mt_events`, la fila en `identity.AspNetUsers` y la fila en `Recipients` de SQL Server. Comprueba que los tres tienen **el mismo identificador**.
+3. En **RabbitMQ**, mira cómo pasaron los mensajes por `identity-accounts` y por el exchange.
+4. En el **dashboard de Aspire**, abre las trazas y busca la petición: vas a ver el salto entre procesos dibujado.
+
+Ese ejercicio de diez minutos es la mejor forma de fijar los ocho módulos anteriores.
+
+**Y luego:** el [módulo 10](/arquitectura/entorno) explica precisamente esa última herramienta — qué ves cuando algo falla, y qué partes del entorno no existirían en producción.
+
+</Callout>
