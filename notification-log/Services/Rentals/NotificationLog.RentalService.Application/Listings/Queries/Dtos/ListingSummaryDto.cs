@@ -1,4 +1,4 @@
-namespace NotificationLog.RentalService.Application.Listings.Queries.ListListings;
+namespace NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 
 public sealed record ListingSummaryDto(
     Guid Id,

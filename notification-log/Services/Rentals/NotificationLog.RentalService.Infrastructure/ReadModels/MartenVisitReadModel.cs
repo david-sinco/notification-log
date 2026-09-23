@@ -1,9 +1,9 @@
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
-using NotificationLog.RentalService.Application.Abstractions;
-using NotificationLog.RentalService.Application.Visits.Dtos;
-using NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
+using NotificationLog.RentalService.Application.Visits.Queries;
+using NotificationLog.RentalService.Application.Visits.Queries.Dtos;
+using NotificationLog.RentalService.Application.Visits.Queries.Filters;
 
 namespace NotificationLog.RentalService.Infrastructure.ReadModels;
 
@@ -13,17 +13,17 @@ internal sealed class MartenVisitReadModel : IVisitReadModel
 
     public MartenVisitReadModel(IQuerySession session) => _session = session;
 
-    public async Task<(IReadOnlyList<VisitSummaryDto> Items, int TotalCount)> ListAsync(ListVisitsQuery query, PageRequest paging, CancellationToken ct)
+    public async Task<(IReadOnlyList<VisitSummaryDto> Items, int TotalCount)> ListAsync(VisitFilter filter, PageRequest paging, CancellationToken ct)
     {
         IQueryable<VisitView> visits = _session.Query<VisitView>();
 
-        if (query.ListingId is { } listingId)
+        if (filter.ListingId is { } listingId)
             visits = visits.Where(x => x.ListingId == listingId);
 
-        if (query.ParticipantId is { } participant)
+        if (filter.ParticipantId is { } participant)
             visits = visits.Where(x => x.VisitorId == participant || x.HostId == participant);
 
-        if (query.Status is { } status)
+        if (filter.Status is { } status)
             visits = visits.Where(x => x.Status == status);
 
         var items = await ((IMartenQueryable<VisitView>)visits)

@@ -27,12 +27,9 @@ using NotificationLog.RentalService.Application.Visits.Commands.ReportVisitOutco
 using NotificationLog.RentalService.Application.Visits.Commands.RequestVisit;
 using NotificationLog.RentalService.Application.Visits.Commands.SendVisitReminder;
 using NotificationLog.RentalService.Application.Processes;
-using NotificationLog.RentalService.Application.Listings.Queries.GetListingById;
-using NotificationLog.RentalService.Application.Listings.Queries.ListListings;
-using NotificationLog.RentalService.Application.Owners.Queries.GetOwnerById;
-using NotificationLog.RentalService.Application.Owners.Queries.ListOwners;
-using NotificationLog.RentalService.Application.Visits.Queries.GetVisitById;
-using NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
+using NotificationLog.RentalService.Application.Listings.Queries;
+using NotificationLog.RentalService.Application.Owners.Queries;
+using NotificationLog.RentalService.Application.Visits.Queries;
 
 namespace NotificationLog.RentalService.Application;
 

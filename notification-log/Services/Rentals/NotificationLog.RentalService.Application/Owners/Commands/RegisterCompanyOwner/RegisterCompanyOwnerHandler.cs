@@ -4,8 +4,8 @@ using Application.Shared.Common;
 using Domain.Shared.Authorization;
 using FluentValidation;
 using NotificationLog.Contracts.Identity;
-using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Application.Owners.Producers;
+using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 

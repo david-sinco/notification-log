@@ -1,4 +1,4 @@
-namespace NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
+namespace NotificationLog.RentalService.Application.Visits.Queries.Dtos;
 
 public sealed record VisitSummaryDto(
     Guid Id,

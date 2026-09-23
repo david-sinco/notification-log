@@ -1,8 +1,8 @@
 using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Visits;
-using NotificationLog.RentalService.Application.Visits.Dtos;
-using NotificationLog.RentalService.Application.Visits.Queries.GetVisitById;
-using NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
+using NotificationLog.RentalService.Application.Visits.Queries;
+using NotificationLog.RentalService.Application.Visits.Queries.Dtos;
+using NotificationLog.RentalService.Application.Visits.Queries.Filters;
 using NotificationLog.RentalService.Application.Visits.Commands.CancelVisit;
 using NotificationLog.RentalService.Application.Visits.Commands.ConfirmVisit;
 using NotificationLog.RentalService.Application.Visits.Commands.DeclineVisit;
@@ -81,17 +81,17 @@ public static class VisitEndpoints
     }
 
     private static async Task<IResult> ListAsync(
-        [AsParameters] ListVisitsQuery query,
+        [AsParameters] VisitFilter filter,
         [AsParameters] PageRequest paging,
         ListVisitsHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(query, paging, ct));
+        => Results.Ok(await handler.HandleAsync(filter, paging, ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,
         GetVisitByIdHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(new GetVisitByIdQuery(id), ct));
+        => Results.Ok(await handler.HandleAsync(id, ct));
 
     private static async Task<IResult> ConfirmAsync(
         Guid id,

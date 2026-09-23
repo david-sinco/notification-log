@@ -1,9 +1,9 @@
 using System.Security.Claims;
 using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Listings;
-using NotificationLog.RentalService.Application.Listings.Dtos;
-using NotificationLog.RentalService.Application.Listings.Queries.GetListingById;
-using NotificationLog.RentalService.Application.Listings.Queries.ListListings;
+using NotificationLog.RentalService.Application.Listings.Queries;
+using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
+using NotificationLog.RentalService.Application.Listings.Queries.Filters;
 using NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 using NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
 using NotificationLog.RentalService.Application.Listings.Commands.DraftListing;
@@ -122,17 +122,17 @@ public static class ListingEndpoints
     }
 
     private static async Task<IResult> ListAsync(
-        [AsParameters] ListListingsQuery query,
+        [AsParameters] ListingFilter filter,
         [AsParameters] PageRequest paging,
         ListListingsHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(query, paging, ct));
+        => Results.Ok(await handler.HandleAsync(filter, paging, ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,
         GetListingByIdHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(new GetListingByIdQuery(id), ct));
+        => Results.Ok(await handler.HandleAsync(id, ct));
 
     private static async Task<IResult> UpdateDetailsAsync(
         Guid id,

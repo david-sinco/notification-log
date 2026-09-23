@@ -1,9 +1,9 @@
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
-using NotificationLog.RentalService.Application.Abstractions;
-using NotificationLog.RentalService.Application.Owners.Dtos;
-using NotificationLog.RentalService.Application.Owners.Queries.ListOwners;
+using NotificationLog.RentalService.Application.Owners.Queries;
+using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
+using NotificationLog.RentalService.Application.Owners.Queries.Filters;
 using NotificationLog.RentalService.Domain.Owners.Enums;
 
 namespace NotificationLog.RentalService.Infrastructure.ReadModels;
@@ -14,11 +14,11 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
 
     public MartenOwnerReadModel(IQuerySession session) => _session = session;
 
-    public async Task<(IReadOnlyList<OwnerDto> Items, int TotalCount)> ListAsync(ListOwnersQuery query, PageRequest paging, CancellationToken ct)
+    public async Task<(IReadOnlyList<OwnerDto> Items, int TotalCount)> ListAsync(OwnerFilter filter, PageRequest paging, CancellationToken ct)
     {
         IQueryable<OwnerView> owners = _session.Query<OwnerView>();
 
-        if (query.CreatedBy is { } createdBy)
+        if (filter.CreatedBy is { } createdBy)
             owners = owners.Where(x => x.CreatedBy == createdBy);
 
         var items = await ((IMartenQueryable<OwnerView>)owners)

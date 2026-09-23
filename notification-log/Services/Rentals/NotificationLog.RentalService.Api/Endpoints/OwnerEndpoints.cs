@@ -4,9 +4,9 @@ using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Owners;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
-using NotificationLog.RentalService.Application.Owners.Dtos;
-using NotificationLog.RentalService.Application.Owners.Queries.GetOwnerById;
-using NotificationLog.RentalService.Application.Owners.Queries.ListOwners;
+using NotificationLog.RentalService.Application.Owners.Queries;
+using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
+using NotificationLog.RentalService.Application.Owners.Queries.Filters;
 
 namespace NotificationLog.RentalService.Api.Endpoints;
 
@@ -75,16 +75,16 @@ public static class OwnerEndpoints
     }
 
     private static async Task<IResult> ListAsync(
-        [AsParameters] ListOwnersQuery query,
+        [AsParameters] OwnerFilter filter,
         [AsParameters] PageRequest paging,
         ListOwnersHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(query, paging, ct));
+        => Results.Ok(await handler.HandleAsync(filter, paging, ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,
         ClaimsPrincipal user,
         GetOwnerByIdHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(new GetOwnerByIdQuery(id), user, ct));
+        => Results.Ok(await handler.HandleAsync(id, user, ct));
 }

@@ -1,4 +1,4 @@
-namespace NotificationLog.RentalService.Application.Owners.Dtos;
+namespace NotificationLog.RentalService.Application.Owners.Queries.Dtos;
 
 public sealed record OwnerDto(
     Guid Id,

@@ -1,9 +1,9 @@
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
-using NotificationLog.RentalService.Application.Abstractions;
-using NotificationLog.RentalService.Application.Listings.Dtos;
-using NotificationLog.RentalService.Application.Listings.Queries.ListListings;
+using NotificationLog.RentalService.Application.Listings.Queries;
+using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
+using NotificationLog.RentalService.Application.Listings.Queries.Filters;
 
 namespace NotificationLog.RentalService.Infrastructure.ReadModels;
 
@@ -13,26 +13,26 @@ internal sealed class MartenListingReadModel : IListingReadModel
 
     public MartenListingReadModel(IQuerySession session) => _session = session;
 
-    public async Task<(IReadOnlyList<ListingSummaryDto> Items, int TotalCount)> ListAsync(ListListingsQuery query, PageRequest paging, CancellationToken ct)
+    public async Task<(IReadOnlyList<ListingSummaryDto> Items, int TotalCount)> ListAsync(ListingFilter filter, PageRequest paging, CancellationToken ct)
     {
         IQueryable<ListingView> listings = _session.Query<ListingView>();
 
-        if (!string.IsNullOrWhiteSpace(query.Search))
+        if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            var search = query.Search.Trim();
+            var search = filter.Search.Trim();
             listings = listings.Where(x =>
                 x.City!.Contains(search, StringComparison.OrdinalIgnoreCase)
                 || x.Neighborhood!.Contains(search, StringComparison.OrdinalIgnoreCase)
                 || x.Address!.Contains(search, StringComparison.OrdinalIgnoreCase));
         }
 
-        if (query.Status is { } status)
+        if (filter.Status is { } status)
             listings = listings.Where(x => x.Status == status);
 
-        if (query.Operation is { } operation)
+        if (filter.Operation is { } operation)
             listings = listings.Where(x => x.Operation == operation);
 
-        if (query.ParticipantId is { } participant)
+        if (filter.ParticipantId is { } participant)
             listings = listings.Where(x =>
                 x.OwnerId == participant || x.CreatedBy == participant);
 
