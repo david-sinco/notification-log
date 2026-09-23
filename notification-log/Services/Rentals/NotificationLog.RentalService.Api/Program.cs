@@ -1,6 +1,5 @@
 using API.Shared.Exceptions;
 using Domain.Shared.Authorization;
-using NotificationLog.RentalService.Api.Authorization;
 using NotificationLog.RentalService.Api.Endpoints;
 using NotificationLog.RentalService.Api.OpenApi;
 using NotificationLog.RentalService.Application;
@@ -15,7 +14,6 @@ builder.AddServiceDefaults();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddOpenIdDictAuthorization(builder.Configuration, [OidcScope.Rentals] );
-//builder.Services.AddRentalsAuthorization(builder.Configuration);
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();

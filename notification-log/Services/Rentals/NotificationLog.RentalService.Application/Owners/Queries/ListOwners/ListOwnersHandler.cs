@@ -4,11 +4,9 @@ using NotificationLog.RentalService.Application.Owners.Dtos;
 
 namespace NotificationLog.RentalService.Application.Owners.Queries.ListOwners;
 
-public sealed class ListOwnersHandler
+public sealed class ListOwnersHandler(IOwnerReadModel owners)
 {
-    private readonly IOwnerReadModel _owners;
-
-    public ListOwnersHandler(IOwnerReadModel owners) => _owners = owners;
+    private readonly IOwnerReadModel _owners = owners;
 
     public async Task<PagedResult<OwnerDto>> HandleAsync(ListOwnersQuery query, CancellationToken ct)
     {

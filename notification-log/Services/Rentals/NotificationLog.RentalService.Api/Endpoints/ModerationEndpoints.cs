@@ -1,4 +1,3 @@
-using NotificationLog.RentalService.Api.Authorization;
 using System.Security.Claims;
 using NotificationLog.RentalService.Api.Contracts.Listings;
 using NotificationLog.RentalService.Api.Contracts.Moderation;
@@ -6,6 +5,7 @@ using NotificationLog.RentalService.Application.Listings.Commands.ReinstateListi
 using NotificationLog.RentalService.Application.Listings.Commands.ReviewListing;
 using NotificationLog.RentalService.Application.Listings.Commands.SuspendListing;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
+using API.Shared.Extensions;
 
 namespace NotificationLog.RentalService.Api.Endpoints;
 

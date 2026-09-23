@@ -7,13 +7,20 @@ public enum OidcScope
     Notifications
 }
 
+public static class OidcScopeNames
+{
+    public const string Identity = "identity";
+    public const string Rentals = "rentals";
+    public const string Notifications = "notifications";
+}
+
 public static class OidcScopeExtensions
 {
     public static string ToScopeName(this OidcScope scope) => scope switch
     {
-        OidcScope.Identity => "identity",
-        OidcScope.Rentals => "rentals",
-        OidcScope.Notifications => "notifications",
+        OidcScope.Identity => OidcScopeNames.Identity,
+        OidcScope.Rentals => OidcScopeNames.Rentals,
+        OidcScope.Notifications => OidcScopeNames.Rentals,
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "Scope OIDC desconocido.")
     };
 }

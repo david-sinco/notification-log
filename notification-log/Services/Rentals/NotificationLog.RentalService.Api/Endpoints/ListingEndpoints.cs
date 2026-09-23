@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using NotificationLog.RentalService.Api.Authorization;
 using NotificationLog.RentalService.Api.Contracts.Listings;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Listings.Dtos;
@@ -14,6 +13,7 @@ using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingF
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
+using API.Shared.Extensions;
 
 namespace NotificationLog.RentalService.Api.Endpoints;
 

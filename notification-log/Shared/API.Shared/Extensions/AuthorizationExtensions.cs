@@ -8,7 +8,11 @@ namespace API.Shared.Extensions;
 
 public static class AuthorizationExtensions
 {
+    //Scopes
+    public const string RentalsScopePolicy = OidcScopeNames.Rentals;
     public const string AdministradorPolicy = nameof(UserRole.Administrador);
+
+    //Roles
     public const string ModeracionPolicy = nameof(UserRole.Moderador);
 
     public static IServiceCollection AddOpenIdDictAuthorization(

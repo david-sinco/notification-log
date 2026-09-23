@@ -1,6 +1,5 @@
 using System.Security.Claims;
-using Domain.Shared.Authorization;
-using NotificationLog.RentalService.Api.Authorization;
+using API.Shared.Extensions;
 using NotificationLog.RentalService.Api.Contracts.Owners;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
