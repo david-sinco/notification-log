@@ -1,5 +1,5 @@
+using Application.Shared.Pagination;
 using NotificationLog.RentalService.Application.Abstractions;
-using NotificationLog.RentalService.Application.Common;
 
 namespace NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
 
@@ -9,11 +9,10 @@ public sealed class ListVisitsHandler
 
     public ListVisitsHandler(IVisitReadModel visits) => _visits = visits;
 
-    public async Task<PagedResult<VisitSummaryDto>> HandleAsync(ListVisitsQuery query, CancellationToken ct)
+    public async Task<PagedResult<VisitSummaryDto>> HandleAsync(ListVisitsQuery query, PageRequest paging, CancellationToken ct)
     {
-        var paged = query with { Page = Paging.Page(query.Page), PageSize = Paging.Size(query.PageSize) };
-        var (items, total) = await _visits.ListAsync(paged, ct);
+        var (items, total) = await _visits.ListAsync(query, paging, ct);
 
-        return new PagedResult<VisitSummaryDto>(items, paged.Page, paged.PageSize, total);
+        return new PagedResult<VisitSummaryDto>(items, paging, total);
     }
 }

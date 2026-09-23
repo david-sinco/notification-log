@@ -1,5 +1,5 @@
+using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Visits;
-using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Visits.Dtos;
 using NotificationLog.RentalService.Application.Visits.Queries.GetVisitById;
 using NotificationLog.RentalService.Application.Visits.Queries.ListVisits;
@@ -82,9 +82,10 @@ public static class VisitEndpoints
 
     private static async Task<IResult> ListAsync(
         [AsParameters] ListVisitsQuery query,
+        [AsParameters] PageRequest paging,
         ListVisitsHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(query, ct));
+        => Results.Ok(await handler.HandleAsync(query, paging, ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,

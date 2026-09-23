@@ -7,6 +7,4 @@ public sealed record ListListingsQuery(
     string? Search = null,
     ListingStatus? Status = null,
     Operation? Operation = null,
-    Guid? ParticipantId = null,
-    int Page = 1,
-    int PageSize = 20);
+    Guid? ParticipantId = null);

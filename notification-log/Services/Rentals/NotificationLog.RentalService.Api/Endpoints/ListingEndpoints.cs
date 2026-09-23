@@ -1,6 +1,6 @@
 using System.Security.Claims;
+using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Listings;
-using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Listings.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.GetListingById;
 using NotificationLog.RentalService.Application.Listings.Queries.ListListings;
@@ -123,9 +123,10 @@ public static class ListingEndpoints
 
     private static async Task<IResult> ListAsync(
         [AsParameters] ListListingsQuery query,
+        [AsParameters] PageRequest paging,
         ListListingsHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(query, ct));
+        => Results.Ok(await handler.HandleAsync(query, paging, ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,

@@ -1,3 +1,4 @@
+using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
 using NotificationLog.RentalService.Application.Abstractions;
@@ -12,7 +13,7 @@ internal sealed class MartenVisitReadModel : IVisitReadModel
 
     public MartenVisitReadModel(IQuerySession session) => _session = session;
 
-    public async Task<(IReadOnlyList<VisitSummaryDto> Items, int TotalCount)> ListAsync(ListVisitsQuery query, CancellationToken ct)
+    public async Task<(IReadOnlyList<VisitSummaryDto> Items, int TotalCount)> ListAsync(ListVisitsQuery query, PageRequest paging, CancellationToken ct)
     {
         IQueryable<VisitView> visits = _session.Query<VisitView>();
 
@@ -28,8 +29,8 @@ internal sealed class MartenVisitReadModel : IVisitReadModel
         var items = await ((IMartenQueryable<VisitView>)visits)
             .Stats(out QueryStatistics stats)
             .OrderByDescending(x => x.UpdatedAt)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
+            .Skip(paging.Skip)
+            .Take(paging.PageSize)
             .ToListAsync(ct);
 
         return (items.Select(x => new VisitSummaryDto(

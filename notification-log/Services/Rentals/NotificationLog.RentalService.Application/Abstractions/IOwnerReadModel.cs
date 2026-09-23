@@ -1,3 +1,4 @@
+using Application.Shared.Pagination;
 using NotificationLog.RentalService.Application.Owners.Dtos;
 using NotificationLog.RentalService.Application.Owners.Queries.ListOwners;
 using NotificationLog.RentalService.Domain.Owners.Enums;
@@ -6,7 +7,7 @@ namespace NotificationLog.RentalService.Application.Abstractions;
 
 public interface IOwnerReadModel
 {
-    Task<(IReadOnlyList<OwnerDto> Items, int TotalCount)> ListAsync(ListOwnersQuery query, CancellationToken ct);
+    Task<(IReadOnlyList<OwnerDto> Items, int TotalCount)> ListAsync(ListOwnersQuery query, PageRequest paging, CancellationToken ct);
 
     Task<OwnerDto?> GetAsync(Guid id, CancellationToken ct);
 

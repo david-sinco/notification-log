@@ -1,3 +1,4 @@
+using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
 using NotificationLog.RentalService.Application.Abstractions;
@@ -13,7 +14,7 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
 
     public MartenOwnerReadModel(IQuerySession session) => _session = session;
 
-    public async Task<(IReadOnlyList<OwnerDto> Items, int TotalCount)> ListAsync(ListOwnersQuery query, CancellationToken ct)
+    public async Task<(IReadOnlyList<OwnerDto> Items, int TotalCount)> ListAsync(ListOwnersQuery query, PageRequest paging, CancellationToken ct)
     {
         IQueryable<OwnerView> owners = _session.Query<OwnerView>();
 
@@ -23,8 +24,8 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
         var items = await ((IMartenQueryable<OwnerView>)owners)
             .Stats(out QueryStatistics stats)
             .OrderByDescending(x => x.RegisteredAt)
-            .Skip((query.Page - 1) * query.PageSize)
-            .Take(query.PageSize)
+            .Skip(paging.Skip)
+            .Take(paging.PageSize)
             .ToListAsync(ct);
 
         return (items.Select(ToDto).ToList(), (int)stats.TotalResults);
