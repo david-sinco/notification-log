@@ -12,11 +12,11 @@ message AccountCreationRequested {
   int32 schema_version = 3;
 
   string user_id = 10;
-  string identifier = 11;
+  string email = 11;
   string name = 12;
   string locale = 13;
   string time_zone = 14;
   bool accepts_notifications = 15;
-  repeated string roles = 16;
+  string role = 16;
   string phone = 17;
 }

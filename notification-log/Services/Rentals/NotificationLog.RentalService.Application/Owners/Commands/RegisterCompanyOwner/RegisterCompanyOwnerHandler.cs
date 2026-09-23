@@ -3,7 +3,9 @@ using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using Domain.Shared.Authorization;
 using FluentValidation;
+using NotificationLog.Contracts.Identity;
 using NotificationLog.RentalService.Application.Abstractions;
+using NotificationLog.RentalService.Application.Owners.Producers;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
@@ -43,8 +45,18 @@ public sealed class RegisterCompanyOwnerHandler
         await _owners.AppendAsync(owner, ct);
         await _uow.SaveChangesAsync(ct);
 
-        await _accounts.RequestAccountAsync(
-            new AccountRequest(owner.Id, legalName.Value, contact.Email, contact.Phone, [UserRole.Propietario]), ct);
+
+        await _accounts.RequestAccountAsync(new AccountCreationRequested()
+        {
+            UserId = owner.Id.ToString(),
+            Email = contact.Email,
+            Phone = contact.Phone,
+            Name = legalName.Value,
+            Locale = string.Empty,
+            TimeZone = string.Empty,
+            AcceptsNotifications = true,
+            Role = UserRole.Propietario.ToString()
+        }, ct);
 
         return owner.Id;
     }

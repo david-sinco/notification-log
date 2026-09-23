@@ -4,6 +4,7 @@ using Marten;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.RentalService.Application.Abstractions;
+using NotificationLog.RentalService.Application.Owners.Producers;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Visits;

@@ -13,7 +13,7 @@ using Wolverine.Runtime.Serialization;
 
 namespace NotificationLog.IdentityService.Infrastructure.Messaging;
 
-public static class RabbitMqMessagingExtensions
+internal static class RabbitMqMessagingExtensions
 {
     public const string UsersExchange = "identity.users";
     public const string VerificationCodesExchange = "identity.verification-codes";

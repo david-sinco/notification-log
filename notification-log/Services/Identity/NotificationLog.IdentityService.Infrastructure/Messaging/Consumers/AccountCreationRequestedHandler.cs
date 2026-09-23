@@ -13,13 +13,13 @@ public static class AccountCreationRequestedHandler
         => await handler.HandleAsync(
             new CreateAccountCommand(
                 Id: ParseId(message.UserId),
-                Identifier: message.Identifier,
+                Identifier: message.Email,
                 Phone: message.Phone,
                 Name: message.Name,
                 Locale: message.Locale,
                 TimeZone: message.TimeZone,
                 AcceptsNotifications: message.AcceptsNotifications,
-                Roles: [.. message.Roles.Select(ParseRole)]),
+                Roles: [ParseRole(message.Role)]),
             ct);
 
     private static Guid ParseId(string userId) =>
