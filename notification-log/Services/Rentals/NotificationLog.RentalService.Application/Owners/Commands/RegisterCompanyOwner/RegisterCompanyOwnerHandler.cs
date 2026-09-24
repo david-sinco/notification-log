@@ -5,7 +5,6 @@ using Domain.Shared.Authorization;
 using FluentValidation;
 using NotificationLog.Contracts.Identity;
 using NotificationLog.RentalService.Application.Owners.Producers;
-using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
@@ -14,18 +13,16 @@ namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterComp
 public sealed class RegisterCompanyOwnerHandler
 {
     private readonly IOwnerRepository _owners;
-    private readonly IOwnerReadModel _readModel;
     private readonly IAccountProvisioner _accounts;
     private readonly IUnitOfWork _uow;
     private readonly IValidator<RegisterCompanyOwnerCommand> _validator;
 
     public RegisterCompanyOwnerHandler(
         IOwnerRepository owners,
-        IOwnerReadModel readModel,
         IAccountProvisioner accounts,
         IUnitOfWork uow,
         IValidator<RegisterCompanyOwnerCommand> validator)
-        => (_owners, _readModel, _accounts, _uow, _validator) = (owners, readModel, accounts, uow, validator);
+        => (_owners, _accounts, _uow, _validator) = (owners, accounts, uow, validator);
 
     public async Task<Guid> HandleAsync(RegisterCompanyOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
@@ -37,7 +34,7 @@ public sealed class RegisterCompanyOwnerHandler
         var nit = Nit.Create(cmd.Nit);
         var contact = ContactInfo.Create(cmd.Email, cmd.Phone);
 
-        if (await _readModel.ExistsWithNitAsync(nit.Number, ct))
+        if (!await _owners.TryReserveCompanyAsync(ownerId, nit, ct))
             throw new AppValidationException("Ya existe un propietario con ese NIT.");
 
         var owner = Owner.RegisterCompany(ownerId, user.GetUserId(), legalName, nit, contact);

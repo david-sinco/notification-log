@@ -4,7 +4,6 @@ using Marten.Linq;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
 using NotificationLog.RentalService.Application.Owners.Queries.Filters;
-using NotificationLog.RentalService.Domain.Owners.Enums;
 
 namespace NotificationLog.RentalService.Infrastructure.ReadModels;
 
@@ -33,12 +32,6 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
 
     public async Task<OwnerDto?> GetAsync(Guid id, CancellationToken ct)
         => await _session.LoadAsync<OwnerView>(id, ct) is { } view ? ToDto(view) : null;
-
-    public Task<bool> ExistsWithDocumentAsync(DocumentType type, string number, CancellationToken ct)
-        => _session.Query<OwnerView>().AnyAsync(x => x.DocumentType == type && x.DocumentNumber == number, ct);
-
-    public Task<bool> ExistsWithNitAsync(string nit, CancellationToken ct)
-        => _session.Query<OwnerView>().AnyAsync(x => x.Nit == nit, ct);
 
     private static OwnerDto ToDto(OwnerView x) => new(
         x.Id,
