@@ -1,3 +1,4 @@
+using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
 namespace NotificationLog.RentalService.Domain.Owners;

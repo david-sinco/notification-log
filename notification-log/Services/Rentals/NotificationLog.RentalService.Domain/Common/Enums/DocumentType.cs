@@ -1,4 +1,4 @@
-namespace NotificationLog.RentalService.Domain.Owners.Enums;
+namespace NotificationLog.RentalService.Domain.Common.Enums;
 
 public enum DocumentType
 {

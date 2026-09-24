@@ -1,4 +1,4 @@
-using NotificationLog.RentalService.Domain.Owners.Enums;
+using NotificationLog.RentalService.Domain.Common.Enums;
 
 namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
 

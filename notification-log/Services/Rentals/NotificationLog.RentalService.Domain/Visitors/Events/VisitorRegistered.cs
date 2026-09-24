@@ -1,11 +1,10 @@
-using Domain.Shared.EventSourcing;
+﻿using Domain.Shared.EventSourcing;
 using NotificationLog.RentalService.Domain.Common.Enums;
 
-namespace NotificationLog.RentalService.Domain.Owners.Events;
+namespace NotificationLog.RentalService.Domain.Visitors.Events;
 
-public sealed record NaturalOwnerRegistered(
-    Guid OwnerId,
-    Guid CreatedBy,
+public sealed record VisitorRegistered(
+    Guid VisitorId,
     string FirstNames,
     string LastNames,
     DocumentType DocumentType,

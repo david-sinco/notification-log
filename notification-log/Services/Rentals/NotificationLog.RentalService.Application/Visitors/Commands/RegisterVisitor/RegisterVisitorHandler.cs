@@ -6,54 +6,56 @@ using NotificationLog.Contracts.Identity;
 using NotificationLog.RentalService.Application.Common.Producers;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Owners;
+using NotificationLog.RentalService.Domain.Visitors;
 using System.Security.Claims;
 
-namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
+namespace NotificationLog.RentalService.Application.Visitors.Commands.RegisterVisitor;
 
-public sealed class RegisterNaturalOwnerHandler
+public sealed class RegisterVisitorHandler
 {
-    private readonly IOwnerRepository _owners;
+    private readonly IVisitorRepository _visitorsRepo;
     private readonly IAccountProvisioner _accounts;
     private readonly IUnitOfWork _uow;
-    private readonly IValidator<RegisterNaturalOwnerCommand> _validator;
+    private readonly IValidator<RegisterVisitorCommand> _validator;
 
-    public RegisterNaturalOwnerHandler(
-        IOwnerRepository owners,
+    public RegisterVisitorHandler(
+        IVisitorRepository visitorsRepo,
         IAccountProvisioner accounts,
         IUnitOfWork uow,
-        IValidator<RegisterNaturalOwnerCommand> validator)
-        => (_owners, _accounts, _uow, _validator) = (owners, accounts, uow, validator);
+        IValidator<RegisterVisitorCommand> validator)
+        => (_visitorsRepo, _accounts, _uow, _validator) = (visitorsRepo, accounts, uow, validator);
 
-    public async Task<Guid> HandleAsync(RegisterNaturalOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
+    public async Task<Guid> HandleAsync(RegisterVisitorCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
-        var ownerId = await OwnerIdResolver.ResolveAsync(_owners, user, ct);
-
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
+
+        var visitorId = Guid.NewGuid();
 
         var name = PersonName.Create(cmd.FirstNames, cmd.LastNames);
         var document = IdentityDocument.Create(cmd.DocumentType, cmd.DocumentNumber);
         var contact = ContactInfo.Create(cmd.Email, cmd.Phone);
 
-        if (!await _owners.TryReserveNaturalAsync(ownerId, document, ct))
-            throw new AppValidationException("Ya existe un propietario con ese documento.");
+        if (!await _visitorsRepo.TryReserveVisitorAsync(visitorId, document, ct))
+            throw new AppValidationException("Ya existe un visitante con ese documento.");
 
-        var owner = Owner.RegisterNatural(ownerId, user.GetUserId(), name, document, contact);
+        var visitor = Visitor.RegisterVisitor(visitorId, name, document, contact);
 
-        await _owners.AppendAsync(owner, ct);
+
+        await _visitorsRepo.AppendAsync(visitor, ct);
         await _uow.SaveChangesAsync(ct);
 
         await _accounts.RequestAccountAsync(new AccountCreationRequested()
         {
-            UserId = owner.Id.ToString(),
+            UserId = visitorId.ToString(),
             Email = contact.Email,
             Phone = contact.Phone,
             Name = name.ToString(),
             Locale = string.Empty,
             TimeZone = string.Empty,
             AcceptsNotifications = true,
-            Role = UserRole.Propietario.ToString()
+            Role = UserRole.Visitor.ToString()
         }, ct);
 
-        return owner.Id;
+        return visitorId;
     }
 }

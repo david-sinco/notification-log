@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
 using Domain.Shared.Exceptions;
 
-namespace NotificationLog.RentalService.Domain.Owners.ValueObjects;
+namespace NotificationLog.RentalService.Domain.Common.ValueObjects;
 
 public sealed record ContactInfo
 {

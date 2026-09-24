@@ -46,5 +46,6 @@ app.MapListings();
 app.MapModeration();
 app.MapVisits();
 app.MapOwners();
+app.MapVisitors();
 
 app.Run();

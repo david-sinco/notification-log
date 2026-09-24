@@ -30,6 +30,8 @@ using NotificationLog.RentalService.Application.Processes;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Visits.Queries;
+using NotificationLog.RentalService.Application.Visitors.Commands.RegisterVisitor;
+using NotificationLog.RentalService.Application.Visitors.Queries;
 
 namespace NotificationLog.RentalService.Application;
 
@@ -63,6 +65,8 @@ public static class DependencyInjection
         services.AddScoped<RegisterCompanyOwnerHandler>();
         services.AddScoped<RegisterNaturalOwnerHandler>();
 
+        services.AddScoped<RegisterVisitorHandler>();
+
         services.AddScoped<AutoCompleteVisitHandler>();
         services.AddScoped<CancelVisitHandler>();
         services.AddScoped<ConfirmVisitHandler>();
@@ -76,6 +80,8 @@ public static class DependencyInjection
         services.AddScoped<GetListingByIdHandler>();
         services.AddScoped<GetOwnerByIdHandler>();
         services.AddScoped<ListOwnersHandler>();
+        services.AddScoped<GetVisitorByIdHandler>();
+        services.AddScoped<ListVisitorsHandler>();
         services.AddScoped<ListVisitsHandler>();
         services.AddScoped<GetVisitByIdHandler>();
 

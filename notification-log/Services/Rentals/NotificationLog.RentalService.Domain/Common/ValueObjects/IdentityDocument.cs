@@ -1,8 +1,8 @@
 using System.Text.RegularExpressions;
 using Domain.Shared.Exceptions;
-using NotificationLog.RentalService.Domain.Owners.Enums;
+using NotificationLog.RentalService.Domain.Common.Enums;
 
-namespace NotificationLog.RentalService.Domain.Owners.ValueObjects;
+namespace NotificationLog.RentalService.Domain.Common.ValueObjects;
 
 public sealed record IdentityDocument
 {

@@ -1,3 +1,4 @@
+using NotificationLog.RentalService.Domain.Common.Enums;
 using NotificationLog.RentalService.Domain.Owners.Enums;
 
 namespace NotificationLog.RentalService.Infrastructure.ReadModels;

@@ -1,5 +1,5 @@
 using FluentValidation;
-using NotificationLog.RentalService.Domain.Owners.ValueObjects;
+using NotificationLog.RentalService.Domain.Common.ValueObjects;
 
 namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 

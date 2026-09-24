@@ -25,9 +25,11 @@ internal static class MartenStoreConfiguration
         options.Projections.Add(new ListingViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new OwnerViewProjection(), ProjectionLifecycle.Inline);
+        options.Projections.Add(new VisitorViewProjection(), ProjectionLifecycle.Inline);
 
         options.Schema.For<PersonVerificationDocument>().Index(x => x.UserId);
         options.Schema.For<OwnerDocumentReservation>();
         options.Schema.For<OwnerNitReservation>();
+        options.Schema.For<VisitorDocumentReservation>();
     }
 }

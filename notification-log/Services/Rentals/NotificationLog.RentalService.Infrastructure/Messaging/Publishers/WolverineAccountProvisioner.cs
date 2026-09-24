@@ -1,6 +1,6 @@
 using Google.Protobuf.WellKnownTypes;
 using NotificationLog.Contracts.Identity;
-using NotificationLog.RentalService.Application.Owners.Producers;
+using NotificationLog.RentalService.Application.Common.Producers;
 using Wolverine;
 
 namespace NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
