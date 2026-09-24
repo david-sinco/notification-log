@@ -10,4 +10,4 @@ public sealed record CreateAccountCommand(
     string Locale,
     string TimeZone,
     bool AcceptsNotifications,
-    IReadOnlyList<UserRole> Roles);
+    UserRole Role);

@@ -8,10 +8,10 @@ public sealed record SignedInUser(
     string? Email,
     string? Phone,
     string SecurityStamp,
-    IReadOnlyList<string> Roles)
+    string? Role)
 {
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Email ?? Phone ?? Id.ToString() : Name;
 
     public static SignedInUser From(User user) =>
-        new(user.Id, user.Name, user.Email, user.Phone, user.SecurityStamp, user.Roles);
+        new(user.Id, user.Name, user.Email, user.Phone, user.SecurityStamp, user.Role?.ToString());
 }

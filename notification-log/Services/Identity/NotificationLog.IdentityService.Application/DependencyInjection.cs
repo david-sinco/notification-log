@@ -5,7 +5,7 @@ using NotificationLog.IdentityService.Application.Users.Commands.LockUser;
 using NotificationLog.IdentityService.Application.Users.Commands.RegisterAccount;
 using NotificationLog.IdentityService.Application.Users.Commands.RequestSignInCode;
 using NotificationLog.IdentityService.Application.Users.Commands.ResendVerificationCode;
-using NotificationLog.IdentityService.Application.Users.Commands.SetUserRoles;
+using NotificationLog.IdentityService.Application.Users.Commands.SetUserRole;
 using NotificationLog.IdentityService.Application.Users.Commands.SignIn;
 using NotificationLog.IdentityService.Application.Users.Commands.SignInWithCode;
 using NotificationLog.IdentityService.Application.Users.Commands.UnlockUser;
@@ -32,7 +32,7 @@ public static class DependencyInjection
         services.AddScoped<SignInHandler>();
         services.AddScoped<RequestSignInCodeHandler>();
         services.AddScoped<SignInWithCodeHandler>();
-        services.AddScoped<SetUserRolesHandler>();
+        services.AddScoped<SetUserRoleHandler>();
         services.AddScoped<LockUserHandler>();
         services.AddScoped<UnlockUserHandler>();
 

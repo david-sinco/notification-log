@@ -1,12 +1,11 @@
 using FluentValidation;
-using NotificationLog.RentalService.Application.Visitors.Commands.RegisterVisitor;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 
-namespace NotificationLog.RentalService.Application.VIsitors.Commands.RegisterVisitor;
+namespace NotificationLog.RentalService.Application.Visitors.Commands.CompleteVisitorProfile;
 
-internal sealed class RegisterVisitorValidator : AbstractValidator<RegisterVisitorCommand>
+internal sealed class CompleteVisitorProfileValidator : AbstractValidator<CompleteVisitorProfileCommand>
 {
-    public RegisterVisitorValidator()
+    public CompleteVisitorProfileValidator()
     {
         RuleFor(x => x.FirstNames).NotEmpty();
         RuleFor(x => x.LastNames).NotEmpty();

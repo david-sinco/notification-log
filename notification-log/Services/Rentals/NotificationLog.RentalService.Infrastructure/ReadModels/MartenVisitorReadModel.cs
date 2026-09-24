@@ -29,11 +29,14 @@ internal sealed class MartenVisitorReadModel : IVisitorReadModel
 
     private static VisitorDto ToDto(VisitorView x) => new(
         x.Id,
+        x.Status.ToString(),
+        x.DisplayName,
         x.FirstNames,
         x.LastNames,
-        x.DocumentType.ToString(),
+        x.DocumentType?.ToString(),
         x.DocumentNumber,
         x.Email,
         x.Phone,
-        x.RegisteredAt);
+        x.RegisteredAt,
+        x.ProfileCompletedAt);
 }

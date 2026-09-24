@@ -23,9 +23,9 @@ public sealed class UsersApiClient(HttpClient http)
         return (await response.Content.ReadFromJsonAsync<UserDto>(ApiJson.Options, ct))!;
     }
 
-    public async Task SetRolesAsync(Guid id, SetUserRolesRequest request, CancellationToken ct)
+    public async Task SetRoleAsync(Guid id, SetUserRoleRequest request, CancellationToken ct)
     {
-        var response = await http.PutAsJsonAsync($"/api/users/{id}/roles", request, ApiJson.Options, ct);
+        var response = await http.PutAsJsonAsync($"/api/users/{id}/role", request, ApiJson.Options, ct);
         await response.EnsureSuccessAsync(ct);
     }
 

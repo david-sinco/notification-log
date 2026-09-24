@@ -18,4 +18,5 @@ message UserCreated {
   string locale = 14;
   string time_zone = 15;
   bool accepts_notifications = 16;
+  string role = 17;
 }

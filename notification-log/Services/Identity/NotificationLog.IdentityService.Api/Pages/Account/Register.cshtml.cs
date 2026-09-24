@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using NotificationLog.IdentityService.Api.Connect;
 using NotificationLog.IdentityService.Application.Users.Commands.RegisterAccount;
 using NotificationLog.IdentityService.Domain.Users;
 
@@ -8,8 +9,10 @@ namespace NotificationLog.IdentityService.Api.Pages.Account;
 public sealed class RegisterModel : PageModel
 {
     private readonly RegisterAccountHandler _register;
+    private readonly RegistrationRoleResolver _roles;
 
-    public RegisterModel(RegisterAccountHandler register) => _register = register;
+    public RegisterModel(RegisterAccountHandler register, RegistrationRoleResolver roles)
+        => (_register, _roles) = (register, roles);
 
     [BindProperty]
     public string Identifier { get; set; } = string.Empty;
@@ -47,8 +50,10 @@ public sealed class RegisterModel : PageModel
             return Page();
         }
 
+        var role = await _roles.ResolveAsync(ReturnUrl, ct);
+
         var result = await _register.HandleAsync(
-            new RegisterAccountCommand(Identifier, Password, Name, Locale, TimeZone, AcceptsNotifications), ct);
+            new RegisterAccountCommand(Identifier, Password, Name, Locale, TimeZone, AcceptsNotifications, role), ct);
 
         if (!result.Succeeded)
         {

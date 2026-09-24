@@ -111,7 +111,8 @@ public sealed class IdentitySeeder : IHostedService
                     Permissions.Scopes.Phone,
                     Permissions.Scopes.Roles
                 },
-                Requirements = { Requirements.Features.ProofKeyForCodeExchange }
+                Requirements = { Requirements.Features.ProofKeyForCodeExchange },
+                Settings = { [OidcClientSettings.RegistrationRole] = client.RegistrationRole.ToString() }
             };
 
             foreach (var uri in client.RedirectUris)

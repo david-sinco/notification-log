@@ -1,3 +1,4 @@
+using Domain.Shared.Authorization;
 using Domain.Shared.Exceptions;
 using Microsoft.AspNetCore.Identity;
 using NotificationLog.IdentityService.Application.Abstractions;
@@ -67,13 +68,18 @@ internal sealed class IdentityUserSecurity : IUserSecurity
         await _users.ResetAccessFailedCountAsync(entity);
     }
 
-    public async Task SetRolesAsync(User user, IReadOnlyList<string> roles, CancellationToken ct)
+    public async Task SetRoleAsync(User user, UserRole role, CancellationToken ct)
     {
+        user.SetRole(role);
+
         var entity = await RequireAsync(user);
         var current = await _users.GetRolesAsync(entity);
+        var name = role.ToString();
 
-        await _users.RemoveFromRolesAsync(entity, current.Except(roles));
-        await _users.AddToRolesAsync(entity, roles.Except(current));
+        await _users.RemoveFromRolesAsync(entity, current.Where(existing => existing != name));
+
+        if (!current.Contains(name))
+            await _users.AddToRoleAsync(entity, name);
     }
 
     private async Task<ApplicationUser> RequireAsync(User user) =>

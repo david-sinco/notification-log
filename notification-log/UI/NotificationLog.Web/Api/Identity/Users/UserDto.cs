@@ -8,4 +8,4 @@ public sealed record UserDto(
     string? Phone,
     bool IsPhoneVerified,
     DateTimeOffset? LockedUntil,
-    IReadOnlyList<string> Roles);
+    string? Role);

@@ -59,8 +59,7 @@ public sealed class CreateAccountHandler
             await _users.UpdateAsync(user, ct);
         }
 
-        if (cmd.Roles.Count > 0)
-            await _security.SetRolesAsync(user, [.. cmd.Roles.Distinct().Select(role => role.ToString())], ct);
+        await _security.SetRoleAsync(user, cmd.Role, ct);
 
         await _events.PublishUserCreatedAsync(user, ct);
         await _uow.SaveChangesAsync(ct);

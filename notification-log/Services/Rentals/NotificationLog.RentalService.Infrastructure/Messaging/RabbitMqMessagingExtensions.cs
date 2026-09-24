@@ -11,6 +11,9 @@ namespace NotificationLog.RentalService.Infrastructure.Messaging;
 
 public static class RabbitMqMessagingExtensions
 {
+    private const string IdentityUsersExchange = "identity.users";
+    private const string IdentityUsersQueue = "rentals-identity-users";
+
     public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("rabbitmq")
@@ -22,10 +25,15 @@ public static class RabbitMqMessagingExtensions
             opts.Discovery.IncludeAssembly(typeof(RabbitMqMessagingExtensions).Assembly);
             opts.Policies.UseDurableLocalQueues();
 
-            opts.UseRabbitMq(new Uri(connectionString)).AutoProvision();
+            opts.UseRabbitMq(new Uri(connectionString))
+                .DeclareExchange(IdentityUsersExchange, exchange =>
+                {
+                    exchange.ExchangeType = ExchangeType.Fanout;
+                    exchange.BindQueue(IdentityUsersQueue);
+                })
+                .AutoProvision();
 
-            opts.ListenToRabbitQueue("rentals-person-verification")
-                .DefaultIncomingMessage<PersonVerificationChanged>()
+            opts.ListenToRabbitQueue(IdentityUsersQueue)
                 .UseProtobufSerialization();
 
             opts.PublishMessage<NotificationDispatchRequested>()

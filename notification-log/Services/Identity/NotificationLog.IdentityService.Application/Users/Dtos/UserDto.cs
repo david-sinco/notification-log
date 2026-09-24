@@ -10,7 +10,7 @@ public sealed record UserDto(
     string? Phone,
     bool IsPhoneVerified,
     DateTimeOffset? LockedUntil,
-    IReadOnlyList<string> Roles)
+    string? Role)
 {
     public static UserDto From(User user, DateTimeOffset now) =>
         new(user.Id,
@@ -20,5 +20,5 @@ public sealed record UserDto(
             user.Phone,
             user.IsPhoneConfirmed,
             user.IsLockedOut(now) ? user.LockedUntil : null,
-            user.Roles);
+            user.Role?.ToString());
 }

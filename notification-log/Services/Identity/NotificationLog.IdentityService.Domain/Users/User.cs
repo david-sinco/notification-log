@@ -1,3 +1,4 @@
+using Domain.Shared.Authorization;
 using Domain.Shared.Common;
 using Domain.Shared.Exceptions;
 using NotificationLog.IdentityService.Domain.Users.Enums;
@@ -7,8 +8,6 @@ namespace NotificationLog.IdentityService.Domain.Users;
 
 public sealed class User : AggregateRoot
 {
-    private readonly List<string> _roles = [];
-
     private User(Guid id) : base(id) { }
 
     public string Name { get; private set; } = string.Empty;
@@ -31,7 +30,7 @@ public sealed class User : AggregateRoot
 
     public DateTimeOffset? LockedUntil { get; private set; }
 
-    public IReadOnlyList<string> Roles => _roles;
+    public UserRole? Role { get; private set; }
 
     public bool IsVerified => IsEmailConfirmed || IsPhoneConfirmed;
 
@@ -74,7 +73,7 @@ public sealed class User : AggregateRoot
         bool acceptsNotifications,
         string securityStamp,
         DateTimeOffset? lockedUntil,
-        IEnumerable<string> roles)
+        UserRole? role)
     {
         var user = new User(id)
         {
@@ -87,10 +86,9 @@ public sealed class User : AggregateRoot
             TimeZone = timeZone,
             AcceptsNotifications = acceptsNotifications,
             SecurityStamp = securityStamp,
-            LockedUntil = lockedUntil
+            LockedUntil = lockedUntil,
+            Role = role
         };
-
-        user._roles.AddRange(roles);
 
         return user;
     }
@@ -152,6 +150,14 @@ public sealed class User : AggregateRoot
     }
 
     public bool IsLockedOut(DateTimeOffset now) => LockedUntil > now;
+
+    public void SetRole(UserRole role)
+    {
+        if (!Enum.IsDefined(role))
+            throw new DomainException("El rol no es válido.");
+
+        Role = role;
+    }
 
     private static void Ensure(string? error)
     {

@@ -1,3 +1,5 @@
+using Domain.Shared.Authorization;
+
 namespace NotificationLog.IdentityService.Infrastructure.Seeding;
 
 public sealed class ClientSeedOptions
@@ -8,4 +10,5 @@ public sealed class ClientSeedOptions
     public List<string> RedirectUris { get; init; } = [];
     public List<string> PostLogoutRedirectUris { get; init; } = [];
     public List<string> Scopes { get; init; } = [];
+    public UserRole RegistrationRole { get; init; } = UserRole.Visitor;
 }

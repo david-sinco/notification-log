@@ -1,3 +1,4 @@
+using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Application.Users.Common;
 using NotificationLog.IdentityService.Domain.Users;
 using NotificationLog.IdentityService.Domain.Users.Enums;
@@ -24,5 +25,5 @@ public interface IUserSecurity
 
     Task UnlockAsync(User user, CancellationToken ct);
 
-    Task SetRolesAsync(User user, IReadOnlyList<string> roles, CancellationToken ct);
+    Task SetRoleAsync(User user, UserRole role, CancellationToken ct);
 }

@@ -1,3 +1,4 @@
+using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Domain.Users;
 
 namespace NotificationLog.IdentityService.Infrastructure.Persistence;
@@ -17,7 +18,8 @@ internal static class UserMapping
             entity.AcceptsNotifications,
             entity.SecurityStamp ?? string.Empty,
             entity.LockoutEnd,
-            roles);
+            roles.Select(role => Enum.TryParse<UserRole>(role, out var parsed) ? parsed : (UserRole?)null)
+                .FirstOrDefault(role => role is not null));
 
     public static ApplicationUser ToEntity(User user) =>
         new(user.Id)

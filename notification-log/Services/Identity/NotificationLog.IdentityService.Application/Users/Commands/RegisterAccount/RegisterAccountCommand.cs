@@ -1,3 +1,5 @@
+using Domain.Shared.Authorization;
+
 namespace NotificationLog.IdentityService.Application.Users.Commands.RegisterAccount;
 
 public sealed record RegisterAccountCommand(
@@ -6,4 +8,5 @@ public sealed record RegisterAccountCommand(
     string Name,
     string Locale,
     string TimeZone,
-    bool AcceptsNotifications);
+    bool AcceptsNotifications,
+    UserRole Role);

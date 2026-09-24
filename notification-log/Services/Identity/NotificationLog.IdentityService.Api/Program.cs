@@ -15,6 +15,7 @@ builder.AddServiceDefaults();
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddConnect(builder.Configuration);
+builder.Services.AddScoped<RegistrationRoleResolver>();
 builder.Services.AddScopePolicies([OidcScope.Identity]);
 
 builder.Services.AddRazorPages();

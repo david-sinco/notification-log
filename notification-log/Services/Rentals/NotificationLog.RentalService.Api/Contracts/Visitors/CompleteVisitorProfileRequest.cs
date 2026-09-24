@@ -1,8 +1,8 @@
 using NotificationLog.RentalService.Domain.Common.Enums;
 
-namespace NotificationLog.RentalService.Application.Visitors.Commands.RegisterVisitor;
+namespace NotificationLog.RentalService.Api.Contracts.Visitors;
 
-public sealed record RegisterVisitorCommand(
+public sealed record CompleteVisitorProfileRequest(
     string FirstNames,
     string LastNames,
     DocumentType DocumentType,

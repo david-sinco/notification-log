@@ -27,7 +27,8 @@ internal sealed class WolverineUserEventPublisher : IUserEventPublisher
             Phone = user.VerifiedPhone,
             Locale = user.Locale,
             TimeZone = user.TimeZone,
-            AcceptsNotifications = user.AcceptsNotifications
+            AcceptsNotifications = user.AcceptsNotifications,
+            Role = user.Role?.ToString() ?? string.Empty
         });
 
     public async Task PublishVerificationChangedAsync(User user, CancellationToken ct) =>

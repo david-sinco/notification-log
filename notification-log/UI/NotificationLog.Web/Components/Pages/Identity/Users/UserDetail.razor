@@ -46,8 +46,8 @@ else if (user is not null)
                     <dd>@(user.Email ?? "—") @VerifiedLabel(user.Email, user.IsEmailVerified)</dd>
                     <dt>Teléfono</dt>
                     <dd>@(user.Phone ?? "—") @VerifiedLabel(user.Phone, user.IsPhoneVerified)</dd>
-                    <dt>Roles</dt>
-                    <dd>@(user.Roles.Count == 0 ? "—" : string.Join(", ", user.Roles))</dd>
+                    <dt>Rol</dt>
+                    <dd>@(user.Role ?? "—")</dd>
                     <dt>Bloqueo</dt>
                     <dd>@LockLabel(user.LockedUntil)</dd>
                 </dl>
@@ -57,16 +57,16 @@ else if (user is not null)
         <AuthorizeView Roles="@IdentityRoles.Administrador">
             <div class="col-lg-6">
                 <div class="surface-card mb-4">
-                    <h2 class="h6">Roles</h2>
+                    <h2 class="h6">Rol</h2>
                     @foreach (var role in AllRoles)
                     {
                         <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="role-@role"
-                                   checked="@selectedRoles.Contains(role)" @onchange="e => ToggleRole(role, (bool)e.Value!)" />
+                            <input class="form-check-input" type="radio" name="role" id="role-@role"
+                                   checked="@(selectedRole == role)" @onchange="() => selectedRole = role" />
                             <label class="form-check-label" for="role-@role">@role</label>
                         </div>
                     }
-                    <button class="btn btn-primary btn-sm mt-3" disabled="@busy" @onclick="SaveRolesAsync">Guardar roles</button>
+                    <button class="btn btn-primary btn-sm mt-3" disabled="@(busy || selectedRole is null)" @onclick="SaveRoleAsync">Guardar rol</button>
                 </div>
 
                 <div class="surface-card">
@@ -89,7 +89,7 @@ else if (user is not null)
 }
 
 @code {
-    private static readonly string[] AllRoles = [IdentityRoles.Administrador, IdentityRoles.Propietario, IdentityRoles.Moderador];
+    private static readonly string[] AllRoles = [IdentityRoles.Administrador, IdentityRoles.Moderador, IdentityRoles.Propietario, IdentityRoles.Visitor];
 
     [Parameter] public Guid? Id { get; set; }
 
@@ -102,7 +102,7 @@ else if (user is not null)
     private ApiException? actionError;
 
     private Guid currentUserId;
-    private HashSet<string> selectedRoles = [];
+    private string? selectedRole;
     private DateTime? lockUntil;
 
     private bool IsOwnProfile => user?.Id == currentUserId;
@@ -122,7 +122,7 @@ else if (user is not null)
         try
         {
             user = await Api.GetByIdAsync(Id ?? currentUserId, CancellationToken.None);
-            selectedRoles = [.. user.Roles];
+            selectedRole = user.Role;
             lockUntil = null;
             loadError = null;
         }
@@ -136,16 +136,8 @@ else if (user is not null)
         }
     }
 
-    private void ToggleRole(string role, bool selected)
-    {
-        if (selected)
-            selectedRoles.Add(role);
-        else
-            selectedRoles.Remove(role);
-    }
-
-    private Task SaveRolesAsync() =>
-        RunAsync(() => Api.SetRolesAsync(user!.Id, new SetUserRolesRequest([.. selectedRoles]), CancellationToken.None));
+    private Task SaveRoleAsync() =>
+        RunAsync(() => Api.SetRoleAsync(user!.Id, new SetUserRoleRequest(selectedRole!), CancellationToken.None));
 
     private Task LockAsync() =>
         RunAsync(() => Api.LockAsync(

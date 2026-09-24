@@ -1,4 +1,4 @@
-﻿using NotificationLog.AppHost;
+using NotificationLog.AppHost;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
@@ -101,6 +101,7 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Seed__Clients__0__Scopes__1", webClientConfig["Scopes:1"])
         .WithEnvironment("Seed__Clients__0__RedirectUris__0", webClientConfig["RedirectUris:0"])
         .WithEnvironment("Seed__Clients__0__PostLogoutRedirectUris__0", webClientConfig["PostLogoutRedirectUris:0"])
+        .WithEnvironment("Seed__Clients__0__RegistrationRole", webClientConfig["RegistrationRole"])
         .WithEnvironment("Seed__Clients__1__ClientId", scalarClientConfig["ClientId"])
         .WithEnvironment("Seed__Clients__1__Scopes__0", scalarClientConfig["Scopes:0"])
         .WithEnvironment("Seed__Clients__1__Scopes__1", scalarClientConfig["Scopes:1"])

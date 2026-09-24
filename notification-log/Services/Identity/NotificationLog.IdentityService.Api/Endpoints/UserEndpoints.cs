@@ -3,7 +3,7 @@ using API.Shared.Extensions;
 using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Api.Contracts.Users;
 using NotificationLog.IdentityService.Application.Users.Commands.LockUser;
-using NotificationLog.IdentityService.Application.Users.Commands.SetUserRoles;
+using NotificationLog.IdentityService.Application.Users.Commands.SetUserRole;
 using NotificationLog.IdentityService.Application.Users.Commands.UnlockUser;
 using NotificationLog.IdentityService.Application.Users.Dtos;
 using NotificationLog.IdentityService.Application.Users.Queries.GetUserById;
@@ -33,10 +33,10 @@ public static class UserEndpoints
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
-        group.MapPut("/{id:guid}/roles", SetRolesAsync)
+        group.MapPut("/{id:guid}/role", SetRoleAsync)
             .RequireAuthorization(AuthorizationExtensions.AdministradorPolicy)
-            .WithName("SetUserRoles")
-            .WithSummary("Reemplaza los roles de un usuario")
+            .WithName("SetUserRole")
+            .WithSummary("Asigna el rol de un usuario, reemplazando el que tenía")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound);
@@ -74,14 +74,14 @@ public static class UserEndpoints
         CancellationToken ct)
         => Results.Ok(await handler.HandleAsync(new GetUserByIdQuery(id), user, ct));
 
-    private static async Task<IResult> SetRolesAsync(
+    private static async Task<IResult> SetRoleAsync(
         Guid id,
-        SetUserRolesRequest body,
+        SetUserRoleRequest body,
         ClaimsPrincipal user,
-        SetUserRolesHandler handler,
+        SetUserRoleHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new SetUserRolesCommand(id, body.Roles), user, ct);
+        await handler.HandleAsync(new SetUserRoleCommand(id, body.Role), user, ct);
 
         return Results.NoContent();
     }

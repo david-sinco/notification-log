@@ -31,7 +31,7 @@ public static class OidcPrincipalFactory
             .SetClaim(Claims.Email, user.Email)
             .SetClaim(Claims.PhoneNumber, user.Phone)
             .SetClaim(OidcClaims.SecurityStamp, user.SecurityStamp)
-            .SetClaims(Claims.Role, [.. user.Roles]);
+            .SetClaim(Claims.Role, user.Role);
 
         identity.SetScopes(scopes);
         identity.SetResources(resources);

@@ -1,3 +1,4 @@
+using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Application.Abstractions;
 using NotificationLog.IdentityService.Application.Users.Common;
 using NotificationLog.IdentityService.Domain.Users;
@@ -36,6 +37,7 @@ public sealed class RegisterAccountHandler
             user = User.Register(Guid.NewGuid(), login, name, cmd.Locale, cmd.TimeZone, cmd.AcceptsNotifications);
 
             await _users.AddAsync(user, ct);
+            await _security.SetRoleAsync(user, cmd.Role, ct);
         }
         else
         {
@@ -55,7 +57,8 @@ public sealed class RegisterAccountHandler
     }
 
     private static string? Validate(string name, RegisterAccountCommand cmd) =>
-        AccountPolicy.ValidateName(name)
+        (cmd.Role is UserRole.Visitor or UserRole.Propietario ? null : "Solo se pueden crear cuentas de visitante o de propietario.")
+        ?? AccountPolicy.ValidateName(name)
         ?? AccountPolicy.ValidateLocale(cmd.Locale)
         ?? AccountPolicy.ValidateTimeZone(cmd.TimeZone)
         ?? AccountPolicy.ValidateConsent(cmd.AcceptsNotifications)

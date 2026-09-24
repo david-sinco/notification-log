@@ -19,7 +19,7 @@ public static class AccountCreationRequestedHandler
                 Locale: message.Locale,
                 TimeZone: message.TimeZone,
                 AcceptsNotifications: message.AcceptsNotifications,
-                Roles: [ParseRole(message.Role)]),
+                Role: ParseRole(message.Role)),
             ct);
 
     private static Guid ParseId(string userId) =>

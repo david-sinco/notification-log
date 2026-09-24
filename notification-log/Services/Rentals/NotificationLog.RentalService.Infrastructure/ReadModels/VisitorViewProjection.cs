@@ -1,6 +1,7 @@
 using Domain.Shared.EventSourcing;
 using JasperFx.Events;
 using Marten.Events.Aggregation;
+using NotificationLog.RentalService.Domain.Visitors.Enums;
 using NotificationLog.RentalService.Domain.Visitors.Events;
 using NotificationLog.RentalService.Infrastructure.DecisionProjections;
 
@@ -9,19 +10,36 @@ namespace NotificationLog.RentalService.Infrastructure.ReadModels;
 public sealed class VisitorViewProjection : SingleStreamProjection<VisitorView, Guid>
 {
     public override VisitorView? Evolve(VisitorView? snapshot, Guid id, IEvent e)
-        => e.Data switch
+    {
+        var at = EventTime.Of((IDomainEvent)e.Data);
+
+        switch (e.Data)
         {
-            VisitorRegistered r => new VisitorView
-            {
-                Id = id,
-                FirstNames = r.FirstNames,
-                LastNames = r.LastNames,
-                DocumentType = r.DocumentType,
-                DocumentNumber = r.DocumentNumber,
-                Email = r.Email,
-                Phone = r.Phone,
-                RegisteredAt = EventTime.Of((IDomainEvent)e.Data)
-            },
-            _ => snapshot
-        };
+            case VisitorRegistered r:
+                return new VisitorView
+                {
+                    Id = id,
+                    Status = VisitorStatus.PendingProfile,
+                    DisplayName = r.Name,
+                    Email = r.Email,
+                    Phone = r.Phone,
+                    RegisteredAt = at
+                };
+
+            case VisitorProfileCompleted c when snapshot is not null:
+                snapshot.Status = VisitorStatus.Registered;
+                snapshot.DisplayName = $"{c.FirstNames} {c.LastNames}";
+                snapshot.FirstNames = c.FirstNames;
+                snapshot.LastNames = c.LastNames;
+                snapshot.DocumentType = c.DocumentType;
+                snapshot.DocumentNumber = c.DocumentNumber;
+                snapshot.Email = c.Email;
+                snapshot.Phone = c.Phone;
+                snapshot.ProfileCompletedAt = at;
+                return snapshot;
+
+            default:
+                return snapshot;
+        }
+    }
 }
