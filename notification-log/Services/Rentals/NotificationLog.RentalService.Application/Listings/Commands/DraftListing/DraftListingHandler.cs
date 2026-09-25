@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using Domain.Shared.Authorization;
+using Domain.Shared.Common;
 using FluentValidation;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;

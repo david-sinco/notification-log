@@ -14,8 +14,6 @@ public sealed class ApproveListingHandler(IListingRepository listings, IUnitOfWo
 
     public async Task HandleAsync(ApproveListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
-        ListingAccess.EnsureStaff(user);
-
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
 
         listing.Approve(user.GetUserId(), _time.GetUtcNow());

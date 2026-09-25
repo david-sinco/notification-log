@@ -24,7 +24,7 @@ public sealed class ChangeListingPriceHandler(
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        Listing.EnsureCanManage(listing, user);
 
         listing.ChangePrice(Money.Create(cmd.Price), _time.GetUtcNow());
 

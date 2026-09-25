@@ -24,7 +24,7 @@ public sealed class CloseListingHandler(
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        Listing.EnsureCanManage(listing, user);
 
         listing.Close(Money.Create(cmd.FinalPrice), cmd.SignedOn, _time.GetUtcNow());
 

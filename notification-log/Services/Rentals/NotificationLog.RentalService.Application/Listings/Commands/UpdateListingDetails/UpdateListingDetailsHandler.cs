@@ -23,7 +23,7 @@ public sealed class UpdateListingDetailsHandler(
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        Listing.EnsureCanManage(listing, user);
 
         var details = PropertyDetails.Create(
             cmd.Type,

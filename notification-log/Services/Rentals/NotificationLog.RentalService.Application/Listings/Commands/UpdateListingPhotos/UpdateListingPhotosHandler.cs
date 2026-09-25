@@ -22,7 +22,7 @@ public sealed class UpdateListingPhotosHandler(
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        Listing.EnsureCanManage(listing, user);
 
         listing.UpdatePhotos(cmd.Photos.Select(Photo.Create).ToList());
 

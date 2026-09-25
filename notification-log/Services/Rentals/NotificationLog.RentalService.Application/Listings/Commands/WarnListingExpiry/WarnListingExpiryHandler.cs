@@ -22,7 +22,7 @@ public sealed class WarnListingExpiryHandler(IListingRepository listings, INotif
 
         await _notifications.DispatchAsync(
             NotificationKeys.ListingExpiresSoon,
-            ListingAccess.HostOf(listing),
+            Listing.HostOf(listing),
             new Dictionary<string, string>
             {
                 ["listing_id"] = listing.Id.ToString(),

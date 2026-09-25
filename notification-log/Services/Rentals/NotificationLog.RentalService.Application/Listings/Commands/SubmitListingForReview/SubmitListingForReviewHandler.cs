@@ -13,7 +13,7 @@ public sealed class SubmitListingForReviewHandler(IListingRepository listings, I
     public async Task HandleAsync(SubmitListingForReviewCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        Listing.EnsureCanManage(listing, user);
 
         listing.SubmitForReview();
 

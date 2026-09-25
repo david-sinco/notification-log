@@ -1,16 +1,15 @@
 using System.Security.Claims;
 using Application.Shared.Common;
 using Domain.Shared.Authorization;
+using Domain.Shared.Common;
 using NotificationLog.RentalService.Application.Visitors.Queries.Dtos;
 using NotificationLog.RentalService.Domain.Visitors;
 
 namespace NotificationLog.RentalService.Application.Visitors.Queries;
 
-public sealed class GetVisitorByIdHandler
+public sealed class GetVisitorByIdHandler(IVisitorReadModel visitors)
 {
-    private readonly IVisitorReadModel _visitors;
-
-    public GetVisitorByIdHandler(IVisitorReadModel visitors) => _visitors = visitors;
+    private readonly IVisitorReadModel _visitors = visitors;
 
     public async Task<VisitorDto> HandleAsync(Guid id, ClaimsPrincipal user, CancellationToken ct)
     {

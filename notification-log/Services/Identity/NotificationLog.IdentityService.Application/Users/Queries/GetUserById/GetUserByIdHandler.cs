@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Application.Shared.Common;
 using Domain.Shared.Authorization;
+using Domain.Shared.Common;
 using NotificationLog.IdentityService.Application.Users.Dtos;
 using NotificationLog.IdentityService.Domain.Users;
 

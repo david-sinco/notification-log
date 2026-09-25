@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Domain.Shared.Exceptions;
+using Domain.Shared.Common;
 
 namespace API.Shared.Exceptions;
 

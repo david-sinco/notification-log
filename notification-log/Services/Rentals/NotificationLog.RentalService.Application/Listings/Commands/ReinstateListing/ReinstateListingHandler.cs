@@ -14,8 +14,6 @@ public sealed class ReinstateListingHandler(IListingRepository listings, IUnitOf
 
     public async Task HandleAsync(ReinstateListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
-        ListingAccess.EnsureStaff(user);
-
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
 
         listing.Reinstate(user.GetUserId(), _time.GetUtcNow());

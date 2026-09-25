@@ -13,7 +13,7 @@ public sealed class ResumeListingHandler(IListingRepository listings, IUnitOfWor
     public async Task HandleAsync(ResumeListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        Listing.EnsureCanManage(listing, user);
 
         listing.Resume();
 

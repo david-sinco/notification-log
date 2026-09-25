@@ -1,16 +1,15 @@
 using System.Security.Claims;
 using Application.Shared.Common;
 using Domain.Shared.Authorization;
+using Domain.Shared.Common;
 using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
 using NotificationLog.RentalService.Domain.Owners;
 
 namespace NotificationLog.RentalService.Application.Owners.Queries;
 
-public sealed class GetOwnerByIdHandler
+public sealed class GetOwnerByIdHandler(IOwnerReadModel owners)
 {
-    private readonly IOwnerReadModel _owners;
-
-    public GetOwnerByIdHandler(IOwnerReadModel owners) => _owners = owners;
+    private readonly IOwnerReadModel _owners = owners;
 
     public async Task<OwnerDto> HandleAsync(Guid id, ClaimsPrincipal user, CancellationToken ct)
     {

@@ -1,11 +1,13 @@
+using Domain.Shared.Authorization;
 using Domain.Shared.Common;
 using Domain.Shared.EventSourcing;
 using Domain.Shared.Exceptions;
+using NotificationLog.RentalService.Domain.Common;
+using NotificationLog.RentalService.Domain.Common.ValueObjects;
+using NotificationLog.RentalService.Domain.Listings.Enums;
 using NotificationLog.RentalService.Domain.Listings.Events;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
-using NotificationLog.RentalService.Domain.Listings.Enums;
-using NotificationLog.RentalService.Domain.Common.ValueObjects;
-using NotificationLog.RentalService.Domain.Common;
+using System.Security.Claims;
 
 namespace NotificationLog.RentalService.Domain.Listings;
 
@@ -349,4 +351,15 @@ public sealed class Listing : AggregateRoot
 
     private static DateTimeOffset OccurredAt(DomainEvent domainEvent)
         => new(DateTime.SpecifyKind(domainEvent.OccurredOn, DateTimeKind.Utc));
+
+    public static Guid HostOf(Listing listing) => listing.OwnerId;
+
+    public static void EnsureCanManage(Listing listing, ClaimsPrincipal user)
+    {
+        if (user.IsAdministrador() || user.IsModerador())
+            return;
+
+        if (!user.IsPropietario() || listing.OwnerId != user.GetUserId())
+            throw new ForbiddenException("No tienes permiso para gestionar esta publicación.");
+    }
 }

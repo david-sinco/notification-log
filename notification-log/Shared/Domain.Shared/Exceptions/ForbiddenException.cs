@@ -1,4 +1,4 @@
-namespace Application.Shared.Common;
+namespace Domain.Shared.Common;
 
 public sealed class ForbiddenException : Exception
 {

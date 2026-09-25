@@ -38,8 +38,6 @@ public static class DependencyInjection
 
         services.TryAddSingleton(TimeProvider.System);
 
-        services.AddScoped<ListingAccess>();
-
         services.AddScoped<ApproveListingHandler>();
         services.AddScoped<ChangeListingPriceHandler>();
         services.AddScoped<CloseListingHandler>();

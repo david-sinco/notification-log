@@ -21,8 +21,6 @@ public sealed class RejectListingHandler(
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
-        ListingAccess.EnsureStaff(user);
-
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
 
         listing.Reject(user.GetUserId(), cmd.Reasons);

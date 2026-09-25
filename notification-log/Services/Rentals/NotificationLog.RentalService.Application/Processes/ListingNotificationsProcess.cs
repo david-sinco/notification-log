@@ -34,6 +34,6 @@ public sealed class ListingNotificationsProcess
         var data = extra.ToDictionary(item => item.Key, item => item.Value);
         data["listing_id"] = listingId.ToString();
 
-        await _notifications.DispatchAsync(key, ListingAccess.HostOf(listing), data, ct);
+        await _notifications.DispatchAsync(key, Listing.HostOf(listing), data, ct);
     }
 }

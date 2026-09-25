@@ -20,8 +20,6 @@ public sealed class SuspendListingHandler(
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
-        ListingAccess.EnsureStaff(user);
-
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
 
         listing.Suspend(cmd.Reason);
