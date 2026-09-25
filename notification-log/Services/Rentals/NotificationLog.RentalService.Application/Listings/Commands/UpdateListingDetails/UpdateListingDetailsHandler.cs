@@ -3,9 +3,9 @@ using Application.Shared.Abstractions;
 using Application.Shared.Common;
 using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
+using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
-using NotificationLog.RentalService.Domain.Shared;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 

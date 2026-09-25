@@ -3,8 +3,9 @@ using Domain.Shared.EventSourcing;
 using Domain.Shared.Exceptions;
 using NotificationLog.RentalService.Domain.Listings.Events;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
-using NotificationLog.RentalService.Domain.Shared;
 using NotificationLog.RentalService.Domain.Listings.Enums;
+using NotificationLog.RentalService.Domain.Common.ValueObjects;
+using NotificationLog.RentalService.Domain.Common;
 
 namespace NotificationLog.RentalService.Domain.Listings;
 

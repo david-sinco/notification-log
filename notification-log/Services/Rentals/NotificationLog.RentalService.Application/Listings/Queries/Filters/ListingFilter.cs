@@ -1,5 +1,4 @@
 using NotificationLog.RentalService.Domain.Listings.Enums;
-using NotificationLog.RentalService.Domain.Shared;
 
 namespace NotificationLog.RentalService.Application.Listings.Queries.Filters;
 

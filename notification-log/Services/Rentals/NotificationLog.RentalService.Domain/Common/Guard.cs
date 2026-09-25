@@ -1,6 +1,6 @@
 using Domain.Shared.Exceptions;
 
-namespace NotificationLog.RentalService.Domain.Shared;
+namespace NotificationLog.RentalService.Domain.Common;
 
 internal static class Guard
 {

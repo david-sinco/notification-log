@@ -5,7 +5,6 @@ using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.Filters;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.Enums;
-using NotificationLog.RentalService.Domain.Shared;
 
 namespace NotificationLog.RentalService.Api.Endpoints;
 

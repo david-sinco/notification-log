@@ -1,7 +1,7 @@
 using System.Globalization;
 using Domain.Shared.Exceptions;
 
-namespace NotificationLog.RentalService.Domain.Shared;
+namespace NotificationLog.RentalService.Domain.Common.ValueObjects;
 
 public sealed record Money
 {

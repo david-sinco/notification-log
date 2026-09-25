@@ -20,10 +20,7 @@ internal static class MartenStoreConfiguration
         options.Events.AddEventTypes(typeof(Listing).Assembly.GetTypes()
             .Where(type => type is { IsAbstract: false, IsClass: true } && typeof(IDomainEvent).IsAssignableFrom(type)));
 
-        options.Projections.Add(new VisitDecisionProjection(), ProjectionLifecycle.Inline);
-
         options.Projections.Add(new ListingViewProjection(), ProjectionLifecycle.Inline);
-        options.Projections.Add(new VisitViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new OwnerViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitorViewProjection(), ProjectionLifecycle.Inline);
 

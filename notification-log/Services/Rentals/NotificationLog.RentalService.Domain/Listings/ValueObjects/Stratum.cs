@@ -1,6 +1,6 @@
 using Domain.Shared.Exceptions;
 
-namespace NotificationLog.RentalService.Domain.Shared;
+namespace NotificationLog.RentalService.Domain.Listings.ValueObjects;
 
 public sealed record Stratum
 {

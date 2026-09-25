@@ -1,7 +1,6 @@
 using FluentValidation;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
-using NotificationLog.RentalService.Domain.Shared;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 

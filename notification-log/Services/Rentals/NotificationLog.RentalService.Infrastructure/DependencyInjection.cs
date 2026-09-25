@@ -6,11 +6,9 @@ using Microsoft.Extensions.DependencyInjection;
 using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
-using NotificationLog.RentalService.Application.Visits.Queries;
 using NotificationLog.RentalService.Application.Visitors.Queries;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
-using NotificationLog.RentalService.Domain.Visits;
 using NotificationLog.RentalService.Domain.Visitors;
 using NotificationLog.RentalService.Infrastructure.DecisionProjections;
 using NotificationLog.RentalService.Infrastructure.IdentityReplica;
@@ -42,16 +40,12 @@ public static class DependencyInjection
         services.AddScoped<AggregateStreams>();
         services.AddScoped<IUnitOfWork, MartenUnitOfWork>();
         services.AddScoped<IListingRepository, MartenListingRepository>();
-        services.AddScoped<IVisitRepository, MartenVisitRepository>();
         services.AddScoped<IOwnerRepository, MartenOwnerRepository>();
         services.AddScoped<IVisitorRepository, MartenVisitorRepository>();
 
-        services.AddScoped<ISoftRuleChecks, MartenSoftRuleChecks>();
-        services.AddScoped<IProcessLookups, MartenProcessLookups>();
         services.AddScoped<IIdentityReplica, MartenIdentityReplica>();
 
         services.AddScoped<IListingReadModel, MartenListingReadModel>();
-        services.AddScoped<IVisitReadModel, MartenVisitReadModel>();
         services.AddScoped<IOwnerReadModel, MartenOwnerReadModel>();
         services.AddScoped<IVisitorReadModel, MartenVisitorReadModel>();
 

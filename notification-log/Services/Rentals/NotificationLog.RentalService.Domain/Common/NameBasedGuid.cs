@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace NotificationLog.RentalService.Domain.Shared;
+namespace NotificationLog.RentalService.Domain.Common;
 
 internal static class NameBasedGuid
 {

@@ -1,6 +1,6 @@
 using Domain.Shared.Exceptions;
-using NotificationLog.RentalService.Domain.Shared;
 using NotificationLog.RentalService.Domain.Listings.Enums;
+using NotificationLog.RentalService.Domain.Common.ValueObjects;
 
 namespace NotificationLog.RentalService.Domain.Listings.ValueObjects;
 

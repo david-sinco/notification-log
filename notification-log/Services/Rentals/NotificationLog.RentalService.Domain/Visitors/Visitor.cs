@@ -1,8 +1,8 @@
 using Domain.Shared.Common;
 using Domain.Shared.EventSourcing;
 using Domain.Shared.Exceptions;
+using NotificationLog.RentalService.Domain.Common;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
-using NotificationLog.RentalService.Domain.Shared;
 using NotificationLog.RentalService.Domain.Visitors.Enums;
 using NotificationLog.RentalService.Domain.Visitors.Events;
 

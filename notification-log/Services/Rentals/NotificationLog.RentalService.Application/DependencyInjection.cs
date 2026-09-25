@@ -18,18 +18,9 @@ using NotificationLog.RentalService.Application.Listings.Commands.WarnListingExp
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
-using NotificationLog.RentalService.Application.Visits.Commands.AutoCompleteVisit;
-using NotificationLog.RentalService.Application.Visits.Commands.CancelVisit;
-using NotificationLog.RentalService.Application.Visits.Commands.ConfirmVisit;
-using NotificationLog.RentalService.Application.Visits.Commands.DeclineVisit;
-using NotificationLog.RentalService.Application.Visits.Commands.ExpireVisitRequest;
-using NotificationLog.RentalService.Application.Visits.Commands.ReportVisitOutcome;
-using NotificationLog.RentalService.Application.Visits.Commands.RequestVisit;
-using NotificationLog.RentalService.Application.Visits.Commands.SendVisitReminder;
 using NotificationLog.RentalService.Application.Processes;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
-using NotificationLog.RentalService.Application.Visits.Queries;
 using NotificationLog.RentalService.Application.Visitors.Commands.CompleteVisitorProfile;
 using NotificationLog.RentalService.Application.Visitors.Queries;
 
@@ -67,26 +58,14 @@ public static class DependencyInjection
 
         services.AddScoped<CompleteVisitorProfileHandler>();
 
-        services.AddScoped<AutoCompleteVisitHandler>();
-        services.AddScoped<CancelVisitHandler>();
-        services.AddScoped<ConfirmVisitHandler>();
-        services.AddScoped<DeclineVisitHandler>();
-        services.AddScoped<ExpireVisitRequestHandler>();
-        services.AddScoped<ReportVisitOutcomeHandler>();
-        services.AddScoped<RequestVisitHandler>();
-        services.AddScoped<SendVisitReminderHandler>();
-
         services.AddScoped<ListListingsHandler>();
         services.AddScoped<GetListingByIdHandler>();
         services.AddScoped<GetOwnerByIdHandler>();
         services.AddScoped<ListOwnersHandler>();
         services.AddScoped<GetVisitorByIdHandler>();
         services.AddScoped<ListVisitorsHandler>();
-        services.AddScoped<ListVisitsHandler>();
-        services.AddScoped<GetVisitByIdHandler>();
 
         services.AddScoped<ListingLifecycleProcess>();
-        services.AddScoped<VisitProcess>();
         services.AddScoped<ListingNotificationsProcess>();
         services.AddScoped<ProcessRouter>();
 
