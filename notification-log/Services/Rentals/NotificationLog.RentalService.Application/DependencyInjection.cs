@@ -16,7 +16,6 @@ using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingF
 using NotificationLog.RentalService.Application.Listings.Commands.SuspendListing;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
-using NotificationLog.RentalService.Application.Listings.Commands.WarnListingExpiry;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
@@ -52,7 +51,6 @@ public static class DependencyInjection
         services.AddScoped<SuspendListingHandler>();
         services.AddScoped<UpdateListingDetailsHandler>();
         services.AddScoped<UpdateListingPhotosHandler>();
-        services.AddScoped<WarnListingExpiryHandler>();
         services.AddScoped<WithdrawListingHandler>();
 
         services.AddScoped<RegisterCompanyOwnerHandler>();
