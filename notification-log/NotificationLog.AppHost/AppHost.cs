@@ -41,14 +41,28 @@ var webClientSecret = builder.AddParameter(
     secret: true,
     persist: true);
 
+var portalClientSecret = builder.AddParameter(
+    "portal-client-secret",
+    new GenerateParameterDefault { MinLength = 32, Special = false },
+    secret: true,
+    persist: true);
+
+var portalAuthSecret = builder.AddParameter(
+    "portal-auth-secret",
+    new GenerateParameterDefault { MinLength = 32, Special = false },
+    secret: true,
+    persist: true);
+
 var oidcConfig = builder.Configuration.GetSection("Oidc");
 var webClientConfig = builder.Configuration.GetSection("WebClient");
 var scalarClientConfig = builder.Configuration.GetSection("ScalarClient");
+var portalClientConfig = builder.Configuration.GetSection("PortalClient");
 
 var notification = AddNotification();
 var identity = AddIdentity();
 var rental = AddRental();
 AddWeb();
+AddPortal();
 AddDocs();
 
 builder.Build().Run();
@@ -107,6 +121,12 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Seed__Clients__1__Scopes__1", scalarClientConfig["Scopes:1"])
         .WithEnvironment("Seed__Clients__1__Scopes__2", scalarClientConfig["Scopes:2"])
         .WithEnvironment("Seed__Clients__1__RedirectUris__0", scalarClientConfig["RedirectUris:0"])
+        .WithEnvironment("Seed__Clients__2__ClientId", portalClientConfig["ClientId"])
+        .WithEnvironment("Seed__Clients__2__ClientSecret", portalClientSecret)
+        .WithEnvironment("Seed__Clients__2__Scopes__0", portalClientConfig["Scopes:0"])
+        .WithEnvironment("Seed__Clients__2__RedirectUris__0", portalClientConfig["RedirectUris:0"])
+        .WithEnvironment("Seed__Clients__2__PostLogoutRedirectUris__0", portalClientConfig["PostLogoutRedirectUris:0"])
+        .WithEnvironment("Seed__Clients__2__RegistrationRole", portalClientConfig["RegistrationRole"])
         .WithEnvironment("Cors__Origins__0", scalarClientConfig["Origins:0"])
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
@@ -138,6 +158,22 @@ void AddWeb() =>
         .WithEnvironment("Identity__ClientId", webClientConfig["ClientId"])
         .WithEnvironment("Identity__ClientSecret", webClientSecret)
         .WithHttpsUrlsOnly()
+        .WithParentRelationship(ui);
+
+void AddPortal() =>
+    builder.AddJavaScriptApp("portal", "../UI/portal")
+        .WithNpm()
+        .WithHttpEndpoint(port: 3100, env: "PORT")
+        .WithExternalHttpEndpoints()
+        .WithReference(rental)
+        .WaitFor(rental)
+        .WaitFor(identity)
+        .WithEnvironment("AUTH_URL", portalClientConfig["Url"])
+        .WithEnvironment("AUTH_SECRET", portalAuthSecret)
+        .WithEnvironment("AUTH_TRUST_HOST", "true")
+        .WithEnvironment("IDENTITY_ISSUER", oidcConfig["Issuer"])
+        .WithEnvironment("PORTAL_CLIENT_ID", portalClientConfig["ClientId"])
+        .WithEnvironment("PORTAL_CLIENT_SECRET", portalClientSecret)
         .WithParentRelationship(ui);
 
 void AddDocs() =>

@@ -22,8 +22,14 @@
 
 ## Web
 
-- [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro) y en `Web/wwwroot/app.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
+- [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro), en `Web/wwwroot/app.css` y en `UI/portal/app/globals.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
 - [ ] Página propia de acceso denegado: `/authentication/access-denied` todavía responde texto plano.
+
+## Portal (Next.js)
+
+- [ ] Primera foto en `ListingSummaryDto` para que las tarjetas del catálogo muestren imagen en lugar del logo.
+- [ ] Renovar el access token con refresh token; hoy, cuando vence (1 h), la sesión del portal termina y hay que volver a iniciar sesión (Identity la recuerda, así que es solo una redirección).
+- [ ] El catálogo público devuelve `ListingDto` completo (incluye dirección y `OwnerId`); decidir qué datos se muestran sin iniciar sesión.
 
 ## Integración y negocio
 
