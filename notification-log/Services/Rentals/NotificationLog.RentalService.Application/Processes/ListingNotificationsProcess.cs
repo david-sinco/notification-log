@@ -1,6 +1,6 @@
 using Domain.Shared.EventSourcing;
-using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Application.Common;
+using NotificationLog.RentalService.Application.Common.Producers;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.Events;
 
@@ -9,11 +9,11 @@ namespace NotificationLog.RentalService.Application.Processes;
 public sealed class ListingNotificationsProcess
 {
     private readonly IListingRepository _listings;
-    private readonly INotificationDispatcher _notifications;
+    private readonly INotificationProducer _notifications;
 
     public ListingNotificationsProcess(
         IListingRepository listings,
-        INotificationDispatcher notifications)
+        INotificationProducer notifications)
         => (_listings, _notifications) = (listings, notifications);
 
     public Task NotifyAsync(Guid streamId, IDomainEvent domainEvent, CancellationToken ct) => domainEvent switch
@@ -34,6 +34,6 @@ public sealed class ListingNotificationsProcess
         var data = extra.ToDictionary(item => item.Key, item => item.Value);
         data["listing_id"] = listingId.ToString();
 
-        await _notifications.DispatchAsync(key, Listing.HostOf(listing), data, ct);
+        await _notifications.NotifyAsync(key, Listing.HostOf(listing), data, ct);
     }
 }

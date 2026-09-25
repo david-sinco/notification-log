@@ -1,15 +1,15 @@
-using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Application.Common;
+using NotificationLog.RentalService.Application.Common.Producers;
 using NotificationLog.RentalService.Application.Processes;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.Enums;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.WarnListingExpiry;
 
-public sealed class WarnListingExpiryHandler(IListingRepository listings, INotificationDispatcher notifications)
+public sealed class WarnListingExpiryHandler(IListingRepository listings, INotificationProducer notifications)
 {
     private readonly IListingRepository _listings = listings;
-    private readonly INotificationDispatcher _notifications = notifications;
+    private readonly INotificationProducer _notifications = notifications;
 
     public async Task HandleAsync(WarnListingExpiryCommand cmd, CancellationToken ct)
     {
@@ -20,7 +20,7 @@ public sealed class WarnListingExpiryHandler(IListingRepository listings, INotif
             || listing.Status is not (ListingStatus.Published or ListingStatus.Paused))
             return;
 
-        await _notifications.DispatchAsync(
+        await _notifications.NotifyAsync(
             NotificationKeys.ListingExpiresSoon,
             Listing.HostOf(listing),
             new Dictionary<string, string>

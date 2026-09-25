@@ -43,14 +43,12 @@ public static class DependencyInjection
         services.AddScoped<IOwnerRepository, MartenOwnerRepository>();
         services.AddScoped<IVisitorRepository, MartenVisitorRepository>();
 
-        services.AddScoped<IIdentityReplica, MartenIdentityReplica>();
-
         services.AddScoped<IListingReadModel, MartenListingReadModel>();
         services.AddScoped<IOwnerReadModel, MartenOwnerReadModel>();
         services.AddScoped<IVisitorReadModel, MartenVisitorReadModel>();
 
         services.AddScoped<ICommandScheduler, WolverineCommandScheduler>();
-        services.AddScoped<INotificationDispatcher, WolverineNotificationDispatcher>();
+        services.AddScoped<INotificationProducer, WolverineNotificationDispatcher>();
         services.AddScoped<IAccountProvisioner, WolverineAccountProvisioner>();
 
         services.AddRabbitMqMessaging(configuration);

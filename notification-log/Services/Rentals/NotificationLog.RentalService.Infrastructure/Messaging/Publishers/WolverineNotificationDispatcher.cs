@@ -1,18 +1,18 @@
 using Google.Protobuf.WellKnownTypes;
 using NotificationLog.Contracts.Notifications;
-using NotificationLog.RentalService.Application.Abstractions;
+using NotificationLog.RentalService.Application.Common.Producers;
 using Wolverine;
 
 namespace NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
 
-internal sealed class WolverineNotificationDispatcher : INotificationDispatcher
+internal sealed class WolverineNotificationDispatcher : INotificationProducer
 {
     private readonly IMessageBus _bus;
     private readonly TimeProvider _time;
 
     public WolverineNotificationDispatcher(IMessageBus bus, TimeProvider time) => (_bus, _time) = (bus, time);
 
-    public async Task DispatchAsync(string eventKey, Guid recipientId, IReadOnlyDictionary<string, string> data, CancellationToken ct)
+    public async Task NotifyAsync(string eventKey, Guid recipientId, IReadOnlyDictionary<string, string> data, CancellationToken ct)
     {
         var message = new NotificationDispatchRequested
         {

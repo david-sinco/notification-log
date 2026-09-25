@@ -36,6 +36,31 @@
 - [ ] **Log de eventos reproducible** (estilo Kafka) para reconstruir estado o alimentar servicios nuevos; hoy RabbitMQ solo garantiza la entrega.
 - [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
 - [ ] Responder 403 en lugar de 400 para "no es tuyo" en las visitas de Rentals (`ForbiddenException`); publicaciones y propietarios ya lo hacen.
+- [ ] **Recordatorios programados en Notification** (reemplaza `WarnListingExpiryCommand` y `WarnListingExpiryHandler`; el porqué está en `EventSourcingProblems.md`, caso 1).
+  - **Idea.** Un agregado nuevo en Notification (`Reminder`, o `ScheduledReminder`) que funciona como `Notification`, pero diferido: se registra ahora y se envía después. El productor no dice cómo ni cuándo enviar; eso ya está configurado en Notification. Rentals solo manda tres cosas: la **clave** de la configuración (por ejemplo `publicacion.vence.pronto`), el **id del flujo** que origina el recordatorio (el `ListingId`) y el **payload** con los valores que reemplazan los placeholders de la plantilla.
+  - **Configuración** (lado de Notification, como `NotificationTrigger`).
+    - `EventKey` como identidad, con el mismo formato y regex.
+    - Canales y plantillas: se reutilizan `NotificationConfiguration` y `NotificationTemplate`, así que el render (Scriban, `StrictVariables`) y el envío son los de hoy.
+    - El momento del envío: un desfase respecto a una fecha del payload, por ejemplo "7 días antes de `expires_at`". Así la regla de negocio de cuánto antes avisar (RN-08) queda en la configuración y Rentals no programa nada.
+    - Decidir si el desfase también puede ser absoluto ("en X horas desde que llega") para otros casos, como los recordatorios de visita de 24 h y 2 h.
+  - **Identidad del recordatorio.** El par `(clave, id del flujo)`. Recibir otra vez el mismo par **reemplaza** el recordatorio pendiente en lugar de crear otro. Eso resuelve la renovación: `ListingRenewed` manda el nuevo `expires_at` y el aviso viejo desaparece, sin chequear si está obsoleto al ejecutarse.
+  - **Estados.** `Pending → Sent | Failed | Cancelled`. Al enviarse deja un `Notification` en el log, igual que hoy (éxito o fallo, nunca se descarta en silencio). Enviado o cancelado, ya no se reemplaza.
+  - **Cancelación.** Un mensaje aparte con `(clave, id del flujo)`. Rentals lo manda cuando la publicación deja de estar vigente: `ListingClosed`, `ListingWithdrawn` y `ListingSuspended`. Cancelar algo que no existe o que ya se envió no es un error.
+  - **Rehabilitación.** `ListingReinstated` debe volver a programar el aviso con el `ExpiresAt` vigente (el evento no lo trae, hay que leerlo del `Listing`). Si ya pasó la fecha del aviso, se envía de inmediato o se omite: decidir.
+  - **Pausa.** El handler actual sí avisa a las publicaciones pausadas. Mantenerlo: pausar no cancela el recordatorio.
+  - **Destinatario.** Falta en los tres datos de la idea. `NotificationDispatchRequested` lleva `recipient_id`; el recordatorio también lo necesita (el anfitrión, `Listing.HostOf`). Mandarlo como campo propio del contrato, no dentro del payload.
+  - **Envío.** Un proceso en Notification que cada minuto toma los `Pending` con `DueAt <= now` (índice por `Status, DueAt`) y los pasa por el mismo camino de `NotificationDispatchService`. Aquí la consulta por rango de fechas es trivial porque Notification es relacional (EF Core + SQL Server); ese es justamente el motivo de mover el recordatorio a este servicio. Controlar el envío doble si hay varias instancias (`UPDATE ... WHERE Status = Pending` como bloqueo optimista, o `rowversion`).
+  - **Recalcular.** Si el payload cambia pero la fecha no, se reemplaza igual (el render usa el último payload). La fecha de envío se recalcula cada vez que llega el mensaje, no cuando cambia la configuración: decidir si cambiar el desfase en la configuración mueve los pendientes.
+  - **Contratos.**
+    - `reminder_scheduled.proto` (`event_id`, `occurred_at`, `schema_version`, `reminder_key`, `stream_id`, `recipient_id`, `map<string,string> data`) y `reminder_cancelled.proto` (`reminder_key`, `stream_id`) en `Shared/NotificationLog.Contracts/Notifications`, con los comentarios de semántica como los otros `.proto`. El primero es snapshot completo, igual que `UserContactUpdated`.
+    - Cola `notification-reminders` en `RabbitMqMessagingExtensions`, con consumidores estáticos que solo mapean a records de Application.
+  - **Rentals.**
+    - `IReminderProducer` en `Common/Producers`, al lado de `INotificationProducer`.
+    - `ListingNotificationsProcess` programa en `ListingApproved`, `ListingRenewed` y `ListingReinstated`, y cancela en `ListingClosed`, `ListingWithdrawn` y `ListingSuspended`.
+    - `ListingLifecycleProcess` queda solo con `ExpireListingCommand`, que sí cambia el estado y sigue siendo un mensaje programado de Wolverine.
+    - Actualizar la fila de `ListingApproved` / `ListingRenewed` en la tabla de `Rentals.md` §6.
+  - **API y Web.** Endpoints `MapReminders()` para administrar la configuración y consultar los pendientes, y página en la Web con su `ReminderApiClient`. Plantilla y configuración semilla para `publicacion.vence.pronto` con `{{ expires_at }}` y `{{ listing_id }}`.
+  - **Tests.** Reemplazo por `(clave, id del flujo)`, cancelación, idempotencia ante mensajes repetidos, y que un placeholder sin valor en el payload quede como `Notification` fallida.
 
 ## Rentals
 
