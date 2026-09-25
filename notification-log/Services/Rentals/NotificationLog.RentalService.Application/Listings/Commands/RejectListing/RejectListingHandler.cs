@@ -4,26 +4,28 @@ using Application.Shared.Common;
 using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Listings;
+using Domain.Shared.Authorization;
 
-namespace NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
+namespace NotificationLog.RentalService.Application.Listings.Commands.RejectListing;
 
-public sealed class WithdrawListingHandler(
+public sealed class RejectListingHandler(
     IListingRepository listings,
     IUnitOfWork uow,
-    IValidator<WithdrawListingCommand> validator)
+    IValidator<RejectListingCommand> validator)
 {
     private readonly IListingRepository _listings = listings;
     private readonly IUnitOfWork _uow = uow;
-    private readonly IValidator<WithdrawListingCommand> _validator = validator;
+    private readonly IValidator<RejectListingCommand> _validator = validator;
 
-    public async Task HandleAsync(WithdrawListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
+    public async Task HandleAsync(RejectListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
-        var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        ListingAccess.EnsureCanManage(listing, user);
+        ListingAccess.EnsureStaff(user);
 
-        listing.Withdraw(cmd.Reason);
+        var listing = await _listings.GetAsync(cmd.ListingId, ct);
+
+        listing.Reject(user.GetUserId(), cmd.Reasons);
 
         await _listings.AppendAsync(listing, ct);
         await _uow.SaveChangesAsync(ct);

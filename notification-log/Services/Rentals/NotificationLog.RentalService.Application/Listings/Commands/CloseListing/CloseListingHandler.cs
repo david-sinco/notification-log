@@ -8,16 +8,16 @@ using NotificationLog.RentalService.Domain.Listings;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
 
-public sealed class CloseListingHandler
+public sealed class CloseListingHandler(
+    IListingRepository listings,
+    IUnitOfWork uow,
+    IValidator<CloseListingCommand> validator,
+    TimeProvider time)
 {
-    private readonly IListingRepository _listings;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<CloseListingCommand> _validator;
-    private readonly TimeProvider _time;
-
-    public CloseListingHandler(
-        IListingRepository listings, IUnitOfWork uow, IValidator<CloseListingCommand> validator, TimeProvider time)
-        => (_listings, _uow, _validator, _time) = (listings, uow, validator, time);
+    private readonly IListingRepository _listings = listings;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<CloseListingCommand> _validator = validator;
+    private readonly TimeProvider _time = time;
 
     public async Task HandleAsync(CloseListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

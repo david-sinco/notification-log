@@ -11,19 +11,16 @@ using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
 namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 
-public sealed class RegisterCompanyOwnerHandler
+public sealed class RegisterCompanyOwnerHandler(
+    IOwnerRepository owners,
+    IAccountProvisioner accounts,
+    IUnitOfWork uow,
+    IValidator<RegisterCompanyOwnerCommand> validator)
 {
-    private readonly IOwnerRepository _owners;
-    private readonly IAccountProvisioner _accounts;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<RegisterCompanyOwnerCommand> _validator;
-
-    public RegisterCompanyOwnerHandler(
-        IOwnerRepository owners,
-        IAccountProvisioner accounts,
-        IUnitOfWork uow,
-        IValidator<RegisterCompanyOwnerCommand> validator)
-        => (_owners, _accounts, _uow, _validator) = (owners, accounts, uow, validator);
+    private readonly IOwnerRepository _owners = owners;
+    private readonly IAccountProvisioner _accounts = accounts;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<RegisterCompanyOwnerCommand> _validator = validator;
 
     public async Task<Guid> HandleAsync(RegisterCompanyOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

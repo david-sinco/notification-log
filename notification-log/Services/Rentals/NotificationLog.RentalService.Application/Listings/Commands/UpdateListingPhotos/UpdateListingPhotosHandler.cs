@@ -8,15 +8,14 @@ using NotificationLog.RentalService.Domain.Listings.ValueObjects;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
 
-public sealed class UpdateListingPhotosHandler
+public sealed class UpdateListingPhotosHandler(
+    IListingRepository listings,
+    IUnitOfWork uow,
+    IValidator<UpdateListingPhotosCommand> validator)
 {
-    private readonly IListingRepository _listings;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<UpdateListingPhotosCommand> _validator;
-
-    public UpdateListingPhotosHandler(
-        IListingRepository listings, IUnitOfWork uow, IValidator<UpdateListingPhotosCommand> validator)
-        => (_listings, _uow, _validator) = (listings, uow, validator);
+    private readonly IListingRepository _listings = listings;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<UpdateListingPhotosCommand> _validator = validator;
 
     public async Task HandleAsync(UpdateListingPhotosCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

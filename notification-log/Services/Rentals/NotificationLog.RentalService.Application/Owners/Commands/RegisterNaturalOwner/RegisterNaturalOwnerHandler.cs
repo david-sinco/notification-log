@@ -10,19 +10,16 @@ using System.Security.Claims;
 
 namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
 
-public sealed class RegisterNaturalOwnerHandler
+public sealed class RegisterNaturalOwnerHandler(
+    IOwnerRepository owners,
+    IAccountProvisioner accounts,
+    IUnitOfWork uow,
+    IValidator<RegisterNaturalOwnerCommand> validator)
 {
-    private readonly IOwnerRepository _owners;
-    private readonly IAccountProvisioner _accounts;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<RegisterNaturalOwnerCommand> _validator;
-
-    public RegisterNaturalOwnerHandler(
-        IOwnerRepository owners,
-        IAccountProvisioner accounts,
-        IUnitOfWork uow,
-        IValidator<RegisterNaturalOwnerCommand> validator)
-        => (_owners, _accounts, _uow, _validator) = (owners, accounts, uow, validator);
+    private readonly IOwnerRepository _owners = owners;
+    private readonly IAccountProvisioner _accounts = accounts;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<RegisterNaturalOwnerCommand> _validator = validator;
 
     public async Task<Guid> HandleAsync(RegisterNaturalOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

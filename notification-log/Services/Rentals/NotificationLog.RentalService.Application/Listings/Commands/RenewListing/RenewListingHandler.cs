@@ -5,15 +5,11 @@ using NotificationLog.RentalService.Domain.Listings;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.RenewListing;
 
-public sealed class RenewListingHandler
+public sealed class RenewListingHandler(IListingRepository listings, IUnitOfWork uow, TimeProvider time)
 {
-    private readonly IListingRepository _listings;
-    private readonly IUnitOfWork _uow;
-    private readonly TimeProvider _time;
-
-    public RenewListingHandler(
-        IListingRepository listings, IUnitOfWork uow, TimeProvider time)
-        => (_listings, _uow, _time) = (listings, uow, time);
+    private readonly IListingRepository _listings = listings;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly TimeProvider _time = time;
 
     public async Task HandleAsync(RenewListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

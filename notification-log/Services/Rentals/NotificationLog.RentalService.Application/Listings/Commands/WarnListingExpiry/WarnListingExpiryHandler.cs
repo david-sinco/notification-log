@@ -6,13 +6,10 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.WarnListingExpiry;
 
-public sealed class WarnListingExpiryHandler
+public sealed class WarnListingExpiryHandler(IListingRepository listings, INotificationDispatcher notifications)
 {
-    private readonly IListingRepository _listings;
-    private readonly INotificationDispatcher _notifications;
-
-    public WarnListingExpiryHandler(IListingRepository listings, INotificationDispatcher notifications)
-        => (_listings, _notifications) = (listings, notifications);
+    private readonly IListingRepository _listings = listings;
+    private readonly INotificationDispatcher _notifications = notifications;
 
     public async Task HandleAsync(WarnListingExpiryCommand cmd, CancellationToken ct)
     {

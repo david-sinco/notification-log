@@ -1,8 +1,9 @@
 using System.Security.Claims;
 using NotificationLog.RentalService.Api.Contracts.Listings;
 using NotificationLog.RentalService.Api.Contracts.Moderation;
+using NotificationLog.RentalService.Application.Listings.Commands.ApproveListing;
 using NotificationLog.RentalService.Application.Listings.Commands.ReinstateListing;
-using NotificationLog.RentalService.Application.Listings.Commands.ReviewListing;
+using NotificationLog.RentalService.Application.Listings.Commands.RejectListing;
 using NotificationLog.RentalService.Application.Listings.Commands.SuspendListing;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
 using API.Shared.Extensions;
@@ -17,9 +18,17 @@ public static class ModerationEndpoints
             .WithTags("Moderation")
             .RequireAuthorization(AuthorizationExtensions.ModeracionPolicy);
 
-        group.MapPost("/{id:guid}/review", ReviewAsync)
-            .WithName("ReviewListing")
-            .WithSummary("Aprueba o rechaza una publicación en revisión")
+        group.MapPost("/{id:guid}/approve", ApproveAsync)
+            .WithName("ApproveListing")
+            .WithSummary("Aprueba una publicación en revisión")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapPost("/{id:guid}/reject", RejectAsync)
+            .WithName("RejectListing")
+            .WithSummary("Rechaza una publicación en revisión")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -52,14 +61,24 @@ public static class ModerationEndpoints
         return app;
     }
 
-    private static async Task<IResult> ReviewAsync(
+    private static async Task<IResult> ApproveAsync(
         Guid id,
-        ReviewListingRequest body,
         ClaimsPrincipal user,
-        ReviewListingHandler handler,
+        ApproveListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new ReviewListingCommand(id, body.Approve, body.Reasons), user, ct);
+        await handler.HandleAsync(new ApproveListingCommand(id), user, ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> RejectAsync(
+        Guid id,
+        RejectListingRequest body,
+        ClaimsPrincipal user,
+        RejectListingHandler handler,
+        CancellationToken ct)
+    {
+        await handler.HandleAsync(new RejectListingCommand(id, body.Reasons), user, ct);
         return Results.NoContent();
     }
 

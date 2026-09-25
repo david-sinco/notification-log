@@ -64,13 +64,11 @@ public sealed record UpdateListingPhotosRequest(IReadOnlyList<string> Photos);
 
 public sealed record ChangeListingPriceRequest(long Price);
 
-public sealed record SetListingAvailabilityRequest(bool IsAvailable);
-
 public sealed record ReasonRequest(string Reason);
 
 public sealed record CloseListingRequest(long FinalPrice, DateOnly SignedOn);
 
-public sealed record ReviewListingRequest(bool Approve, IReadOnlyList<RejectionReason> Reasons);
+public sealed record RejectListingRequest(IReadOnlyList<RejectionReason> Reasons);
 
 public static class ListingLimits
 {

@@ -8,17 +8,14 @@ using NotificationLog.RentalService.Domain.Visitors;
 
 namespace NotificationLog.RentalService.Application.Visitors.Commands.CompleteVisitorProfile;
 
-public sealed class CompleteVisitorProfileHandler
+public sealed class CompleteVisitorProfileHandler(
+    IVisitorRepository visitors,
+    IUnitOfWork uow,
+    IValidator<CompleteVisitorProfileCommand> validator)
 {
-    private readonly IVisitorRepository _visitors;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<CompleteVisitorProfileCommand> _validator;
-
-    public CompleteVisitorProfileHandler(
-        IVisitorRepository visitors,
-        IUnitOfWork uow,
-        IValidator<CompleteVisitorProfileCommand> validator)
-        => (_visitors, _uow, _validator) = (visitors, uow, validator);
+    private readonly IVisitorRepository _visitors = visitors;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<CompleteVisitorProfileCommand> _validator = validator;
 
     public async Task HandleAsync(CompleteVisitorProfileCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

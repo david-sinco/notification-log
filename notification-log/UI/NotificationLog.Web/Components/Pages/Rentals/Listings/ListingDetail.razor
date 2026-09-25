@@ -33,12 +33,12 @@ else if (listing is not null)
                     break;
                 case "Published":
                     <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.SetAvailabilityAsync(Id, false, CancellationToken.None))">Pausar</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.PauseAsync(Id, CancellationToken.None))">Pausar</button>
                     <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar</button>
                     break;
                 case "Paused":
                     <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.SetAvailabilityAsync(Id, true, CancellationToken.None))">Reanudar</button>
+                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.ResumeAsync(Id, CancellationToken.None))">Reanudar</button>
                     break;
                 case "Expired":
                     <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar</button>

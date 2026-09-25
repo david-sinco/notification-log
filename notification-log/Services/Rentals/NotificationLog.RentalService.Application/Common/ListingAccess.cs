@@ -8,10 +8,6 @@ namespace NotificationLog.RentalService.Application.Common;
 
 public sealed class ListingAccess
 {
-    private readonly IIdentityReplica _identity;
-
-    public ListingAccess(IIdentityReplica identity) => _identity = identity;
-
     public static bool IsStaff(ClaimsPrincipal user) => user.IsAdministrador() || user.IsModerador();
 
     public static void EnsureStaff(ClaimsPrincipal user)
@@ -32,15 +28,4 @@ public sealed class ListingAccess
     public static bool IsHost(Listing listing, Guid userId) => listing.OwnerId == userId;
 
     public static Guid HostOf(Listing listing) => listing.OwnerId;
-
-    public async Task<PersonVerification> RequireVerifiedUserAsync(Guid userId, CancellationToken ct)
-    {
-        var person = await _identity.GetPersonByUserAsync(userId, ct)
-            ?? throw new AppValidationException("El usuario no está registrado en la plataforma.");
-
-        if (!person.IsPhoneVerified)
-            throw new AppValidationException("Necesitas verificar tu teléfono para hacer esto.");
-
-        return person;
-    }
 }

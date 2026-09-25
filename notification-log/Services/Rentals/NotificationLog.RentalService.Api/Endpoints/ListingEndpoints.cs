@@ -7,8 +7,9 @@ using NotificationLog.RentalService.Application.Listings.Queries.Filters;
 using NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 using NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
 using NotificationLog.RentalService.Application.Listings.Commands.DraftListing;
+using NotificationLog.RentalService.Application.Listings.Commands.PauseListing;
 using NotificationLog.RentalService.Application.Listings.Commands.RenewListing;
-using NotificationLog.RentalService.Application.Listings.Commands.SetListingAvailability;
+using NotificationLog.RentalService.Application.Listings.Commands.ResumeListing;
 using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingForReview;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
@@ -75,9 +76,17 @@ public static class ListingEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound)
             .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
 
-        group.MapPatch("/{id:guid}/availability", SetAvailabilityAsync)
-            .WithName("SetListingAvailability")
-            .WithSummary("Pausa o reanuda la publicación")
+        group.MapPost("/{id:guid}/pause", PauseAsync)
+            .WithName("PauseListing")
+            .WithSummary("Pausa la publicación")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapPost("/{id:guid}/resume", ResumeAsync)
+            .WithName("ResumeListing")
+            .WithSummary("Reanuda la publicación")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -192,14 +201,23 @@ public static class ListingEndpoints
         return Results.NoContent();
     }
 
-    private static async Task<IResult> SetAvailabilityAsync(
+    private static async Task<IResult> PauseAsync(
         Guid id,
-        SetListingAvailabilityRequest body,
         ClaimsPrincipal user,
-        SetListingAvailabilityHandler handler,
+        PauseListingHandler handler,
         CancellationToken ct)
     {
-        await handler.HandleAsync(new SetListingAvailabilityCommand(id, body.IsAvailable), user, ct);
+        await handler.HandleAsync(new PauseListingCommand(id), user, ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> ResumeAsync(
+        Guid id,
+        ClaimsPrincipal user,
+        ResumeListingHandler handler,
+        CancellationToken ct)
+    {
+        await handler.HandleAsync(new ResumeListingCommand(id), user, ct);
         return Results.NoContent();
     }
 

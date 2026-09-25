@@ -7,15 +7,14 @@ using NotificationLog.RentalService.Domain.Listings;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.SuspendListing;
 
-public sealed class SuspendListingHandler
+public sealed class SuspendListingHandler(
+    IListingRepository listings,
+    IUnitOfWork uow,
+    IValidator<SuspendListingCommand> validator)
 {
-    private readonly IListingRepository _listings;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<SuspendListingCommand> _validator;
-
-    public SuspendListingHandler(
-        IListingRepository listings, IUnitOfWork uow, IValidator<SuspendListingCommand> validator)
-        => (_listings, _uow, _validator) = (listings, uow, validator);
+    private readonly IListingRepository _listings = listings;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<SuspendListingCommand> _validator = validator;
 
     public async Task HandleAsync(SuspendListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

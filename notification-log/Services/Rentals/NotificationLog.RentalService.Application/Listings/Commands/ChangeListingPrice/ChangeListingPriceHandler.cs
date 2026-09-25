@@ -8,16 +8,16 @@ using NotificationLog.RentalService.Domain.Listings;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 
-public sealed class ChangeListingPriceHandler
+public sealed class ChangeListingPriceHandler(
+    IListingRepository listings,
+    IUnitOfWork uow,
+    IValidator<ChangeListingPriceCommand> validator,
+    TimeProvider time)
 {
-    private readonly IListingRepository _listings;
-    private readonly IUnitOfWork _uow;
-    private readonly IValidator<ChangeListingPriceCommand> _validator;
-    private readonly TimeProvider _time;
-
-    public ChangeListingPriceHandler(
-        IListingRepository listings, IUnitOfWork uow, IValidator<ChangeListingPriceCommand> validator, TimeProvider time)
-        => (_listings, _uow, _validator, _time) = (listings, uow, validator, time);
+    private readonly IListingRepository _listings = listings;
+    private readonly IUnitOfWork _uow = uow;
+    private readonly IValidator<ChangeListingPriceCommand> _validator = validator;
+    private readonly TimeProvider _time = time;
 
     public async Task HandleAsync(ChangeListingPriceCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {

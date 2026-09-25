@@ -34,8 +34,11 @@ public sealed class ListingsApiClient(HttpClient http)
     public Task SubmitForReviewAsync(Guid id, CancellationToken ct)
         => http.SendJsonAsync(HttpMethod.Post, $"/api/listings/{id}/submit", null, ct);
 
-    public Task SetAvailabilityAsync(Guid id, bool isAvailable, CancellationToken ct)
-        => http.SendJsonAsync(HttpMethod.Patch, $"/api/listings/{id}/availability", new SetListingAvailabilityRequest(isAvailable), ct);
+    public Task PauseAsync(Guid id, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Post, $"/api/listings/{id}/pause", null, ct);
+
+    public Task ResumeAsync(Guid id, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Post, $"/api/listings/{id}/resume", null, ct);
 
     public Task RenewAsync(Guid id, CancellationToken ct)
         => http.SendJsonAsync(HttpMethod.Post, $"/api/listings/{id}/renew", null, ct);

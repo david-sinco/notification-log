@@ -45,7 +45,7 @@
                             <td class="text-end">
                                 <div class="btn-group btn-group-sm">
                                     <button class="btn btn-outline-secondary" disabled="@busy"
-                                            @onclick="() => RunAsync(() => Api.ReviewAsync(l.Id, true, [], CancellationToken.None))">
+                                            @onclick="() => RunAsync(() => Api.ApproveAsync(l.Id, CancellationToken.None))">
                                         Aprobar
                                     </button>
                                     <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReject(l)">Rechazar…</button>
@@ -255,7 +255,7 @@
     }
 
     private Task RejectAsync() => RunModalAsync(
-        () => Api.ReviewAsync(target!.Id, false, rejectReasons.ToList(), CancellationToken.None),
+        () => Api.RejectAsync(target!.Id, rejectReasons.ToList(), CancellationToken.None),
         () => showReject = false);
 
     private void OpenReason(ListingSummaryDto listing, ModerationAction action)
