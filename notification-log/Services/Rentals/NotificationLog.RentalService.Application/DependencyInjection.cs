@@ -19,7 +19,6 @@ using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingP
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
-using NotificationLog.RentalService.Application.Processes;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Visitors.Commands.CompleteVisitorProfile;
@@ -64,10 +63,6 @@ public static class DependencyInjection
         services.AddScoped<ListOwnersHandler>();
         services.AddScoped<GetVisitorByIdHandler>();
         services.AddScoped<ListVisitorsHandler>();
-
-        services.AddScoped<ListingLifecycleProcess>();
-        services.AddScoped<ListingNotificationsProcess>();
-        services.AddScoped<ProcessRouter>();
 
         return services;
     }

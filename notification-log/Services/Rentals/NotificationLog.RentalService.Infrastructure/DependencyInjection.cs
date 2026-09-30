@@ -10,11 +10,8 @@ using NotificationLog.RentalService.Application.Visitors.Queries;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Visitors;
-using NotificationLog.RentalService.Infrastructure.DecisionProjections;
-using NotificationLog.RentalService.Infrastructure.IdentityReplica;
 using NotificationLog.RentalService.Infrastructure.Messaging;
 using NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
-using NotificationLog.RentalService.Infrastructure.Messaging.Subscriptions;
 using NotificationLog.RentalService.Infrastructure.Persistence;
 using NotificationLog.RentalService.Infrastructure.ReadModels;
 using NotificationLog.RentalService.Infrastructure.Scheduling;
@@ -34,8 +31,7 @@ public static class DependencyInjection
             .UseLightweightSessions()
             .ApplyAllDatabaseChangesOnStartup()
             .IntegrateWithWolverine()
-            .AddAsyncDaemon(DaemonMode.Solo)
-            .AddSubscriptionWithServices<DomainEventsSubscription>(ServiceLifetime.Singleton);
+            .AddAsyncDaemon(DaemonMode.Solo);
 
         services.AddScoped<AggregateStreams>();
         services.AddScoped<IUnitOfWork, MartenUnitOfWork>();
