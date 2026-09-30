@@ -64,6 +64,12 @@
 
 ## Rentals
 
+- [ ] **Schedules para tareas programadas** (vencer una publicación, avisar que está por vencer, recordatorios de visita). Reemplaza el `ApplyExpiry` calculado en `Listing.Status` y en `MartenListingReadModel`, y también `ICommandScheduler`, `WolverineCommandScheduler`, `ScheduledCommandsHandler` y `ExpireListingCommand`.
+  - **Datos del dominio.** Por ahora solo `StreamId`, `ScheduledTo` (fecha y hora) y `Kind` (string que identifica cómo se procesa, por ejemplo `listing.expire` o `listing.warn-expiry`). El agregado declara sus schedules a partir de su estado; `Listing` los deriva de `IsVisible` y `ExpiresAt`.
+  - **Programar.** Mensaje programado de Wolverine por el outbox (`IMartenOutbox` enrolado en la misma sesión de Marten), para que sea atómico con los eventos. La dependencia queda invertida: la interfaz en Application y la implementación en Infrastructure. `AggregateStreams` compara los schedules del agregado al cargarlo y al hacer append, y programa solo los nuevos.
+  - **Validar al ejecutarse.** Recargar el agregado y seguir solo si el schedule `(Kind, ScheduledTo)` todavía está entre los que declara; si no, descartarlo. Los mensajes programados no se cancelan, así que renovar, cerrar, retirar o suspender dejan mensajes viejos que se descartan al llegar.
+  - **Duplicados.** Suspender y rehabilitar con el mismo `ExpiresAt` vuelve a programar el aviso y el original sigue vivo. Expirar es idempotente en el dominio; para avisar, usar un `event_id` determinista (`StreamId + Kind + ScheduledTo`) y que Notification ignore los repetidos.
+  - **Estructura en Application (por definir).** Nombre de la carpeta y de las clases que reciben el schedule vencido, lo enrutan por `Kind` al handler que corresponde y disparan comandos o notificaciones. Es parecido a un consumer, pero ese nombre no encaja para esta lógica. También hay que decidir si hay un handler por `Kind` o uno por agregado.
 - [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.
 - [ ] **Quitar la réplica de Identity (`IIdentityReplica`) y cambiar antes la regla de visitas.**
   - **Qué es hoy.** `IIdentityReplica` **no** consulta la base de Identity: lee la base de *Rentals* (Marten,

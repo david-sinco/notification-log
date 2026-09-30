@@ -130,20 +130,25 @@ carrera entre dos peticiones simultáneas. Es un riesgo aceptado.
 
 ### Visitas
 
-- **RN-19** Solo se pueden visitar publicaciones publicadas. El interesado propone entre 1 y 3 franjas
-  de una hora, con al menos 2 horas y como mucho 14 días de antelación, entre las 7:00 y las 19:00 hora
-  de Colombia.
-- **RN-20** Un interesado tiene como máximo 3 visitas pendientes en toda la plataforma. **(blanda)**
-- **RN-21** El anfitrión (el publicador o su asesor) confirma una de las franjas o rechaza la solicitud.
-  Si no responde en 48 horas o antes de la primera franja, la solicitud vence.
-- **RN-22** El anfitrión no puede confirmar dos visitas que se solapen. **(blanda)**
-- **RN-23** La dirección exacta solo se muestra al interesado con una visita confirmada. El catálogo
+- **RN-19** El anfitrión (el propietario) publica su disponibilidad en una sola agenda para todos sus
+  inmuebles: huecos de una hora, cada uno para una publicación, entre las 7:00 y las 19:00 hora de
+  Colombia y como mucho 14 días adelante. Los huecos no se solapan, aunque sean de inmuebles distintos, y
+  en cada hueco cabe un solo visitante.
+- **RN-20** Solo se pueden visitar publicaciones publicadas (no pausadas), y solo visitantes con el
+  perfil completo que no sean el dueño. El visitante elige un hueco disponible de esa publicación que
+  empiece en al menos 2 horas. Máximo 3 visitas pendientes o confirmadas por visitante y una sola activa
+  por visitante y publicación. **(blanda)**
+- **RN-21** El anfitrión aprueba o rechaza la solicitud. Si no responde en 48 horas o 2 horas antes del
+  hueco (lo que ocurra primero), la solicitud vence. Rechazar, vencer o cancelar devuelve el hueco a
+  disponible si todavía no empieza.
+- **RN-22** Un hueco tomado no se puede quitar de la agenda: primero hay que cancelar la visita.
+- **RN-23** La dirección exacta solo se muestra al visitante con una visita confirmada. El catálogo
   solo muestra el barrio.
-- **RN-24** Cancelar con menos de 12 horas de antelación cuenta como cancelación tardía. Un interesado
+- **RN-24** Cancelar con menos de 12 horas de antelación cuenta como cancelación tardía. Un visitante
   que acumula 2 cancelaciones tardías o inasistencias en 30 días no puede pedir visitas durante 15 días.
   **(blanda)**
-- **RN-25** Después de la visita, el anfitrión la marca como realizada o como inasistencia. Si no la
-  marca en 72 horas, se da por realizada.
+- **RN-25** Después de que empiece la visita, el anfitrión la marca como realizada o como inasistencia.
+  Si no la marca en 72 horas desde el fin del hueco, se da por realizada.
 
 ### Ofertas
 
@@ -237,38 +242,75 @@ meses), estado, número de contraofertas, quién movió por última vez y `Respo
 `OfferCountered(By, Amount, RespondBy)`, `OfferAccepted(By)`, `OfferRejected(By, Reason)`,
 `OfferWithdrawn`, `OfferExpired` y `OfferFellThrough(Reason)`.
 
-### 4.3 `Visit` (el flujo es el `VisitId`)
+### 4.3 `HostAgenda` (el flujo es un id calculado a partir del `OwnerId`)
 
-**Estados:** `Requested → Confirmed → Completed | NoShow`. Desde `Requested` también puede pasar a
-`Declined` o `Expired`, y desde `Confirmed` a `Cancelled`.
+El `OwnerId` ya es el flujo del `Owner`, así que el id de la agenda se calcula con `NameBasedGuid`.
 
-**Eventos:** `VisitRequested(VisitId, ListingId, VisitorId, HostId, Slots, RespondBy)`,
-`VisitConfirmed(Slot)`, `VisitDeclined(Reason)`, `VisitRequestExpired`,
-`VisitCancelled(By, Reason, IsLate)`, `VisitCompleted` y `VisitNoShow`.
+**Datos:** `HostId` y los huecos `AvailabilitySlot` (entidad hija): `SlotId`, `ListingId`, `StartsAt`,
+`EndsAt` y `VisitId` (`null` = disponible; con valor = tomado). No distingue "apartado" de "confirmado":
+eso lo dice la `Visit`, y así aprobar no toca la agenda.
 
-### 4.4 `Inquiry` (el flujo es un id calculado a partir de la publicación y el interesado)
+**Eventos:** `HostAgendaOpened(AgendaId, HostId)`, `AvailabilitySlotAdded(SlotId, ListingId, StartsAt, EndsAt)`,
+`AvailabilitySlotRemoved(SlotId)`, `AvailabilitySlotTaken(SlotId, VisitId)` y
+`AvailabilitySlotReleased(SlotId, VisitId)`.
+
+Que los huecos no se solapen y que un hueco tenga una sola visita (RN-19) son invariantes de este
+agregado, no reglas blandas: la concurrencia optimista del flujo impide que dos visitantes tomen el mismo
+hueco. Además, la agenda sabe qué visitas tiene cada publicación en sus huecos tomados, así que cancelar
+las visitas futuras de una publicación no necesita una proyección.
+
+### 4.4 `Visit` (el flujo es el `VisitId`)
+
+**Datos:** `ListingId`, `HostId`, `VisitorId`, `SlotId`, `StartsAt` y `EndsAt` (copia del hueco), `Note`
+opcional (sin teléfonos, correos ni enlaces), estado, `RespondBy`, `CancelledBy`, `IsLateCancellation` y
+`ClosedBy` (`VisitParty`: `Visitor`, `Host` o `System`). Las fechas de cada paso salen de los eventos.
+
+**Estados:**
+
+| Desde                     | Acción                                      | Hacia       | Quién                          | Hueco                   |
+|---                        |---                                          |---          |---                             |---                      |
+| —                         | elegir un hueco disponible                  | `Requested` | visitante                      | se toma                 |
+| `Requested`               | aprobar                                     | `Confirmed` | anfitrión                      | —                       |
+| `Requested`               | rechazar, con motivo                        | `Declined`  | anfitrión                      | se libera               |
+| `Requested`               | pasa `RespondBy`                            | `Expired`   | sistema                        | se libera               |
+| `Requested` / `Confirmed` | cancelar, con motivo                        | `Cancelled` | visitante, anfitrión o sistema | se libera si no empezó  |
+| `Confirmed`               | marcar realizada (después de `StartsAt`)    | `Completed` | anfitrión                      | —                       |
+| `Confirmed`               | marcar inasistencia (después de `StartsAt`) | `NoShow`    | anfitrión                      | —                       |
+| `Confirmed`               | pasan 72 h desde `EndsAt`                   | `Completed` | sistema                        | —                       |
+
+`Declined`, `Expired`, `Cancelled`, `Completed` y `NoShow` son finales. "Pendiente de cierre" no es un
+estado: se deriva de `Confirmed` y la hora.
+
+**Eventos:** `VisitRequested(VisitId, ListingId, HostId, VisitorId, SlotId, StartsAt, EndsAt, Note, RespondBy)`,
+`VisitConfirmed`, `VisitDeclined(Reason)`, `VisitRequestExpired`, `VisitCancelled(By, Reason, IsLate)`,
+`VisitCompleted(By)` y `VisitNoShow`.
+
+Pedir una visita y liberar su hueco escriben `HostAgenda` y `Visit` en la misma sesión de Marten, la misma
+excepción consciente que `AcceptOffer` (§5). Aprobar y cerrar solo tocan `Visit`.
+
+### 4.5 `Inquiry` (el flujo es un id calculado a partir de la publicación y el interesado)
 
 **Eventos:** `InquiryOpened(InquiryId, ListingId, SeekerId, Message)`,
 `InquiryMessagePosted(AuthorId, Text)` e `InquiryClosed(Reason)`.
 
-### 4.5 `FavoriteList` (el flujo es el `UserId`)
+### 4.6 `FavoriteList` (el flujo es el `UserId`)
 
 **Eventos:** `ListingFavorited(ListingId)` y `ListingUnfavorited(ListingId)`. Contiene el límite de 100,
 y añadir o quitar dos veces lo mismo no genera evento.
 
-### 4.6 `SavedSearchList` (el flujo es el `UserId`)
+### 4.7 `SavedSearchList` (el flujo es el `UserId`)
 
 **Eventos:** `SavedSearchCreated(SearchId, Name, Criteria, Frequency)`,
 `SavedSearchUpdated(SearchId, Name, Criteria, Frequency)` y `SavedSearchDeleted(SearchId)`. Contiene el
 límite de 10. Cada búsqueda es una entidad hija, `SavedSearch`, igual que `NotificationConfiguration`
 dentro de `NotificationTrigger`.
 
-### 4.7 Value objects compartidos
+### 4.8 Value objects compartidos
 
 `Money` (pesos colombianos, sin decimales), `Operation` (venta o arriendo), `Stratum` (1 a 6) y
 `TimeSlot`, en `Shared/`.
 
-### 4.8 Réplicas de Identity
+### 4.9 Réplicas de Identity
 
 No son agregados: son documentos locales alimentados por los eventos que publica Identity.
 
