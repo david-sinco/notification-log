@@ -37,7 +37,7 @@ public sealed class RequestVisitHandler(
 
         var visitorId = user.GetUserId();
 
-        if (await _visitors.LoadAsync(visitorId, ct) is not { Status: VisitorStatus.Registered })
+        if (await _visitors.LoadAsync(visitorId, ct) is not { Status: VisitorStatus.Registered } visitor)
             throw new AppValidationException("Completa tu perfil de visitante antes de pedir una visita.");
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
@@ -60,10 +60,9 @@ public sealed class RequestVisitHandler(
         await _notifications.NotifyAsync(
             VisitNotificationKeys.Requested,
             visit.HostId,
-            new Dictionary<string, string>
+            new Dictionary<string, string>(VisitNotificationData.For(visit, listing))
             {
-                ["visit_id"] = visit.Id.ToString(),
-                ["listing_id"] = visit.ListingId.ToString(),
+                ["visitor_name"] = visitor.DisplayName,
                 ["slots"] = string.Join(", ", visit.ProposedSlots)
             },
             ct);

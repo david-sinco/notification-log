@@ -81,16 +81,16 @@
     - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
     - bloqueo por cancelaciones tardías o inasistencias repetidas (`IsLateCancellation`, `NoShow`);
     - que el anfitrión no agende dos visitas a la misma hora.
-- [ ] **Configurar en Notification las notificaciones de visitas.** Rentals ya las publica con `INotificationProducer`; sin trigger y plantilla en Notification no se envía nada. Las claves están en `VisitNotificationKeys` (Domain de Rentals). Las plantillas usan `StrictVariables`, así que solo pueden usar los datos que manda cada una (más `recipient.*`):
+- [x] **Configurar en Notification las notificaciones de visitas.** Triggers, configuraciones (correo y SMS) y plantillas sembrados en la migración `VisitNotifications`. Las claves están en `VisitNotificationKeys` (Domain de Rentals). Todas llevan los datos comunes de `VisitNotificationData` (`visit_id`, `listing_id`, `listing_type`, `listing_operation`, `listing_neighborhood`, `listing_city`, `listing_address`, `listing_price`) más los propios; las plantillas usan `StrictVariables`, así que solo pueden usar esos datos (más `recipient.*`):
 
-  | Clave                    | Destinatario                    | Datos                                |
-  |---                       |---                              |---                                   |
-  | `visita.solicitada`      | anfitrión                       | `visit_id`, `listing_id`, `slots`    |
-  | `visita.contrapropuesta` | la otra parte                   | `visit_id`, `listing_id`, `slots`    |
-  | `visita.agendada`        | quien había propuesto la franja | `visit_id`, `listing_id`, `starts_at`|
-  | `visita.cancelada`       | la otra parte                   | `visit_id`, `listing_id`, `reason`   |
-  | `visita.realizada`       | visitante                       | `visit_id`, `listing_id`             |
-  | `visita.inasistencia`    | visitante                       | `visit_id`, `listing_id`             |
+  | Clave                    | Destinatario                    | Datos propios           |
+  |---                       |---                              |---                      |
+  | `visita.solicitada`      | anfitrión                       | `visitor_name`, `slots` |
+  | `visita.contrapropuesta` | la otra parte                   | `slots`                 |
+  | `visita.agendada`        | quien había propuesto la franja | `starts_at`             |
+  | `visita.cancelada`       | la otra parte                   | `reason`                |
+  | `visita.realizada`       | visitante                       | `starts_at`             |
+  | `visita.inasistencia`    | visitante                       | `starts_at`             |
 
   Las fechas (`slots`, `starts_at`) van ya formateadas en hora de Colombia (`yyyy-MM-dd HH:mm`). El destinatario tiene que existir en la réplica de destinatarios de Notification; un `Owner` sin cuenta no recibe nada (ver "Usuario por cada `Owner`").
 - [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.

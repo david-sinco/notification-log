@@ -5,18 +5,21 @@ using Domain.Shared.Authorization;
 using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Common.Producers;
+using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Visits;
 
 namespace NotificationLog.RentalService.Application.Visits.Commands.CancelVisit;
 
 public sealed class CancelVisitHandler(
     IVisitRepository visits,
+    IListingRepository listings,
     IUnitOfWork uow,
     INotificationProducer notifications,
     TimeProvider time,
     IValidator<CancelVisitCommand> validator)
 {
     private readonly IVisitRepository _visits = visits;
+    private readonly IListingRepository _listings = listings;
     private readonly IUnitOfWork _uow = uow;
     private readonly INotificationProducer _notifications = notifications;
     private readonly TimeProvider _time = time;
@@ -40,10 +43,8 @@ public sealed class CancelVisitHandler(
         await _notifications.NotifyAsync(
             VisitNotificationKeys.Cancelled,
             visit.CounterpartOf(party),
-            new Dictionary<string, string>
+            new Dictionary<string, string>(VisitNotificationData.For(visit, await _listings.GetAsync(visit.ListingId, ct)))
             {
-                ["visit_id"] = visit.Id.ToString(),
-                ["listing_id"] = visit.ListingId.ToString(),
                 ["reason"] = cmd.Reason.Trim()
             },
             ct);

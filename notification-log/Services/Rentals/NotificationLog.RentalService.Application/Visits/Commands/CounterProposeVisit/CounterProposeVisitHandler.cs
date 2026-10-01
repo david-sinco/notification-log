@@ -6,18 +6,21 @@ using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Common.Producers;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
+using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Visits;
 
 namespace NotificationLog.RentalService.Application.Visits.Commands.CounterProposeVisit;
 
 public sealed class CounterProposeVisitHandler(
     IVisitRepository visits,
+    IListingRepository listings,
     IUnitOfWork uow,
     INotificationProducer notifications,
     TimeProvider time,
     IValidator<CounterProposeVisitCommand> validator)
 {
     private readonly IVisitRepository _visits = visits;
+    private readonly IListingRepository _listings = listings;
     private readonly IUnitOfWork _uow = uow;
     private readonly INotificationProducer _notifications = notifications;
     private readonly TimeProvider _time = time;
@@ -38,10 +41,8 @@ public sealed class CounterProposeVisitHandler(
         await _notifications.NotifyAsync(
             VisitNotificationKeys.CounterProposed,
             visit.CounterpartOf(party),
-            new Dictionary<string, string>
+            new Dictionary<string, string>(VisitNotificationData.For(visit, await _listings.GetAsync(visit.ListingId, ct)))
             {
-                ["visit_id"] = visit.Id.ToString(),
-                ["listing_id"] = visit.ListingId.ToString(),
                 ["slots"] = string.Join(", ", visit.ProposedSlots)
             },
             ct);
