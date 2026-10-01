@@ -1,43 +1,40 @@
 namespace NotificationLog.Web.Api.Rentals.Visits;
 
-public sealed record VisitSummaryDto(
-    Guid Id,
-    Guid ListingId,
-    Guid VisitorId,
-    Guid HostId,
-    string Status,
-    DateTimeOffset FirstSlotStart,
-    DateTimeOffset? ConfirmedSlotStart,
-    DateTimeOffset RespondBy,
-    DateTimeOffset UpdatedAt);
-
 public sealed record VisitDto(
     Guid Id,
     Guid ListingId,
-    Guid VisitorId,
     Guid HostId,
+    Guid VisitorId,
     string Status,
-    IReadOnlyList<DateTimeOffset> SlotStarts,
-    int SlotDurationMinutes,
-    DateTimeOffset? ConfirmedSlotStart,
-    DateTimeOffset RespondBy,
+    IReadOnlyList<DateTimeOffset> ProposedSlots,
+    DateTimeOffset? RespondBy,
+    DateTimeOffset? ScheduledStartsAt,
+    DateTimeOffset? ScheduledEndsAt,
     string? CancelledBy,
+    string? CancellationReason,
     bool IsLateCancellation,
-    string? Reason,
+    string? ClosedBy,
     DateTimeOffset RequestedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt)
+{
+    public bool IsNegotiating => Status is nameof(VisitStatus.AwaitingHost) or nameof(VisitStatus.AwaitingVisitor);
 
-public sealed record RequestVisitRequest(Guid VisitorId, Guid ListingId, IReadOnlyList<DateTimeOffset> SlotStarts);
+    public DateTimeOffset? FirstSlot => ScheduledStartsAt ?? (ProposedSlots.Count > 0 ? ProposedSlots[0] : null);
+}
 
-public sealed record ConfirmVisitRequest(Guid ActorId, DateTimeOffset SlotStart);
+public sealed record RequestVisitRequest(Guid ListingId, IReadOnlyList<DateTimeOffset> Slots);
 
-public sealed record VisitReasonRequest(Guid ActorId, string Reason);
+public sealed record CounterProposeVisitRequest(IReadOnlyList<DateTimeOffset> Slots);
 
-public sealed record ReportVisitOutcomeRequest(Guid ActorId, bool Attended);
+public sealed record ScheduleVisitRequest(DateTimeOffset StartsAt);
+
+public sealed record CancelVisitRequest(string Reason);
 
 public static class VisitLimits
 {
     public const int MaxSlots = 3;
     public const int EarliestHour = 7;
     public const int LatestHour = 19;
+    public const int MinLeadHours = 24;
+    public const int MaxLeadDays = 14;
 }

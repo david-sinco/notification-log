@@ -9,7 +9,7 @@
     <div>
         <p class="eyebrow">Arriendos</p>
         <h1>Visitas</h1>
-        <p>Solicitudes de visita y su resultado. Se solicitan desde la publicación.</p>
+        <p>Visitas en negociación, agendadas y su resultado. Se solicitan desde la publicación.</p>
     </div>
 </div>
 
@@ -72,8 +72,8 @@
                             <td><ShortId Value="v.VisitorId" /></td>
                             <td><ShortId Value="v.HostId" /></td>
                             <td>
-                                @RentalsFormat.Date(v.ConfirmedSlotStart ?? v.FirstSlotStart)
-                                @if (v.ConfirmedSlotStart is null && v.Status == "Requested")
+                                @RentalsFormat.Date(v.FirstSlot)
+                                @if (v.IsNegotiating)
                                 {
                                     <div class="form-hint">Propuesta · responder antes de @RentalsFormat.Date(v.RespondBy)</div>
                                 }
@@ -91,7 +91,7 @@
 </div>
 
 @code {
-    private PagedResult<VisitSummaryDto>? page;
+    private PagedResult<VisitDto>? page;
     private bool loading = true;
     private ApiException? error;
     private string statusFilter = "";

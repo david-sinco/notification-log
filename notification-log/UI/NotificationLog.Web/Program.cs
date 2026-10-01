@@ -1,12 +1,6 @@
-using NotificationLog.Web.Api.Identity.Users;
+using NotificationLog.Web.Api.Identity;
 using NotificationLog.Web.Api.Notifications;
-using NotificationLog.Web.Api.Recipients;
-using NotificationLog.Web.Api.Templates;
-using NotificationLog.Web.Api.Triggers;
 using NotificationLog.Web.Api.Rentals;
-using NotificationLog.Web.Api.Rentals.Listings;
-using NotificationLog.Web.Api.Rentals.Owners;
-using NotificationLog.Web.Api.Rentals.Visits;
 using NotificationLog.Web.Authentication;
 using NotificationLog.Web.Components;
 using NotificationLog.Web.Components.Rentals;
@@ -23,26 +17,11 @@ builder.Services.AddIdentityAuthentication(builder.Configuration);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Clientes tipados hacia NotificationLog.ApiService. La URL usa "https+http://" para preferir
-// HTTPS cuando esté disponible; la resuelve el descubrimiento de servicios de Aspire.
-builder.Services.AddHttpClient<TriggersApiClient>(client => client.BaseAddress = new("https+http://notification"));
-builder.Services.AddHttpClient<TemplatesApiClient>(client => client.BaseAddress = new("https+http://notification"));
-builder.Services.AddHttpClient<RecipientsApiClient>(client => client.BaseAddress = new("https+http://notification"));
-builder.Services.AddHttpClient<NotificationsApiClient>(client => client.BaseAddress = new("https+http://notification"));
+builder.Services.AddNotificationApi();
+builder.Services.AddIdentityApi();
+builder.Services.AddRentalsApi();
 
-builder.Services.AddHttpClient<VisitsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress));
 builder.Services.AddScoped<RentalsActor>();
-
-builder.Services.AddHttpContextAccessor();
-builder.Services.AddTransient<AccessTokenHandler>();
-builder.Services.AddHttpClient<UsersApiClient>(client => client.BaseAddress = new("https+http://identity"))
-    .AddHttpMessageHandler<AccessTokenHandler>();
-builder.Services.AddHttpClient<OwnersApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
-    .AddHttpMessageHandler<AccessTokenHandler>();
-builder.Services.AddHttpClient<ListingsApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
-    .AddHttpMessageHandler<AccessTokenHandler>();
-builder.Services.AddHttpClient<ModerationApiClient>(client => client.BaseAddress = new(RentalsApi.BaseAddress))
-    .AddHttpMessageHandler<AccessTokenHandler>();
 
 var app = builder.Build();
 

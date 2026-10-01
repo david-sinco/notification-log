@@ -23,6 +23,13 @@ using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Visitors.Commands.CompleteVisitorProfile;
 using NotificationLog.RentalService.Application.Visitors.Queries;
+using NotificationLog.RentalService.Application.Visits.Commands.CancelVisit;
+using NotificationLog.RentalService.Application.Visits.Commands.CounterProposeVisit;
+using NotificationLog.RentalService.Application.Visits.Commands.MarkVisitCompleted;
+using NotificationLog.RentalService.Application.Visits.Commands.MarkVisitNoShow;
+using NotificationLog.RentalService.Application.Visits.Commands.RequestVisit;
+using NotificationLog.RentalService.Application.Visits.Commands.ScheduleVisit;
+using NotificationLog.RentalService.Application.Visits.Queries;
 
 namespace NotificationLog.RentalService.Application;
 
@@ -57,12 +64,21 @@ public static class DependencyInjection
 
         services.AddScoped<CompleteVisitorProfileHandler>();
 
+        services.AddScoped<CancelVisitHandler>();
+        services.AddScoped<CounterProposeVisitHandler>();
+        services.AddScoped<MarkVisitCompletedHandler>();
+        services.AddScoped<MarkVisitNoShowHandler>();
+        services.AddScoped<RequestVisitHandler>();
+        services.AddScoped<ScheduleVisitHandler>();
+
         services.AddScoped<ListListingsHandler>();
         services.AddScoped<GetListingByIdHandler>();
         services.AddScoped<GetOwnerByIdHandler>();
         services.AddScoped<ListOwnersHandler>();
         services.AddScoped<GetVisitorByIdHandler>();
         services.AddScoped<ListVisitorsHandler>();
+        services.AddScoped<GetVisitByIdHandler>();
+        services.AddScoped<ListVisitsHandler>();
 
         return services;
     }

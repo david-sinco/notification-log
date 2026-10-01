@@ -160,7 +160,7 @@ else if (listing is not null)
                                 {
                                     <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/visits/{v.Id}")'>
                                         <td><ShortId Value="v.VisitorId" /></td>
-                                        <td>@RentalsFormat.Date(v.ConfirmedSlotStart ?? v.FirstSlotStart)</td>
+                                        <td>@RentalsFormat.Date(v.FirstSlot)</td>
                                         <td><RentalStatusPill Status="@v.Status" /></td>
                                     </tr>
                                 }
@@ -225,7 +225,7 @@ else if (listing is not null)
 }
 
 <ReasonModal Title="Retirar publicación"
-             Description="La publicación deja de estar disponible y se cancelan sus visitas futuras."
+             Description="La publicación deja de estar disponible."
              ConfirmText="Retirar"
              Danger="true" Busy="modalBusy" Error="modalError"
              @bind-IsVisible="showWithdraw" OnConfirm="WithdrawAsync" />
@@ -370,7 +370,8 @@ else if (listing is not null)
     <ChildContent>
         <p class="text-muted small">
             Proponé hasta @VisitLimits.MaxSlots franjas de una hora, en hora de Colombia, entre las @VisitLimits.EarliestHour:00
-            y las @VisitLimits.LatestHour:00, con al menos 2 horas de antelación y hasta 14 días.
+            y las @VisitLimits.LatestHour:00 (la última empieza a las @(VisitLimits.LatestHour - 1):00), con al menos @VisitLimits.MinLeadHours horas de antelación y hasta
+            @VisitLimits.MaxLeadDays días. El propietario acepta una, propone otras o cancela.
         </p>
         @for (var i = 0; i < slotDrafts.Length; i++)
         {
@@ -395,7 +396,7 @@ else if (listing is not null)
     [Parameter] public Guid Id { get; set; }
 
     private ListingDto? listing;
-    private IReadOnlyList<VisitSummaryDto> visits = [];
+    private IReadOnlyList<VisitDto> visits = [];
     private bool loading = true;
     private ApiException? loadError;
     private ApiException? actionError;
@@ -542,8 +543,8 @@ else if (listing is not null)
 
     private void OpenVisit()
     {
-        var tomorrow = DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date.AddDays(1);
-        slotDrafts = [tomorrow.AddHours(10), tomorrow.AddHours(15), null];
+        var day = DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date.AddDays(2);
+        slotDrafts = [day.AddHours(10), day.AddHours(15), null];
         modalError = null;
         showVisit = true;
     }
@@ -554,7 +555,7 @@ else if (listing is not null)
         try
         {
             var slots = slotDrafts.OfType<DateTime>().Select(RentalsFormat.FromColombia).ToList();
-            var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Actor.Require(), Id, slots), CancellationToken.None);
+            var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Id, slots), CancellationToken.None);
             showVisit = false;
             Nav.NavigateTo($"/rentals/visits/{visitId}");
         }

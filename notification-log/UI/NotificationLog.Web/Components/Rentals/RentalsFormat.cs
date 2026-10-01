@@ -19,9 +19,9 @@ public static class RentalsFormat
         ["Closed"] = "Cerrada",
         ["Withdrawn"] = "Retirada",
         ["Suspended"] = "Suspendida",
-        ["Requested"] = "Solicitada",
-        ["Confirmed"] = "Confirmada",
-        ["Declined"] = "Rechazada",
+        ["AwaitingHost"] = "Espera al anfitrión",
+        ["AwaitingVisitor"] = "Espera al visitante",
+        ["Scheduled"] = "Agendada",
         ["Cancelled"] = "Cancelada",
         ["Completed"] = "Realizada",
         ["NoShow"] = "Inasistencia"
@@ -39,7 +39,8 @@ public static class RentalsFormat
         ["InvalidAddress"] = "Dirección inválida",
         ["ProhibitedContent"] = "Contenido prohibido",
         ["Visitor"] = "Visitante",
-        ["Host"] = "Anfitrión"
+        ["Host"] = "Anfitrión",
+        ["System"] = "Sistema"
     };
 
     public static string Status(string status) => Statuses.GetValueOrDefault(status, status);
@@ -50,10 +51,10 @@ public static class RentalsFormat
 
     public static string StatusVariant(string status) => status switch
     {
-        "Published" or "Confirmed" or "Completed" => "success",
-        "InReview" or "Requested" => "warning",
+        "Published" or "Scheduled" or "Completed" => "success",
+        "InReview" or "AwaitingHost" or "AwaitingVisitor" => "warning",
         "Closed" => "info",
-        "Suspended" or "Withdrawn" or "Declined" or "NoShow" => "danger",
+        "Suspended" or "Withdrawn" or "NoShow" => "danger",
         _ => "neutral"
     };
 

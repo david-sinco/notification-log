@@ -6,10 +6,11 @@ import { SignInRequired } from "@/components/sign-in-required";
 import { dateTime, place, visitStatus } from "@/lib/format";
 import { getListing, getMyVisitor, listMyVisits } from "@/lib/rentals";
 import { CancelVisitForm } from "./cancel-visit-form";
+import { RespondVisitForm } from "./respond-visit-form";
 
 export const metadata = { title: "Mis visitas" };
 
-const cancellable = ["Requested", "Confirmed"];
+const cancellable = ["AwaitingHost", "AwaitingVisitor", "Scheduled"];
 
 export default async function VisitsPage({ searchParams }: { searchParams: Promise<{ pagina?: string }> }) {
   const session = await auth();
@@ -19,7 +20,7 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
   if (visitor?.status !== "Registered") redirect("/perfil?next=/visitas");
 
   const page = Math.max(Number((await searchParams).pagina) || 1, 1);
-  const visits = await listMyVisits(session.user.id, page);
+  const visits = await listMyVisits(page);
   const listings = await Promise.all(visits.items.map((visit) => getListing(visit.listingId).catch(() => null)));
 
   return (
@@ -28,7 +29,10 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
         <header className="page-header">
           <p className="eyebrow">Tu cuenta</p>
           <h1>Mis visitas</h1>
-          <p>Las visitas que has pedido y en qué van. El propietario tiene un plazo para confirmar uno de tus horarios.</p>
+          <p>
+            Las visitas que has pedido y en qué van. El propietario acepta uno de tus horarios o te propone otros, y
+            cada respuesta tiene un plazo.
+          </p>
         </header>
 
         {visits.items.length === 0 ? (
@@ -54,15 +58,26 @@ export default async function VisitsPage({ searchParams }: { searchParams: Promi
                       </Link>
                     </h2>
                     <div className="visit-meta">
-                      {visit.confirmedSlotStart ? (
-                        <span>Confirmada para el {dateTime(visit.confirmedSlotStart)}</span>
-                      ) : (
-                        <span>Primer horario propuesto: {dateTime(visit.firstSlotStart)}</span>
+                      {visit.scheduledStartsAt && <span>Agendada para el {dateTime(visit.scheduledStartsAt)}</span>}
+                      {visit.status === "AwaitingHost" && (
+                        <span>Horarios que propusiste: {visit.proposedSlots.map(dateTime).join(" · ")}</span>
                       )}
-                      {visit.status === "Requested" && <span>Respuesta antes del {dateTime(visit.respondBy)}</span>}
+                      {visit.status === "AwaitingVisitor" && <span>El propietario te propuso otros horarios.</span>}
+                      {visit.respondBy && (
+                        <span>
+                          {visit.status === "AwaitingHost" ? "El propietario responde" : "Responde"} antes del{" "}
+                          {dateTime(visit.respondBy)}
+                        </span>
+                      )}
+                      {visit.cancellationReason && <span>Motivo: {visit.cancellationReason}</span>}
                     </div>
                   </div>
-                  {cancellable.includes(visit.status) && <CancelVisitForm visitId={visit.id} />}
+                  <div className="stack">
+                    {visit.status === "AwaitingVisitor" && (
+                      <RespondVisitForm visitId={visit.id} proposedSlots={visit.proposedSlots} />
+                    )}
+                    {cancellable.includes(visit.status) && <CancelVisitForm visitId={visit.id} />}
+                  </div>
                 </li>
               );
             })}

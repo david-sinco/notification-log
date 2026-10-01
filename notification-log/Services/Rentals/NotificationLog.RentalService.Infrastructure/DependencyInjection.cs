@@ -7,9 +7,11 @@ using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Visitors.Queries;
+using NotificationLog.RentalService.Application.Visits.Queries;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Visitors;
+using NotificationLog.RentalService.Domain.Visits;
 using NotificationLog.RentalService.Infrastructure.Messaging;
 using NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
 using NotificationLog.RentalService.Infrastructure.Persistence;
@@ -38,10 +40,12 @@ public static class DependencyInjection
         services.AddScoped<IListingRepository, MartenListingRepository>();
         services.AddScoped<IOwnerRepository, MartenOwnerRepository>();
         services.AddScoped<IVisitorRepository, MartenVisitorRepository>();
+        services.AddScoped<IVisitRepository, MartenVisitRepository>();
 
         services.AddScoped<IListingReadModel, MartenListingReadModel>();
         services.AddScoped<IOwnerReadModel, MartenOwnerReadModel>();
         services.AddScoped<IVisitorReadModel, MartenVisitorReadModel>();
+        services.AddScoped<IVisitReadModel, MartenVisitReadModel>();
 
         services.AddScoped<ICommandScheduler, WolverineCommandScheduler>();
         services.AddScoped<INotificationProducer, WolverineNotificationDispatcher>();

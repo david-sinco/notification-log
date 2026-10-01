@@ -19,23 +19,23 @@ else if (visit is not null)
     <div class="page-header">
         <div>
             <p class="eyebrow">Visita</p>
-            <h1>Visita @(visit.ConfirmedSlotStart is { } confirmed ? $"el {RentalsFormat.Date(confirmed)}" : "por confirmar")</h1>
-            <p>Franjas de @visit.SlotDurationMinutes minutos, hora de Colombia · <ShortId Value="visit.Id" /></p>
+            <h1>Visita @(visit.ScheduledStartsAt is { } scheduled ? $"el {RentalsFormat.Date(scheduled)}" : "por acordar")</h1>
+            <p>Franjas de una hora, hora de Colombia · <ShortId Value="visit.Id" /></p>
         </div>
         <div class="d-flex align-items-center gap-2 flex-wrap">
             <RentalStatusPill Status="@visit.Status" />
-            @if (visit.Status == "Requested")
+            @if (IsMyTurn)
             {
-                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(VisitAction.Decline)">Rechazar</button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="OpenSlots">Proponer otras franjas</button>
             }
-            @if (visit.Status == "Confirmed")
+            @if (visit.Status == "Scheduled" && IsHost)
             {
-                <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.ReportOutcomeAsync(Id, a, true, CancellationToken.None))">Se realizó</button>
-                <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(a => Api.ReportOutcomeAsync(Id, a, false, CancellationToken.None))">No asistió</button>
+                <button class="btn btn-primary btn-sm" disabled="@(busy || !HasStarted)" @onclick="() => RunAsync(() => Api.MarkCompletedAsync(Id, CancellationToken.None))">Se realizó</button>
+                <button class="btn btn-outline-secondary btn-sm" disabled="@(busy || !HasStarted)" @onclick="() => RunAsync(() => Api.MarkNoShowAsync(Id, CancellationToken.None))">No asistió</button>
             }
-            @if (visit.Status is "Requested" or "Confirmed")
+            @if (CanCancel)
             {
-                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="() => OpenReason(VisitAction.Cancel)">Cancelar</button>
+                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="OpenCancel">Cancelar</button>
             }
         </div>
     </div>
@@ -45,16 +45,17 @@ else if (visit is not null)
         <ErrorAlert Exception="actionError" />
     }
 
-    @if (visit.Status == "Requested")
+    @if (visit.IsNegotiating)
     {
         <div class="alert alert-info-soft small">
-            El anfitrión confirma una de las franjas o rechaza la solicitud antes del @RentalsFormat.Date(visit.RespondBy).
+            Le toca responder al @(visit.Status == "AwaitingHost" ? "anfitrión" : "visitante") antes del @RentalsFormat.Date(visit.RespondBy):
+            acepta una de las franjas, propone otras o cancela. Si no responde, la visita vence.
         </div>
     }
-    else if (visit.Status == "Confirmed")
+    else if (visit.Status == "Scheduled")
     {
         <div class="alert alert-info-soft small">
-            El resultado se registra cuando termina la franja; si nadie lo hace, la visita se da por realizada 72 horas después.
+            El anfitrión registra el resultado cuando empieza la visita; si no lo hace, se da por realizada 72 horas después de que termine.
             Cancelar con menos de 12 horas cuenta como cancelación tardía.
         </div>
     }
@@ -77,10 +78,15 @@ else if (visit is not null)
                         <dt>Cancelada por</dt>
                         <dd>@RentalsFormat.Term(visit.CancelledBy)@(visit.IsLateCancellation ? " · tardía" : "")</dd>
                     }
-                    @if (visit.Reason is not null)
+                    @if (visit.CancellationReason is not null)
                     {
                         <dt>Motivo</dt>
-                        <dd>@visit.Reason</dd>
+                        <dd>@visit.CancellationReason</dd>
+                    }
+                    @if (visit.ClosedBy is not null)
+                    {
+                        <dt>Cerrada por</dt>
+                        <dd>@RentalsFormat.Term(visit.ClosedBy)</dd>
                     }
                 </dl>
             </div>
@@ -88,42 +94,74 @@ else if (visit is not null)
 
         <div class="col-lg-6">
             <div class="surface-card">
-                <h2 class="h6">Franjas propuestas</h2>
-                <ul class="slot-list">
-                    @foreach (var slot in visit.SlotStarts)
-                    {
-                        <li>
-                            <span>
-                                @RentalsFormat.Date(slot) – @slot.AddMinutes(visit.SlotDurationMinutes).ToOffset(RentalsFormat.ColombiaOffset).ToString("HH:mm")
-                                @if (visit.ConfirmedSlotStart == slot)
+                @if (visit.ScheduledStartsAt is { } start)
+                {
+                    <h2 class="h6">Franja agendada</h2>
+                    <ul class="slot-list">
+                        <li><span>@Range(start)</span></li>
+                    </ul>
+                }
+                else if (visit.ProposedSlots.Count > 0)
+                {
+                    <h2 class="h6">Franjas propuestas</h2>
+                    <ul class="slot-list">
+                        @foreach (var slot in visit.ProposedSlots)
+                        {
+                            <li>
+                                <span>@Range(slot)</span>
+                                @if (IsMyTurn)
                                 {
-                                    <StatusPill Text="Confirmada" Variant="success" />
+                                    <button class="btn btn-sm btn-outline-secondary" disabled="@busy"
+                                            @onclick="() => RunAsync(() => Api.ScheduleAsync(Id, slot, CancellationToken.None))">
+                                        Aceptar esta
+                                    </button>
                                 }
-                            </span>
-                            @if (visit.Status == "Requested")
-                            {
-                                <button class="btn btn-sm btn-outline-secondary" disabled="@busy"
-                                        @onclick="() => RunAsync(a => Api.ConfirmAsync(Id, a, slot, CancellationToken.None))">
-                                    Confirmar esta
-                                </button>
-                            }
-                        </li>
-                    }
-                </ul>
+                            </li>
+                        }
+                    </ul>
+                }
+                else
+                {
+                    <h2 class="h6">Franjas</h2>
+                    <p class="text-muted small mb-0">La visita terminó sin una franja agendada.</p>
+                }
             </div>
         </div>
     </div>
 }
 
-<ReasonModal Title="@(reasonAction == VisitAction.Decline ? "Rechazar solicitud" : "Cancelar visita")"
-             ConfirmText="@(reasonAction == VisitAction.Decline ? "Rechazar" : "Cancelar visita")"
+<ReasonModal Title="Cancelar visita" ConfirmText="Cancelar visita"
              Danger="true" Busy="modalBusy" Error="modalError"
-             @bind-IsVisible="showReason" OnConfirm="ConfirmReasonAsync" />
+             @bind-IsVisible="showCancel" OnConfirm="CancelAsync" />
+
+<Modal Title="Proponer otras franjas" @bind-IsVisible="showSlots">
+    <ChildContent>
+        <p class="text-muted small">
+            Proponé hasta @VisitLimits.MaxSlots franjas de una hora, en hora de Colombia, entre las @VisitLimits.EarliestHour:00
+            y las @VisitLimits.LatestHour:00 (la última empieza a las @(VisitLimits.LatestHour - 1):00), con al menos @VisitLimits.MinLeadHours horas de antelación y hasta
+            @VisitLimits.MaxLeadDays días. Reemplazan a las propuestas actuales.
+        </p>
+        @for (var i = 0; i < slotDrafts.Length; i++)
+        {
+            var index = i;
+            <div class="mb-2">
+                <label class="form-label">Franja @(index + 1)@(index == 0 ? "" : " (opcional)")</label>
+                <input type="datetime-local" class="form-control" @bind="slotDrafts[index]" />
+            </div>
+        }
+        @if (modalError is not null)
+        {
+            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+        }
+    </ChildContent>
+    <FooterContent>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showSlots = false">Cancelar</button>
+        <button type="button" class="btn btn-primary" disabled="@(modalBusy || slotDrafts.All(s => s is null))" @onclick="CounterProposeAsync">Proponer</button>
+    </FooterContent>
+</Modal>
 
 @code {
     [Parameter] public Guid Id { get; set; }
-
-    private enum VisitAction { Decline, Cancel }
 
     private VisitDto? visit;
     private bool loading = true;
@@ -133,10 +171,32 @@ else if (visit is not null)
 
     private bool modalBusy;
     private ApiException? modalError;
-    private bool showReason;
-    private VisitAction reasonAction;
+    private bool showCancel;
+    private bool showSlots;
+    private DateTime?[] slotDrafts = new DateTime?[VisitLimits.MaxSlots];
+
+    private bool IsHost => visit is not null && Actor.Is(visit.HostId);
+
+    private bool IsVisitor => visit is not null && Actor.Is(visit.VisitorId);
+
+    private bool IsMyTurn => visit?.Status switch
+    {
+        "AwaitingHost" => IsHost,
+        "AwaitingVisitor" => IsVisitor,
+        _ => false
+    };
+
+    private bool HasStarted => visit?.ScheduledStartsAt is { } start && start <= DateTimeOffset.UtcNow;
+
+    private bool CanCancel =>
+        visit is not null
+        && (IsHost || IsVisitor)
+        && (visit.IsNegotiating || (visit.Status == "Scheduled" && !HasStarted));
 
     protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private static string Range(DateTimeOffset start) =>
+        $"{RentalsFormat.Date(start)} – {start.AddHours(1).ToOffset(RentalsFormat.ColombiaOffset):HH:mm}";
 
     private async Task LoadAsync()
     {
@@ -156,12 +216,12 @@ else if (visit is not null)
         }
     }
 
-    private async Task RunAsync(Func<Guid, Task> action)
+    private async Task RunAsync(Func<Task> action)
     {
         busy = true;
         try
         {
-            await action(Actor.Require());
+            await action();
             actionError = null;
             await LoadAsync();
         }
@@ -175,26 +235,13 @@ else if (visit is not null)
         }
     }
 
-    private void OpenReason(VisitAction action)
-    {
-        reasonAction = action;
-        modalError = null;
-        showReason = true;
-    }
-
-    private async Task ConfirmReasonAsync(string reason)
+    private async Task RunModalAsync(Func<Task> action, Action close)
     {
         modalBusy = true;
         try
         {
-            var actorId = Actor.Require();
-
-            if (reasonAction == VisitAction.Decline)
-                await Api.DeclineAsync(Id, actorId, reason, CancellationToken.None);
-            else
-                await Api.CancelAsync(Id, actorId, reason, CancellationToken.None);
-
-            showReason = false;
+            await action();
+            close();
             modalError = null;
             await LoadAsync();
         }
@@ -206,5 +253,29 @@ else if (visit is not null)
         {
             modalBusy = false;
         }
+    }
+
+    private void OpenCancel()
+    {
+        modalError = null;
+        showCancel = true;
+    }
+
+    private void OpenSlots()
+    {
+        var day = DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date.AddDays(2);
+        slotDrafts = [day.AddHours(10), day.AddHours(15), null];
+        modalError = null;
+        showSlots = true;
+    }
+
+    private Task CancelAsync(string reason) =>
+        RunModalAsync(() => Api.CancelAsync(Id, reason, CancellationToken.None), () => showCancel = false);
+
+    private Task CounterProposeAsync()
+    {
+        var slots = slotDrafts.OfType<DateTime>().Select(RentalsFormat.FromColombia).ToList();
+
+        return RunModalAsync(() => Api.CounterProposeAsync(Id, slots, CancellationToken.None), () => showSlots = false);
     }
 }

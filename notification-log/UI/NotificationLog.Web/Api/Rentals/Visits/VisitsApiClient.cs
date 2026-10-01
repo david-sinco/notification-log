@@ -2,7 +2,7 @@ namespace NotificationLog.Web.Api.Rentals.Visits;
 
 public sealed class VisitsApiClient(HttpClient http)
 {
-    public Task<PagedResult<VisitSummaryDto>> ListAsync(
+    public Task<PagedResult<VisitDto>> ListAsync(
         Guid? listingId, Guid? participantId, VisitStatus? status, int page, int pageSize, CancellationToken ct)
     {
         var query = QueryString.Build(
@@ -12,7 +12,7 @@ public sealed class VisitsApiClient(HttpClient http)
             ("page", page.ToString()),
             ("pageSize", pageSize.ToString()));
 
-        return http.GetJsonAsync<PagedResult<VisitSummaryDto>>($"/api/visits{query}", ct);
+        return http.GetJsonAsync<PagedResult<VisitDto>>($"/api/visits{query}", ct);
     }
 
     public Task<VisitDto> GetByIdAsync(Guid id, CancellationToken ct)
@@ -21,15 +21,19 @@ public sealed class VisitsApiClient(HttpClient http)
     public Task<Guid> RequestAsync(RequestVisitRequest request, CancellationToken ct)
         => http.SendForIdAsync(HttpMethod.Post, "/api/visits", request, ct);
 
-    public Task ConfirmAsync(Guid id, Guid actorId, DateTimeOffset slotStart, CancellationToken ct)
-        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/confirm", new ConfirmVisitRequest(actorId, slotStart), ct);
+    public Task CounterProposeAsync(Guid id, IReadOnlyList<DateTimeOffset> slots, CancellationToken ct)
+        => http.SendJsonAsync(
+            HttpMethod.Post, $"/api/visits/{id}/counter-proposal", new CounterProposeVisitRequest(slots), ct);
 
-    public Task DeclineAsync(Guid id, Guid actorId, string reason, CancellationToken ct)
-        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/decline", new VisitReasonRequest(actorId, reason), ct);
+    public Task ScheduleAsync(Guid id, DateTimeOffset startsAt, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/schedule", new ScheduleVisitRequest(startsAt), ct);
 
-    public Task CancelAsync(Guid id, Guid actorId, string reason, CancellationToken ct)
-        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/cancel", new VisitReasonRequest(actorId, reason), ct);
+    public Task CancelAsync(Guid id, string reason, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/cancel", new CancelVisitRequest(reason), ct);
 
-    public Task ReportOutcomeAsync(Guid id, Guid actorId, bool attended, CancellationToken ct)
-        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/outcome", new ReportVisitOutcomeRequest(actorId, attended), ct);
+    public Task MarkCompletedAsync(Guid id, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/complete", null, ct);
+
+    public Task MarkNoShowAsync(Guid id, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Post, $"/api/visits/{id}/no-show", null, ct);
 }

@@ -23,7 +23,7 @@ public sealed record TimeSlot
 
         if (start < TimeSpan.FromHours(FirstHour) || end > TimeSpan.FromHours(LastHour))
             throw new DomainException(
-                $"La franja debe estar entre las {FirstHour}:00 y las {LastHour}:00 hora de Colombia.");
+                $"La franja dura una hora y debe empezar entre las {FirstHour}:00 y las {LastHour - Duration.Hours}:00 hora de Colombia.");
 
         return new TimeSlot(startsAt.ToUniversalTime());
     }

@@ -4,8 +4,15 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getToken } from "next-auth/jwt";
-import { auth, issuer, signIn, signOut } from "@/auth";
-import { ApiError, cancelVisit, completeMyProfile, requestVisit } from "@/lib/rentals";
+import { issuer, signIn, signOut } from "@/auth";
+import {
+  ApiError,
+  cancelVisit,
+  completeMyProfile,
+  counterProposeVisit,
+  requestVisit,
+  scheduleVisit,
+} from "@/lib/rentals";
 import type { ActionResult } from "@/lib/types";
 
 export async function login(redirectTo: string) {
@@ -28,12 +35,6 @@ export async function logout() {
   redirect(endSession.href);
 }
 
-async function currentUserId() {
-  const session = await auth();
-  if (!session) throw new ApiError("Tu sesión terminó. Inicia sesión de nuevo.", 401);
-  return session.user.id;
-}
-
 async function attempt(action: () => Promise<unknown>): Promise<ActionResult> {
   try {
     await action();
@@ -43,17 +44,26 @@ async function attempt(action: () => Promise<unknown>): Promise<ActionResult> {
   }
 }
 
-export async function requestVisitAction(listingId: string, slotStarts: string[]): Promise<ActionResult> {
-  const result = await attempt(async () => requestVisit(await currentUserId(), listingId, slotStarts));
+export async function requestVisitAction(listingId: string, slots: string[]): Promise<ActionResult> {
+  const result = await attempt(() => requestVisit(listingId, slots));
   if (result.error) return result;
   redirect("/visitas");
 }
 
-export async function cancelVisitAction(visitId: string, reason: string): Promise<ActionResult> {
-  const result = await attempt(async () => cancelVisit(await currentUserId(), visitId, reason));
+async function visitAction(action: () => Promise<unknown>): Promise<ActionResult> {
+  const result = await attempt(action);
   revalidatePath("/visitas");
   return result;
 }
+
+export const cancelVisitAction = async (visitId: string, reason: string) =>
+  visitAction(() => cancelVisit(visitId, reason));
+
+export const scheduleVisitAction = async (visitId: string, startsAt: string) =>
+  visitAction(() => scheduleVisit(visitId, startsAt));
+
+export const counterProposeVisitAction = async (visitId: string, slots: string[]) =>
+  visitAction(() => counterProposeVisit(visitId, slots));
 
 export async function completeProfileAction(_: ActionResult, form: FormData): Promise<ActionResult> {
   const field = (name: string) => String(form.get(name) ?? "").trim();

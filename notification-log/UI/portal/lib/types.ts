@@ -31,14 +31,20 @@ export type Listing = ListingSummary & {
   expiresAt: string | null;
 };
 
-export type VisitSummary = {
+export type Visit = {
   id: string;
   listingId: string;
+  hostId: string;
   visitorId: string;
   status: string;
-  firstSlotStart: string;
-  confirmedSlotStart: string | null;
-  respondBy: string;
+  proposedSlots: string[];
+  respondBy: string | null;
+  scheduledStartsAt: string | null;
+  scheduledEndsAt: string | null;
+  cancelledBy: string | null;
+  cancellationReason: string | null;
+  isLateCancellation: boolean;
+  closedBy: string | null;
 };
 
 export type Visitor = {

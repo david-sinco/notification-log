@@ -1,7 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { getToken } from "next-auth/jwt";
-import type { Listing, ListingSummary, PagedResult, Visitor, VisitSummary } from "@/lib/types";
+import type { Listing, ListingSummary, PagedResult, Visit, Visitor } from "@/lib/types";
 
 const baseUrl =
   process.env.services__rental__https__0 ?? process.env.services__rental__http__0 ?? "https://localhost:7057";
@@ -80,21 +80,20 @@ export const completeMyProfile = (profile: {
   phone: string;
 }) => request<void>("/api/visitors/me/profile", { method: "PUT", body: JSON.stringify(profile), authenticated: true });
 
-export const listMyVisits = (visitorId: string, page: number) =>
-  request<PagedResult<VisitSummary>>(`/api/visits?${query({ participantId: visitorId, page, pageSize: 20 })}`, {
-    authenticated: true,
-  });
+const post = <T>(path: string, body: unknown) =>
+  request<T>(path, { method: "POST", body: JSON.stringify(body), authenticated: true });
 
-export const requestVisit = (visitorId: string, listingId: string, slotStarts: string[]) =>
-  request<{ id: string }>("/api/visits", {
-    method: "POST",
-    body: JSON.stringify({ visitorId, listingId, slotStarts }),
-    authenticated: true,
-  });
+export const listMyVisits = (page: number) =>
+  request<PagedResult<Visit>>(`/api/visits?${query({ page, pageSize: 20 })}`, { authenticated: true });
 
-export const cancelVisit = (actorId: string, visitId: string, reason: string) =>
-  request<void>(`/api/visits/${visitId}/cancel`, {
-    method: "POST",
-    body: JSON.stringify({ actorId, reason }),
-    authenticated: true,
-  });
+export const requestVisit = (listingId: string, slots: string[]) =>
+  post<{ id: string }>("/api/visits", { listingId, slots });
+
+export const counterProposeVisit = (visitId: string, slots: string[]) =>
+  post<void>(`/api/visits/${visitId}/counter-proposal`, { slots });
+
+export const scheduleVisit = (visitId: string, startsAt: string) =>
+  post<void>(`/api/visits/${visitId}/schedule`, { startsAt });
+
+export const cancelVisit = (visitId: string, reason: string) =>
+  post<void>(`/api/visits/${visitId}/cancel`, { reason });

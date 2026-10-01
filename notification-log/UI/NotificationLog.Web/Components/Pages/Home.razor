@@ -43,7 +43,7 @@
     <div class="col-6 col-lg-3">
         <a class="stat-card" href="rentals/visits">
             <span class="stat-icon">📅</span>
-            <span class="stat-label">Visitas por confirmar</span>
+            <span class="stat-label">Visitas por responder</span>
             <span class="stat-value">@Count(requestedVisits)</span>
         </a>
     </div>
@@ -273,7 +273,7 @@
             var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 1, CancellationToken.None);
             var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 1, CancellationToken.None);
             var recentTask = ListingsApi.ListAsync(null, null, null, null, 1, 6, CancellationToken.None);
-            var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.Requested, 1, 1, CancellationToken.None);
+            var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.AwaitingHost, 1, 1, CancellationToken.None);
             var ownersTask = isStaff ? OwnersApi.ListAsync(null, 1, 1, CancellationToken.None) : null;
             var closedTask = isStaff
                 ? null

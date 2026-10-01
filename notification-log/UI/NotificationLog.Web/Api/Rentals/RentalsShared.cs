@@ -35,11 +35,11 @@ public enum RejectionReason
 
 public enum VisitStatus
 {
-    Requested = 0,
-    Confirmed = 1,
-    Declined = 2,
-    Expired = 3,
-    Cancelled = 4,
-    Completed = 5,
-    NoShow = 6
+    AwaitingHost = 0,
+    AwaitingVisitor = 1,
+    Scheduled = 2,
+    Completed = 3,
+    NoShow = 4,
+    Cancelled = 5,
+    Expired = 6
 }

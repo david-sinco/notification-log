@@ -1,10 +1,30 @@
 using System.Net.Http.Json;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using NotificationLog.Web.Api.Rentals.Listings;
+using NotificationLog.Web.Api.Rentals.Owners;
+using NotificationLog.Web.Api.Rentals.Visits;
+using NotificationLog.Web.Authentication;
 
 namespace NotificationLog.Web.Api.Rentals;
 
 internal static class RentalsApi
 {
-    public const string BaseAddress = "https+http://rental";
+    private const string BaseAddress = "https+http://rental";
+
+    public static IServiceCollection AddRentalsApi(this IServiceCollection services)
+    {
+        services.AddHttpContextAccessor();
+        services.TryAddTransient<AccessTokenHandler>();
+
+        services.AddHttpClient(nameof(RentalsApi), client => client.BaseAddress = new(BaseAddress))
+            .AddHttpMessageHandler<AccessTokenHandler>()
+            .AddTypedClient<OwnersApiClient>()
+            .AddTypedClient<ListingsApiClient>()
+            .AddTypedClient<ModerationApiClient>()
+            .AddTypedClient<VisitsApiClient>();
+
+        return services;
+    }
 
     public static async Task<T> GetJsonAsync<T>(this HttpClient http, string url, CancellationToken ct)
     {
