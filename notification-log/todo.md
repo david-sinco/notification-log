@@ -70,6 +70,29 @@
   - **Validar al ejecutarse.** Recargar el agregado y seguir solo si el schedule `(Kind, ScheduledTo)` todavía está entre los que declara; si no, descartarlo. Los mensajes programados no se cancelan, así que renovar, cerrar, retirar o suspender dejan mensajes viejos que se descartan al llegar.
   - **Duplicados.** Suspender y rehabilitar con el mismo `ExpiresAt` vuelve a programar el aviso y el original sigue vivo. Expirar es idempotente en el dominio; para avisar, usar un `event_id` determinista (`StreamId + Kind + ScheduledTo`) y que Notification ignore los repetidos.
   - **Estructura en Application (por definir).** Nombre de la carpeta y de las clases que reciben el schedule vencido, lo enrutan por `Kind` al handler que corresponde y disparan comandos o notificaciones. Es parecido a un consumer, pero ese nombre no encaja para esta lógica. También hay que decidir si hay un handler por `Kind` o uno por agregado.
+- [ ] **Visitas: tareas programadas, cancelación automática y reglas sin validar.** El dominio (`Visit`) y los comandos de usuario ya existen; falta lo que no dispara una persona.
+  - **Vencer la visita sin respuesta.** Al llegar el `RespondBy` de cada propuesta, llamar a `visit.Expire(now)` (emite `VisitExpired`). El método ya existe; faltan el comando `ExpireVisit` y programarlo tras `VisitRequested` y `VisitCounterProposed`. Avisar a las dos partes (`visita.vencida`).
+  - **Cierre automático.** 72 h después de que termine la franja agendada, llamar a `visit.AutoComplete(now)` (emite `VisitCompleted` con `System`). El método ya existe; faltan el comando y programarlo tras `VisitScheduled`.
+  - **Recordatorios de la visita agendada** a las dos partes (por ejemplo, 24 h antes). Solo notifican, no cambian el estado (`visita.recordatorio`).
+  - Los dos métodos del dominio no hacen nada si todavía no toca o la visita ya cambió de estado, así que un mensaje viejo o repetido es inofensivo. Encaja con el pendiente de *Schedules* de arriba.
+  - **Cancelar las visitas cuando la publicación deja de estar disponible** (cerrada, retirada, suspendida o vencida), con `visit.Cancel(VisitParty.System, ...)`, y avisar a las dos partes. Necesita una forma de encontrar las visitas activas de una publicación (proyección por `ListingId`).
+  - **Reglas que no se validan todavía** (todas consultan varias visitas a la vez, contra una proyección):
+    - máximo de visitas activas por visitante;
+    - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
+    - bloqueo por cancelaciones tardías o inasistencias repetidas (`IsLateCancellation`, `NoShow`);
+    - que el anfitrión no agende dos visitas a la misma hora.
+- [ ] **Configurar en Notification las notificaciones de visitas.** Rentals ya las publica con `INotificationProducer`; sin trigger y plantilla en Notification no se envía nada. Las claves están en `VisitNotificationKeys` (Domain de Rentals). Las plantillas usan `StrictVariables`, así que solo pueden usar los datos que manda cada una (más `recipient.*`):
+
+  | Clave                    | Destinatario                    | Datos                                |
+  |---                       |---                              |---                                   |
+  | `visita.solicitada`      | anfitrión                       | `visit_id`, `listing_id`, `slots`    |
+  | `visita.contrapropuesta` | la otra parte                   | `visit_id`, `listing_id`, `slots`    |
+  | `visita.agendada`        | quien había propuesto la franja | `visit_id`, `listing_id`, `starts_at`|
+  | `visita.cancelada`       | la otra parte                   | `visit_id`, `listing_id`, `reason`   |
+  | `visita.realizada`       | visitante                       | `visit_id`, `listing_id`             |
+  | `visita.inasistencia`    | visitante                       | `visit_id`, `listing_id`             |
+
+  Las fechas (`slots`, `starts_at`) van ya formateadas en hora de Colombia (`yyyy-MM-dd HH:mm`). El destinatario tiene que existir en la réplica de destinatarios de Notification; un `Owner` sin cuenta no recibe nada (ver "Usuario por cada `Owner`").
 - [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.
 - [ ] **Quitar la réplica de Identity (`IIdentityReplica`) y cambiar antes la regla de visitas.**
   - **Qué es hoy.** `IIdentityReplica` **no** consulta la base de Identity: lee la base de *Rentals* (Marten,
