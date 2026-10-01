@@ -92,7 +92,7 @@
   | `visita.realizada`       | visitante                       | `starts_at`             |
   | `visita.inasistencia`    | visitante                       | `starts_at`             |
 
-  Las fechas (`slots`, `starts_at`) van ya formateadas en hora de Colombia (`yyyy-MM-dd HH:mm`). El destinatario tiene que existir en la réplica de destinatarios de Notification; un `Owner` sin cuenta no recibe nada (ver "Usuario por cada `Owner`").
+  Las fechas (`slots`, `starts_at`) van ya formateadas en hora de Colombia (`yyyy-MM-dd HH:mm`). El destinatario tiene que existir en la réplica de destinatarios de Notification; un `Owner` sin cuenta no recibe nada (ver "Rediseñar la creación de `Owner` y su cuenta").
 - [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.
 - [ ] **Quitar la réplica de Identity (`IIdentityReplica`) y cambiar antes la regla de visitas.**
   - **Qué es hoy.** `IIdentityReplica` **no** consulta la base de Identity: lee la base de *Rentals* (Marten,
@@ -119,8 +119,18 @@
 - [ ] Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas futuras y avisar a los visitantes. Al cerrarlo o retirarlo ya se hace (`ListingLifecycleProcess.OnNoLongerAvailableAsync`).
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).
 - [ ] Publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`).
-- [ ] **Usuario por cada `Owner`.** Al registrar un propietario (también si lo registra un moderador), crear su usuario en Identity para confirmar correo o teléfono y poder enviarle notificaciones. Mientras tanto, un `Owner` sin cuenta no recibe las notificaciones de sus avisos ni puede atender visitas (el anfitrión es `OwnerId`).
-- [ ] **Mismo id para el usuario y su `Owner`.** Al crear un usuario con rol de propietario hay que registrarlo en Owners con ese mismo id. Si el `Owner` ya existía, actualizar su id para que coincida con el del usuario, o crear el usuario con el id que ya tiene el `Owner`.
+- [ ] **Rediseñar la creación de `Owner` y su cuenta.** Hoy Rentals pide la cuenta por el bus (`AccountCreationRequested` → cola `identity-accounts`) y eso se salta la verificación de credenciales.
+  - **Qué está mal hoy.** `CreateAccountHandler` (Identity) crea la cuenta con el canal ya confirmado, sin código; si ya existe un usuario con ese correo le sobrescribe perfil, contacto y rol; y cuando el propietario se registra a sí mismo pide una cuenta que ya existe.
+  - **Principio.** Identity es el único que crea usuarios, siempre por su registro con verificación. Rentals solo crea `Owner`, y la prueba de identidad es el token.
+  - **Propietario con cuenta.** Se registra en Identity desde el backoffice (rol Propietario por el cliente OIDC), entra, y si no tiene owner el backoffice lo lleva a "Completa tu perfil de propietario", que llama a `POST /api/owners/natural` o `/company` con su token (mismo patrón que `CompleteVisitorProfile`).
+  - **Propietario sin cuenta.** Lo crea un administrador o moderador a nombre de un tercero, sin cuenta ni mensaje. Mientras no tenga cuenta no recibe las notificaciones de sus avisos ni puede atender visitas (el anfitrión es `OwnerId`).
+  - **Vínculo.** `Owner.Id` siempre propio (nunca el id del usuario); `Owner` gana un `UserId` opcional y el evento `OwnerClaimed`. Reserva de unicidad por `UserId`, como `OwnerDocumentReservation`.
+  - **Reconocer a un owner que ya existía.** Cuando alguien entra sin owner, buscar owners sin `UserId` cuyo correo o teléfono coincida con el contacto **verificado** del token. Una coincidencia: se le muestra y al confirmar se emite `OwnerClaimed`. Ninguna: formulario de perfil. Varias: lo resuelve un moderador. La reserva por documento queda como segunda red, pero una cédula repetida no enlaza sola: va a moderación.
+  - **Identity.** Faltan los claims `email_verified` y `phone_number_verified` (`OidcPrincipalFactory` hoy pone correo y teléfono sin decir cuál está verificado) y comprobar que lleguen al access token de Rentals (dependen de los scopes `email` y `phone`).
+  - **Rentals.** `OwnerIdResolver` siempre genera id nuevo; `DraftListingHandler` y `GetOwnerByIdHandler` comparan el `UserId` del owner en vez de `OwnerId` con `userId`; comando para reclamar y consulta del owner propio (`GET /api/owners/me`).
+  - **Qué se borra.** `IAccountProvisioner`, `WolverineAccountProvisioner`, `AccountCreationRequestedHandler`, la cola `identity-accounts`, `account_creation_requested.proto` y `CreateAccountHandler` si nadie más lo usa.
+  - **Por decidir.** Si una misma persona puede tener dos owners (ella como natural y su empresa); hoy el código asume uno.
+  - **Descartado.** `Owner` como entidad dentro de `Listing` (y `Visitor` dentro de `Visit`): se pierde la unicidad por documento, un cambio de contacto son N escrituras, el owner no puede existir sin publicación y los datos personales quedan copiados en cada stream.
 - [ ] **Consultas** (`Inquiry`, un flujo por par publicación–interesado, id UUID v5 de `ListingId + SeekerId`).
   - Una sola conversación por interesado y publicación; un mensaje nuevo se añade a la existente.
   - Mensajes de 1 a 1.000 caracteres, sin teléfonos, correos ni enlaces: el contacto pasa por la plataforma.

@@ -24,7 +24,9 @@ public static class RentalsFormat
         ["Scheduled"] = "Agendada",
         ["Cancelled"] = "Cancelada",
         ["Completed"] = "Realizada",
-        ["NoShow"] = "Inasistencia"
+        ["NoShow"] = "Inasistencia",
+        ["PendingProfile"] = "Perfil pendiente",
+        ["Registered"] = "Registrado"
     };
 
     private static readonly Dictionary<string, string> Terms = new()
@@ -51,8 +53,8 @@ public static class RentalsFormat
 
     public static string StatusVariant(string status) => status switch
     {
-        "Published" or "Scheduled" or "Completed" => "success",
-        "InReview" or "AwaitingHost" or "AwaitingVisitor" => "warning",
+        "Published" or "Scheduled" or "Completed" or "Registered" => "success",
+        "InReview" or "AwaitingHost" or "AwaitingVisitor" or "PendingProfile" => "warning",
         "Closed" => "info",
         "Suspended" or "Withdrawn" or "NoShow" => "danger",
         _ => "neutral"

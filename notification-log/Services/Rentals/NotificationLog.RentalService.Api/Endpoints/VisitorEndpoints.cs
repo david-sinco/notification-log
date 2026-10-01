@@ -1,4 +1,4 @@
-using System.Security.Claims;
+ using System.Security.Claims;
 using API.Shared.Extensions;
 using Application.Shared.Pagination;
 using Domain.Shared.Authorization;
