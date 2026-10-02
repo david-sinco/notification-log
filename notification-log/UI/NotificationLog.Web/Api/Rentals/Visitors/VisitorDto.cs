@@ -11,4 +11,5 @@ public sealed record VisitorDto(
     string Email,
     string Phone,
     DateTimeOffset RegisteredAt,
-    DateTimeOffset? ProfileCompletedAt);
+    DateTimeOffset? ProfileCompletedAt,
+    int VisitCount);

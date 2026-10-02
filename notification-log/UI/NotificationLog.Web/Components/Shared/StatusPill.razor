@@ -1,8 +1,7 @@
-<span class="badge status-pill status-@Variant">@Text</span>
+<span class="pill pill-@Variant @(Large ? "pill-lg" : "")">@Text</span>
 
 @code {
     [Parameter, EditorRequired] public string Text { get; set; } = "";
-
-    // success | danger | neutral
     [Parameter] public string Variant { get; set; } = "neutral";
+    [Parameter] public bool Large { get; set; }
 }

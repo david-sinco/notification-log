@@ -1,32 +1,32 @@
-﻿@page "/Error"
+@page "/Error"
 @attribute [AllowAnonymous]
 @using System.Diagnostics
 
 <PageTitle>Error · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
+<div class="page">
+    <header class="page-head">
         <p class="eyebrow">Llave</p>
-        <h1>Algo salió mal</h1>
-        <p>No pudimos completar la operación. Vuelve a intentarlo en un momento.</p>
+        <h1 class="title">Algo salió mal</h1>
+        <p class="muted">No pudimos completar la operación. Vuelve a intentarlo en un momento.</p>
+    </header>
+
+    <div class="card">
+        @if (ShowRequestId)
+        {
+            <div class="fact">
+                <span class="fact-label">Identificador de la petición</span>
+                <span class="fact-value mono">@requestId</span>
+            </div>
+        }
+        else
+        {
+            <p class="muted">No hay más detalles disponibles sobre este error.</p>
+        }
     </div>
 </div>
 
-<div class="surface-card">
-    @if (ShowRequestId)
-    {
-        <dl class="kv-list mb-0">
-            <dt>Identificador de la petición</dt>
-            <dd><code>@requestId</code></dd>
-        </dl>
-    }
-    else
-    {
-        <p class="mb-0 text-muted">No hay más detalles disponibles sobre este error.</p>
-    }
-</div>
-
-@code{
+@code {
     [CascadingParameter]
     public HttpContext? HttpContext { get; set; }
 

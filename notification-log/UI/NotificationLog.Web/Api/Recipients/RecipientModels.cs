@@ -1,6 +1,6 @@
 namespace NotificationLog.Web.Api.Recipients;
 
-public sealed record RecipientSummaryDto(Guid Id, string Name, string? Email, string? Phone, bool IsActive);
+public sealed record RecipientSummaryDto(Guid Id, string Name, string? Email, string? Phone, bool IsActive, bool AcceptsNotifications);
 
 public sealed record RecipientDto(
     Guid Id,
@@ -10,4 +10,5 @@ public sealed record RecipientDto(
     string Locale,
     string TimeZone,
     IReadOnlyDictionary<string, string> Attributes,
-    bool IsActive);
+    bool IsActive,
+    bool AcceptsNotifications);

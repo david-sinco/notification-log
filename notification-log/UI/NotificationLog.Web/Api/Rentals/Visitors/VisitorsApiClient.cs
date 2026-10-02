@@ -10,4 +10,10 @@ public sealed class VisitorsApiClient(HttpClient http)
 
         return http.GetJsonAsync<PagedResult<VisitorDto>>($"/api/visitors{query}", ct);
     }
+
+    public Task<VisitorDto> GetMeAsync(CancellationToken ct)
+        => http.GetJsonAsync<VisitorDto>("/api/visitors/me", ct);
+
+    public async Task CompleteProfileAsync(CompleteVisitorProfileRequest request, CancellationToken ct)
+        => (await http.SendJsonAsync(HttpMethod.Put, "/api/visitors/me/profile", request, ct)).Dispose();
 }

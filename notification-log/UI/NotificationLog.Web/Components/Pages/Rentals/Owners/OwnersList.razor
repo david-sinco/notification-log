@@ -3,177 +3,149 @@
 @using System.Net
 @inject OwnersApiClient Api
 @inject RentalsActor Actor
-@inject NavigationManager Nav
 
 <PageTitle>Propietarios · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
+<div class="page">
+    <header class="page-head">
         <p class="eyebrow">Arriendos</p>
-        <h1>Propietarios</h1>
-        <p>@Subtitle</p>
-    </div>
-    @if (CanRegister)
-    {
-        <button class="btn btn-primary" @onclick="OpenCreate">+ Registrar propietario</button>
-    }
-</div>
+        <h1 class="title">Propietarios</h1>
+        <p class="muted">Personas naturales o jurídicas a cuyo nombre quedan las publicaciones.</p>
+    </header>
 
-@if (error is not null)
-{
     <ErrorAlert Exception="error" />
-}
 
-@if (Actor.IsStaff)
-{
-    <div class="filter-bar">
-        <div class="form-check mb-0">
-            <input class="form-check-input" type="checkbox" id="only-mine" checked="@onlyMine" @onchange="ToggleOnlyMine" />
-            <label class="form-check-label" for="only-mine">Solo los que registré yo</label>
-        </div>
-    </div>
-}
-
-@if (loading)
-{
-    <div class="p-4 text-center text-muted">Cargando…</div>
-}
-else if (!Actor.IsStaff)
-{
-    @if (ownRecord is null)
-    {
-        <div class="surface-card">
-            <EmptyState Text="Aún no estás registrado como propietario." Icon="🔑" />
-            <p class="form-hint text-center mb-0">
-                Registra tus datos para poder publicar inmuebles y atender visitas.
-            </p>
-        </div>
-    }
-    else
-    {
-        <div class="table-card">
-            <OwnerRows Owners="[ownRecord]" OnSelect="Open" />
-        </div>
-    }
-}
-else if (page is { Items.Count: 0 })
-{
-    <div class="table-card">
-        <EmptyState Text="No se encontraron propietarios." Icon="🔑" />
-    </div>
-}
-else if (page is not null)
-{
-    <div class="table-card">
-        <OwnerRows Owners="page.Items" OnSelect="Open" />
-        <div class="px-3 pb-3">
-            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
-        </div>
-    </div>
-}
-
-<Modal Title="Registrar propietario" @bind-IsVisible="showCreate">
-    <ChildContent>
-        @if (!Actor.IsStaff)
-        {
-            <div class="alert-info-soft p-3 mb-3 small">
-                Te registras a ti mismo como propietario: el registro queda con tu mismo identificador y solo
-                puedes hacerlo una vez.
-            </div>
-        }
-
-        <div class="mb-3">
-            <label class="form-label">Tipo de persona</label>
-            <select class="form-select" @bind="createCompany">
-                <option value="false">Persona natural</option>
-                <option value="true">Persona jurídica</option>
-            </select>
-        </div>
-
-        @if (createCompany)
-        {
-            <div class="mb-3">
-                <label class="form-label">Razón social</label>
-                <input class="form-control" maxlength="200" @bind="legalName" />
-            </div>
-            <div class="mb-3">
-                <label class="form-label">NIT</label>
-                <input class="form-control" placeholder="900123456-7" @bind="nit" />
-                <div class="form-hint">De 8 o 9 dígitos y el dígito de verificación después del guion.</div>
-            </div>
-        }
-        else
-        {
-            <div class="row g-2 mb-3">
-                <div class="col-md-6">
-                    <label class="form-label">Nombres</label>
-                    <input class="form-control" maxlength="100" @bind="firstNames" />
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Apellidos</label>
-                    <input class="form-control" maxlength="100" @bind="lastNames" />
-                </div>
-            </div>
-            <div class="row g-2 mb-3">
-                <div class="col-md-5">
-                    <label class="form-label">Tipo de documento</label>
-                    <select class="form-select" @bind="documentType">
-                        @foreach (var type in Enum.GetValues<DocumentType>())
+    <div class="split">
+        <section class="stack" aria-label="Lista de propietarios" style="flex: 3 1 420px">
+            @if (Actor.IsStaff)
+            {
+                <div class="row">
+                    <label class="sr-only" for="owner-search">Buscar propietario</label>
+                    <input id="owner-search" type="search" class="input input-search grow" style="--basis: 220px" placeholder="Nombre, razón social o documento"
+                           @bind="search" @bind:after="RefreshAsync" />
+                    <div class="segmented" role="group" aria-label="Tipo">
+                        @foreach (var (key, label) in TypeFilters)
                         {
-                            <option value="@type">@OwnerLabels.Document(type.ToString())</option>
+                            <button type="button" aria-pressed="@(typeFilter == key ? "true" : "false")" @onclick="() => SetTypeAsync(key)">@label</button>
                         }
-                    </select>
+                    </div>
                 </div>
-                <div class="col-md-7">
-                    <label class="form-label">Número</label>
-                    <input class="form-control" @bind="documentNumber" />
-                    <div class="form-hint">@DocumentHint</div>
-                </div>
-            </div>
-        }
+            }
 
-        <div class="row g-2 mb-3">
-            <div class="col-md-7">
-                <label class="form-label">Correo</label>
-                <input type="email" class="form-control" maxlength="256" @bind="email" />
-            </div>
-            <div class="col-md-5">
-                <label class="form-label">Teléfono</label>
-                <input class="form-control" placeholder="3001234567" @bind="phone" />
-                <div class="form-hint">Si no pones indicativo se asume +57.</div>
-            </div>
-        </div>
+            @if (loaded && owners.Count == 0)
+            {
+                <EmptyState Text="@(Actor.IsStaff ? "No se encontraron propietarios." : "Todavía no estás registrado como propietario.")" />
+            }
 
-        <div class="alert-info-soft p-3 mb-3 small">
-            Con el correo y el teléfono se crea la cuenta del propietario en Llave, para que pueda
-            confirmarlos y recibir las notificaciones de sus publicaciones y visitas.
-        </div>
+            <div class="stack" style="--gap: 10px">
+                @foreach (var owner in owners)
+                {
+                    var company = owner.Type == "Company";
+                    <article class="card card-tight row" style="padding: 16px; flex-direction: row; --gap: 14px">
+                        <span class="avatar @(company ? "avatar-ink" : "avatar-lime")" aria-hidden="true">@RentalsFormat.Initials(OwnerLabels.Name(owner))</span>
+                        <div class="stack grow" style="--gap: 2px">
+                            <span class="row" style="--gap: 8px">
+                                <span class="strong">@OwnerLabels.Name(owner)</span>
+                                <StatusPill Text="@OwnerLabels.Type(owner.Type)" />
+                            </span>
+                            <span class="mono smaller muted">@OwnerLabels.Identification(owner)</span>
+                            <span class="small muted wrap-any">@owner.Email · @owner.Phone</span>
+                        </div>
+                        <a class="link" href="rentals/listings">@owner.ListingCount @(owner.ListingCount == 1 ? "publicación" : "publicaciones")</a>
+                    </article>
+                }
+            </div>
 
-        @if (createError is not null)
+            @if (page is { TotalPages: > 1 })
+            {
+                <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="propietarios" OnPageChange="GoToPageAsync" />
+            }
+        </section>
+
+        @if (CanRegister)
         {
-            <ErrorAlert Exception="createError" />
+            <section class="card" aria-label="Registrar propietario" style="flex: 2 1 320px; --gap: 16px">
+                <h2 class="h2">Registrar propietario</h2>
+                <div class="choices" role="group" aria-label="Tipo de propietario">
+                    <button type="button" class="choice choice-left" aria-pressed="@(company ? "false" : "true")" @onclick="() => company = false">
+                        <span>Persona natural</span>
+                        <span>Nombres y documento</span>
+                    </button>
+                    <button type="button" class="choice choice-left" aria-pressed="@(company ? "true" : "false")" @onclick="() => company = true">
+                        <span>Persona jurídica</span>
+                        <span>Razón social y NIT</span>
+                    </button>
+                </div>
+                <div class="grid-auto" style="--min: 190px; --gap: 14px">
+                    @if (company)
+                    {
+                        <div class="field">
+                            <label class="label" for="o-legal">Razón social</label>
+                            <input id="o-legal" class="input" @bind="legalName" />
+                        </div>
+                        <div class="field">
+                            <label class="label" for="o-nit">NIT</label>
+                            <input id="o-nit" class="input" @bind="nit" />
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="field">
+                            <label class="label" for="o-doc-type">Tipo de documento</label>
+                            <select id="o-doc-type" class="select" @bind="documentType">
+                                @foreach (var type in RentalsFormat.Values<DocumentType>())
+                                {
+                                    <option value="@type">@OwnerLabels.Document(type.ToString())</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="field">
+                            <label class="label" for="o-doc">Número de documento</label>
+                            <input id="o-doc" class="input" @bind="documentNumber" />
+                        </div>
+                        <div class="field">
+                            <label class="label" for="o-first">Nombres</label>
+                            <input id="o-first" class="input" @bind="firstNames" />
+                        </div>
+                        <div class="field">
+                            <label class="label" for="o-last">Apellidos</label>
+                            <input id="o-last" class="input" @bind="lastNames" />
+                        </div>
+                    }
+                    <div class="field">
+                        <label class="label" for="o-email">Correo</label>
+                        <input id="o-email" type="email" class="input" @bind="email" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="o-phone">Teléfono</label>
+                        <input id="o-phone" type="tel" class="input" @bind="phone" />
+                    </div>
+                </div>
+                <span class="smaller muted">El correo y el teléfono se usan para avisarle de visitas y cambios de estado.</span>
+                <ErrorAlert Exception="createError" />
+                <button type="button" class="btn btn-primary" disabled="@busy" @onclick="RegisterAsync">@(company ? "Registrar persona jurídica" : "Registrar persona natural")</button>
+            </section>
         }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showCreate = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@creating" @onclick="CreateAsync">Registrar</button>
-    </FooterContent>
-</Modal>
+    </div>
+</div>
 
 @code {
     private const int PageSize = 20;
 
-    private PagedResult<OwnerDto>? page;
-    private OwnerDto? ownRecord;
-    private bool loading = true;
-    private ApiException? error;
-    private int currentPage = 1;
-    private bool onlyMine;
+    private static readonly (string? Key, string Label)[] TypeFilters = [(null, "Todos"), ("Natural", "Naturales"), ("Company", "Jurídicas")];
 
-    private bool showCreate;
-    private bool creating;
+    private PagedResult<OwnerDto>? page;
+    private IReadOnlyList<OwnerDto> owners = [];
+    private bool loaded;
+    private bool busy;
+    private ApiException? error;
     private ApiException? createError;
-    private bool createCompany;
+
+    private string search = "";
+    private string? typeFilter;
+    private int currentPage = 1;
+
+    private bool company;
     private string firstNames = "";
     private string lastNames = "";
     private DocumentType documentType = DocumentType.CitizenshipCard;
@@ -183,27 +155,23 @@ else if (page is not null)
     private string email = "";
     private string phone = "";
 
-    private string Subtitle => Actor.IsStaff
-        ? "Toda persona natural o jurídica dueña de los inmuebles que se publican."
-        : "Tu registro como propietario dentro de Llave.";
-
-    private bool CanRegister => !loading && (Actor.IsStaff || ownRecord is null);
-
-    private string DocumentHint => documentType == DocumentType.Passport
-        ? "Entre 5 y 20 letras o números."
-        : "Entre 6 y 10 dígitos, sin puntos.";
+    private bool CanRegister => loaded && (Actor.IsStaff || owners.Count == 0);
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
     {
-        loading = true;
         try
         {
             if (Actor.IsStaff)
-                page = await Api.ListAsync(onlyMine ? Actor.Require() : null, currentPage, PageSize, CancellationToken.None);
+            {
+                page = await Api.ListAsync(null, string.IsNullOrWhiteSpace(search) ? null : search, typeFilter, currentPage, PageSize, CancellationToken.None);
+                owners = page.Items;
+            }
             else
-                ownRecord = await LoadOwnRecordAsync();
+            {
+                owners = await LoadOwnRecordAsync();
+            }
 
             error = null;
         }
@@ -213,60 +181,54 @@ else if (page is not null)
         }
         finally
         {
-            loading = false;
+            loaded = true;
         }
     }
 
-    private async Task<OwnerDto?> LoadOwnRecordAsync()
+    private async Task<IReadOnlyList<OwnerDto>> LoadOwnRecordAsync()
     {
         try
         {
-            return await Api.GetByIdAsync(Actor.Require(), CancellationToken.None);
+            return [await Api.GetByIdAsync(Actor.Require(), CancellationToken.None)];
         }
         catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
         {
-            return null;
+            return [];
         }
     }
 
-    private Task ToggleOnlyMine(ChangeEventArgs args)
+    private Task RefreshAsync()
     {
-        onlyMine = args.Value is true;
         currentPage = 1;
-
         return LoadAsync();
     }
 
-    private Task GoToPage(int p)
+    private Task SetTypeAsync(string? type)
     {
-        currentPage = p;
+        typeFilter = type;
+        return RefreshAsync();
+    }
 
+    private Task GoToPageAsync(int target)
+    {
+        currentPage = target;
         return LoadAsync();
     }
 
-    private void Open(OwnerDto owner) => Nav.NavigateTo($"/rentals/owners/{owner.Id}");
-
-    private void OpenCreate()
+    private async Task RegisterAsync()
     {
-        createError = null;
-        showCreate = true;
-    }
-
-    private async Task CreateAsync()
-    {
-        creating = true;
+        busy = true;
         try
         {
-            var id = createCompany
-                ? await Api.RegisterCompanyAsync(
-                    new RegisterCompanyOwnerRequest(legalName, nit, email, phone),
-                    CancellationToken.None)
-                : await Api.RegisterNaturalAsync(
-                    new RegisterNaturalOwnerRequest(firstNames, lastNames, documentType, documentNumber, email, phone),
-                    CancellationToken.None);
+            if (company)
+                await Api.RegisterCompanyAsync(new RegisterCompanyOwnerRequest(legalName, nit, email, phone), CancellationToken.None);
+            else
+                await Api.RegisterNaturalAsync(
+                    new RegisterNaturalOwnerRequest(firstNames, lastNames, documentType, documentNumber, email, phone), CancellationToken.None);
 
-            showCreate = false;
-            Nav.NavigateTo($"/rentals/owners/{id}");
+            firstNames = lastNames = documentNumber = legalName = nit = email = phone = "";
+            createError = null;
+            await LoadAsync();
         }
         catch (ApiException ex)
         {
@@ -274,7 +236,7 @@ else if (page is not null)
         }
         finally
         {
-            creating = false;
+            busy = false;
         }
     }
 }

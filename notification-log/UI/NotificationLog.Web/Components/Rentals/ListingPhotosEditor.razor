@@ -1,59 +1,145 @@
 @inject ListingsApiClient Api
 
-<label class="form-label">Agregar fotos</label>
-<InputFile class="form-control" multiple accept="image/jpeg,image/png,image/webp" disabled="@busy" OnChange="UploadAsync" />
-<div class="form-hint">
-    JPEG, PNG o WebP de hasta @(MaxPhotoBytes / 1024 / 1024) MB. Entre @ListingLimits.MinPhotos y @ListingLimits.MaxPhotos fotos.
-    Arrastrá una foto sobre otra para cambiar el orden.
-</div>
-
-@if (Photos.Count == 0)
-{
-    <p class="text-muted small mt-3 mb-0">Sin fotos.</p>
-}
-else
-{
-    <div class="d-flex flex-wrap gap-2 mt-3">
-        @foreach (var photo in Photos)
+<section class="card" aria-label="Fotos" style="--gap: 16px">
+    <div class="row row-between row-bottom" style="--gap: 12px">
+        <div class="stack grow" style="--gap: 2px; --basis: 260px">
+            <h2 class="h2">Fotos</h2>
+            <span class="small muted">
+                @order.Count de @ListingLimits.MaxPhotos · mínimo @ListingLimits.MinPhotos para enviar a revisión.
+                @(CanEdit ? "Arrastra para ordenar o usa las flechas; la primera es la portada." : "La primera es la portada.")
+            </span>
+        </div>
+        @if (CanEdit)
         {
-            <div class="position-relative border rounded @(photo.FileName == dragged ? "opacity-50" : "")"
-                 style="cursor:grab"
-                 draggable="true"
-                 @key="photo.FileName"
-                 @ondragstart="() => dragged = photo.FileName"
-                 @ondragend="() => dragged = null"
-                 @ondragover:preventDefault
-                 @ondragover="() => { }"
-                 @ondrop="() => DropAsync(photo.FileName)">
-                <img src="@photo.Url" alt="" draggable="false" style="width:120px;height:90px;object-fit:cover;display:block" />
-                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 py-0 px-1"
-                        title="Quitar" disabled="@busy" @onclick="() => RemoveAsync(photo.FileName)">×</button>
-            </div>
+            <label class="btn btn-sm btn-file">
+                Agregar fotos
+                <InputFile multiple accept="image/jpeg,image/png,image/webp" disabled="@busy" OnChange="UploadAsync" />
+            </label>
         }
     </div>
-}
 
-@if (message is not null)
-{
-    <div class="alert alert-warning-soft small mt-3 mb-0">@message</div>
-}
+    @if (order.Count == 0)
+    {
+        <EmptyState Text="Sin fotos todavía. JPEG, PNG o WebP de hasta 10 MB." />
+    }
+    else
+    {
+        <ul class="grid-fill">
+            @for (var i = 0; i < order.Count; i++)
+            {
+                var index = i;
+                var photo = order[i];
+                <li class="photo @PhotoClass(index)" @key="photo.FileName"
+                    draggable="@(CanEdit ? "true" : "false")"
+                    @ondragstart="() => dragging = index"
+                    @ondragend="EndDrag"
+                    @ondragover:preventDefault
+                    @ondragover="() => { }"
+                    @ondragenter="() => over = index"
+                    @ondrop="() => Drop(index)">
+                    <div class="photo-frame">
+                        <img src="@photo.Url" alt="Foto @(index + 1)" draggable="false" />
+                        <span class="photo-badge @(index == 0 ? "photo-badge-cover" : "")">@(index == 0 ? "Portada" : (index + 1).ToString())</span>
+                    </div>
+                    @if (CanEdit)
+                    {
+                        <div class="photo-actions">
+                            <button type="button" aria-label="Mover la foto @(index + 1) antes" disabled="@(index == 0)" @onclick="() => Move(index, index - 1)">←</button>
+                            <button type="button" aria-label="Mover la foto @(index + 1) después" disabled="@(index == order.Count - 1)" @onclick="() => Move(index, index + 1)">→</button>
+                            <button type="button" aria-label="Quitar la foto @(index + 1)" disabled="@busy" @onclick="() => RemoveAsync(photo.FileName)">Quitar</button>
+                        </div>
+                    }
+                </li>
+            }
+        </ul>
+    }
 
-@if (error is not null)
-{
-    <div class="mt-3"><ErrorAlert Exception="error" /></div>
-}
+    @if (message is not null)
+    {
+        <div class="note note-warning" role="status"><span>@message</span></div>
+    }
+
+    <ErrorAlert Exception="error" />
+
+    @if (CanEdit && order.Count > 1)
+    {
+        <div class="save-bar @(MovedCount > 0 ? "dirty" : "")" aria-live="polite">
+            <span>@SaveText</span>
+            <div class="row" style="--gap: 8px">
+                <button type="button" class="btn btn-sm btn-ghost" disabled="@(MovedCount == 0 || busy)" @onclick="Discard">Descartar</button>
+                <button type="button" class="btn btn-sm btn-lime" disabled="@(MovedCount == 0 || busy)" @onclick="SaveOrderAsync">Guardar orden</button>
+            </div>
+        </div>
+    }
+</section>
 
 @code {
     private const long MaxPhotoBytes = 10 * 1024 * 1024;
 
-    [Parameter, EditorRequired] public Guid ListingId { get; set; }
-    [Parameter, EditorRequired] public IReadOnlyList<ListingPhotoDto> Photos { get; set; } = [];
-    [Parameter] public EventCallback OnChanged { get; set; }
-
+    private List<ListingPhotoDto> order = [];
+    private IReadOnlyList<ListingPhotoDto> saved = [];
     private bool busy;
-    private string? dragged;
+    private bool justSaved;
+    private int? dragging;
+    private int? over;
     private string? message;
     private ApiException? error;
+
+    [Parameter, EditorRequired] public Guid ListingId { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ListingPhotoDto> Photos { get; set; } = [];
+    [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private int MovedCount => order.Where((photo, index) => saved[index].FileName != photo.FileName).Count();
+
+    private string SaveText => MovedCount > 0
+        ? $"{MovedCount} fotos cambiaron de posición. Guarda para actualizar el orden."
+        : justSaved ? "Orden guardado. Así se verá en el catálogo." : "El orden coincide con el guardado.";
+
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(saved, Photos))
+            return;
+
+        saved = Photos;
+        order = [.. Photos];
+    }
+
+    private string PhotoClass(int index) =>
+        dragging == index ? "dragging"
+        : over == index && dragging is not null ? "over"
+        : saved[index].FileName != order[index].FileName ? "moved" : "";
+
+    private void Move(int from, int to)
+    {
+        var photo = order[from];
+        order.RemoveAt(from);
+        order.Insert(to, photo);
+        justSaved = false;
+    }
+
+    private void Drop(int target)
+    {
+        if (dragging is { } source && source != target)
+            Move(source, target);
+
+        EndDrag();
+    }
+
+    private void EndDrag()
+    {
+        dragging = null;
+        over = null;
+    }
+
+    private void Discard() => order = [.. saved];
+
+    private Task SaveOrderAsync() => RunAsync(async () =>
+    {
+        await Api.ReorderPhotosAsync(
+            ListingId, new ReorderListingPhotosRequest(order.Select(photo => photo.FileName).ToList()), CancellationToken.None);
+        justSaved = true;
+    });
 
     private Task UploadAsync(InputFileChangeEventArgs e) => RunAsync(async () =>
     {
@@ -61,7 +147,7 @@ else
         {
             if (file.Size > MaxPhotoBytes)
             {
-                message = $"«{file.Name}» supera el tamaño máximo y no se subió.";
+                message = $"«{file.Name}» supera los 10 MB y no se subió.";
                 continue;
             }
 
@@ -72,22 +158,6 @@ else
 
     private Task RemoveAsync(string fileName) =>
         RunAsync(() => Api.RemovePhotoAsync(ListingId, fileName, CancellationToken.None));
-
-    private Task DropAsync(string target)
-    {
-        var source = dragged;
-        dragged = null;
-
-        if (source is null || source == target)
-            return Task.CompletedTask;
-
-        var order = Photos.Select(photo => photo.FileName).ToList();
-        var targetIndex = order.IndexOf(target);
-        order.Remove(source);
-        order.Insert(targetIndex, source);
-
-        return RunAsync(() => Api.ReorderPhotosAsync(ListingId, new ReorderListingPhotosRequest(order), CancellationToken.None));
-    }
 
     private async Task RunAsync(Func<Task> action)
     {

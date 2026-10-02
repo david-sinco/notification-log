@@ -1,0 +1,326 @@
+@page "/rentals/visits"
+@page "/rentals/visits/{Id:guid}"
+@inject VisitsApiClient Api
+@inject RentalsActor Actor
+@inject NavigationManager Nav
+
+<PageTitle>Visitas · Llave</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <p class="eyebrow">Arriendos</p>
+        <h1 class="title">Visitas</h1>
+        <p class="muted">Visitante y anfitrión negocian por turnos hasta acordar una franja de una hora, en hora de Colombia.</p>
+    </header>
+
+    <ErrorAlert Exception="loadError" />
+
+    <div class="split">
+        <section class="split-list" aria-label="Lista de visitas">
+            <div class="chips" role="group" aria-label="Filtrar por estado" style="gap: 6px">
+                @foreach (var (key, label) in Filters)
+                {
+                    <button type="button" class="chip" aria-pressed="@(filter == key ? "true" : "false")" @onclick="() => filter = key">@label</button>
+                }
+            </div>
+            @if (visits is not null && Visible.Count == 0)
+            {
+                <EmptyState Text="No hay visitas en este grupo." />
+            }
+            @foreach (var visit in Visible)
+            {
+                <a class="list-item @(visit.Id == current?.Id ? "active" : "")" href="rentals/visits/@visit.Id" aria-current="@(visit.Id == current?.Id ? "true" : "false")">
+                    <span class="row row-between" style="flex-wrap: nowrap">
+                        <span class="strong">@VisitorName(visit)</span>
+                        <RentalStatusPill Status="@visit.Status" />
+                    </span>
+                    <span class="small muted">@ListingTitle(visit)</span>
+                    <span class="smaller muted">@Summary(visit)</span>
+                </a>
+            }
+        </section>
+
+        @if (current is not null)
+        {
+            <section class="split-detail card" aria-label="Detalle de la visita" style="--gap: 16px">
+                <div class="page-head">
+                    <div class="row">
+                        <RentalStatusPill Status="@current.Status" Large="true" />
+                        <span class="id">@RentalsFormat.Short(current.Id)</span>
+                    </div>
+                    <h2 class="h2 h2-lg">@Heading</h2>
+                    <a class="small strong btn-start" href="rentals/listings/@current.ListingId">@ListingTitle(current)</a>
+                </div>
+
+                <div class="grid-auto" style="--min: 160px; --gap: 10px">
+                    <div class="fact fact-box"><span class="fact-label">Visitante</span><span class="fact-value">@VisitorName(current)</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Anfitrión</span><span class="fact-value">@HostName(current)</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Actúas como</span><span class="fact-value">@(IsHost ? "Anfitrión" : IsVisitor ? "Visitante" : "Observador")</span></div>
+                </div>
+
+                <div class="note @(IsMyTurn ? "note-lime" : "")" role="status">
+                    <strong>@Banner.Title</strong>
+                    <span>@Banner.Text</span>
+                </div>
+
+                <ErrorAlert Exception="actionError" />
+
+                @if (current.IsNegotiating && current.ProposedSlots.Count > 0)
+                {
+                    <div class="stack" style="--gap: 10px">
+                        <h3 class="h3">Franjas propuestas</h3>
+                        <div class="grid-auto" style="--min: 170px; --gap: 10px">
+                            @foreach (var slot in current.ProposedSlots)
+                            {
+                                <div class="slot">
+                                    <span>
+                                        <span class="slot-day">@Capitalize(RentalsFormat.Day(slot))</span>
+                                        <span class="slot-range">@RentalsFormat.Range(slot)</span>
+                                    </span>
+                                    @if (IsMyTurn)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => RunAsync(() => Api.ScheduleAsync(current.Id, slot, CancellationToken.None))">Aceptar esta franja</button>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                }
+
+                <div class="row" style="--gap: 8px">
+                    @if (IsMyTurn)
+                    {
+                        <button type="button" class="btn" disabled="@busy" @onclick="() => Open(Panel.Slots)">Proponer otras franjas</button>
+                    }
+                    @if (current.Status == "Scheduled" && IsHost)
+                    {
+                        <button type="button" class="btn btn-primary" disabled="@(busy || !HasStarted)" @onclick="() => RunAsync(() => Api.MarkCompletedAsync(current.Id, CancellationToken.None))">Se realizó</button>
+                        <button type="button" class="btn" disabled="@(busy || !HasStarted)" @onclick="() => RunAsync(() => Api.MarkNoShowAsync(current.Id, CancellationToken.None))">No asistió</button>
+                    }
+                    @if (CanCancel)
+                    {
+                        <button type="button" class="btn btn-danger" disabled="@busy" @onclick="() => Open(Panel.Cancel)">Cancelar visita</button>
+                    }
+                </div>
+
+                @if (panel == Panel.Slots)
+                {
+                    <SlotPicker Title="Proponer otras franjas" Hint="Reemplazan a las actuales." Busy="busy" Error="panelError"
+                                OnCancel="() => Open(Panel.None)" OnConfirm="CounterProposeAsync" />
+                }
+
+                @if (panel == Panel.Cancel)
+                {
+                    <ReasonPanel Title="Cancelar visita" Description="Indica el motivo. Cancelar con menos de 12 horas cuenta como cancelación tardía."
+                                 ConfirmText="Cancelar visita" CancelText="Volver" Busy="busy" Error="panelError"
+                                 OnCancel="() => Open(Panel.None)" OnConfirm="CancelAsync" />
+                }
+
+                <div class="stack" style="--gap: 10px">
+                    <h3 class="h3">Historial</h3>
+                    <ol>
+                        @foreach (var entry in History)
+                        {
+                            <li class="line-row row-top" style="flex-wrap: nowrap; gap: 12px">
+                                <span class="dot @entry.Dot" aria-hidden="true" style="margin-top: 6px"></span>
+                                <span class="stack" style="--gap: 0">
+                                    <span class="strong">@entry.Who</span>
+                                    <span class="small muted">@entry.Text</span>
+                                </span>
+                            </li>
+                        }
+                    </ol>
+                </div>
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly (string Key, string Label)[] Filters =
+        [("all", "Todas"), ("open", "Por responder"), ("scheduled", "Agendadas"), ("closed", "Cerradas")];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private IReadOnlyList<VisitDto>? visits;
+    private VisitDto? current;
+    private string filter = "all";
+    private Panel panel;
+    private bool busy;
+    private ApiException? loadError;
+    private ApiException? actionError;
+    private ApiException? panelError;
+
+    private enum Panel
+    {
+        None,
+        Slots,
+        Cancel
+    }
+
+    private IReadOnlyList<VisitDto> Visible =>
+        (visits ?? []).Where(visit => filter == "all" || Group(visit) == filter).ToList();
+
+    private bool IsHost => current is not null && Actor.Is(current.HostId);
+
+    private bool IsVisitor => current is not null && Actor.Is(current.VisitorId);
+
+    private bool IsMyTurn => current?.Status switch
+    {
+        "AwaitingHost" => IsHost,
+        "AwaitingVisitor" => IsVisitor,
+        _ => false
+    };
+
+    private bool HasStarted => current?.ScheduledStartsAt is { } start && start <= DateTimeOffset.UtcNow;
+
+    private bool CanCancel =>
+        current is not null
+        && (IsHost || IsVisitor)
+        && (current.IsNegotiating || (current.Status == "Scheduled" && !HasStarted));
+
+    private string Heading => current!.ScheduledStartsAt is { } start
+        ? $"Visita el {RentalsFormat.Day(start)}, {RentalsFormat.Range(start)}"
+        : "Visita por acordar";
+
+    private (string Title, string Text) Banner => current!.Status switch
+    {
+        "AwaitingHost" or "AwaitingVisitor" when IsMyTurn =>
+            ($"Te toca responder antes del {RentalsFormat.Moment(current.RespondBy)}", "Acepta una de las franjas, propone otras o cancela. Si no respondes, la visita vence."),
+        "AwaitingHost" => ($"Le toca responder al anfitrión antes del {RentalsFormat.Moment(current.RespondBy)}", "Si no responde, la visita vence."),
+        "AwaitingVisitor" => ($"Le toca responder al visitante antes del {RentalsFormat.Moment(current.RespondBy)}", "Si no responde, la visita vence."),
+        "Scheduled" => ("Visita agendada", "El anfitrión registra el resultado cuando empieza; si no lo hace, se da por realizada 72 horas después de que termine."),
+        "Completed" => ("Visita realizada", "Se registró que la visita se hizo."),
+        "NoShow" => ("El visitante no asistió", "El anfitrión registró la inasistencia."),
+        "Cancelled" => ("Visita cancelada", "Ya no admite cambios."),
+        _ => ("La visita venció", "Nadie respondió dentro del plazo.")
+    };
+
+    private IEnumerable<(string Who, string Text, string Dot)> History
+    {
+        get
+        {
+            var visit = current!;
+
+            yield return ($"{VisitorName(visit)} · visitante", $"Pidió la visita el {RentalsFormat.Moment(visit.RequestedAt)}.", "dot-info");
+
+            if (visit.IsNegotiating && visit.Status == "AwaitingVisitor")
+                yield return ($"{HostName(visit)} · anfitrión", $"Propuso otras {visit.ProposedSlots.Count} franjas.", "");
+
+            if (visit.ScheduledStartsAt is { } start)
+                yield return ("Acuerdo", $"Se agendó para el {RentalsFormat.Day(start)}, {RentalsFormat.Range(start)}.", "");
+
+            if (visit.Status == "Cancelled")
+                yield return (
+                    RentalsFormat.Term(visit.CancelledBy),
+                    $"Canceló: «{visit.CancellationReason}».{(visit.IsLateCancellation ? " Cancelación tardía." : "")}",
+                    "dot-danger");
+
+            if (visit.Status == "Expired")
+                yield return ("Sistema", "Venció: nadie respondió a tiempo.", "dot-neutral");
+
+            if (visit.Status == "Completed")
+                yield return (RentalsFormat.Term(visit.ClosedBy), "Marcó la visita como realizada.", "");
+
+            if (visit.Status == "NoShow")
+                yield return ("Anfitrión", "Marcó que el visitante no asistió.", "dot-danger");
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        panel = Panel.None;
+        actionError = null;
+
+        if (visits is null)
+            await LoadAsync();
+        else
+            await SelectAsync();
+    }
+
+    private static string Group(VisitDto visit) =>
+        visit.IsNegotiating ? "open" : visit.Status == "Scheduled" ? "scheduled" : "closed";
+
+    private static string VisitorName(VisitDto visit) => visit.VisitorName ?? $"Visitante {RentalsFormat.Short(visit.VisitorId)}";
+
+    private static string HostName(VisitDto visit) => visit.HostName ?? $"Anfitrión {RentalsFormat.Short(visit.HostId)}";
+
+    private static string ListingTitle(VisitDto visit) =>
+        RentalsFormat.ListingTitle(visit.ListingType, visit.ListingNeighborhood, visit.ListingCity);
+
+    private static string Capitalize(string text) => char.ToUpperInvariant(text[0]) + text[1..];
+
+    private static string Summary(VisitDto visit) =>
+        visit.ScheduledStartsAt is { } start ? $"{RentalsFormat.Day(start)} · {RentalsFormat.Range(start)}"
+        : visit.IsNegotiating ? $"{visit.ProposedSlots.Count} franjas propuestas · responde antes del {RentalsFormat.Moment(visit.RespondBy)}"
+        : "Sin franja agendada";
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            visits = (await Api.ListAsync(null, null, null, 1, 50, CancellationToken.None)).Items;
+            loadError = null;
+            await SelectAsync();
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+    }
+
+    private async Task SelectAsync()
+    {
+        if (Id is null)
+        {
+            current = visits?.FirstOrDefault();
+            return;
+        }
+
+        try
+        {
+            current = visits?.FirstOrDefault(visit => visit.Id == Id) ?? await Api.GetByIdAsync(Id.Value, CancellationToken.None);
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            current = null;
+            loadError = ex;
+        }
+    }
+
+    private void Open(Panel target)
+    {
+        panel = target;
+        panelError = null;
+    }
+
+    private Task RunAsync(Func<Task> action) => ExecuteAsync(action, ex => actionError = ex);
+
+    private Task CounterProposeAsync(IReadOnlyList<DateTimeOffset> slots) =>
+        ExecuteAsync(() => Api.CounterProposeAsync(current!.Id, slots, CancellationToken.None), ex => panelError = ex);
+
+    private Task CancelAsync(string reason) =>
+        ExecuteAsync(() => Api.CancelAsync(current!.Id, reason, CancellationToken.None), ex => panelError = ex);
+
+    private async Task ExecuteAsync(Func<Task> action, Action<ApiException?> report)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            report(null);
+            panel = Panel.None;
+            Id ??= current?.Id;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            report(ex);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

@@ -1,0 +1,265 @@
+@page "/users"
+@page "/users/me"
+@page "/users/{Id:guid}"
+@inject UsersApiClient Api
+
+<PageTitle>@(isAdmin ? "Usuarios" : "Mi perfil") · Llave</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <p class="eyebrow">@(isAdmin ? "Cuenta · solo administradores" : "Cuenta")</p>
+        <h1 class="title">@(isAdmin ? "Usuarios" : "Mi perfil")</h1>
+        <p class="muted">@(isAdmin ? "Busca por correo o teléfono, asigna el rol y bloquea o desbloquea el acceso." : "Tus datos de acceso a Llave.")</p>
+    </header>
+
+    <ErrorAlert Exception="loadError" />
+
+    <div class="split">
+        @if (isAdmin)
+        {
+            <section class="split-list" aria-label="Resultados">
+                <label class="sr-only" for="user-search">Buscar usuario</label>
+                <input id="user-search" type="search" class="input input-search" placeholder="Correo o teléfono" @bind="search" @bind:after="SearchAsync" />
+                @if (users.Count == 0 && loaded)
+                {
+                    <EmptyState Text="No se encontraron usuarios." />
+                }
+                @foreach (var user in users)
+                {
+                    <a class="list-item @(user.Id == current?.Id ? "active" : "")" href="users/@user.Id" style="gap: 4px" aria-current="@(user.Id == current?.Id ? "true" : "false")">
+                        <span class="row row-between" style="flex-wrap: nowrap">
+                            <span class="strong">@user.Name@(user.Id == currentUserId ? " · tú" : "")</span>
+                            <StatusPill Text="@(IsLocked(user) ? "Bloqueado" : "Activo")" Variant="@(IsLocked(user) ? "danger" : "success")" />
+                        </span>
+                        <span class="small muted wrap-any">@(user.Email ?? user.Phone)</span>
+                        <span class="smaller muted">@(user.Role ?? "Sin rol")</span>
+                    </a>
+                }
+                @if (skip > 0 || users.Count == PageSize)
+                {
+                    <div class="row row-end" style="--gap: 8px">
+                        <button type="button" class="btn btn-sm" disabled="@(skip == 0)" @onclick="() => PageAsync(-PageSize)">Anterior</button>
+                        <button type="button" class="btn btn-sm" disabled="@(users.Count < PageSize)" @onclick="() => PageAsync(PageSize)">Siguiente</button>
+                    </div>
+                }
+            </section>
+        }
+
+        @if (current is not null)
+        {
+            <section class="split-detail" aria-label="Detalle del usuario">
+                <div class="card">
+                    <div class="row row-between" style="--gap: 12px">
+                        <div class="stack" style="--gap: 4px">
+                            <h2 class="h2 h2-lg">@(current.Id == currentUserId ? "Mi perfil" : current.Name)</h2>
+                            <span class="id">@current.Id</span>
+                        </div>
+                        <StatusPill Text="@(IsLocked(current) ? "Bloqueado" : "Activo")" Variant="@(IsLocked(current) ? "danger" : "success")" Large="true" />
+                    </div>
+                    <div class="grid-auto" style="--min: 220px; --gap: 10px">
+                        <div class="fact fact-box" style="padding: 14px; gap: 4px">
+                            <span class="fact-label">Nombre</span>
+                            <span class="fact-value">@current.Name</span>
+                            <span class="smaller strong muted">@(current.Role ?? "Sin rol")</span>
+                        </div>
+                        @foreach (var contact in Contacts)
+                        {
+                            <div class="fact fact-box" style="padding: 14px; gap: 4px">
+                                <span class="fact-label">@contact.Label</span>
+                                <span class="fact-value">@contact.Value</span>
+                                <span class="smaller strong @(contact.Verified ? "text-success" : "text-warning")">@contact.State</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <ErrorAlert Exception="actionError" />
+
+                @if (isAdmin)
+                {
+                    <fieldset class="card">
+                        <legend class="h2 h2-sm" style="float: left">Rol</legend>
+                        <div class="grid-auto" role="radiogroup" aria-label="Rol" style="clear: both; --gap: 10px">
+                            @foreach (var (role, hint) in Roles)
+                            {
+                                <button type="button" class="choice choice-radio" role="radio" aria-checked="@(roleDraft == role ? "true" : "false")" @onclick="() => roleDraft = role">
+                                    <span>@role</span>
+                                    <span>@hint</span>
+                                </button>
+                            }
+                        </div>
+                        <div class="row row-between" style="--gap: 12px">
+                            <span class="small muted">@(roleDraft == current.Role ? $"Rol actual: {current.Role ?? "ninguno"}." : $"Reemplaza el rol {current.Role ?? "vacío"} por {roleDraft}.")</span>
+                            <button type="button" class="btn btn-lg btn-primary" disabled="@(busy || roleDraft is null || roleDraft == current.Role)" @onclick="SaveRoleAsync">Guardar rol</button>
+                        </div>
+                    </fieldset>
+
+                    @if (IsLocked(current))
+                    {
+                        <div class="card card-alert row row-between" style="flex-direction: row; --gap: 14px">
+                            <div class="stack" style="--gap: 2px">
+                                <strong class="h2 h2-sm">Acceso bloqueado</strong>
+                                <span class="small">@LockText</span>
+                            </div>
+                            <button type="button" class="btn btn-lg btn-primary" disabled="@busy" @onclick="() => RunAsync(() => Api.UnlockAsync(current.Id, CancellationToken.None))">Desbloquear</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="card">
+                            <div class="stack" style="--gap: 2px">
+                                <h2 class="h2 h2-sm">Bloquear acceso</h2>
+                                <span class="small muted">Cierra todas las sesiones del usuario de inmediato.</span>
+                            </div>
+                            <div class="chips" role="group" aria-label="Duración del bloqueo">
+                                @foreach (var (key, label) in Durations)
+                                {
+                                    <button type="button" class="chip" aria-pressed="@(duration == key ? "true" : "false")" @onclick="() => duration = key">@label</button>
+                                }
+                            </div>
+                            @if (duration == "custom")
+                            {
+                                <div class="field">
+                                    <label class="label" for="lock-until">Bloquear hasta</label>
+                                    <input id="lock-until" type="datetime-local" class="input" @bind="lockUntil" />
+                                </div>
+                            }
+                            <button type="button" class="btn btn-lg btn-danger-solid btn-start" disabled="@busy" @onclick="LockAsync">
+                                @(duration == "forever" ? "Bloquear indefinidamente" : "Bloquear y cerrar sesiones")
+                            </button>
+                        </div>
+                    }
+                }
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private const int PageSize = 20;
+
+    private static readonly (string Role, string Hint)[] Roles =
+    [
+        (IdentityRoles.Administrador, "Todo, incluidos usuarios y roles."),
+        (IdentityRoles.Moderador, "Revisa, suspende y retira publicaciones."),
+        (IdentityRoles.Propietario, "Publica inmuebles y atiende visitas."),
+        (IdentityRoles.Visitor, "Pide visitas a publicaciones.")
+    ];
+
+    private static readonly (string Key, string Label)[] Durations =
+        [("1h", "1 hora"), ("24h", "24 horas"), ("7d", "7 días"), ("custom", "Elegir fecha"), ("forever", "Indefinido")];
+
+    [Parameter] public Guid? Id { get; set; }
+
+    [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
+
+    private IReadOnlyList<UserDto> users = [];
+    private UserDto? current;
+    private Guid currentUserId;
+    private bool isAdmin;
+    private bool loaded;
+    private bool busy;
+    private string search = "";
+    private int skip;
+    private string? roleDraft;
+    private string duration = "24h";
+    private DateTime lockUntil = DateTime.Now.AddDays(7);
+    private ApiException? loadError;
+    private ApiException? actionError;
+
+    private (string Label, string Value, bool Verified, string State)[] Contacts =>
+    [
+        Contact("Correo", current!.Email, current.IsEmailVerified, "Sin correo"),
+        Contact("Teléfono", current.Phone, current.IsPhoneVerified, "Sin teléfono")
+    ];
+
+    private string LockText => current!.LockedUntil is { } until && until.Year < 9000
+        ? $"Bloqueado hasta el {RentalsFormat.Moment(until)}."
+        : "Bloqueo indefinido.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var principal = (await AuthState).User;
+        currentUserId = Guid.TryParse(principal.FindFirst(IdentityClaims.Subject)?.Value, out var subject) ? subject : Guid.Empty;
+        isAdmin = principal.IsInRole(IdentityRoles.Administrador);
+        actionError = null;
+
+        await LoadAsync();
+    }
+
+    private static bool IsLocked(UserDto user) => user.LockedUntil is { } until && until > DateTimeOffset.UtcNow;
+
+    private static (string, string, bool, string) Contact(string label, string? value, bool verified, string missing) =>
+        value is null ? (label, missing, false, "No registrado") : (label, value, verified, verified ? "Verificado" : "Sin verificar");
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var none = CancellationToken.None;
+
+            if (isAdmin)
+                users = await Api.SearchAsync(string.IsNullOrWhiteSpace(search) ? null : search, skip, PageSize, none);
+
+            current = await Api.GetByIdAsync(isAdmin ? Id ?? currentUserId : currentUserId, none);
+            roleDraft = current.Role;
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+        finally
+        {
+            loaded = true;
+        }
+    }
+
+    private Task SearchAsync()
+    {
+        skip = 0;
+        return LoadAsync();
+    }
+
+    private Task PageAsync(int delta)
+    {
+        skip = Math.Max(0, skip + delta);
+        return LoadAsync();
+    }
+
+    private Task SaveRoleAsync() =>
+        RunAsync(() => Api.SetRoleAsync(current!.Id, new SetUserRoleRequest(roleDraft!), CancellationToken.None));
+
+    private Task LockAsync()
+    {
+        DateTimeOffset? until = duration switch
+        {
+            "1h" => DateTimeOffset.UtcNow.AddHours(1),
+            "24h" => DateTimeOffset.UtcNow.AddHours(24),
+            "7d" => DateTimeOffset.UtcNow.AddDays(7),
+            "custom" => new DateTimeOffset(lockUntil),
+            _ => null
+        };
+
+        return RunAsync(() => Api.LockAsync(current!.Id, new LockUserRequest(until), CancellationToken.None));
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            actionError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

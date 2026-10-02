@@ -6,192 +6,175 @@
 
 <PageTitle>Publicaciones · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
-        <p class="eyebrow">Arriendos</p>
-        <h1>Publicaciones</h1>
-        <p>Inmuebles en venta o arriendo, desde el borrador hasta el cierre.</p>
-    </div>
-    <button class="btn btn-primary" @onclick="OpenCreateAsync">+ Nueva publicación</button>
-</div>
+<div class="page">
+    <header class="row row-between row-bottom" style="--gap: 16px">
+        <div class="page-head">
+            <p class="eyebrow">Arriendos</p>
+            <h1 class="title">Publicaciones</h1>
+            <p class="muted">Inmuebles en venta o arriendo, desde el borrador hasta el cierre.</p>
+        </div>
+        <button type="button" class="btn btn-lg btn-primary" @onclick="ToggleCreateAsync">Nueva publicación</button>
+    </header>
 
-@if (error is not null)
-{
-    <ErrorAlert Exception="error" />
-}
-
-<div class="filter-bar">
-    <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-            <label class="form-label">Buscar</label>
-            <input class="form-control" placeholder="Ciudad, barrio o dirección… (Enter para buscar)"
-                   @bind="search" @bind:event="oninput" @onkeyup="OnSearchKeyUp" />
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Estado</label>
-            <select class="form-select" @bind="statusFilter" @bind:after="RefreshAsync">
-                <option value="">Todos</option>
-                @foreach (var s in RentalsFormat.Values<ListingStatus>())
-                {
-                    <option value="@s">@RentalsFormat.Status(s.ToString())</option>
-                }
-            </select>
-        </div>
-        <div class="col-md-2">
-            <label class="form-label">Operación</label>
-            <select class="form-select" @bind="operationFilter" @bind:after="RefreshAsync">
-                <option value="">Todas</option>
-                @foreach (var o in RentalsFormat.Values<Operation>())
-                {
-                    <option value="@o">@RentalsFormat.Term(o)</option>
-                }
-            </select>
-        </div>
-        <div class="col-md-2">
-            <div class="form-check mb-2">
-                <input class="form-check-input" type="checkbox" id="only-mine" @bind="onlyMine" @bind:after="RefreshAsync" />
-                <label class="form-check-label small" for="only-mine">Solo donde participo</label>
+    @if (creating)
+    {
+        <section class="card card-dark" aria-label="Nueva publicación" style="--gap: 16px">
+            <h2 class="h2">Nuevo borrador</h2>
+            <div class="row row-top" style="--gap: 20px">
+                <fieldset class="stack grow" style="--gap: 8px; --basis: 260px">
+                    <legend class="smaller muted" style="margin-bottom: 8px">Operación</legend>
+                    <div class="choices">
+                        @foreach (var operation in RentalsFormat.Values<Operation>().Reverse())
+                        {
+                            <button type="button" class="choice choice-left" style="font-size: 16px; min-height: 64px"
+                                    aria-pressed="@(createOperation == operation ? "true" : "false")" @onclick="() => createOperation = operation">
+                                @RentalsFormat.Term(operation)
+                            </button>
+                        }
+                    </div>
+                </fieldset>
+                <div class="stack grow" style="--gap: 8px; --basis: 260px">
+                    @if (Actor.IsStaff)
+                    {
+                        <label class="smaller muted" for="create-owner">Propietario</label>
+                        <select id="create-owner" class="select" style="min-height: 64px" @bind="createOwnerId">
+                            <option value="@Guid.Empty">Selecciona un propietario</option>
+                            @foreach (var owner in owners)
+                            {
+                                <option value="@owner.Id">@OwnerLabels.Name(owner) · @OwnerLabels.Identification(owner)</option>
+                            }
+                        </select>
+                        <span class="smaller muted">La publicación queda a nombre del propietario; tú quedas como quien la creó.</span>
+                    }
+                    else
+                    {
+                        <span class="smaller muted">Propietario</span>
+                        <span class="strong">La publicación queda a tu nombre.</span>
+                    }
+                </div>
             </div>
-        </div>
-        <div class="col-md-2 text-md-end">
-            <button class="btn btn-outline-secondary w-100 w-md-auto" @onclick="RefreshAsync">Filtrar</button>
-        </div>
-    </div>
-</div>
-
-<div class="table-card">
-    @if (loading)
-    {
-        <div class="p-4 text-center text-muted">Cargando…</div>
+            <ErrorAlert Exception="createError" />
+            <div class="row row-end">
+                <button type="button" class="btn btn-sm btn-on-dark" @onclick="() => creating = false">Cancelar</button>
+                <button type="button" class="btn btn-sm btn-lime" disabled="@(busy || createOwnerId == Guid.Empty)" @onclick="CreateAsync">Crear borrador y completar</button>
+            </div>
+        </section>
     }
-    else if (page is { Items.Count: 0 })
+
+    <ErrorAlert Exception="error" />
+
+    <section class="stack" aria-label="Filtros">
+        <div class="row">
+            <label class="sr-only" for="search">Buscar</label>
+            <input id="search" type="search" class="input input-search grow" style="--basis: 240px" placeholder="Ciudad, barrio o dirección"
+                   @bind="search" @bind:after="RefreshAsync" />
+            <div class="segmented" role="group" aria-label="Operación">
+                <button type="button" aria-pressed="@(operationFilter is null ? "true" : "false")" @onclick="() => SetOperationAsync(null)">Todas</button>
+                @foreach (var operation in RentalsFormat.Values<Operation>().Reverse())
+                {
+                    <button type="button" aria-pressed="@(operationFilter == operation ? "true" : "false")" @onclick="() => SetOperationAsync(operation)">@RentalsFormat.Term(operation)</button>
+                }
+            </div>
+            <label class="check small">
+                <input type="checkbox" @bind="onlyMine" @bind:after="RefreshAsync" />
+                Solo donde participo
+            </label>
+        </div>
+        <div class="chips" role="group" aria-label="Estado">
+            <button type="button" class="chip" aria-pressed="@(statusFilter is null ? "true" : "false")" @onclick="() => SetStatusAsync(null)">Todas · @counts.Values.Sum()</button>
+            @foreach (var status in RentalsFormat.Values<ListingStatus>())
+            {
+                <button type="button" class="chip" aria-pressed="@(statusFilter == status ? "true" : "false")" @onclick="() => SetStatusAsync(status)">
+                    @RentalsFormat.Status(status.ToString()) · @counts.GetValueOrDefault(status)
+                </button>
+            }
+        </div>
+    </section>
+
+    @if (page is { Items.Count: 0 })
     {
-        <EmptyState Text="No se encontraron publicaciones." Icon="🏠" />
+        <EmptyState Text="No se encontraron publicaciones con estos filtros." />
     }
     else if (page is not null)
     {
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Inmueble</th>
-                        <th>Operación</th>
-                        <th>Precio</th>
-                        <th>Habitaciones · área</th>
-                        <th>Estado</th>
-                        <th>Actualizada</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var l in page.Items)
-                    {
-                        <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/listings/{l.Id}")'>
-                            <td>
-                                <div>@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</div>
-                                <ShortId Value="l.Id" />
-                            </td>
-                            <td>@RentalsFormat.Term(l.Operation)</td>
-                            <td>@RentalsFormat.Money(l.Price)</td>
-                            <td>@(l.Bedrooms is null ? "—" : $"{l.Bedrooms} hab · {l.Area:0.#} m²")</td>
-                            <td>
-                                <RentalStatusPill Status="@l.Status" />
-                            </td>
-                            <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        <div class="px-3 pb-3">
-            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
-        </div>
+        <section class="grid-fill" aria-label="Resultados" style="--min: 250px; --gap: 16px">
+            @foreach (var listing in page.Items)
+            {
+                <a class="listing-card" href="rentals/listings/@listing.Id">
+                    <span class="listing-cover">
+                        @if (listing.CoverUrl is null)
+                        {
+                            <span>sin fotos</span>
+                        }
+                        else
+                        {
+                            <img src="@listing.CoverUrl" alt="" loading="lazy" />
+                            <span class="listing-count">@listing.PhotoCount fotos</span>
+                        }
+                        <RentalStatusPill Status="@listing.Status" />
+                    </span>
+                    <span class="listing-body">
+                        <span class="price">@(listing.Price is null ? "Sin precio" : RentalsFormat.Money(listing.Price))</span>
+                        <span class="strong">@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</span>
+                        <span class="smaller muted">@RentalsFormat.Term(listing.Operation) · @Facts(listing)</span>
+                        <span class="id" style="margin-top: 6px">@RentalsFormat.Short(listing.Id) · @RentalsFormat.Moment(listing.UpdatedAt)</span>
+                    </span>
+                </a>
+            }
+        </section>
+
+        <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="publicaciones" OnPageChange="GoToPageAsync" />
     }
 </div>
 
-<Modal Title="Nueva publicación" @bind-IsVisible="showCreate">
-    <ChildContent>
-        <div class="mb-3">
-            <label class="form-label">Operación</label>
-            <select class="form-select" @bind="createOperation">
-                @foreach (var o in RentalsFormat.Values<Operation>())
-                {
-                    <option value="@o">@RentalsFormat.Term(o)</option>
-                }
-            </select>
-        </div>
-        @if (Actor.IsStaff)
-        {
-            <div class="mb-3">
-                <label class="form-label">Propietario</label>
-                <select class="form-select" @bind="createOwnerId">
-                    <option value="">Seleccioná un propietario…</option>
-                    @foreach (var o in owners)
-                    {
-                        <option value="@o.Id">@OwnerName(o)</option>
-                    }
-                </select>
-                <div class="form-hint">La publicación queda a nombre del propietario; tú quedas como quien la creó.</div>
-            </div>
-        }
-        else
-        {
-            <div class="form-hint">La publicación queda a tu nombre como propietario.</div>
-        }
-        @if (createError is not null)
-        {
-            <div class="mt-3">
-                <ErrorAlert Exception="createError" />
-            </div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showCreate = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(creating || createOwnerId == Guid.Empty)" @onclick="CreateAsync">Crear borrador</button>
-    </FooterContent>
-</Modal>
-
 @code {
+    private const int PageSize = 12;
+
     private PagedResult<ListingSummaryDto>? page;
-    private bool loading = true;
+    private Dictionary<ListingStatus, int> counts = [];
     private ApiException? error;
 
     private string search = "";
-    private string statusFilter = "";
-    private string operationFilter = "";
+    private ListingStatus? statusFilter;
+    private Operation? operationFilter;
     private bool onlyMine;
     private int currentPage = 1;
 
-    private bool showCreate;
     private bool creating;
+    private bool busy;
     private ApiException? createError;
     private Operation createOperation = Operation.Rent;
-    private Guid createOwnerId = Guid.Empty;
+    private Guid createOwnerId;
     private IReadOnlyList<OwnerDto> owners = [];
+
+    private string? SearchTerm => string.IsNullOrWhiteSpace(search) ? null : search;
+
+    private Guid? Participant => onlyMine ? Actor.Id ?? Guid.Empty : null;
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
+    private static string Facts(ListingSummaryDto listing) =>
+        listing.Bedrooms is null ? $"{listing.PhotoCount} de {ListingLimits.MinPhotos} fotos" : $"{listing.Bedrooms} hab · {listing.Area:0.#} m²";
+
     private async Task LoadAsync()
     {
-        loading = true;
         try
         {
-            page = await Api.ListAsync(
-                string.IsNullOrWhiteSpace(search) ? null : search,
-                Enum.TryParse<ListingStatus>(statusFilter, out var status) ? status : null,
-                Enum.TryParse<Operation>(operationFilter, out var operation) ? operation : null,
-                onlyMine ? Actor.Id ?? Guid.Empty : null,
-                currentPage,
-                10,
-                CancellationToken.None);
+            var none = CancellationToken.None;
+            var pageTask = Api.ListAsync(SearchTerm, statusFilter, operationFilter, Participant, currentPage, PageSize, none);
+            var countTasks = RentalsFormat.Values<ListingStatus>().ToDictionary(
+                status => status,
+                status => Api.ListAsync(SearchTerm, status, operationFilter, Participant, 1, 1, none));
+
+            await Task.WhenAll(countTasks.Values.Append(pageTask));
+
+            page = pageTask.Result;
+            counts = countTasks.ToDictionary(pair => pair.Key, pair => pair.Value.Result.TotalCount);
             error = null;
         }
         catch (ApiException ex)
         {
             error = ex;
-        }
-        finally
-        {
-            loading = false;
         }
     }
 
@@ -201,26 +184,36 @@
         return LoadAsync();
     }
 
-    private Task GoToPage(int p)
+    private Task SetStatusAsync(ListingStatus? status)
     {
-        currentPage = p;
+        statusFilter = status;
+        return RefreshAsync();
+    }
+
+    private Task SetOperationAsync(Operation? operation)
+    {
+        operationFilter = operation;
+        return RefreshAsync();
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        currentPage = target;
         return LoadAsync();
     }
 
-    private Task OnSearchKeyUp(KeyboardEventArgs e) => e.Key == "Enter" ? RefreshAsync() : Task.CompletedTask;
-
-    private async Task OpenCreateAsync()
+    private async Task ToggleCreateAsync()
     {
+        creating = !creating;
         createError = null;
         createOwnerId = Actor.IsStaff ? Guid.Empty : Actor.Id ?? Guid.Empty;
-        showCreate = true;
 
-        if (!Actor.IsStaff)
+        if (!creating || !Actor.IsStaff)
             return;
 
         try
         {
-            owners = (await OwnersApi.ListAsync(null, 1, 100, CancellationToken.None)).Items;
+            owners = (await OwnersApi.ListAsync(null, null, null, 1, 100, CancellationToken.None)).Items;
         }
         catch (ApiException ex)
         {
@@ -230,11 +223,10 @@
 
     private async Task CreateAsync()
     {
-        creating = true;
+        busy = true;
         try
         {
             var id = await Api.DraftAsync(new DraftListingRequest(createOwnerId, createOperation), CancellationToken.None);
-            showCreate = false;
             Nav.NavigateTo($"/rentals/listings/{id}");
         }
         catch (ApiException ex)
@@ -243,10 +235,7 @@
         }
         finally
         {
-            creating = false;
+            busy = false;
         }
     }
-
-    private static string OwnerName(OwnerDto owner) =>
-        owner.LegalName ?? $"{owner.FirstNames} {owner.LastNames}";
 }

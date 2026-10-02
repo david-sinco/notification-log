@@ -1,0 +1,81 @@
+@using System.Globalization
+
+<section class="card card-tight card-dark" aria-label="@Title">
+    <div class="stack" style="--gap: 2px">
+        <h3 class="h2 h2-sm">@Title</h3>
+        <span class="small muted">
+            Hasta @VisitLimits.MaxSlots franjas de una hora, entre las @VisitLimits.EarliestHour:00 y las @VisitLimits.LatestHour:00,
+            con al menos @VisitLimits.MinLeadHours horas de antelación y hasta @VisitLimits.MaxLeadDays días. @Hint
+        </span>
+    </div>
+
+    <div class="days" role="group" aria-label="Día">
+        @foreach (var day in Days)
+        {
+            <button type="button" class="day" aria-pressed="@(day == selectedDay ? "true" : "false")" @onclick="() => selectedDay = day">
+                <span>@day.ToString("ddd", Culture).Replace(".", "")</span>
+                <span>@day.Day</span>
+            </button>
+        }
+    </div>
+
+    <div class="hours" role="group" aria-label="Hora de inicio">
+        @foreach (var hour in Hours)
+        {
+            var slot = selectedDay.AddHours(hour);
+            <button type="button" class="hour" aria-pressed="@(picked.Contains(slot) ? "true" : "false")"
+                    disabled="@(!picked.Contains(slot) && (picked.Count >= VisitLimits.MaxSlots || slot < Earliest))"
+                    @onclick="() => Toggle(slot)">
+                @hour.ToString("00"):00
+            </button>
+        }
+    </div>
+
+    <div class="row" style="--gap: 8px">
+        <span class="small strong">@picked.Count de @VisitLimits.MaxSlots</span>
+        @foreach (var slot in picked)
+        {
+            <button type="button" class="chip chip-lime" aria-label="Quitar @Label(slot)" @onclick="() => picked.Remove(slot)">@Label(slot) ×</button>
+        }
+    </div>
+
+    <ErrorAlert Exception="Error" />
+
+    <div class="row row-end" style="--gap: 8px">
+        <button type="button" class="btn btn-sm btn-on-dark" @onclick="OnCancel">Cancelar</button>
+        <button type="button" class="btn btn-sm btn-lime" disabled="@(Busy || picked.Count == 0)" @onclick="ConfirmAsync">@ConfirmText</button>
+    </div>
+</section>
+
+@code {
+    private static readonly CultureInfo Culture = CultureInfo.GetCultureInfo("es-CO");
+    private static readonly IEnumerable<int> Hours = Enumerable.Range(VisitLimits.EarliestHour, VisitLimits.LatestHour - VisitLimits.EarliestHour);
+
+    private readonly List<DateTime> picked = [];
+    private DateTime selectedDay = RentalsFormat.Today.AddDays(1);
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string Hint { get; set; } = "";
+    [Parameter] public string ConfirmText { get; set; } = "Enviar propuesta";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public ApiException? Error { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<DateTimeOffset>> OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private static DateTime Earliest =>
+        DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).DateTime.AddHours(VisitLimits.MinLeadHours);
+
+    private static IEnumerable<DateTime> Days =>
+        Enumerable.Range(1, VisitLimits.MaxLeadDays).Select(offset => RentalsFormat.Today.AddDays(offset));
+
+    private static string Label(DateTime slot) => $"{slot.ToString("ddd d MMM", Culture).Replace(".", "")} · {slot:HH:mm}";
+
+    private void Toggle(DateTime slot)
+    {
+        if (!picked.Remove(slot))
+            picked.Add(slot);
+    }
+
+    private Task ConfirmAsync() =>
+        OnConfirm.InvokeAsync(picked.Order().Select(RentalsFormat.FromColombia).ToList());
+}

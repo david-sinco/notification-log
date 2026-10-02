@@ -12,7 +12,10 @@ public sealed record ListingSummaryDto(
     decimal? Area,
     Guid OwnerId,
     Guid CreatedBy,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? OwnerName,
+    string? CoverUrl,
+    int PhotoCount);
 
 public sealed record ListingDto(
     Guid Id,
@@ -41,7 +44,8 @@ public sealed record ListingDto(
     long? FinalPrice,
     DateOnly? SignedOn,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? OwnerName);
 
 public sealed record ListingPhotoDto(string FileName, string Url);
 

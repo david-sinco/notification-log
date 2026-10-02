@@ -5,9 +5,12 @@
     var isEmail = Model.Identifier.Contains('@');
 }
 
-<p class="eyebrow">Cuentas Llave</p>
-<h1>Bienvenido de nuevo</h1>
-<p class="lead">Ingresa con el correo o el celular con el que te registraste.</p>
+<nav class="segmented" aria-label="Acceso">
+    <a class="is-active" aria-current="page" asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Ingresar</a>
+    <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Crear cuenta</a>
+</nav>
+
+<h1>Ingresa a tu cuenta</h1>
 
 <nav class="tabs" aria-label="Formas de iniciar sesión">
     <a class="tab@(Model.IsCodeMode ? "" : " is-active")" aria-current="@(Model.IsCodeMode ? null : "page")"
@@ -37,11 +40,8 @@
             <input type="hidden" asp-for="Identifier" />
 
             <div class="sent-to">
-                <span class="icon" aria-hidden="true">@(isEmail ? "✉" : "✆")</span>
-                <div>
                     <small>@(isEmail ? "Enviado al correo" : "Enviado por SMS al celular")</small>
                     <strong>@Model.Identifier</strong>
-                </div>
             </div>
 
             <div class="field">
@@ -87,11 +87,7 @@ else
     </form>
 }
 
-<div class="divider"></div>
-
 @if (Model.CodeSent)
 {
     <p class="switch">¿Es otro correo o celular? <a asp-page="Login" asp-route-mode="code" asp-route-returnUrl="@Model.ReturnUrl">Empieza de nuevo</a></p>
 }
-
-<p class="switch">¿Aún no tienes cuenta? <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Crea una gratis</a></p>

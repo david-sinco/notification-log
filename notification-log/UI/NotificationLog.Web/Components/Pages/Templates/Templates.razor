@@ -1,0 +1,303 @@
+@page "/templates"
+@page "/templates/new"
+@page "/templates/{Id:guid}"
+@using System.Text.RegularExpressions
+@inject TemplatesApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>Plantillas · Llave</PageTitle>
+
+<div class="page">
+    <header class="row row-between row-bottom" style="--gap: 16px">
+        <div class="page-head">
+            <p class="eyebrow">Notificaciones</p>
+            <h1 class="title">Plantillas</h1>
+            <p class="muted">Cada plantilla pertenece a un canal. Publicar una versión nueva retira la anterior.</p>
+        </div>
+        <a class="btn btn-lg btn-primary" href="templates/new">Nueva plantilla</a>
+    </header>
+
+    <ErrorAlert Exception="loadError" />
+
+    <div class="split">
+        <div class="split-list" style="flex-basis: 280px">
+            @foreach (var template in templates)
+            {
+                <a class="list-item @(template.Id == current?.Id ? "active" : "")" href="templates/@template.Id" aria-current="@(template.Id == current?.Id ? "true" : "false")">
+                    <span class="strong">@template.Name</span>
+                    <span class="row" style="--gap: 8px">
+                        <ChannelBadge Channel="@template.Channel" />
+                        <span class="mono smaller muted">v@(template.CurrentVersion)</span>
+                        <span class="smaller muted">@(template.IsEnabled ? "Habilitada" : "Deshabilitada")</span>
+                    </span>
+                </a>
+            }
+        </div>
+
+        @if (IsNew || current is not null)
+        {
+            <div class="split-detail" style="flex-basis: 460px">
+                <section class="card" aria-label="Editor" style="--gap: 16px">
+                    @if (IsNew)
+                    {
+                        <h2 class="h2" style="font-size: 24px">Nueva plantilla</h2>
+                        <div class="field">
+                            <label class="label" for="tpl-name">Nombre</label>
+                            <input id="tpl-name" class="input" placeholder="Visita cancelada" @bind="newName" @bind:event="oninput" />
+                        </div>
+                        <div class="field" role="group" aria-label="Canal">
+                            <span class="label">Canal · no se puede cambiar después</span>
+                            <div class="choices">
+                                @foreach (var option in Enum.GetValues<NotificationChannel>())
+                                {
+                                    <button type="button" class="choice" style="--basis: 90px" aria-pressed="@(newChannel == option ? "true" : "false")" @onclick="() => newChannel = option">@ChannelLabels.Name(option.ToString())</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="row row-between" style="--gap: 12px">
+                            <div class="page-head">
+                                <h2 class="h2" style="font-size: 24px">@current!.Name</h2>
+                                <span class="row" style="--gap: 8px">
+                                    <ChannelBadge Channel="@current.Channel" />
+                                    <span class="small muted">Versión actual v@(current.CurrentVersion.Number) · @Published(current.CurrentVersion)</span>
+                                </span>
+                            </div>
+                            <Switch Checked="current.IsEnabled" OnLabel="Habilitada" OffLabel="Deshabilitada" Disabled="busy" OnToggle="ToggleStatusAsync" />
+                        </div>
+                    }
+
+                    <div class="row row-top" style="--gap: 18px">
+                        <div class="stack grow" style="--basis: 300px; --gap: 14px">
+                            @if (NeedsSubject)
+                            {
+                                <div class="field">
+                                    <div class="row row-between">
+                                        <label class="label" for="tpl-subject">Asunto</label>
+                                        <span class="counter">@subject.Length / @TemplateLimits.SubjectMaxLength</span>
+                                    </div>
+                                    <input id="tpl-subject" class="input" maxlength="@TemplateLimits.SubjectMaxLength" @bind="subject" @bind:event="oninput" />
+                                </div>
+                            }
+                            <div class="field">
+                                <div class="row row-between">
+                                    <label class="label" for="tpl-body">Cuerpo</label>
+                                    <span class="counter">@body.Length.ToString("N0") / @TemplateLimits.BodyMaxLength.ToString("N0")</span>
+                                </div>
+                                <textarea id="tpl-body" class="textarea textarea-mono" rows="11" maxlength="@TemplateLimits.BodyMaxLength" @bind="body" @bind:event="oninput"></textarea>
+                            </div>
+                            <div class="stack" role="group" aria-label="Insertar dato" style="--gap: 8px">
+                                <span class="label">Insertar dato</span>
+                                <div class="chips" style="gap: 6px">
+                                    @foreach (var key in Sample.Keys)
+                                    {
+                                        <button type="button" class="chip chip-mono" @onclick="() => Insert(key)">@key</button>
+                                    }
+                                </div>
+                                <span class="smaller muted">
+                                    Los datos del destinatario están siempre, incluidos sus atributos propios (<span class="mono">recipient.atributo</span>).
+                                    Los del evento dependen del trigger que use la plantilla y se escriben a mano.
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="stack grow" style="--basis: 280px; --gap: 10px">
+                            <span class="label">Vista previa con un destinatario de ejemplo</span>
+                            <div class="preview">
+                                @if (NeedsSubject)
+                                {
+                                    <div class="preview-subject">@Render(subject)</div>
+                                }
+                                <div class="preview-body">@Render(body)</div>
+                            </div>
+                            <span class="smaller muted">Un dato que el evento no traiga no deja un hueco: el envío queda registrado como fallido.</span>
+                        </div>
+                    </div>
+
+                    <ErrorAlert Exception="actionError" />
+
+                    <div class="row row-between" style="--gap: 12px">
+                        <span class="small muted">@PublishHint</span>
+                        <button type="button" class="btn btn-lg btn-primary" disabled="@(busy || !CanPublish)" @onclick="PublishAsync">
+                            @(IsNew ? "Crear plantilla" : $"Publicar v{current!.CurrentVersion.Number + 1}")
+                        </button>
+                    </div>
+                </section>
+
+                @if (!IsNew)
+                {
+                    <section class="card" aria-label="Historial de versiones" style="--gap: 4px">
+                        <h2 class="h2 h2-sm" style="margin-bottom: 8px">Historial de versiones</h2>
+                        @foreach (var version in current!.History.OrderByDescending(version => version.Number))
+                        {
+                            <div class="stack" style="padding: 12px 0; border-top: 1px solid var(--line-soft); --gap: 10px">
+                                <div class="row">
+                                    <span class="mono">v@(version.Number)</span>
+                                    <span class="small muted grow" style="--basis: 120px">@Published(version)</span>
+                                    @if (version.IsCurrent)
+                                    {
+                                        <StatusPill Text="Actual" Variant="success" />
+                                    }
+                                    <button type="button" class="btn btn-sm" style="font-size: 13px" aria-expanded="@(opened == version.Id ? "true" : "false")"
+                                            @onclick="() => opened = opened == version.Id ? null : version.Id">
+                                        @(opened == version.Id ? "Ocultar" : "Ver contenido")
+                                    </button>
+                                    <button type="button" class="btn btn-sm" style="font-size: 13px" @onclick="() => LoadVersion(version)">Partir de esta</button>
+                                </div>
+                                @if (opened == version.Id)
+                                {
+                                    <div class="well" style="padding: 14px; --gap: 6px">
+                                        @if (!string.IsNullOrEmpty(version.Subject))
+                                        {
+                                            <span class="strong wrap-any">@version.Subject</span>
+                                        }
+                                        <span class="pre mono smaller">@version.Body</span>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </section>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly Regex Placeholder = new(@"\{\{\s*([\w.]+)\s*\}\}");
+
+    private static readonly Dictionary<string, string> Sample = new()
+    {
+        ["recipient.name"] = "Camila Ramírez",
+        ["recipient.email"] = "camila@correo.co",
+        ["recipient.phone"] = "+57 300 555 0142",
+        ["recipient.locale"] = "es-CO",
+        ["recipient.timeZone"] = "America/Bogota"
+    };
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private IReadOnlyList<TemplateSummaryDto> templates = [];
+    private TemplateDto? current;
+    private string subject = "";
+    private string body = "";
+    private string newName = "";
+    private NotificationChannel newChannel = NotificationChannel.Email;
+    private Guid? opened;
+    private bool busy;
+    private ApiException? loadError;
+    private ApiException? actionError;
+
+    private bool IsNew => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("templates/new", StringComparison.OrdinalIgnoreCase);
+
+    private NotificationChannel Channel => IsNew ? newChannel : Enum.Parse<NotificationChannel>(current!.Channel);
+
+    private bool NeedsSubject => TemplateLimits.RequiresSubject(Channel);
+
+    private bool Changed =>
+        IsNew || body != current!.CurrentVersion.Body || (NeedsSubject && subject != (current.CurrentVersion.Subject ?? ""));
+
+    private bool CanPublish =>
+        Changed
+        && !string.IsNullOrWhiteSpace(body)
+        && (!NeedsSubject || !string.IsNullOrWhiteSpace(subject))
+        && (!IsNew || !string.IsNullOrWhiteSpace(newName));
+
+    private string PublishHint =>
+        IsNew ? "Se crea habilitada y con su versión 1."
+        : Changed ? $"La v{current!.CurrentVersion.Number} queda en el historial y deja de usarse."
+        : "Edita el asunto o el cuerpo para publicar una versión nueva.";
+
+    protected override Task OnParametersSetAsync()
+    {
+        opened = null;
+        actionError = null;
+        return LoadAsync();
+    }
+
+    private static string Published(TemplateVersionDto version) => RentalsFormat.Moment(new DateTimeOffset(DateTime.SpecifyKind(version.CreatedAt, DateTimeKind.Utc)));
+
+    private static string Render(string text) =>
+        Placeholder.Replace(text, match => Sample.GetValueOrDefault(match.Groups[1].Value, match.Value));
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            templates = (await Api.ListAsync(null, null, null, 1, 100, CancellationToken.None)).Items;
+
+            if (IsNew)
+            {
+                current = null;
+                subject = body = "";
+            }
+            else
+            {
+                var selected = Id ?? templates.FirstOrDefault()?.Id;
+                current = selected is { } id ? await Api.GetByIdAsync(id, CancellationToken.None) : null;
+                subject = current?.CurrentVersion.Subject ?? "";
+                body = current?.CurrentVersion.Body ?? "";
+            }
+
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+    }
+
+    private void Insert(string key) =>
+        body += (body.Length > 0 && !char.IsWhiteSpace(body[^1]) ? " " : "") + "{{ " + key + " }}";
+
+    private void LoadVersion(TemplateVersionDto version)
+    {
+        subject = version.Subject ?? "";
+        body = version.Body;
+    }
+
+    private Task ToggleStatusAsync() =>
+        RunAsync(async () =>
+        {
+            await Api.SetStatusAsync(current!.Id, !current.IsEnabled, CancellationToken.None);
+            await LoadAsync();
+        });
+
+    private Task PublishAsync() =>
+        RunAsync(async () =>
+        {
+            var versionSubject = NeedsSubject ? subject : null;
+
+            if (IsNew)
+            {
+                var id = await Api.CreateAsync(new CreateTemplateRequest(newName.Trim(), newChannel, versionSubject, body), CancellationToken.None);
+                newName = "";
+                Nav.NavigateTo($"/templates/{id}");
+            }
+            else
+            {
+                await Api.PublishVersionAsync(current!.Id, versionSubject, body, CancellationToken.None);
+                await LoadAsync();
+            }
+        });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            actionError = null;
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

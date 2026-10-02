@@ -5,4 +5,5 @@ public sealed record RecipientSummaryDto(
     string Name,
     string? Email,
     string? Phone,
-    bool IsActive);
+    bool IsActive,
+    bool AcceptsNotifications);

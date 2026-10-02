@@ -1,19 +1,17 @@
 @inherits LayoutComponentBase
 
-<div class="page">
-    <aside class="sidebar">
+<div class="shell">
+    <div class="shell-side">
         <NavMenu />
-    </aside>
+    </div>
 
-    <main>
-        <article class="content">
-            @Body
-        </article>
+    <main class="shell-main">
+        @Body
     </main>
 </div>
 
 <div id="blazor-error-ui">
     Ocurrió un error inesperado.
     <a href="" class="reload">Recargar</a>
-    <a class="dismiss">🗙</a>
+    <a class="dismiss">×</a>
 </div>

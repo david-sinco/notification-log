@@ -15,7 +15,12 @@ public sealed record VisitDto(
     bool IsLateCancellation,
     string? ClosedBy,
     DateTimeOffset RequestedAt,
-    DateTimeOffset UpdatedAt)
+    DateTimeOffset UpdatedAt,
+    string? ListingType,
+    string? ListingNeighborhood,
+    string? ListingCity,
+    string? VisitorName,
+    string? HostName)
 {
     public bool IsNegotiating => Status is nameof(VisitStatus.AwaitingHost) or nameof(VisitStatus.AwaitingVisitor);
 

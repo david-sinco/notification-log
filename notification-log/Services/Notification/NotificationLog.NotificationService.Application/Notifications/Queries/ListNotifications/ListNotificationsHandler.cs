@@ -18,7 +18,7 @@ public sealed class ListNotificationsHandler
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
 
         var (items, total) = await _notifications.ListAsync(
-            query.RecipientId, query.EventKey, query.Status, page, pageSize, ct);
+            query.RecipientId, query.EventKey, query.Status, query.Channel, query.Search, page, pageSize, ct);
 
         var dtos = items
             .Select(n => new NotificationDto(

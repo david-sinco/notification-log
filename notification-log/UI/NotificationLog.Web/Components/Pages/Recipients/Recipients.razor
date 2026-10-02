@@ -1,0 +1,223 @@
+@page "/recipients"
+@page "/recipients/{Id:guid}"
+@inject RecipientsApiClient Api
+@inject NotificationsApiClient NotificationsApi
+
+<PageTitle>Destinatarios · Llave</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <p class="eyebrow">Notificaciones</p>
+        <h1 class="title">Destinatarios</h1>
+        <p class="muted">Copia de los usuarios que pueden recibir avisos. Se actualiza sola cuando cambia la cuenta de origen.</p>
+    </header>
+
+    <ErrorAlert Exception="error" />
+
+    <div class="split">
+        <section class="split-list" aria-label="Lista de destinatarios">
+            <label class="sr-only" for="recipient-search">Buscar destinatario</label>
+            <input id="recipient-search" type="search" class="input input-search" placeholder="Nombre, correo o teléfono" @bind="search" @bind:after="RefreshAsync" />
+            @if (page is { Items.Count: 0 })
+            {
+                <EmptyState Text="No se encontraron destinatarios." />
+            }
+            @foreach (var recipient in page?.Items ?? [])
+            {
+                <a class="list-item @(recipient.Id == current?.Id ? "active" : "")" href="recipients/@recipient.Id" style="flex-direction: row; align-items: center; gap: 12px; padding: 12px 14px"
+                   aria-current="@(recipient.Id == current?.Id ? "true" : "false")">
+                    <span class="avatar" aria-hidden="true" style="width: 42px; height: 42px">@RentalsFormat.Initials(recipient.Name)</span>
+                    <span class="stack" style="--gap: 0">
+                        <span class="strong">@recipient.Name</span>
+                        <span class="smaller muted">@Reach(recipient)</span>
+                    </span>
+                </a>
+            }
+            @if (page is { TotalPages: > 1 })
+            {
+                <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="destinatarios" OnPageChange="GoToPageAsync" />
+            }
+        </section>
+
+        @if (current is not null)
+        {
+            <section class="split-detail card" aria-label="Detalle del destinatario">
+                <div class="stack" style="--gap: 4px">
+                    <h2 class="h2 h2-lg">@current.Name</h2>
+                    <span class="id">user_id @current.Id</span>
+                </div>
+
+                <div class="note">
+                    <strong>Solo lectura</strong>
+                    <span class="muted">Los datos llegan desde la cuenta del usuario. Para cambiarlos, edita el usuario; aquí se reflejan en segundos.</span>
+                    <a class="link btn-start" href="users/@current.Id">Abrir usuario</a>
+                </div>
+
+                @if (!current.AcceptsNotifications)
+                {
+                    <div class="note note-warning" role="status">
+                        <strong>No acepta notificaciones</strong>
+                        <span>Ningún canal le entrega avisos mientras no dé su consentimiento.</span>
+                    </div>
+                }
+                @if (!current.IsActive)
+                {
+                    <div class="note note-warning" role="status">
+                        <strong>Destinatario inactivo</strong>
+                        <span>No recibe avisos por ningún canal.</span>
+                    </div>
+                }
+
+                <div class="stack" style="--gap: 10px">
+                    <h3 class="h3">¿Por dónde se le puede avisar?</h3>
+                    <div class="grid-auto" style="--gap: 10px">
+                        @foreach (var channel in Channels)
+                        {
+                            <div class="stack channel-card @(channel.Available ? "available" : "")" style="--gap: 6px">
+                                <span class="row row-between" style="--gap: 8px">
+                                    <span class="strong">@channel.Name</span>
+                                    <span class="smaller strong @(channel.Available ? "text-success" : "text-warning")" style="font-size: 12px">@(channel.Available ? "Disponible" : "No disponible")</span>
+                                </span>
+                                <span class="small muted wrap-any">@channel.Detail</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="grid-auto" style="--min: 160px">
+                    <div class="fact"><span class="fact-label">Acepta notificaciones</span><span class="fact-value">@(current.AcceptsNotifications ? "Sí" : "No")</span></div>
+                    <div class="fact"><span class="fact-label">Idioma</span><span class="fact-value">@current.Locale</span></div>
+                    <div class="fact"><span class="fact-label">Zona horaria</span><span class="fact-value">@current.TimeZone</span></div>
+                </div>
+
+                <div class="stack" style="--gap: 8px">
+                    <h3 class="h3">Atributos para plantillas</h3>
+                    @if (current.Attributes.Count == 0)
+                    {
+                        <span class="small muted">Sin atributos propios.</span>
+                    }
+                    <div class="row" style="--gap: 6px">
+                        @foreach (var (key, value) in current.Attributes)
+                        {
+                            <span class="tag"><span class="muted">recipient.@key</span><span>@value</span></span>
+                        }
+                    </div>
+                </div>
+
+                <div class="stack" style="--gap: 4px">
+                    <div class="row row-between row-baseline">
+                        <h3 class="h3">Últimos envíos</h3>
+                        <a class="small strong" href="notifications">Ver todos</a>
+                    </div>
+                    @if (sends.Count == 0)
+                    {
+                        <span class="small muted">Todavía no se le envió nada.</span>
+                    }
+                    @foreach (var send in sends)
+                    {
+                        var sent = send.Status == nameof(DeliveryStatus.Sent);
+                        <div class="line-row">
+                            <span class="dot @(sent ? "" : "dot-danger")" aria-hidden="true"></span>
+                            <span class="event-key smaller grow" style="--basis: 160px">@send.EventKey</span>
+                            <span class="smaller muted">@ChannelLabels.Name(send.Channel) · @RentalsFormat.Moment(new DateTimeOffset(DateTime.SpecifyKind(send.OccurredAt, DateTimeKind.Utc)))</span>
+                            <span class="smaller strong @(sent ? "text-success" : "text-danger")">@(sent ? "Enviado" : "Falló")</span>
+                        </div>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private const int PageSize = 20;
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private PagedResult<RecipientSummaryDto>? page;
+    private RecipientDto? current;
+    private IReadOnlyList<NotificationDto> sends = [];
+    private string search = "";
+    private int currentPage = 1;
+    private ApiException? error;
+
+    private (string Name, bool Available, string Detail)[] Channels
+    {
+        get
+        {
+            var recipient = current!;
+            var reachable = recipient.IsActive && recipient.AcceptsNotifications;
+
+            return
+            [
+                Channel("Email", recipient.Email, reachable, "Sin correo confirmado"),
+                Channel("SMS", recipient.Phone, reachable, "Sin teléfono confirmado"),
+                ("Push", false, "Todavía no se registran dispositivos"),
+                ("WhatsApp", false, "El canal todavía no tiene proveedor")
+            ];
+        }
+    }
+
+    protected override Task OnParametersSetAsync() => LoadAsync();
+
+    private static (string, bool, string) Channel(string name, string? address, bool reachable, string missing) =>
+        string.IsNullOrWhiteSpace(address) ? (name, false, missing)
+        : reachable ? (name, true, address)
+        : (name, false, $"{address} · sin consentimiento");
+
+    private static string Reach(RecipientSummaryDto recipient)
+    {
+        if (!recipient.IsActive)
+            return "Inactivo";
+
+        if (!recipient.AcceptsNotifications)
+            return "No acepta notificaciones";
+
+        var channels = new[] { recipient.Email is null ? null : "Email", recipient.Phone is null ? null : "SMS" }.OfType<string>().ToList();
+
+        return channels.Count == 0 ? "Sin canales disponibles" : string.Join(" · ", channels);
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var none = CancellationToken.None;
+            page = await Api.ListAsync(string.IsNullOrWhiteSpace(search) ? null : search, null, currentPage, PageSize, none);
+
+            var selected = Id ?? page.Items.FirstOrDefault()?.Id;
+
+            if (selected is { } id)
+            {
+                var recipientTask = Api.GetByIdAsync(id, none);
+                var sendsTask = NotificationsApi.ListAsync(id, null, null, null, 1, 5, none);
+                await Task.WhenAll(recipientTask, sendsTask);
+
+                current = recipientTask.Result;
+                sends = sendsTask.Result.Items;
+            }
+            else
+            {
+                current = null;
+            }
+
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+    }
+
+    private Task RefreshAsync()
+    {
+        currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        currentPage = target;
+        return LoadAsync();
+    }
+}

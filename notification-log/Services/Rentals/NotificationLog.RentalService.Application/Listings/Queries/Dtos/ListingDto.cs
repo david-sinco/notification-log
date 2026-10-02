@@ -27,4 +27,5 @@ public sealed record ListingDto(
     long? FinalPrice,
     DateOnly? SignedOn,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? OwnerName);

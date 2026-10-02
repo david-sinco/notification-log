@@ -2,10 +2,12 @@ namespace NotificationLog.Web.Api.Rentals.Owners;
 
 public sealed class OwnersApiClient(HttpClient http)
 {
-    public Task<PagedResult<OwnerDto>> ListAsync(Guid? createdBy, int page, int pageSize, CancellationToken ct)
+    public Task<PagedResult<OwnerDto>> ListAsync(Guid? createdBy, string? search, string? type, int page, int pageSize, CancellationToken ct)
     {
         var query = QueryString.Build(
             ("createdBy", createdBy?.ToString()),
+            ("search", search),
+            ("type", type),
             ("page", page.ToString()),
             ("pageSize", pageSize.ToString()));
 

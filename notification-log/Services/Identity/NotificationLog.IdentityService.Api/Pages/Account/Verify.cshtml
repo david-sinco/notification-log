@@ -5,8 +5,7 @@
     var isEmail = Model.Identifier.Contains('@');
 }
 
-<p class="eyebrow">Último paso</p>
-<h1>Confirma que eres tú</h1>
+<h1>Verifica tu cuenta</h1>
 <p class="lead">Escribe el código de 6 dígitos que te enviamos. Vence en pocos minutos.</p>
 
 @if (Model.Message is not null)
@@ -20,11 +19,8 @@
 }
 
 <div class="sent-to">
-    <span class="icon" aria-hidden="true">@(isEmail ? "✉" : "✆")</span>
-    <div>
         <small>@(isEmail ? "Enviado al correo" : "Enviado por SMS al celular")</small>
         <strong>@Model.Identifier</strong>
-    </div>
 </div>
 
 <form method="post">
@@ -39,7 +35,5 @@
     <button type="submit" class="button">Verificar y continuar</button>
     <button type="submit" class="button-link" asp-page-handler="Resend">¿No te llegó? Enviar otro código</button>
 </form>
-
-<div class="divider"></div>
 
 <p class="switch">¿Escribiste mal el dato? <a asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Vuelve a empezar</a></p>

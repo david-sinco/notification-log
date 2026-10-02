@@ -8,4 +8,5 @@ public sealed record RecipientDto(
     string Locale,
     string TimeZone,
     IReadOnlyDictionary<string, string> Attributes,
-    bool IsActive);
+    bool IsActive,
+    bool AcceptsNotifications);

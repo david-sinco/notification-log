@@ -2,194 +2,191 @@
 @attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador}")]
 @inject ListingsApiClient ListingsApi
 @inject ModerationApiClient Api
-@inject NavigationManager Nav
 
 <PageTitle>Moderación · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
-        <p class="eyebrow">Arriendos</p>
-        <h1>Moderación</h1>
-        <p>Revisión de publicaciones nuevas, suspensiones y retiros. Para administradores y moderadores.</p>
-    </div>
-</div>
+<div class="page" style="gap: 26px">
+    <header class="page-head">
+        <p class="eyebrow">Arriendos · administradores y moderadores</p>
+        <h1 class="title">Moderación</h1>
+        <p class="muted">Revisión de publicaciones nuevas, suspensiones y retiros.</p>
+    </header>
 
-@if (error is not null)
-{
     <ErrorAlert Exception="error" />
-}
 
-<div class="table-card mb-4">
-    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">En revisión (@inReview.Count)</h2></div>
-    @if (loading)
+    @if (toast is not null)
     {
-        <div class="p-4 text-center text-muted">Cargando…</div>
+        <div class="note note-ink" role="status"><strong>@toast</strong></div>
     }
-    else if (inReview.Count == 0)
-    {
-        <EmptyState Text="No hay publicaciones esperando revisión." Icon="✅" />
-    }
-    else
-    {
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead><tr><th>Inmueble</th><th>Operación</th><th>Precio</th><th>Enviada</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var l in inReview)
-                    {
-                        <tr>
-                            <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
-                            <td>@RentalsFormat.Term(l.Operation)</td>
-                            <td>@RentalsFormat.Money(l.Price)</td>
-                            <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
-                            <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary" disabled="@busy"
-                                            @onclick="() => RunAsync(() => Api.ApproveAsync(l.Id, CancellationToken.None))">
-                                        Aprobar
-                                    </button>
-                                    <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReject(l)">Rechazar…</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
 
-<div class="table-card mb-4">
-    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Visibles (@visible.Count)</h2></div>
-    @if (!loading && visible.Count == 0)
-    {
-        <EmptyState Text="No hay publicaciones publicadas ni pausadas." Icon="🏠" />
-    }
-    else if (!loading)
-    {
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead><tr><th>Inmueble</th><th>Estado</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var l in visible)
-                    {
-                        <tr>
-                            <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
-                            <td><RentalStatusPill Status="@l.Status" /></td>
-                            <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Suspend)">Suspender…</button>
-                                    <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Withdraw)">Retirar…</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-    }
-</div>
+    <section class="stack" aria-label="En revisión" style="--gap: 14px">
+        <h2 class="h2">En revisión · @inReview.Count</h2>
+        @if (loaded && inReview.Count == 0)
+        {
+            <EmptyState Text="No hay publicaciones esperando revisión." />
+        }
+        @foreach (var listing in inReview)
+        {
+            <article class="card card-tight">
+                <div class="row row-top" style="--gap: 18px">
+                    <div class="review-photos" aria-label="Fotos">
+                        @foreach (var photo in listing.Photos.Take(4))
+                        {
+                            <img src="@photo.Url" alt="" loading="lazy" />
+                        }
+                        @if (listing.Photos.Count > 4)
+                        {
+                            <span class="review-more">+@(listing.Photos.Count - 4)</span>
+                        }
+                    </div>
+                    <div class="stack" style="flex: 2 1 300px; --gap: 8px">
+                        <a class="h2 h2-sm link-plain" href="rentals/listings/@listing.Id">@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</a>
+                        <span class="muted">@RentalsFormat.Term(listing.Operation) · @RentalsFormat.Money(listing.Price) · @listing.Bedrooms hab · @listing.Area?.ToString("0.#") m² · estrato @listing.Stratum</span>
+                        <span class="small muted">@(listing.OwnerName ?? RentalsFormat.Short(listing.OwnerId)) · enviada el @RentalsFormat.Moment(listing.UpdatedAt)</span>
+                        <div class="row" style="--gap: 6px">
+                            <StatusPill Text="@($"{listing.Photos.Count} fotos")" Variant="success" />
+                            <StatusPill Text="@($"Descripción de {listing.Description?.Length ?? 0} caracteres")" Variant="success" />
+                        </div>
+                    </div>
+                </div>
 
-<div class="table-card">
-    <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Suspendidas (@suspended.Count)</h2></div>
-    @if (!loading && suspended.Count == 0)
+                @if (rejecting == listing.Id)
+                {
+                    <fieldset class="well">
+                        <legend class="strong" style="float: left">¿Por qué se rechaza?</legend>
+                        <span class="small muted" style="clear: both">La publicación vuelve a borrador y el propietario ve los motivos.</span>
+                        <div class="chips">
+                            @foreach (var reason in RentalsFormat.Values<RejectionReason>())
+                            {
+                                <button type="button" class="chip chip-danger" aria-pressed="@(reasons.Contains(reason) ? "true" : "false")" @onclick="() => Toggle(reason)">@RentalsFormat.Term(reason)</button>
+                            }
+                        </div>
+                        <ErrorAlert Exception="panelError" />
+                    </fieldset>
+                    <div class="row row-end" style="--gap: 8px">
+                        <button type="button" class="btn" @onclick="CloseRejection">Cancelar</button>
+                        <button type="button" class="btn btn-danger-solid" disabled="@(busy || reasons.Count == 0)" @onclick="() => RejectAsync(listing)">
+                            Rechazar con @reasons.Count @(reasons.Count == 1 ? "motivo" : "motivos")
+                        </button>
+                    </div>
+                }
+                else
+                {
+                    <div class="row row-end" style="--gap: 8px">
+                        <button type="button" class="btn btn-danger" disabled="@busy" @onclick="() => OpenRejection(listing.Id)">Rechazar</button>
+                        <button type="button" class="btn btn-primary" disabled="@busy"
+                                @onclick="() => ApproveAsync(listing)">
+                            Aprobar y publicar
+                        </button>
+                    </div>
+                }
+            </article>
+        }
+    </section>
+
+    @foreach (var group in Groups)
     {
-        <EmptyState Text="No hay publicaciones suspendidas." Icon="⏸️" />
-    }
-    else if (!loading)
-    {
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead><tr><th>Inmueble</th><th>Actualizada</th><th></th></tr></thead>
-                <tbody>
-                    @foreach (var l in suspended)
-                    {
-                        <tr>
-                            <td><a href="@($"/rentals/listings/{l.Id}")">@RentalsFormat.ListingTitle(l.Type, l.Neighborhood, l.City)</a></td>
-                            <td class="text-muted small">@RentalsFormat.Date(l.UpdatedAt)</td>
-                            <td class="text-end">
-                                <div class="btn-group btn-group-sm">
-                                    <button class="btn btn-outline-secondary" disabled="@busy"
-                                            @onclick="() => RunAsync(() => Api.ReinstateAsync(l.Id, CancellationToken.None))">
+        <section class="stack" aria-label="@group.Title">
+            <h2 class="h2">@group.Title · @group.Items.Count</h2>
+            <div class="card" style="padding: 4px 18px; --gap: 0">
+                @if (loaded && group.Items.Count == 0)
+                {
+                    <div class="muted" style="padding: 24px 0; text-align: center">@group.EmptyText</div>
+                }
+                @foreach (var listing in group.Items)
+                {
+                    <div class="stack" style="padding: 14px 0; border-bottom: 1px solid var(--line-soft)">
+                        <div class="row row-between" style="--gap: 12px">
+                            <div class="stack grow" style="--gap: 2px; --basis: 240px">
+                                <span class="row" style="--gap: 8px">
+                                    <a class="strong link-plain" href="rentals/listings/@listing.Id">@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</a>
+                                    <RentalStatusPill Status="@listing.Status" />
+                                </span>
+                                <span class="small muted">@NoteFor(listing)</span>
+                            </div>
+                            <div class="row" style="--gap: 8px">
+                                @if (listing.Status == "Suspended")
+                                {
+                                    <button type="button" class="btn btn-sm" disabled="@busy"
+                                            @onclick="() => ReinstateAsync(listing)">
                                         Levantar suspensión
                                     </button>
-                                    <button class="btn btn-outline-danger" disabled="@busy" @onclick="() => OpenReason(l, ModerationAction.Withdraw)">Retirar…</button>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
+                                }
+                                else
+                                {
+                                    <button type="button" class="btn btn-sm" disabled="@busy" @onclick="() => Ask(listing.Id, ModerationAction.Suspend)">Suspender</button>
+                                }
+                                <button type="button" class="btn btn-sm btn-danger" disabled="@busy" @onclick="() => Ask(listing.Id, ModerationAction.Withdraw)">Retirar</button>
+                            </div>
+                        </div>
+                        @if (asking == (listing.Id, ModerationAction.Suspend))
+                        {
+                            <ReasonPanel Title="Suspender publicación" Description="Motivo que verá el propietario." ConfirmText="Suspender publicación"
+                                         Busy="busy" Error="panelError" OnCancel="CloseAsk"
+                                         OnConfirm="reason => SuspendAsync(listing, reason)" />
+                        }
+                        @if (asking == (listing.Id, ModerationAction.Withdraw))
+                        {
+                            <ReasonPanel Title="Retirar publicación" Description="Motivo que verá el propietario. El retiro es definitivo." ConfirmText="Retirar publicación"
+                                         Busy="busy" Error="panelError" OnCancel="CloseAsk"
+                                         OnConfirm="reason => WithdrawAsync(listing, reason)" />
+                        }
+                    </div>
+                }
+            </div>
+        </section>
     }
 </div>
 
-<Modal Title="Rechazar publicación" @bind-IsVisible="showReject">
-    <ChildContent>
-        <p class="text-muted small">La publicación vuelve a borrador y el propietario ve los motivos.</p>
-        @foreach (var reason in RentalsFormat.Values<RejectionReason>())
-        {
-            <div class="form-check">
-                <input class="form-check-input" type="checkbox" id="reason-@reason" checked="@rejectReasons.Contains(reason)"
-                       @onchange="e => ToggleReason(reason, (bool)e.Value!)" />
-                <label class="form-check-label" for="reason-@reason">@RentalsFormat.Term(reason)</label>
-            </div>
-        }
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showReject = false">Cancelar</button>
-        <button type="button" class="btn btn-danger" disabled="@(modalBusy || rejectReasons.Count == 0)" @onclick="RejectAsync">Rechazar</button>
-    </FooterContent>
-</Modal>
-
-<ReasonModal Title="@(reasonAction == ModerationAction.Suspend ? "Suspender publicación" : "Retirar publicación")"
-             Description="@(reasonAction == ModerationAction.Suspend ? "Deja de ser visible hasta que se levante la suspensión." : "Se retira definitivamente por decisión de moderación.")"
-             ConfirmText="@(reasonAction == ModerationAction.Suspend ? "Suspender" : "Retirar")"
-             Danger="true" Busy="modalBusy" Error="modalError"
-             @bind-IsVisible="showReason" OnConfirm="ConfirmReasonAsync" />
-
 @code {
-    private enum ModerationAction { Suspend, Withdraw }
-
-    private IReadOnlyList<ListingSummaryDto> inReview = [];
-    private IReadOnlyList<ListingSummaryDto> visible = [];
-    private IReadOnlyList<ListingSummaryDto> suspended = [];
-    private bool loading = true;
+    private IReadOnlyList<ListingDto> inReview = [];
+    private IReadOnlyList<ListingDto> visible = [];
+    private IReadOnlyList<ListingDto> suspended = [];
+    private bool loaded;
     private bool busy;
+    private string? toast;
     private ApiException? error;
+    private ApiException? panelError;
 
-    private bool modalBusy;
-    private ApiException? modalError;
-    private ListingSummaryDto? target;
+    private Guid? rejecting;
+    private readonly HashSet<RejectionReason> reasons = [];
+    private (Guid Id, ModerationAction Action)? asking;
 
-    private bool showReject;
-    private HashSet<RejectionReason> rejectReasons = [];
+    private enum ModerationAction
+    {
+        Suspend,
+        Withdraw
+    }
 
-    private bool showReason;
-    private ModerationAction reasonAction;
+    private (string Title, IReadOnlyList<ListingDto> Items, string EmptyText)[] Groups =>
+    [
+        ("Visibles", visible, "No hay publicaciones publicadas ni pausadas."),
+        ("Suspendidas", suspended, "No hay publicaciones suspendidas.")
+    ];
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
+    private static string Message(string verb, ListingDto listing, string? tail) =>
+        $"{verb}: «{RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)}»{(tail is null ? "" : " " + tail)}.";
+
+    private static string NoteFor(ListingDto listing) => listing.Status == "Suspended"
+        ? $"Suspendida el {RentalsFormat.Moment(listing.UpdatedAt)}: «{listing.StatusReason}»"
+        : $"{RentalsFormat.Term(listing.Operation)} · {RentalsFormat.Money(listing.Price)} · {listing.OwnerName ?? RentalsFormat.Short(listing.OwnerId)}";
+
     private async Task LoadAsync()
     {
-        loading = true;
         try
         {
-            var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 100, CancellationToken.None);
-            var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 100, CancellationToken.None);
-            var pausedTask = ListingsApi.ListAsync(null, ListingStatus.Paused, null, null, 1, 100, CancellationToken.None);
-            var suspendedTask = ListingsApi.ListAsync(null, ListingStatus.Suspended, null, null, 1, 100, CancellationToken.None);
-            await Task.WhenAll(inReviewTask, publishedTask, pausedTask, suspendedTask);
+            var groups = await Task.WhenAll(
+                DetailsAsync(ListingStatus.InReview),
+                DetailsAsync(ListingStatus.Published),
+                DetailsAsync(ListingStatus.Paused),
+                DetailsAsync(ListingStatus.Suspended));
 
-            inReview = inReviewTask.Result.Items;
-            visible = publishedTask.Result.Items.Concat(pausedTask.Result.Items)
-                .OrderByDescending(l => l.UpdatedAt)
-                .ToList();
-            suspended = suspendedTask.Result.Items;
+            inReview = groups[0].OrderBy(listing => listing.UpdatedAt).ToList();
+            visible = [.. groups[1], .. groups[2]];
+            suspended = groups[3];
+            error = null;
         }
         catch (ApiException ex)
         {
@@ -197,76 +194,80 @@
         }
         finally
         {
-            loading = false;
+            loaded = true;
         }
     }
 
-    private async Task RunAsync(Func<Task> action)
+    private async Task<IReadOnlyList<ListingDto>> DetailsAsync(ListingStatus status)
+    {
+        var summaries = await ListingsApi.ListAsync(null, status, null, null, 1, 50, CancellationToken.None);
+
+        return await Task.WhenAll(summaries.Items.Select(listing => ListingsApi.GetByIdAsync(listing.Id, CancellationToken.None)));
+    }
+
+    private void OpenRejection(Guid id)
+    {
+        rejecting = id;
+        asking = null;
+        reasons.Clear();
+        panelError = null;
+    }
+
+    private void CloseRejection() => rejecting = null;
+
+    private void Toggle(RejectionReason reason)
+    {
+        if (!reasons.Remove(reason))
+            reasons.Add(reason);
+    }
+
+    private void Ask(Guid id, ModerationAction action)
+    {
+        asking = (id, action);
+        rejecting = null;
+        panelError = null;
+    }
+
+    private void CloseAsk() => asking = null;
+
+    private Task ApproveAsync(ListingDto listing) =>
+        RunAsync(() => Api.ApproveAsync(listing.Id, CancellationToken.None), Message("Aprobada", listing, "ya está publicada"));
+
+    private Task ReinstateAsync(ListingDto listing) =>
+        RunAsync(() => Api.ReinstateAsync(listing.Id, CancellationToken.None), Message("Se levantó la suspensión de", listing, null));
+
+    private Task SuspendAsync(ListingDto listing, string reason) =>
+        RunAsync(() => Api.SuspendAsync(listing.Id, reason, CancellationToken.None), Message("Suspendida", listing, null));
+
+    private Task WithdrawAsync(ListingDto listing, string reason) =>
+        RunAsync(() => Api.WithdrawAsync(listing.Id, reason, CancellationToken.None), Message("Retirada", listing, null));
+
+    private Task RejectAsync(ListingDto listing) =>
+        RunAsync(() => Api.RejectAsync(listing.Id, reasons.ToList(), CancellationToken.None), Message("Rechazada", listing, "volvió a borrador"));
+
+    private async Task RunAsync(Func<Task> action, string done)
     {
         busy = true;
         try
         {
             await action();
+            toast = done;
+            panelError = null;
             error = null;
+            rejecting = null;
+            asking = null;
             await LoadAsync();
         }
         catch (ApiException ex)
         {
-            error = ex;
+            if (rejecting is null && asking is null)
+                error = ex;
+            else
+                panelError = ex;
         }
         finally
         {
             busy = false;
         }
     }
-
-    private async Task RunModalAsync(Func<Task> action, Action close)
-    {
-        modalBusy = true;
-        try
-        {
-            await action();
-            close();
-            modalError = null;
-            await LoadAsync();
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-        finally
-        {
-            modalBusy = false;
-        }
-    }
-
-    private void OpenReject(ListingSummaryDto listing)
-    {
-        target = listing;
-        rejectReasons = [];
-        modalError = null;
-        showReject = true;
-    }
-
-    private void ToggleReason(RejectionReason reason, bool isChecked)
-    {
-        if (isChecked) rejectReasons.Add(reason);
-        else rejectReasons.Remove(reason);
-    }
-
-    private Task RejectAsync() => RunModalAsync(
-        () => Api.RejectAsync(target!.Id, rejectReasons.ToList(), CancellationToken.None),
-        () => showReject = false);
-
-    private void OpenReason(ListingSummaryDto listing, ModerationAction action)
-    {
-        target = listing;
-        reasonAction = action;
-        modalError = null;
-        showReason = true;
-    }
-
-    private Task ConfirmReasonAsync(string reason) => reasonAction == ModerationAction.Suspend
-        ? RunModalAsync(() => Api.SuspendAsync(target!.Id, reason, CancellationToken.None), () => showReason = false)
-        : RunModalAsync(() => Api.WithdrawAsync(target!.Id, reason, CancellationToken.None), () => showReason = false);
 }

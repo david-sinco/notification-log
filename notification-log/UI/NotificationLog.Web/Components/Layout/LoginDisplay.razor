@@ -2,19 +2,19 @@
 
 <AuthorizeView>
     <Authorized>
-        <div class="user-card">
-            <a class="user-identity" href="users/me">
-                <span class="avatar" aria-hidden="true">@Initials(context.User)</span>
-                <span class="user-text">
-                    <span class="user-name">@(context.User.Identity?.Name ?? "Mi cuenta")</span>
-                    <span class="user-role">@Roles(context.User)</span>
+        <div class="nav-user">
+            <a class="nav-user-identity" href="users/me">
+                <span class="nav-user-avatar" aria-hidden="true">@Initials(context.User)</span>
+                <span>
+                    <span class="nav-user-name">@(context.User.Identity?.Name ?? "Mi cuenta")</span>
+                    <span class="nav-user-role">@Roles(context.User)</span>
                 </span>
             </a>
 
             <form action="authentication/logout" method="post">
                 <AntiforgeryToken />
                 <input type="hidden" name="returnUrl" value="/" />
-                <button type="submit" class="logout">Cerrar sesión</button>
+                <button type="submit" class="nav-logout">Salir</button>
             </form>
         </div>
     </Authorized>

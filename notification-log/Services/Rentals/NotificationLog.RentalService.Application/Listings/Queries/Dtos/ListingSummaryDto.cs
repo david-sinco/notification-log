@@ -12,4 +12,7 @@ public sealed record ListingSummaryDto(
     decimal? Area,
     Guid OwnerId,
     Guid CreatedBy,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    string? OwnerName,
+    string? CoverUrl,
+    int PhotoCount);

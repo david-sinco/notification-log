@@ -24,7 +24,7 @@ public static class RentalsFormat
         ["Scheduled"] = "Agendada",
         ["Cancelled"] = "Cancelada",
         ["Completed"] = "Realizada",
-        ["NoShow"] = "Inasistencia",
+        ["NoShow"] = "No asistió",
         ["PendingProfile"] = "Perfil pendiente",
         ["Registered"] = "Registrado"
     };
@@ -53,10 +53,11 @@ public static class RentalsFormat
 
     public static string StatusVariant(string status) => status switch
     {
-        "Published" or "Scheduled" or "Completed" or "Registered" => "success",
-        "InReview" or "AwaitingHost" or "AwaitingVisitor" or "PendingProfile" => "warning",
-        "Closed" => "info",
-        "Suspended" or "Withdrawn" or "NoShow" => "danger",
+        "Published" or "Scheduled" or "Registered" => "success",
+        "InReview" or "AwaitingVisitor" => "info",
+        "Paused" or "Expired" or "AwaitingHost" or "PendingProfile" => "warning",
+        "Closed" or "Completed" => "ink",
+        "Suspended" or "Withdrawn" or "NoShow" or "Cancelled" => "danger",
         _ => "neutral"
     };
 
@@ -66,6 +67,24 @@ public static class RentalsFormat
 
     public static string Date(DateTimeOffset? value) =>
         value is { } date ? date.ToOffset(ColombiaOffset).ToString("dd/MM/yyyy HH:mm", Colombia) : "—";
+
+    public static string Day(DateTimeOffset value) =>
+        value.ToOffset(ColombiaOffset).ToString("ddd d MMM", Colombia).Replace(".", "");
+
+    public static string Moment(DateTimeOffset? value) =>
+        value is { } date ? $"{Day(date)}, {date.ToOffset(ColombiaOffset):HH:mm}" : "—";
+
+    public static string Range(DateTimeOffset start) =>
+        $"{start.ToOffset(ColombiaOffset):HH:mm} – {start.ToOffset(ColombiaOffset).AddHours(1):HH:mm}";
+
+    public static DateTime Today => DateTimeOffset.UtcNow.ToOffset(ColombiaOffset).Date;
+
+    public static string Initials(string? name)
+    {
+        var parts = (name ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+
+        return parts.Length == 0 ? "·" : string.Concat(parts.Take(2).Select(part => char.ToUpperInvariant(part[0])));
+    }
 
     public static string Date(DateOnly? value) => value?.ToString("dd/MM/yyyy", Colombia) ?? "—";
 

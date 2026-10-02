@@ -1,106 +1,193 @@
 @page "/rentals/visitors"
-@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador}")]
+@attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Visitor}")]
+@using System.Net
 @inject VisitorsApiClient Api
+@inject RentalsActor Actor
 
 <PageTitle>Visitantes · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
+<div class="page">
+    <header class="page-head">
         <p class="eyebrow">Arriendos</p>
-        <h1>Visitantes</h1>
-        <p>Las personas registradas en Llave para solicitar visitas a los inmuebles publicados.</p>
+        <h1 class="title">Visitantes</h1>
+        <p class="muted">Quien quiere visitar un inmueble completa su perfil una vez; después puede pedir visitas.</p>
+    </header>
+
+    <ErrorAlert Exception="error" />
+
+    <div class="split">
+        @if (Actor.IsStaff)
+        {
+            <section class="stack" aria-label="Lista de visitantes" style="flex: 3 1 420px; --gap: 10px">
+                @if (page is { Items.Count: 0 })
+                {
+                    <EmptyState Text="No se encontraron visitantes." />
+                }
+                @foreach (var visitor in page?.Items ?? [])
+                {
+                    var registered = visitor.Status == "Registered";
+                    <article class="card card-tight row" style="padding: 16px; flex-direction: row; --gap: 14px">
+                        <span class="avatar @(registered ? "avatar-lime" : "")" aria-hidden="true">@RentalsFormat.Initials(visitor.DisplayName)</span>
+                        <div class="stack grow" style="--gap: 2px">
+                            <span class="strong">@visitor.DisplayName</span>
+                            <span class="mono smaller muted">@Identification(visitor)</span>
+                            <span class="small muted wrap-any">@Contact(visitor)</span>
+                        </div>
+                        <RentalStatusPill Status="@visitor.Status" />
+                        <a class="link" href="rentals/visits">@(visitor.VisitCount == 0 ? "Sin visitas" : visitor.VisitCount == 1 ? "1 visita" : $"{visitor.VisitCount} visitas")</a>
+                    </article>
+                }
+                @if (page is { TotalPages: > 1 })
+                {
+                    <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="visitantes" OnPageChange="GoToPageAsync" />
+                }
+            </section>
+        }
+
+        @if (me is { Status: "PendingProfile" })
+        {
+            <section class="card card-dark" aria-label="Tu perfil de visitante" style="flex: 2 1 320px; --gap: 16px">
+                <div class="page-head">
+                    <span class="pill pill-lime btn-start">Perfil pendiente</span>
+                    <h2 class="h2">Completa tu perfil de visitante</h2>
+                    <span class="small muted">Con estos datos el anfitrión sabe quién llega a la visita. Solo se piden una vez.</span>
+                </div>
+                <div class="grid-auto" style="--min: 190px; --gap: 14px">
+                    <div class="field">
+                        <label class="label" for="v-first">Nombres</label>
+                        <input id="v-first" class="input" @bind="firstNames" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="v-last">Apellidos</label>
+                        <input id="v-last" class="input" @bind="lastNames" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="v-doc-type">Tipo de documento</label>
+                        <select id="v-doc-type" class="select" @bind="documentType">
+                            @foreach (var type in RentalsFormat.Values<DocumentType>())
+                            {
+                                <option value="@type">@OwnerLabels.Document(type.ToString())</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="v-doc">Número de documento</label>
+                        <input id="v-doc" class="input" @bind="documentNumber" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="v-email">Correo</label>
+                        <input id="v-email" type="email" class="input" @bind="email" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="v-phone">Teléfono</label>
+                        <input id="v-phone" type="tel" class="input" @bind="phone" />
+                    </div>
+                </div>
+                <ErrorAlert Exception="profileError" />
+                <button type="button" class="btn btn-lime" disabled="@busy" @onclick="CompleteProfileAsync">Guardar perfil y poder pedir visitas</button>
+            </section>
+        }
+        else if (me is not null)
+        {
+            <section class="card" aria-label="Tu perfil de visitante" style="flex: 2 1 320px; --gap: 12px">
+                <div class="page-head">
+                    <span class="pill pill-success btn-start">Registrado</span>
+                    <h2 class="h2">Tu perfil de visitante</h2>
+                </div>
+                <div class="kv"><span class="muted">Nombre</span><span>@me.DisplayName</span></div>
+                <div class="kv"><span class="muted">Documento</span><span>@Identification(me)</span></div>
+                <div class="kv"><span class="muted">Correo</span><span class="wrap-any">@me.Email</span></div>
+                <div class="kv"><span class="muted">Teléfono</span><span>@me.Phone</span></div>
+                <a class="link" href="rentals/listings">Buscar un inmueble para visitar</a>
+            </section>
+        }
     </div>
 </div>
-
-@if (error is not null)
-{
-    <ErrorAlert Exception="error" />
-}
-
-@if (loading)
-{
-    <div class="p-4 text-center text-muted">Cargando…</div>
-}
-else if (page is { Items.Count: 0 })
-{
-    <div class="table-card">
-        <EmptyState Text="No se encontraron visitantes." Icon="🧳" />
-    </div>
-}
-else if (page is not null)
-{
-    <div class="table-card">
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Nombre</th>
-                        <th>Estado</th>
-                        <th>Documento</th>
-                        <th>Correo</th>
-                        <th>Teléfono</th>
-                        <th>Registrado</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var visitor in page.Items)
-                    {
-                        <tr>
-                            <td>
-                                <div>@visitor.DisplayName</div>
-                                <ShortId Value="visitor.Id" />
-                            </td>
-                            <td><RentalStatusPill Status="@visitor.Status" /></td>
-                            <td>@Identification(visitor)</td>
-                            <td>@visitor.Email</td>
-                            <td>@visitor.Phone</td>
-                            <td class="text-muted small">@RentalsFormat.Date(visitor.RegisteredAt)</td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        <div class="px-3 pb-3">
-            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
-        </div>
-    </div>
-}
 
 @code {
     private const int PageSize = 20;
 
     private PagedResult<VisitorDto>? page;
-    private bool loading = true;
-    private ApiException? error;
+    private VisitorDto? me;
+    private bool busy;
     private int currentPage = 1;
+    private ApiException? error;
+    private ApiException? profileError;
+
+    private string firstNames = "";
+    private string lastNames = "";
+    private DocumentType documentType = DocumentType.CitizenshipCard;
+    private string documentNumber = "";
+    private string email = "";
+    private string phone = "";
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
+    private static string Identification(VisitorDto visitor) => visitor.DocumentNumber is null
+        ? "Sin documento todavía"
+        : $"{OwnerLabels.Document(visitor.DocumentType)} {visitor.DocumentNumber}";
+
+    private static string Contact(VisitorDto visitor) =>
+        string.Join(" · ", new[] { visitor.Email, visitor.Phone }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
     private async Task LoadAsync()
     {
-        loading = true;
         try
         {
-            page = await Api.ListAsync(currentPage, PageSize, CancellationToken.None);
+            if (Actor.IsStaff)
+                page = await Api.ListAsync(currentPage, PageSize, CancellationToken.None);
+
+            me = await LoadMeAsync();
+
+            if (me is { Status: "PendingProfile" } && email.Length == 0)
+            {
+                email = me.Email;
+                phone = me.Phone;
+            }
+
             error = null;
         }
         catch (ApiException ex)
         {
             error = ex;
         }
-        finally
+    }
+
+    private async Task<VisitorDto?> LoadMeAsync()
+    {
+        try
         {
-            loading = false;
+            return await Api.GetMeAsync(CancellationToken.None);
+        }
+        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
+        {
+            return null;
         }
     }
 
-    private Task GoToPage(int p)
+    private Task GoToPageAsync(int target)
     {
-        currentPage = p;
-
+        currentPage = target;
         return LoadAsync();
     }
 
-    private static string Identification(VisitorDto visitor)
-        => visitor.DocumentNumber is null ? "—" : $"{OwnerLabels.Document(visitor.DocumentType)} {visitor.DocumentNumber}";
+    private async Task CompleteProfileAsync()
+    {
+        busy = true;
+        try
+        {
+            await Api.CompleteProfileAsync(
+                new CompleteVisitorProfileRequest(firstNames, lastNames, documentType, documentNumber, email, phone), CancellationToken.None);
+            profileError = null;
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            profileError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
 }

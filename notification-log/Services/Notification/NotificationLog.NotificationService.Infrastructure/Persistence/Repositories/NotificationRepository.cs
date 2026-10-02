@@ -1,3 +1,4 @@
+using NotificationLog.NotificationService.Domain.Shared;
 using Microsoft.EntityFrameworkCore;
 using NotificationLog.NotificationService.Domain.Notifications;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
@@ -13,6 +14,7 @@ internal sealed class NotificationRepository(NotificationDbContext db) : INotifi
 
     public async Task<(IReadOnlyList<Notification> Items, int TotalCount)> ListAsync(
         Guid? recipientId, string? eventKey, DeliveryStatus? status,
+        NotificationChannel? channel, string? search,
         int page, int pageSize, CancellationToken ct)
     {
         var query = _db.Notifications.AsNoTracking();
@@ -25,6 +27,15 @@ internal sealed class NotificationRepository(NotificationDbContext db) : INotifi
 
         if (status.HasValue)
             query = query.Where(n => n.Status == status.Value);
+
+        if (channel.HasValue)
+            query = query.Where(n => n.Channel == channel.Value);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var term = search.Trim();
+            query = query.Where(n => n.EventKey.Contains(term) || n.Destination.Contains(term));
+        }
 
         var total = await query.CountAsync(ct);
 

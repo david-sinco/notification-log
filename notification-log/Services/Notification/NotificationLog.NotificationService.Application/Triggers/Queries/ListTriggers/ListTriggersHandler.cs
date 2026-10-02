@@ -21,7 +21,8 @@ public sealed class ListTriggersHandler(INotificationTriggerRepository triggers)
                 t.EventKey.Value,
                 t.Description,
                 t.IsEnabled,
-                t.Configurations.Count(c => c.IsEnabled)))
+                t.Configurations.Count(c => c.IsEnabled),
+                t.Configurations.Where(c => c.IsEnabled).Select(c => c.Channel.ToString()).ToList()))
             .ToList();
 
         return new PagedResult<TriggerSummaryDto>(dtos, page, pageSize, total);

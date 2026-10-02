@@ -1,148 +1,146 @@
-﻿@page "/notifications"
+@page "/notifications"
 @inject NotificationsApiClient Api
+@inject TemplatesApiClient TemplatesApi
+@inject RecipientsApiClient RecipientsApi
 
-<PageTitle>Notificaciones · Llave</PageTitle>
+<PageTitle>Envíos · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
+<div class="page">
+    <header class="page-head">
         <p class="eyebrow">Notificaciones</p>
-        <h1>Notificaciones</h1>
-        <p>Historial de envíos, con el resultado de cada intento.</p>
-    </div>
-</div>
+        <h1 class="title">Envíos</h1>
+        <p class="muted">Registro inmutable de cada intento. Nada se descarta en silencio: un fallo también queda escrito.</p>
+    </header>
 
-@if (error is not null)
-{
     <ErrorAlert Exception="error" />
-}
 
-<div class="filter-bar">
-    <div class="row g-2 align-items-end">
-        <div class="col-md-4">
-            <label class="form-label">Event key</label>
-            <input class="form-control" placeholder="p. ej. transaccion.realizada (Enter para buscar)"
-                   @bind="eventKey" @bind:event="oninput" @onkeyup="OnFilterKeyUp" />
+    <section class="row" aria-label="Filtros">
+        <label class="sr-only" for="event-search">Buscar por evento o destino</label>
+        <input id="event-search" type="search" class="input input-search grow" style="--basis: 220px" placeholder="Evento o destino"
+               @bind="search" @bind:after="RefreshAsync" />
+        <div class="segmented" role="group" aria-label="Estado">
+            <button type="button" aria-pressed="@(statusFilter is null ? "true" : "false")" @onclick="() => SetStatusAsync(null)">Todos · @(sentCount + failedCount)</button>
+            <button type="button" aria-pressed="@(statusFilter == DeliveryStatus.Sent ? "true" : "false")" @onclick="() => SetStatusAsync(DeliveryStatus.Sent)">Enviados · @sentCount</button>
+            <button type="button" aria-pressed="@(statusFilter == DeliveryStatus.Failed ? "true" : "false")" @onclick="() => SetStatusAsync(DeliveryStatus.Failed)">Fallidos · @failedCount</button>
         </div>
-        <div class="col-md-4">
-            <label class="form-label">Id de destinatario</label>
-            <input class="form-control" placeholder="GUID del destinatario (Enter para buscar)"
-                   @bind="recipientIdText" @bind:event="oninput" @onkeyup="OnFilterKeyUp" />
+        <div class="chips" role="group" aria-label="Canal" style="gap: 6px">
+            <button type="button" class="chip" aria-pressed="@(channelFilter is null ? "true" : "false")" @onclick="() => SetChannelAsync(null)">Todos los canales</button>
+            @foreach (var channel in Enum.GetValues<NotificationChannel>())
+            {
+                <button type="button" class="chip" aria-pressed="@(channelFilter == channel ? "true" : "false")" @onclick="() => SetChannelAsync(channel)">@ChannelLabels.Name(channel.ToString())</button>
+            }
         </div>
-        <div class="col-md-2">
-            <label class="form-label">Estado</label>
-            <select class="form-select" @bind="statusFilter" @bind:after="RefreshAsync">
-                <option value="">Todos</option>
-                <option value="Sent">Enviadas</option>
-                <option value="Failed">Fallidas</option>
-            </select>
-        </div>
-        <div class="col-md-2 text-md-end">
-            <button class="btn btn-outline-secondary w-100" @onclick="RefreshAsync">Filtrar</button>
-        </div>
-    </div>
-</div>
+    </section>
 
-<div class="table-card">
-    @if (loading)
+    @if (page is { Items.Count: 0 })
     {
-        <div class="p-4 text-center text-muted">Cargando…</div>
-    }
-    else if (page is { Items.Count: 0 })
-    {
-        <EmptyState Text="No se encontraron notificaciones con esos filtros." Icon="🔔" />
+        <EmptyState Text="Ningún envío coincide con estos filtros." />
     }
     else if (page is not null)
     {
-        <div class="table-responsive-wrap">
-            <table class="table">
-                <thead>
-                    <tr>
-                        <th>Fecha</th>
-                        <th>Evento</th>
-                        <th>Canal</th>
-                        <th>Destino</th>
-                        <th>Estado</th>
-                        <th>Detalle</th>
-                        <th>Datos</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var n in page.Items)
+        <section class="stack" aria-label="Historial" style="--gap: 8px">
+            @foreach (var notification in page.Items)
+            {
+                var sent = notification.Status == nameof(DeliveryStatus.Sent);
+                var open = opened == notification.Id;
+                <article class="send @(open ? "open" : "")">
+                    <button type="button" class="send-head" aria-expanded="@(open ? "true" : "false")" @onclick="() => ToggleAsync(notification)">
+                        <span class="dot @(sent ? "" : "dot-danger")" aria-hidden="true"></span>
+                        <span class="event-key" style="flex: 2 1 180px; min-width: 0">@notification.EventKey</span>
+                        <ChannelBadge Channel="@notification.Channel" />
+                        <span class="wrap-any" style="flex: 2 1 180px; min-width: 0">@notification.Destination</span>
+                        <span class="smaller strong @(sent ? "text-success" : "text-danger")">@(sent ? "Enviado" : "Falló")</span>
+                        <span class="smaller muted">@Occurred(notification)</span>
+                    </button>
+                    @if (open)
                     {
-                        <tr>
-                            <td class="text-muted small">@n.OccurredAt.ToLocalTime().ToString("g")</td>
-                            <td>
-                                <code>@n.EventKey</code>
-                                <div class="text-muted small" title="@n.EventId">@n.EventId.ToString()[..8]</div>
-                            </td>
-                            <td><ChannelBadge Channel="@n.Channel" /></td>
-                            <td>@n.Destination</td>
-                            <td><StatusPill Text="@n.Status" Variant="@(n.Status == "Sent" ? "success" : "danger")" /></td>
-                            <td class="small">
-                                @if (n.Status == "Sent")
+                        <div class="send-body">
+                            @if (!sent)
+                            {
+                                <div class="note note-danger" role="alert">
+                                    <strong>Motivo del fallo</strong>
+                                    <span class="mono wrap-any">@notification.Error</span>
+                                </div>
+                            }
+                            <div class="grid-auto">
+                                <div class="fact"><span class="fact-label">Destinatario</span><span class="fact-value">@(recipientName ?? "Sin destinatario registrado")</span></div>
+                                <div class="fact"><span class="fact-label">Plantilla y versión</span><span class="fact-value">@(templateLabel ?? "Sin plantilla")</span></div>
+                                <div class="fact"><span class="fact-label">Id del proveedor</span><span class="fact-value">@(notification.ProviderMessageId ?? (sent ? "El proveedor no devolvió id" : "Sin id: no salió"))</span></div>
+                                <div class="fact"><span class="fact-label">Ocurrió</span><span class="fact-value">@Occurred(notification)</span></div>
+                            </div>
+                            @if (notification.Payload is { Count: > 0 })
+                            {
+                                <div class="stack" style="--gap: 6px">
+                                    <span class="fact-label">Datos del evento</span>
+                                    <div class="row" style="--gap: 6px">
+                                        @foreach (var (key, value) in notification.Payload)
+                                        {
+                                            <span class="tag"><span class="muted">@key</span><span>@value</span></span>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            <div class="row" style="--gap: 16px">
+                                <a class="link" href="templates/@notification.TemplateId">Ver plantilla</a>
+                                @if (notification.RecipientId is { } recipientId)
                                 {
-                                    @(n.ProviderMessageId ?? "—")
+                                    <a class="link" href="recipients/@recipientId">Ver destinatario</a>
                                 }
-                                else
-                                {
-                                    <span class="text-danger">@(n.Error ?? "—")</span>
-                                }
-                            </td>
-                            <td class="small text-muted">@FormatPayload(n.Payload)</td>
-                        </tr>
+                                <a class="link" href="triggers">Ver triggers</a>
+                            </div>
+                        </div>
                     }
-                </tbody>
-            </table>
-        </div>
-        <div class="px-3 pb-3">
-            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" OnPageChange="GoToPage" />
-        </div>
+                </article>
+            }
+        </section>
+
+        <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="envíos" OnPageChange="GoToPageAsync" />
     }
 </div>
 
 @code {
-    [SupplyParameterFromQuery(Name = "recipientId")]
-    public Guid? RecipientIdQuery { get; set; }
+    private const int PageSize = 10;
 
     private PagedResult<NotificationDto>? page;
-    private bool loading = true;
+    private int sentCount;
+    private int failedCount;
     private ApiException? error;
 
-    private string eventKey = "";
-    private string recipientIdText = "";
-    private string statusFilter = "";
+    private string search = "";
+    private DeliveryStatus? statusFilter;
+    private NotificationChannel? channelFilter;
     private int currentPage = 1;
 
-    protected override Task OnInitializedAsync()
-    {
-        if (RecipientIdQuery is { } id)
-            recipientIdText = id.ToString();
+    private Guid? opened;
+    private string? recipientName;
+    private string? templateLabel;
 
-        return LoadAsync();
-    }
+    private string? SearchTerm => string.IsNullOrWhiteSpace(search) ? null : search;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private static string Occurred(NotificationDto notification) =>
+        RentalsFormat.Moment(new DateTimeOffset(DateTime.SpecifyKind(notification.OccurredAt, DateTimeKind.Utc)));
 
     private async Task LoadAsync()
     {
-        loading = true;
         try
         {
-            Guid? recipientId = Guid.TryParse(recipientIdText, out var parsed) ? parsed : null;
-            DeliveryStatus? status = string.IsNullOrEmpty(statusFilter)
-                ? null
-                : Enum.Parse<DeliveryStatus>(statusFilter);
+            var none = CancellationToken.None;
+            var pageTask = Api.ListAsync(null, SearchTerm, statusFilter, channelFilter, currentPage, PageSize, none);
+            var sentTask = Api.ListAsync(null, SearchTerm, DeliveryStatus.Sent, channelFilter, 1, 1, none);
+            var failedTask = Api.ListAsync(null, SearchTerm, DeliveryStatus.Failed, channelFilter, 1, 1, none);
+            await Task.WhenAll(pageTask, sentTask, failedTask);
 
-            page = await Api.ListAsync(
-                recipientId, string.IsNullOrWhiteSpace(eventKey) ? null : eventKey, status,
-                currentPage, 10, CancellationToken.None);
+            page = pageTask.Result;
+            sentCount = sentTask.Result.TotalCount;
+            failedCount = failedTask.Result.TotalCount;
+            opened = null;
             error = null;
         }
         catch (ApiException ex)
         {
             error = ex;
-        }
-        finally
-        {
-            loading = false;
         }
     }
 
@@ -152,16 +150,47 @@
         return LoadAsync();
     }
 
-    private Task GoToPage(int p)
+    private Task SetStatusAsync(DeliveryStatus? status)
     {
-        currentPage = p;
+        statusFilter = status;
+        return RefreshAsync();
+    }
+
+    private Task SetChannelAsync(NotificationChannel? channel)
+    {
+        channelFilter = channel;
+        return RefreshAsync();
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        currentPage = target;
         return LoadAsync();
     }
 
-    private Task OnFilterKeyUp(KeyboardEventArgs e) => e.Key == "Enter" ? RefreshAsync() : Task.CompletedTask;
+    private async Task ToggleAsync(NotificationDto notification)
+    {
+        if (opened == notification.Id)
+        {
+            opened = null;
+            return;
+        }
 
-    private static string FormatPayload(IReadOnlyDictionary<string, string>? payload)
-        => payload is null || payload.Count == 0
-            ? "—"
-            : string.Join(", ", payload.Select(kv => $"{kv.Key}={kv.Value}"));
+        opened = notification.Id;
+        recipientName = null;
+        templateLabel = null;
+
+        try
+        {
+            var template = await TemplatesApi.GetByIdAsync(notification.TemplateId, CancellationToken.None);
+            var version = template.History.FirstOrDefault(candidate => candidate.Id == notification.TemplateVersionId);
+            templateLabel = version is null ? template.Name : $"{template.Name} · v{version.Number}";
+
+            if (notification.RecipientId is { } recipientId)
+                recipientName = (await RecipientsApi.GetByIdAsync(recipientId, CancellationToken.None)).Name;
+        }
+        catch (ApiException)
+        {
+        }
+    }
 }

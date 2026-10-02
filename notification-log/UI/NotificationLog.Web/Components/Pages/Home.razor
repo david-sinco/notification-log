@@ -1,4 +1,5 @@
 @page "/"
+@using System.Globalization
 @inject ListingsApiClient ListingsApi
 @inject VisitsApiClient VisitsApi
 @inject OwnersApiClient OwnersApi
@@ -6,262 +7,212 @@
 @inject TemplatesApiClient TemplatesApi
 @inject RecipientsApiClient RecipientsApi
 @inject NotificationsApiClient NotificationsApi
-@inject NavigationManager Nav
+@inject RentalsActor Actor
 
 <PageTitle>Panel · Llave</PageTitle>
 
-<div class="page-header">
-    <div>
-        <p class="eyebrow">Llave · Backoffice</p>
-        <h1>@Greeting</h1>
-        <p>Del anuncio a la entrega de la llave: publicaciones, visitas y los avisos que salen en cada paso.</p>
-    </div>
-</div>
+<div class="page" style="gap: 28px">
+    <header class="page-head" style="gap: 8px">
+        <p class="eyebrow">@RentalsFormat.Today.ToString("dddd d 'de' MMMM", CultureInfo.GetCultureInfo("es-CO"))</p>
+        <h1 class="title title-hero">@Greeting</h1>
+        <p class="muted" style="max-width: 620px">Del anuncio a la entrega de la llave: publicaciones, visitas y los avisos que salen en cada paso.</p>
+    </header>
 
-<h2 class="section-title">Arriendos</h2>
-
-@if (rentalsError is not null)
-{
     <ErrorAlert Exception="rentalsError" />
-}
 
-<div class="row g-3 mb-5">
-    <div class="col-6 col-lg-3">
-        <a class="stat-card stat-accent" href="rentals/moderation">
-            <span class="stat-icon">🛡️</span>
-            <span class="stat-label">En revisión</span>
-            <span class="stat-value">@Count(inReview)</span>
+    <section class="grid-auto" aria-label="Pendientes" style="--min: 280px; --gap: 14px">
+        <a class="queue-card queue-card-ink" href="@(Actor.IsStaff ? "rentals/moderation" : "rentals/listings")">
+            <span class="row row-baseline">
+                <span class="queue-count">@Count(inReview?.TotalCount)</span>
+                <span class="strong">publicaciones en revisión</span>
+            </span>
+            <span>@InReviewText</span>
+            <span class="small strong">@(Actor.IsStaff ? "Abrir moderación" : "Ver publicaciones") →</span>
         </a>
-    </div>
-    <div class="col-6 col-lg-3">
-        <a class="stat-card" href="rentals/listings">
-            <span class="stat-icon">🏢</span>
-            <span class="stat-label">Publicadas</span>
-            <span class="stat-value">@Count(published)</span>
+        <a class="queue-card queue-card-lime" href="rentals/visits">
+            <span class="row row-baseline">
+                <span class="queue-count">@Count(awaitingVisits?.TotalCount)</span>
+                <span class="strong">visitas por responder</span>
+            </span>
+            <span>@VisitsText</span>
+            <span class="small strong">Responder visitas →</span>
         </a>
-    </div>
-    <div class="col-6 col-lg-3">
-        <a class="stat-card" href="rentals/visits">
-            <span class="stat-icon">📅</span>
-            <span class="stat-label">Visitas por responder</span>
-            <span class="stat-value">@Count(requestedVisits)</span>
+        <a class="queue-card" href="rentals/listings">
+            <span class="row row-baseline">
+                <span class="queue-count">@Count(drafts)</span>
+                <span class="strong">borradores tuyos</span>
+            </span>
+            <span>Necesitan datos, precio y al menos @ListingLimits.MinPhotos fotos para enviarse a revisión.</span>
+            <span class="small strong">Completar borradores →</span>
         </a>
-    </div>
-    <div class="col-6 col-lg-3">
-        @if (isStaff)
+    </section>
+
+    <ErrorAlert Exception="notificationsError" />
+
+    <section class="stats" aria-label="Resumen">
+        <a class="stat" href="rentals/listings"><span class="smaller muted">Publicadas</span><span class="stat-value">@Count(published)</span></a>
+        @if (Actor.IsStaff)
         {
-            <a class="stat-card" href="rentals/owners">
-                <span class="stat-icon">🔑</span>
-                <span class="stat-label">Propietarios</span>
-                <span class="stat-value">@Count(owners)</span>
-            </a>
+            <a class="stat" href="rentals/owners"><span class="smaller muted">Propietarios</span><span class="stat-value">@Count(owners)</span></a>
         }
         else
         {
-            <a class="stat-card" href="rentals/listings">
-                <span class="stat-icon">🤝</span>
-                <span class="stat-label">Cerradas</span>
-                <span class="stat-value">@Count(closed)</span>
-            </a>
+            <a class="stat" href="rentals/listings"><span class="smaller muted">Cerradas</span><span class="stat-value">@Count(closed)</span></a>
         }
-    </div>
-</div>
+        <a class="stat" href="triggers"><span class="smaller muted">Triggers</span><span class="stat-value">@Count(triggers)</span></a>
+        <a class="stat" href="templates"><span class="smaller muted">Plantillas</span><span class="stat-value">@Count(templates)</span></a>
+        <a class="stat" href="recipients"><span class="smaller muted">Destinatarios</span><span class="stat-value">@Count(recipients)</span></a>
+        <a class="stat" href="notifications"><span class="smaller muted">Envíos</span><span class="stat-value">@Count(notifications?.TotalCount)</span></a>
+    </section>
 
-<div class="row g-4 mb-5">
-    <div class="col-lg-8">
-        <div class="table-card">
-            <div class="card-title-row">
-                <h2>Publicaciones con actividad reciente</h2>
-                <a href="rentals/listings" class="small">Ver todo →</a>
+    <div class="split">
+        <section class="card card-tight" style="flex: 3 1 420px; --gap: 12px">
+            <div class="row row-between row-baseline">
+                <h2 class="h2 h2-sm">Publicaciones con actividad reciente</h2>
+                <a class="small strong" href="rentals/listings">Ver todas</a>
             </div>
-
-            @if (loadingRentals)
+            @if (recentListings is { Count: 0 })
             {
-                <div class="p-4 text-center text-muted">Cargando…</div>
-            }
-            else if (recentListings is { Count: 0 })
-            {
-                <EmptyState Text="Todavía no hay publicaciones." Icon="🏠" />
+                <EmptyState Text="Todavía no hay publicaciones." />
             }
             else if (recentListings is not null)
             {
-                <div class="table-responsive-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Inmueble</th>
-                                <th>Precio</th>
-                                <th>Estado</th>
-                                <th>Actualizada</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var listing in recentListings)
+                <div>
+                    @foreach (var listing in recentListings)
+                    {
+                        <a class="line-row" href="rentals/listings/@listing.Id" style="gap: 12px; padding: 12px 0">
+                            @if (listing.CoverUrl is null)
                             {
-                                <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/listings/{listing.Id}")'>
-                                    <td>@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</td>
-                                    <td>@RentalsFormat.Money(listing.Price)</td>
-                                    <td><RentalStatusPill Status="@listing.Status" /></td>
-                                    <td class="text-muted small">@RentalsFormat.Date(listing.UpdatedAt)</td>
-                                </tr>
+                                <span class="thumb">sin foto</span>
                             }
-                        </tbody>
-                    </table>
+                            else
+                            {
+                                <img class="thumb" src="@listing.CoverUrl" alt="" />
+                            }
+                            <span class="stack grow" style="--gap: 0; --basis: 180px">
+                                <span class="strong">@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</span>
+                                <span class="smaller muted">@RentalsFormat.Term(listing.Operation) · @Facts(listing)</span>
+                            </span>
+                            <span class="strong">@RentalsFormat.Money(listing.Price)</span>
+                            <RentalStatusPill Status="@listing.Status" />
+                        </a>
+                    }
                 </div>
             }
-        </div>
-    </div>
+        </section>
 
-    <div class="col-lg-4">
-        <div class="surface-card h-100">
-            <h2>Para empezar</h2>
-            <ol class="steps">
-                <li>
-                    <span class="step-number">1</span>
-                    <div>
-                        <strong>Registra al propietario</strong>
-                        Persona natural o jurídica en <a href="rentals/owners">Propietarios</a>.
-                    </div>
-                </li>
-                <li>
-                    <span class="step-number">2</span>
-                    <div>
-                        <strong>Crea la publicación</strong>
-                        Complétala y envíala a revisión.
-                    </div>
-                </li>
-                <li>
-                    <span class="step-number">3</span>
-                    <div>
-                        <strong>Apruébala</strong>
-                        Desde la cola de <a href="rentals/moderation">Moderación</a>.
-                    </div>
-                </li>
-                <li>
-                    <span class="step-number">4</span>
-                    <div>
-                        <strong>Agenda la visita</strong>
-                        Y ciérrala cuando se arriende o se venda.
-                    </div>
-                </li>
-            </ol>
-        </div>
-    </div>
-</div>
-
-<h2 class="section-title">Notificaciones</h2>
-
-@if (notificationsError is not null)
-{
-    <ErrorAlert Exception="notificationsError" />
-}
-
-<div class="row g-4">
-    <div class="col-lg-8">
-        <div class="table-card">
-            <div class="card-title-row">
-                <h2>Últimos envíos</h2>
-                <a href="notifications" class="small">Ver todo →</a>
+        <section class="card card-tight" style="flex: 2 1 300px; --gap: 12px">
+            <div class="row row-between row-baseline">
+                <h2 class="h2 h2-sm">Últimos envíos</h2>
+                <a class="small strong" href="notifications">Ver historial</a>
             </div>
-
-            @if (loadingNotifications)
+            @if (notifications is { Items.Count: 0 })
             {
-                <div class="p-4 text-center text-muted">Cargando…</div>
+                <EmptyState Text="Todavía no se envió ninguna notificación." />
             }
-            else if (recentNotifications is { Count: 0 })
+            else if (notifications is not null)
             {
-                <EmptyState Text="Todavía no se envió ninguna notificación." Icon="🔕" />
-            }
-            else if (recentNotifications is not null)
-            {
-                <div class="table-responsive-wrap">
-                    <table class="table">
-                        <thead>
-                            <tr>
-                                <th>Evento</th>
-                                <th>Canal</th>
-                                <th>Destino</th>
-                                <th>Estado</th>
-                                <th>Fecha</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var notification in recentNotifications)
-                            {
-                                <tr>
-                                    <td><code>@notification.EventKey</code></td>
-                                    <td><ChannelBadge Channel="@notification.Channel" /></td>
-                                    <td>@notification.Destination</td>
-                                    <td>
-                                        <StatusPill Text="@notification.Status"
-                                                    Variant="@(notification.Status == "Sent" ? "success" : "danger")" />
-                                    </td>
-                                    <td class="text-muted small">@notification.OccurredAt.ToLocalTime().ToString("g")</td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
+                <div>
+                    @foreach (var notification in notifications.Items)
+                    {
+                        var sent = notification.Status == nameof(DeliveryStatus.Sent);
+                        <div class="line-row" style="flex-wrap: nowrap; padding: 11px 0">
+                            <span class="dot @(sent ? "" : "dot-danger")" aria-hidden="true"></span>
+                            <span class="stack grow" style="--gap: 0; --basis: 0">
+                                <span class="event-key smaller">@notification.EventKey</span>
+                                <span class="smaller muted wrap-any">@ChannelLabels.Name(notification.Channel) · @notification.Destination</span>
+                            </span>
+                            <span class="smaller strong @(sent ? "text-success" : "text-danger")">@(sent ? "Enviado" : "Falló")</span>
+                        </div>
+                    }
                 </div>
             }
-        </div>
+        </section>
     </div>
 
-    <div class="col-lg-4">
-        <div class="surface-card h-100">
-            <h2>Configuración</h2>
-            <ul class="mini-stats">
-                <li>
-                    <a href="triggers"><span>Triggers</span><strong>@Count(triggers)</strong></a>
-                </li>
-                <li>
-                    <a href="templates"><span>Plantillas</span><strong>@Count(templates)</strong></a>
-                </li>
-                <li>
-                    <a href="recipients"><span>Destinatarios</span><strong>@Count(recipients)</strong></a>
-                </li>
-                <li>
-                    <a href="notifications"><span>Envíos registrados</span><strong>@Count(notifications)</strong></a>
-                </li>
-            </ul>
-        </div>
-    </div>
+    <section class="card card-tight" style="--gap: 16px">
+        <h2 class="h2 h2-sm">El recorrido de una publicación</h2>
+        <ol class="grid-auto">
+            <li class="step">
+                <span class="mono smaller muted">Paso 1</span>
+                <span class="strong">Registra al propietario</span>
+                <span class="small muted">Persona natural o jurídica.</span>
+                <a class="small strong" href="rentals/owners">Ir a propietarios</a>
+            </li>
+            <li class="step">
+                <span class="mono smaller muted">Paso 2</span>
+                <span class="strong">Crea la publicación</span>
+                <span class="small muted">Datos, precio y al menos @ListingLimits.MinPhotos fotos.</span>
+                <a class="small strong" href="rentals/listings">Nueva publicación</a>
+            </li>
+            <li class="step">
+                <span class="mono smaller muted">Paso 3</span>
+                <span class="strong">Apruébala</span>
+                <span class="small muted">Desde la cola de moderación.</span>
+                <a class="small strong" href="rentals/moderation">Ir a moderación</a>
+            </li>
+            <li class="step">
+                <span class="mono smaller muted">Paso 4</span>
+                <span class="strong">Agenda la visita</span>
+                <span class="small muted">Y cierra el negocio cuando se firme.</span>
+                <a class="small strong" href="rentals/visits">Ver visitas</a>
+            </li>
+        </ol>
+    </section>
 </div>
 
 @code {
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
-    private bool loadingRentals = true;
-    private bool loadingNotifications = true;
-    private bool isStaff;
     private ApiException? rentalsError;
     private ApiException? notificationsError;
     private string greetingName = "";
 
-    private int? inReview;
+    private PagedResult<ListingSummaryDto>? inReview;
+    private PagedResult<VisitDto>? awaitingVisits;
+    private IReadOnlyList<ListingSummaryDto>? recentListings;
+    private PagedResult<NotificationDto>? notifications;
+    private int? drafts;
     private int? published;
-    private int? requestedVisits;
     private int? owners;
     private int? closed;
     private int? triggers;
     private int? templates;
     private int? recipients;
-    private int? notifications;
 
-    private IReadOnlyList<ListingSummaryDto>? recentListings;
-    private IReadOnlyList<NotificationDto>? recentNotifications;
+    private int Pending => (inReview?.TotalCount ?? 0) + (awaitingVisits?.TotalCount ?? 0) + (drafts ?? 0);
 
-    private string Greeting => string.IsNullOrWhiteSpace(greetingName)
-        ? "Panel"
-        : $"Hola, {greetingName}";
+    private string Greeting
+    {
+        get
+        {
+            var hello = string.IsNullOrWhiteSpace(greetingName) ? "Hola." : $"Hola, {greetingName}.";
+
+            return Pending switch
+            {
+                0 => $"{hello} Todo está al día.",
+                1 => $"{hello} Hay 1 cosa esperándote.",
+                _ => $"{hello} Hay {Pending} cosas esperándote."
+            };
+        }
+    }
+
+    private string InReviewText => inReview is { Items.Count: > 0 }
+        ? $"La más antigua espera desde el {RentalsFormat.Moment(inReview.Items.Min(listing => listing.UpdatedAt))}."
+        : "Ninguna publicación espera aprobación.";
+
+    private string VisitsText => awaitingVisits?.Items.Where(visit => visit.RespondBy is not null).Select(visit => visit.RespondBy).Min() is { } respondBy
+        ? $"La próxima vence el {RentalsFormat.Moment(respondBy)} si nadie responde."
+        : "Ningún anfitrión tiene solicitudes pendientes.";
 
     private static string Count(int? value) => value?.ToString() ?? "—";
 
+    private static string Facts(ListingSummaryDto listing) =>
+        listing.Bedrooms is null ? "sin datos todavía" : $"{listing.Bedrooms} hab · {listing.Area:0.#} m²";
+
     protected override async Task OnInitializedAsync()
     {
-        var user = (await AuthState).User;
-
-        greetingName = user.Identity?.Name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
-        isStaff = user.IsInRole(IdentityRoles.Administrador) || user.IsInRole(IdentityRoles.Moderador);
+        greetingName = (await AuthState).User.Identity?.Name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
 
         await Task.WhenAll(LoadRentalsAsync(), LoadNotificationsAsync());
     }
@@ -270,21 +221,23 @@
     {
         try
         {
-            var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 1, CancellationToken.None);
-            var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 1, CancellationToken.None);
-            var recentTask = ListingsApi.ListAsync(null, null, null, null, 1, 6, CancellationToken.None);
-            var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.AwaitingHost, 1, 1, CancellationToken.None);
-            var ownersTask = isStaff ? OwnersApi.ListAsync(null, 1, 1, CancellationToken.None) : null;
-            var closedTask = isStaff
-                ? null
-                : ListingsApi.ListAsync(null, ListingStatus.Closed, null, null, 1, 1, CancellationToken.None);
+            var none = CancellationToken.None;
+            var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 50, none);
+            var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 1, none);
+            var draftsTask = ListingsApi.ListAsync(null, ListingStatus.Draft, null, Actor.Id ?? Guid.Empty, 1, 1, none);
+            var recentTask = ListingsApi.ListAsync(null, null, null, null, 1, 5, none);
+            var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.AwaitingHost, 1, 50, none);
+            var ownersTask = Actor.IsStaff ? OwnersApi.ListAsync(null, null, null, 1, 1, none) : null;
+            var closedTask = Actor.IsStaff ? null : ListingsApi.ListAsync(null, ListingStatus.Closed, null, null, 1, 1, none);
 
-            await Task.WhenAll(inReviewTask, publishedTask, recentTask, visitsTask);
+            await Task.WhenAll(inReviewTask, publishedTask, draftsTask, recentTask, visitsTask);
 
-            inReview = inReviewTask.Result.TotalCount;
+            inReview = inReviewTask.Result;
             published = publishedTask.Result.TotalCount;
+            drafts = draftsTask.Result.TotalCount;
             recentListings = recentTask.Result.Items;
-            requestedVisits = visitsTask.Result.TotalCount;
+            awaitingVisits = visitsTask.Result;
+
             owners = ownersTask is null ? null : (await ownersTask).TotalCount;
             closed = closedTask is null ? null : (await closedTask).TotalCount;
         }
@@ -292,36 +245,28 @@
         {
             rentalsError = ex;
         }
-        finally
-        {
-            loadingRentals = false;
-        }
     }
 
     private async Task LoadNotificationsAsync()
     {
         try
         {
-            var triggersTask = TriggersApi.ListAsync(null, null, 1, 1, CancellationToken.None);
-            var templatesTask = TemplatesApi.ListAsync(null, null, null, 1, 1, CancellationToken.None);
-            var recipientsTask = RecipientsApi.ListAsync(null, null, 1, 1, CancellationToken.None);
-            var notificationsTask = NotificationsApi.ListAsync(null, null, null, 1, 6, CancellationToken.None);
+            var none = CancellationToken.None;
+            var triggersTask = TriggersApi.ListAsync(null, null, 1, 1, none);
+            var templatesTask = TemplatesApi.ListAsync(null, null, null, 1, 1, none);
+            var recipientsTask = RecipientsApi.ListAsync(null, null, 1, 1, none);
+            var notificationsTask = NotificationsApi.ListAsync(null, null, null, null, 1, 5, none);
 
             await Task.WhenAll(triggersTask, templatesTask, recipientsTask, notificationsTask);
 
             triggers = triggersTask.Result.TotalCount;
             templates = templatesTask.Result.TotalCount;
             recipients = recipientsTask.Result.TotalCount;
-            notifications = notificationsTask.Result.TotalCount;
-            recentNotifications = notificationsTask.Result.Items;
+            notifications = notificationsTask.Result;
         }
         catch (ApiException ex)
         {
             notificationsError = ex;
-        }
-        finally
-        {
-            loadingNotifications = false;
         }
     }
 }

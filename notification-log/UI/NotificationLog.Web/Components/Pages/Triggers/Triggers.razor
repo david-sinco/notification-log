@@ -1,0 +1,259 @@
+@page "/triggers"
+@page "/triggers/{Id:guid}"
+@using System.Text.RegularExpressions
+@inject TriggersApiClient Api
+@inject TemplatesApiClient TemplatesApi
+@inject NavigationManager Nav
+
+<PageTitle>Triggers · Llave</PageTitle>
+
+<div class="page">
+    <header class="page-head">
+        <p class="eyebrow">Notificaciones</p>
+        <h1 class="title">Triggers</h1>
+        <p class="muted">Cada trigger escucha un evento de negocio y decide por qué canales y con qué plantilla se avisa.</p>
+    </header>
+
+    <ErrorAlert Exception="loadError" />
+
+    <div class="split">
+        <div class="split-list">
+            @foreach (var trigger in triggers)
+            {
+                <a class="list-item @(trigger.Id == current?.Id ? "active" : "")" href="triggers/@trigger.Id" aria-current="@(trigger.Id == current?.Id ? "true" : "false")">
+                    <span class="row row-between" style="flex-wrap: nowrap">
+                        <span class="event-key">@trigger.EventKey</span>
+                        <StatusPill Text="@(trigger.IsEnabled ? "Habilitado" : "Deshabilitado")" Variant="@(trigger.IsEnabled ? "success" : "neutral")" />
+                    </span>
+                    <span class="small muted">@trigger.Description</span>
+                    <span class="smaller muted">@(trigger.ActiveChannels.Count == 0 ? "Sin canales habilitados" : string.Join(" · ", trigger.ActiveChannels.Select(ChannelLabels.Name)))</span>
+                </a>
+            }
+
+            <section class="card card-tight card-dark" aria-label="Nuevo trigger" style="margin-top: 8px; --gap: 12px">
+                <h2 class="h2 h2-sm">Nuevo trigger</h2>
+                <div class="field">
+                    <label class="label" for="new-key">Clave del evento</label>
+                    <input id="new-key" class="input input-mono @(KeyInvalid ? "input-invalid" : "")" placeholder="dominio.accion" @bind="newKey" @bind:event="oninput" />
+                    <span class="smaller @(KeyInvalid ? "" : "muted")" style="@(KeyInvalid ? "color: #F7B8B1" : "")">@KeyHint</span>
+                </div>
+                <div class="field">
+                    <label class="label" for="new-desc">Descripción</label>
+                    <input id="new-desc" class="input" placeholder="Cuándo ocurre y a quién se avisa" @bind="newDescription" @bind:event="oninput" />
+                </div>
+                <ErrorAlert Exception="createError" />
+                <button type="button" class="btn btn-lime" disabled="@(busy || !KeyValid || string.IsNullOrWhiteSpace(newDescription))" @onclick="CreateAsync">Crear trigger</button>
+            </section>
+        </div>
+
+        @if (current is not null)
+        {
+            <section class="split-detail" aria-label="Detalle del trigger">
+                <div class="card">
+                    <div class="row row-between" style="--gap: 12px">
+                        <h2 class="event-key-lg">@current.EventKey</h2>
+                        <Switch Checked="current.IsEnabled" Disabled="busy" OnToggle="() => RunAsync(() => Api.SetStatusAsync(current.Id, !current.IsEnabled, CancellationToken.None))" />
+                    </div>
+                    <div class="field">
+                        <label class="label" for="trigger-desc">Descripción</label>
+                        <div class="row row-top" style="--gap: 8px">
+                            <textarea id="trigger-desc" class="textarea grow" style="--basis: 260px" rows="2" @bind="descriptionDraft" @bind:event="oninput"></textarea>
+                            <button type="button" class="btn btn-primary" disabled="@(busy || descriptionDraft == current.Description)"
+                                    @onclick="() => RunAsync(() => Api.UpdateDescriptionAsync(current.Id, descriptionDraft, CancellationToken.None))">
+                                Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stack" style="--gap: 4px">
+                    <h2 class="h2">Canales</h2>
+                    <span class="small muted">Como máximo una configuración habilitada por canal.</span>
+                </div>
+
+                <ErrorAlert Exception="actionError" />
+
+                <div class="grid-auto" style="--min: 280px; --gap: 14px">
+                    @foreach (var channel in Enum.GetValues<NotificationChannel>())
+                    {
+                        var name = channel.ToString();
+                        var configurations = current.Configurations.Where(configuration => configuration.Channel == name).ToList();
+                        var options = templates.Where(template => template.Channel == name).ToList();
+                        <article class="card card-tight" style="--gap: 12px">
+                            <div class="row row-between">
+                                <ChannelBadge Channel="@name" Large="true" />
+                                <span class="smaller muted">
+                                    @(configurations.Any(configuration => configuration.IsEnabled) ? "Activo" : configurations.Count > 0 ? "Sin configuración habilitada" : "Sin configurar")
+                                </span>
+                            </div>
+
+                            @foreach (var configuration in configurations)
+                            {
+                                <div class="well" style="padding: 12px; --gap: 8px">
+                                    <label class="label" for="config-@configuration.Id">Plantilla</label>
+                                    <select id="config-@configuration.Id" class="select" disabled="@busy" value="@configuration.TemplateId"
+                                            @onchange="e => ChangeTemplateAsync(configuration, e)">
+                                        @if (options.All(template => template.Id != configuration.TemplateId))
+                                        {
+                                            <option value="@configuration.TemplateId">Plantilla deshabilitada</option>
+                                        }
+                                        @foreach (var template in options)
+                                        {
+                                            <option value="@template.Id">@template.Name (v@(template.CurrentVersion))</option>
+                                        }
+                                    </select>
+                                    <Switch Checked="configuration.IsEnabled" OnLabel="Habilitada" OffLabel="Deshabilitada" Disabled="busy"
+                                            OnToggle="() => ToggleConfigurationAsync(configuration)" />
+                                </div>
+                            }
+
+                            @if (adding == channel)
+                            {
+                                <div class="well" style="padding: 12px; --gap: 8px">
+                                    <label class="label" for="add-@name">Plantilla para la nueva configuración</label>
+                                    <select id="add-@name" class="select" @bind="addTemplateId">
+                                        @foreach (var template in options)
+                                        {
+                                            <option value="@template.Id">@template.Name (v@(template.CurrentVersion))</option>
+                                        }
+                                    </select>
+                                    <div class="row row-end" style="--gap: 8px">
+                                        <button type="button" class="btn btn-sm" @onclick="() => adding = null">Cancelar</button>
+                                        <button type="button" class="btn btn-sm btn-primary" disabled="@busy" @onclick="() => AddConfigurationAsync(channel)">Agregar</button>
+                                    </div>
+                                </div>
+                            }
+                            else if (options.Count > 0)
+                            {
+                                <button type="button" class="btn btn-sm btn-dashed" disabled="@busy" @onclick="() => StartAdding(channel, options[0].Id)">Agregar configuración</button>
+                            }
+                            else
+                            {
+                                <span class="small muted">No hay plantillas habilitadas para este canal. <a class="strong" href="templates/new">Crear una</a>.</span>
+                            }
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+    </div>
+</div>
+
+@code {
+    private static readonly Regex KeyFormat = new(@"^[a-z0-9]+(\.[a-z0-9]+)+$");
+
+    [Parameter] public Guid? Id { get; set; }
+
+    private IReadOnlyList<TriggerSummaryDto> triggers = [];
+    private IReadOnlyList<TemplateSummaryDto> templates = [];
+    private TriggerDto? current;
+    private string descriptionDraft = "";
+    private string newKey = "";
+    private string newDescription = "";
+    private NotificationChannel? adding;
+    private Guid addTemplateId;
+    private bool busy;
+    private ApiException? loadError;
+    private ApiException? actionError;
+    private ApiException? createError;
+
+    private bool KeyValid => KeyFormat.IsMatch(newKey) && triggers.All(trigger => trigger.EventKey != newKey);
+
+    private bool KeyInvalid => newKey.Length > 0 && !KeyValid;
+
+    private string KeyHint =>
+        newKey.Length == 0 ? "Minúsculas y números separados por punto, por ejemplo visit.cancelled."
+        : triggers.Any(trigger => trigger.EventKey == newKey) ? "Ya existe un trigger con esa clave."
+        : KeyValid ? "Formato válido."
+        : "Usa el formato dominio.accion, en minúsculas y sin espacios.";
+
+    protected override Task OnParametersSetAsync()
+    {
+        adding = null;
+        actionError = null;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var none = CancellationToken.None;
+            var triggersTask = Api.ListAsync(null, null, 1, 100, none);
+            var templatesTask = TemplatesApi.ListAsync(null, null, true, 1, 100, none);
+            await Task.WhenAll(triggersTask, templatesTask);
+
+            triggers = triggersTask.Result.Items;
+            templates = templatesTask.Result.Items;
+
+            var selected = Id ?? triggers.FirstOrDefault()?.Id;
+            current = selected is { } id ? await Api.GetByIdAsync(id, none) : null;
+            descriptionDraft = current?.Description ?? "";
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+    }
+
+    private void StartAdding(NotificationChannel channel, Guid templateId)
+    {
+        adding = channel;
+        addTemplateId = templateId;
+    }
+
+    private Task AddConfigurationAsync(NotificationChannel channel) =>
+        RunAsync(async () =>
+        {
+            await Api.AddConfigurationAsync(current!.Id, addTemplateId, channel, CancellationToken.None);
+            adding = null;
+        });
+
+    private Task ChangeTemplateAsync(ConfigurationDto configuration, ChangeEventArgs e) =>
+        RunAsync(() => Api.ChangeConfigurationTemplateAsync(current!.Id, configuration.Id, Guid.Parse((string)e.Value!), CancellationToken.None));
+
+    private Task ToggleConfigurationAsync(ConfigurationDto configuration) =>
+        RunAsync(() => configuration.IsEnabled
+            ? Api.DisableConfigurationAsync(current!.Id, configuration.Id, CancellationToken.None)
+            : Api.EnableConfigurationAsync(current!.Id, configuration.Id, CancellationToken.None));
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            actionError = null;
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+            await LoadAsync();
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        busy = true;
+        try
+        {
+            var id = await Api.CreateAsync(new CreateTriggerRequest(newKey, newDescription.Trim()), CancellationToken.None);
+            newKey = newDescription = "";
+            createError = null;
+            Nav.NavigateTo($"/triggers/{id}");
+        }
+        catch (ApiException ex)
+        {
+            createError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

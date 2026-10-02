@@ -1,7 +1,8 @@
 namespace NotificationLog.Web.Api.Triggers;
 
 public sealed record TriggerSummaryDto(
-    Guid Id, string EventKey, string Description, bool IsEnabled, int ActiveConfigurations);
+    Guid Id, string EventKey, string Description, bool IsEnabled, int ActiveConfigurations,
+    IReadOnlyList<string> ActiveChannels);
 
 public sealed record TriggerDto(
     Guid Id, string EventKey, string Description, bool IsEnabled, IReadOnlyList<ConfigurationDto> Configurations);

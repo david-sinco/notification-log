@@ -24,6 +24,7 @@ public sealed class GetRecipientByIdHandler
             recipient.Locale,
             recipient.TimeZone,
             recipient.Attributes,
-            recipient.IsActive);
+            recipient.IsActive,
+            recipient.AcceptsNotifications);
     }
 }

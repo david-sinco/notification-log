@@ -49,42 +49,51 @@ internal sealed class MartenListingReadModel : IListingReadModel
             .Take(paging.PageSize)
             .ToListAsync(ct);
 
-        return (items.Select(ToSummary).ToList(), (int)stats.TotalResults);
+        var owners = await _session.LoadManyAsync<OwnerView>(ct, items.Select(x => x.OwnerId).Distinct().ToArray());
+        var ownerNames = owners.ToDictionary(x => x.Id, x => x.DisplayName());
+
+        return (items.Select(x => ToSummary(x, ownerNames.GetValueOrDefault(x.OwnerId))).ToList(), (int)stats.TotalResults);
     }
 
     public async Task<ListingDto?> GetAsync(Guid id, CancellationToken ct)
-        => await _session.LoadAsync<ListingView>(id, ct) is { } x
-            ? new ListingDto(
-                x.Id,
-                x.OwnerId,
-                x.CreatedBy,
-                x.Operation.ToString(),
-                x.Status.ToString(),
-                x.Type?.ToString(),
-                x.Area,
-                x.Bedrooms,
-                x.Bathrooms,
-                x.ParkingSpots,
-                x.Stratum,
-                x.Floor,
-                x.HasElevator,
-                x.AdministrationFee,
-                x.City,
-                x.Neighborhood,
-                x.Address,
-                x.Description,
-                x.Price,
-                x.Photos.Select(fileName => new ListingPhotoDto(fileName, _photoUrls.ReadUrlFor(x.Id, fileName))).ToList(),
-                x.ExpiresAt,
-                x.RejectionReasons.Select(r => r.ToString()).ToList(),
-                x.StatusReason,
-                x.FinalPrice,
-                x.SignedOn,
-                x.CreatedAt,
-                x.UpdatedAt)
-            : null;
+    {
+        if (await _session.LoadAsync<ListingView>(id, ct) is not { } x)
+            return null;
 
-    internal static ListingSummaryDto ToSummary(ListingView x) =>
+        var owner = await _session.LoadAsync<OwnerView>(x.OwnerId, ct);
+
+        return new ListingDto(
+            x.Id,
+            x.OwnerId,
+            x.CreatedBy,
+            x.Operation.ToString(),
+            x.Status.ToString(),
+            x.Type?.ToString(),
+            x.Area,
+            x.Bedrooms,
+            x.Bathrooms,
+            x.ParkingSpots,
+            x.Stratum,
+            x.Floor,
+            x.HasElevator,
+            x.AdministrationFee,
+            x.City,
+            x.Neighborhood,
+            x.Address,
+            x.Description,
+            x.Price,
+            x.Photos.Select(fileName => new ListingPhotoDto(fileName, _photoUrls.ReadUrlFor(x.Id, fileName))).ToList(),
+            x.ExpiresAt,
+            x.RejectionReasons.Select(r => r.ToString()).ToList(),
+            x.StatusReason,
+            x.FinalPrice,
+            x.SignedOn,
+            x.CreatedAt,
+            x.UpdatedAt,
+            owner?.DisplayName());
+    }
+
+    private ListingSummaryDto ToSummary(ListingView x, string? ownerName) =>
         new(
             x.Id,
             x.Operation.ToString(),
@@ -97,5 +106,8 @@ internal sealed class MartenListingReadModel : IListingReadModel
             x.Area,
             x.OwnerId,
             x.CreatedBy,
-            x.UpdatedAt);
+            x.UpdatedAt,
+            ownerName,
+            x.Photos.Count > 0 ? _photoUrls.ReadUrlFor(x.Id, x.Photos[0]) : null,
+            x.Photos.Count);
 }

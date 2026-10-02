@@ -1,23 +1,20 @@
 @if (Exception is not null)
 {
-    <div class="alert alert-danger d-flex align-items-start gap-2 shadow-sm" role="alert">
-        <span class="alert-icon">⚠</span>
-        <div class="flex-grow-1">
-            <div class="fw-semibold">@(Exception.Title ?? "Ocurrió un error")</div>
-            <div class="small">@Exception.Message</div>
-            @if (Exception.FieldErrors is { Count: > 0 })
-            {
-                <ul class="mb-0 mt-1 small">
-                    @foreach (var field in Exception.FieldErrors)
+    <div class="note note-danger" role="alert">
+        <strong>@(Exception.Title ?? "No se pudo aplicar el cambio")</strong>
+        <span>@Exception.Message</span>
+        @if (Exception.FieldErrors is { Count: > 0 })
+        {
+            <ul>
+                @foreach (var field in Exception.FieldErrors)
+                {
+                    @foreach (var message in field.Value)
                     {
-                        @foreach (var message in field.Value)
-                        {
-                            <li><strong>@field.Key:</strong> @message</li>
-                        }
+                        <li><strong>@field.Key:</strong> @message</li>
                     }
-                </ul>
-            }
-        </div>
+                }
+            </ul>
+        }
     </div>
 }
 

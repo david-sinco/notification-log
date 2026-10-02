@@ -1,5 +1,6 @@
-<StatusPill Text="@RentalsFormat.Status(Status)" Variant="@RentalsFormat.StatusVariant(Status)" />
+<StatusPill Text="@RentalsFormat.Status(Status)" Variant="@RentalsFormat.StatusVariant(Status)" Large="Large" />
 
 @code {
     [Parameter, EditorRequired] public string Status { get; set; } = "";
+    [Parameter] public bool Large { get; set; }
 }

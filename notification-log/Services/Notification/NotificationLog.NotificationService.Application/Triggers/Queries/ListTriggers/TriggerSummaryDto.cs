@@ -5,4 +5,5 @@ public sealed record TriggerSummaryDto(
     string EventKey,
     string Description,
     bool IsEnabled,
-    int ActiveConfigurations);
+    int ActiveConfigurations,
+    IReadOnlyList<string> ActiveChannels);

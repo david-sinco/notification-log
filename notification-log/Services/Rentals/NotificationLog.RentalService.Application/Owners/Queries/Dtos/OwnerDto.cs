@@ -12,4 +12,5 @@ public sealed record OwnerDto(
     string? Nit,
     string Email,
     string Phone,
-    DateTimeOffset RegisteredAt);
+    DateTimeOffset RegisteredAt,
+    int ListingCount);

@@ -5,9 +5,12 @@
     ViewData["Title"] = "Crear cuenta";
 }
 
-<p class="eyebrow">Cuentas Llave</p>
+<nav class="segmented" aria-label="Acceso">
+    <a asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Ingresar</a>
+    <a class="is-active" aria-current="page" asp-page="Register" asp-route-returnUrl="@Model.ReturnUrl">Crear cuenta</a>
+</nav>
+
 <h1>Crea tu cuenta</h1>
-<p class="lead">Guarda favoritos, agenda visitas y publica tu apartamento cuando quieras.</p>
 
 @if (Model.Error is not null)
 {
@@ -62,7 +65,3 @@
 
     <p class="legal">Al crear tu cuenta autorizas el tratamiento de tus datos personales para gestionar tu acceso a Llave.</p>
 </form>
-
-<div class="divider"></div>
-
-<p class="switch">¿Ya tienes cuenta? <a asp-page="Login" asp-route-returnUrl="@Model.ReturnUrl">Inicia sesión</a></p>

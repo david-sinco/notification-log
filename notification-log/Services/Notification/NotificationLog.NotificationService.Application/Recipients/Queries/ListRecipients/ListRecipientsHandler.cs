@@ -22,7 +22,7 @@ public sealed class ListRecipientsHandler
 
         var dtos = items
             .Select(r => new RecipientSummaryDto(
-                r.Id, r.Name, r.Email, r.Phone, r.IsActive))
+                r.Id, r.Name, r.Email, r.Phone, r.IsActive, r.AcceptsNotifications))
             .ToList();
 
         return new PagedResult<RecipientSummaryDto>(dtos, page, pageSize, total);

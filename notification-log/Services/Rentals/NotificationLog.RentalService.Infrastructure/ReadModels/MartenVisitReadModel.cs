@@ -33,26 +33,46 @@ internal sealed class MartenVisitReadModel : IVisitReadModel
             .Take(paging.PageSize)
             .ToListAsync(ct);
 
-        return (items.Select(ToDto).ToList(), (int)stats.TotalResults);
+        return (await ToDtosAsync(items, ct), (int)stats.TotalResults);
     }
 
     public async Task<VisitDto?> GetAsync(Guid id, CancellationToken ct)
-        => await _session.LoadAsync<VisitView>(id, ct) is { } view ? ToDto(view) : null;
+        => await _session.LoadAsync<VisitView>(id, ct) is { } view ? (await ToDtosAsync([view], ct))[0] : null;
 
-    private static VisitDto ToDto(VisitView x) => new(
-        x.Id,
-        x.ListingId,
-        x.HostId,
-        x.VisitorId,
-        x.Status.ToString(),
-        x.ProposedSlots,
-        x.RespondBy,
-        x.ScheduledStartsAt,
-        x.ScheduledEndsAt,
-        x.CancelledBy?.ToString(),
-        x.CancellationReason,
-        x.IsLateCancellation,
-        x.ClosedBy?.ToString(),
-        x.RequestedAt,
-        x.UpdatedAt);
+    private async Task<IReadOnlyList<VisitDto>> ToDtosAsync(IReadOnlyList<VisitView> visits, CancellationToken ct)
+    {
+        var listings = (await _session.LoadManyAsync<ListingView>(ct, visits.Select(x => x.ListingId).Distinct().ToArray()))
+            .ToDictionary(x => x.Id);
+        var visitors = (await _session.LoadManyAsync<VisitorView>(ct, visits.Select(x => x.VisitorId).Distinct().ToArray()))
+            .ToDictionary(x => x.Id, x => x.DisplayName);
+        var hosts = (await _session.LoadManyAsync<OwnerView>(ct, visits.Select(x => x.HostId).Distinct().ToArray()))
+            .ToDictionary(x => x.Id, x => x.DisplayName());
+
+        return visits.Select(x =>
+        {
+            var listing = listings.GetValueOrDefault(x.ListingId);
+
+            return new VisitDto(
+                x.Id,
+                x.ListingId,
+                x.HostId,
+                x.VisitorId,
+                x.Status.ToString(),
+                x.ProposedSlots,
+                x.RespondBy,
+                x.ScheduledStartsAt,
+                x.ScheduledEndsAt,
+                x.CancelledBy?.ToString(),
+                x.CancellationReason,
+                x.IsLateCancellation,
+                x.ClosedBy?.ToString(),
+                x.RequestedAt,
+                x.UpdatedAt,
+                listing?.Type?.ToString(),
+                listing?.Neighborhood,
+                listing?.City,
+                visitors.GetValueOrDefault(x.VisitorId),
+                hosts.GetValueOrDefault(x.HostId));
+        }).ToList();
+    }
 }

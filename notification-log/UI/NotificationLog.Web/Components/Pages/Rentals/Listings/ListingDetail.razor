@@ -6,425 +6,346 @@
 
 <PageTitle>Publicación · Llave</PageTitle>
 
-<a href="/rentals/listings" class="back-link">← Volver a publicaciones</a>
+<div class="page">
+    <a class="link btn-start" href="rentals/listings">← Publicaciones</a>
 
-@if (loading && listing is null)
-{
-    <div class="p-5 text-center text-muted">Cargando…</div>
-}
-else if (loadError is not null)
-{
     <ErrorAlert Exception="loadError" />
-}
-else if (listing is not null)
-{
-    <div class="page-header">
-        <div>
-            <p class="eyebrow">PublicaciÃ³n</p>
-            <h1>@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</h1>
-            <p>@RentalsFormat.Term(listing.Operation) · @RentalsFormat.Money(listing.Price) · <ShortId Value="listing.Id" /></p>
-        </div>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-            <RentalStatusPill Status="@listing.Status" />
-            @switch (listing.Status)
-            {
-                case "Draft":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.SubmitForReviewAsync(Id, CancellationToken.None))">Enviar a revisión</button>
-                    break;
-                case "Published":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.PauseAsync(Id, CancellationToken.None))">Pausar</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar</button>
-                    break;
-                case "Paused":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="OpenClose">Cerrar negocio</button>
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.ResumeAsync(Id, CancellationToken.None))">Reanudar</button>
-                    break;
-                case "Expired":
-                    <button class="btn btn-primary btn-sm" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar</button>
-                    break;
-            }
-            @if (CanWithdraw)
-            {
-                <button class="btn btn-outline-danger btn-sm" disabled="@busy" @onclick="OpenWithdraw">Retirar</button>
-            }
-        </div>
-    </div>
 
-    @if (actionError is not null)
+    @if (listing is not null)
     {
+        <header class="stack" style="--gap: 18px">
+            <div class="row row-between row-bottom" style="--gap: 16px">
+                <div class="page-head">
+                    <div class="row">
+                        <RentalStatusPill Status="@listing.Status" Large="true" />
+                        <span class="id">@RentalsFormat.Short(listing.Id) · @RentalsFormat.Term(listing.Operation)</span>
+                    </div>
+                    <h1 class="title title-detail">@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</h1>
+                </div>
+                <div class="row" style="--gap: 8px">
+                    @switch (listing.Status)
+                    {
+                        case "Draft":
+                            <button type="button" class="btn btn-primary" disabled="@(busy || !Ready)" @onclick="() => RunAsync(() => Api.SubmitForReviewAsync(Id, CancellationToken.None))">Enviar a revisión</button>
+                            break;
+                        case "Published":
+                            <button type="button" class="btn" disabled="@busy" @onclick="() => RunAsync(() => Api.PauseAsync(Id, CancellationToken.None))">Pausar</button>
+                            <button type="button" class="btn" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar vigencia</button>
+                            break;
+                        case "Paused":
+                            <button type="button" class="btn btn-primary" disabled="@busy" @onclick="() => RunAsync(() => Api.ResumeAsync(Id, CancellationToken.None))">Reanudar</button>
+                            break;
+                        case "Expired":
+                            <button type="button" class="btn btn-primary" disabled="@busy" @onclick="() => RunAsync(() => Api.RenewAsync(Id, CancellationToken.None))">Renovar vigencia</button>
+                            break;
+                    }
+                    @if (CanWithdraw)
+                    {
+                        <button type="button" class="btn btn-danger" disabled="@busy" @onclick="() => Open(Panel.Withdraw)">Retirar</button>
+                    }
+                </div>
+            </div>
+
+            <ol class="rail" aria-label="Ciclo de vida">
+                @for (var i = 0; i < RailSteps.Length; i++)
+                {
+                    <li class="@(i < RailIndex ? "done" : i == RailIndex ? "current" : "")">@RailSteps[i]</li>
+                }
+            </ol>
+
+            @if (Note is { } note)
+            {
+                <div class="note note-@note.Variant" role="status">
+                    <strong>@note.Title</strong>
+                    <span>@note.Text</span>
+                </div>
+            }
+        </header>
+
         <ErrorAlert Exception="actionError" />
-    }
 
-    @if (listing.Status == "Draft" && listing.RejectionReasons.Count > 0)
-    {
-        <div class="alert alert-warning-soft small">
-            <strong>Moderación la rechazó:</strong> @string.Join(", ", listing.RejectionReasons.Select(RentalsFormat.Term)).
-            Corregí lo necesario y volvé a enviarla a revisión.
-        </div>
-    }
+        @if (panel == Panel.Withdraw)
+        {
+            <ReasonPanel Title="Retirar publicación" Description="La publicación deja de estar disponible. Indica el motivo."
+                         ConfirmText="Retirar publicación" Busy="busy" Error="panelError"
+                         OnCancel="() => Open(Panel.None)" OnConfirm="WithdrawAsync" />
+        }
 
-    @if (listing.StatusReason is not null)
-    {
-        <div class="alert alert-info-soft small">
-            <strong>@(listing.Status == "Suspended" ? "Suspendida:" : "Retirada:")</strong>
-            @listing.StatusReason
-        </div>
-    }
+        @if (panel == Panel.Visit)
+        {
+            <SlotPicker Title="Solicitar visita" Hint="El propietario acepta una, propone otras o cancela." ConfirmText="Solicitar visita"
+                        Busy="busy" Error="panelError" OnCancel="() => Open(Panel.None)" OnConfirm="RequestVisitAsync" />
+        }
 
-    @if (listing.Status == "Draft")
-    {
-        <div class="alert alert-info-soft small">
-            Para enviarla a revisión necesita datos del inmueble (@Check(listing.City is not null)),
-            precio (@Check(listing.Price is not null)) y al menos @ListingLimits.MinPhotos fotos (@listing.Photos.Count/@ListingLimits.MinPhotos).
-        </div>
-    }
+        <div class="split">
+            <div class="stack" style="flex: 3 1 460px; --gap: 20px">
+                <ListingPhotosEditor ListingId="Id" Photos="listing.Photos" CanEdit="CanEdit" OnChanged="() => LoadAsync(keepForm: true)" />
 
-    <div class="row g-4">
-        <div class="col-lg-8">
-            <div class="surface-card mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="h6 mb-0">Datos del inmueble</h2>
+                <section class="card" aria-label="Datos del inmueble" style="--gap: 18px">
+                    <div class="stack" style="--gap: 2px">
+                        <h2 class="h2">Datos del inmueble</h2>
+                        <span class="small muted">
+                            @(listing.Status is "Published" or "Paused"
+                                ? "Editar datos o fotos de una publicación visible la devuelve a revisión."
+                                : CanEdit ? "Tipo, ubicación y descripción que verá quien busque inmueble." : "Esta publicación ya no admite cambios.")
+                        </span>
+                    </div>
+
+                    <fieldset class="stack" disabled="@(!CanEdit || busy)" style="--gap: 18px">
+                        <div class="row row-top" style="--gap: 20px">
+                            <div class="stack grow" role="group" aria-label="Tipo" style="--gap: 8px; --basis: 240px">
+                                <span class="label">Tipo</span>
+                                <div class="choices">
+                                    @foreach (var type in RentalsFormat.Values<PropertyType>())
+                                    {
+                                        <button type="button" class="choice" aria-pressed="@(details.Type == type ? "true" : "false")" @onclick="() => details.Type = type">@RentalsFormat.Term(type)</button>
+                                    }
+                                </div>
+                            </div>
+                            <div class="stack grow" role="group" aria-label="Estrato" style="--gap: 8px; --basis: 240px">
+                                <span class="label">Estrato</span>
+                                <div class="choices" style="gap: 6px; flex-wrap: nowrap">
+                                    @for (var stratum = 1; stratum <= 6; stratum++)
+                                    {
+                                        var value = stratum;
+                                        <button type="button" class="choice" style="font-size: 15px" aria-pressed="@(details.Stratum == value ? "true" : "false")" @onclick="() => details.Stratum = value">@value</button>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid-auto" style="--min: 170px; --gap: 14px">
+                            <div class="field">
+                                <label class="label" for="area">Área (m²)</label>
+                                <input id="area" type="number" class="input" min="20" step="0.1" @bind="details.Area" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="bedrooms">Habitaciones</label>
+                                <input id="bedrooms" type="number" class="input" min="0" @bind="details.Bedrooms" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="bathrooms">Baños</label>
+                                <input id="bathrooms" type="number" class="input" min="1" @bind="details.Bathrooms" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="parking">Parqueaderos</label>
+                                <input id="parking" type="number" class="input" min="0" @bind="details.ParkingSpots" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="floor">Piso</label>
+                                <input id="floor" type="number" class="input" min="1" @bind="details.Floor" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="fee">Administración (COP)</label>
+                                <input id="fee" type="number" class="input" min="0" step="1000" @bind="details.AdministrationFee" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="city">Ciudad</label>
+                                <input id="city" class="input" @bind="details.City" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="neighborhood">Barrio</label>
+                                <input id="neighborhood" class="input" @bind="details.Neighborhood" />
+                            </div>
+                            <div class="field">
+                                <label class="label" for="address">Dirección</label>
+                                <input id="address" class="input" @bind="details.Address" />
+                            </div>
+                        </div>
+
+                        <label class="check">
+                            <input type="checkbox" @bind="details.HasElevator" />
+                            Tiene ascensor
+                        </label>
+
+                        <div class="field">
+                            <div class="row row-between">
+                                <label class="label" for="description">Descripción</label>
+                                <span class="counter @(DescriptionLength >= ListingLimits.MinDescriptionLength ? "" : "text-danger")">
+                                    @DescriptionLength / @ListingLimits.MaxDescriptionLength · mínimo @ListingLimits.MinDescriptionLength
+                                </span>
+                            </div>
+                            <textarea id="description" class="textarea" rows="5" maxlength="@ListingLimits.MaxDescriptionLength" @bind="details.Description" @bind:event="oninput"></textarea>
+                        </div>
+                    </fieldset>
+
+                    <ErrorAlert Exception="detailsError" />
+
                     @if (CanEdit)
                     {
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenDetails">Editar</button>
+                        <div class="row row-end">
+                            <button type="button" class="btn btn-lg btn-primary" disabled="@busy" @onclick="SaveDetailsAsync">Guardar datos</button>
+                        </div>
                     }
-                </div>
-                @if (listing.City is null)
-                {
-                    <p class="text-muted small mb-0">Todavía no se cargaron los datos del inmueble.</p>
-                }
-                else
-                {
-                    <dl class="kv-list mb-3">
-                        <dt>Tipo</dt>
-                        <dd>@RentalsFormat.Term(listing.Type)</dd>
-                        <dt>Ubicación</dt>
-                        <dd>@listing.Address · @listing.Neighborhood, @listing.City</dd>
-                        <dt>Área</dt>
-                        <dd>@listing.Area?.ToString("0.#") m²</dd>
-                        <dt>Habitaciones · baños</dt>
-                        <dd>@listing.Bedrooms · @listing.Bathrooms</dd>
-                        <dt>Parqueaderos</dt>
-                        <dd>@listing.ParkingSpots</dd>
-                        <dt>Estrato</dt>
-                        <dd>@listing.Stratum</dd>
-                        <dt>Piso · ascensor</dt>
-                        <dd>@(listing.Floor?.ToString() ?? "—") · @(listing.HasElevator ? "Sí" : "No")</dd>
-                        <dt>Administración</dt>
-                        <dd>@RentalsFormat.Money(listing.AdministrationFee)</dd>
-                    </dl>
-                    <div class="form-hint mb-1">Descripción</div>
-                    <p class="mb-0" style="white-space:pre-wrap">@listing.Description</p>
-                }
-                @if (listing.Status is "Published" or "Paused")
-                {
-                    <div class="form-hint mt-2">Editar datos o fotos de una publicación visible la devuelve a revisión.</div>
-                }
+                </section>
             </div>
 
-            <div class="surface-card mb-4">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <h2 class="h6 mb-0">Fotos (@listing.Photos.Count)</h2>
-                    @if (CanEdit)
-                    {
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => showPhotos = true">Editar</button>
-                    }
-                </div>
-                @if (listing.Photos.Count == 0)
+            <aside class="stack" style="flex: 2 1 280px; --gap: 20px">
+                @if (listing.Status == "Draft")
                 {
-                    <p class="text-muted small mb-0">Sin fotos.</p>
-                }
-                else
-                {
-                    <div class="d-flex flex-wrap gap-2">
-                        @foreach (var photo in listing.Photos)
+                    <section class="card card-tight card-dark" aria-label="Para enviar a revisión" style="--gap: 10px">
+                        <h2 class="h2 h2-xs">Para enviar a revisión</h2>
+                        @foreach (var item in Checklist)
                         {
-                            <img src="@photo.Url" alt="" class="border rounded" style="width:120px;height:90px;object-fit:cover" />
+                            <div class="row" style="flex-wrap: nowrap">
+                                <span class="check-mark @(item.Ok ? "ok" : "")" aria-hidden="true">@(item.Ok ? "✓" : "·")</span>
+                                <span class="grow" style="--basis: 0">@item.Label</span>
+                                <span class="smaller muted">@item.State</span>
+                            </div>
                         }
-                    </div>
+                    </section>
                 }
-            </div>
 
-            <div class="table-card mb-4">
-                <div class="px-3 pt-3 pb-2"><h2 class="h6 mb-0">Visitas</h2></div>
-                @if (visits.Count == 0)
-                {
-                    <EmptyState Text="Nadie pidió visitar este inmueble todavía." Icon="📅" />
-                }
-                else
-                {
-                    <div class="table-responsive-wrap">
-                        <table class="table">
-                            <thead><tr><th>Visitante</th><th>Franja</th><th>Estado</th></tr></thead>
-                            <tbody>
-                                @foreach (var v in visits)
-                                {
-                                    <tr class="row-link" @onclick='() => Nav.NavigateTo($"/rentals/visits/{v.Id}")'>
-                                        <td><ShortId Value="v.VisitorId" /></td>
-                                        <td>@RentalsFormat.Date(v.FirstSlot)</td>
-                                        <td><RentalStatusPill Status="@v.Status" /></td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
-            </div>
-
-        </div>
-
-        <div class="col-lg-4">
-            <div class="surface-card mb-4">
-                <div class="d-flex justify-content-between align-items-center">
-                    <h2 class="h6 mb-0">Precio</h2>
+                <section class="card card-tight" aria-label="Precio" style="--gap: 12px">
+                    <h2 class="smaller strong muted">Precio de @RentalsFormat.Term(listing.Operation).ToLowerInvariant()</h2>
+                    <div class="price-lg">@(listing.Price is null ? "Sin precio" : RentalsFormat.Money(listing.Price))</div>
                     @if (CanChangePrice)
                     {
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenPrice">Cambiar</button>
+                        <label class="label" for="new-price">Nuevo precio (COP)</label>
+                        <div class="row" style="--gap: 8px">
+                            <input id="new-price" type="number" class="input grow" style="--basis: 140px" min="0" step="10000" @bind="priceDraft" />
+                            <button type="button" class="btn" disabled="@(busy || priceDraft <= 0 || priceDraft == listing.Price)" @onclick="ChangePriceAsync">Cambiar</button>
+                        </div>
+                        <ErrorAlert Exception="priceError" />
                     }
-                </div>
-                <div class="fs-3 fw-bold mt-1">@RentalsFormat.Money(listing.Price)</div>
-                <div class="form-hint">Una vez publicada, el precio solo cambia una vez cada 24 horas.</div>
-            </div>
+                    <span class="smaller muted">Mínimo $300.000 en arriendo y $30.000.000 en venta. Una vez publicada, solo cambia una vez cada 24 horas.</span>
+                </section>
 
-            <div class="surface-card mb-4">
-                <h2 class="h6">Participantes</h2>
-                <dl class="kv-list mb-0">
-                    <dt>Propietario</dt>
-                    <dd><ShortId Value="listing.OwnerId" Href="@($"/rentals/owners/{listing.OwnerId}")" /></dd>
-                    <dt>Creada por</dt>
-                    <dd><ShortId Value="listing.CreatedBy" /></dd>
-                </dl>
-                <div class="form-hint mt-2">El anfitrión de las visitas es el propietario.</div>
-            </div>
+                @if (listing.Status is "Published" or "Paused")
+                {
+                    <section class="card card-tight card-lime" aria-label="Cerrar negocio" style="--gap: 12px">
+                        <h2 class="h2 h2-xs">Cerrar negocio</h2>
+                        <div class="field">
+                            <label class="label" for="final-price">Valor final (COP)</label>
+                            <input id="final-price" type="number" class="input" min="0" step="10000" @bind="closeFinalPrice" />
+                        </div>
+                        <div class="field">
+                            <label class="label" for="signed-on">Fecha de firma · no puede ser futura</label>
+                            <input id="signed-on" type="date" class="input" @bind="closeSignedOn" />
+                        </div>
+                        <ErrorAlert Exception="closeError" />
+                        <button type="button" class="btn btn-primary" disabled="@(busy || closeFinalPrice <= 0)" @onclick="CloseAsync">Cerrar negocio</button>
+                    </section>
+                }
 
-            <div class="surface-card mb-4">
-                <h2 class="h6">Vigencia</h2>
-                <dl class="kv-list mb-0">
-                    <dt>Creada</dt>
-                    <dd>@RentalsFormat.Date(listing.CreatedAt)</dd>
-                    <dt>Vence</dt>
-                    <dd>@RentalsFormat.Date(listing.ExpiresAt)</dd>
+                <section class="card card-tight" aria-label="Vigencia y participantes" style="--gap: 10px">
+                    <h2 class="h2 h2-xs">Vigencia y participantes</h2>
+                    <div class="kv"><span class="muted">Propietario</span><span>@(listing.OwnerName ?? RentalsFormat.Short(listing.OwnerId))</span></div>
+                    <div class="kv"><span class="muted">Creada por</span><span>@CreatedBy</span></div>
+                    <div class="kv"><span class="muted">Creada</span><span>@RentalsFormat.Moment(listing.CreatedAt)</span></div>
+                    <div class="kv"><span class="muted">Vence</span><span>@RentalsFormat.Moment(listing.ExpiresAt)</span></div>
                     @if (listing.FinalPrice is not null)
                     {
-                        <dt>Valor final</dt>
-                        <dd>@RentalsFormat.Money(listing.FinalPrice)</dd>
-                        <dt>Firmada el</dt>
-                        <dd>@RentalsFormat.Date(listing.SignedOn)</dd>
+                        <div class="kv"><span class="muted">Valor final</span><span>@RentalsFormat.Money(listing.FinalPrice)</span></div>
+                        <div class="kv"><span class="muted">Firmada el</span><span>@RentalsFormat.Date(listing.SignedOn)</span></div>
                     }
-                </dl>
-            </div>
+                    <a class="link" href="rentals/owners">Ver propietario</a>
+                </section>
 
-            <div class="surface-card">
-                <h2 class="h6">Como interesado</h2>
-                <p class="form-hint">Actuá con un usuario distinto al propietario.</p>
-                <div class="d-grid gap-2">
-                    <button class="btn btn-outline-secondary btn-sm" disabled="@(listing.Status != "Published")" @onclick="OpenVisit">Solicitar visita</button>
-                </div>
-            </div>
-        </div>
-    </div>
-}
-
-<ReasonModal Title="Retirar publicación"
-             Description="La publicación deja de estar disponible."
-             ConfirmText="Retirar"
-             Danger="true" Busy="modalBusy" Error="modalError"
-             @bind-IsVisible="showWithdraw" OnConfirm="WithdrawAsync" />
-
-<Modal Title="Datos del inmueble" Large="true" @bind-IsVisible="showDetails">
-    <ChildContent>
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Tipo</label>
-                <select class="form-select" @bind="details.Type">
-                    @foreach (var t in RentalsFormat.Values<PropertyType>())
+                <section class="card card-tight" aria-label="Visitas" style="--gap: 10px">
+                    <h2 class="h2 h2-xs">Visitas</h2>
+                    @if (visits.Count == 0)
                     {
-                        <option value="@t">@RentalsFormat.Term(t)</option>
+                        <span class="small muted">Nadie pidió visitar este inmueble todavía.</span>
                     }
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Área (m²)</label>
-                <input type="number" class="form-control" min="20" step="0.1" @bind="details.Area" />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Estrato</label>
-                <input type="number" class="form-control" min="1" max="6" @bind="details.Stratum" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Habitaciones</label>
-                <input type="number" class="form-control" min="0" @bind="details.Bedrooms" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Baños</label>
-                <input type="number" class="form-control" min="1" @bind="details.Bathrooms" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Parqueaderos</label>
-                <input type="number" class="form-control" min="0" @bind="details.ParkingSpots" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Piso</label>
-                <input type="number" class="form-control" min="1" @bind="details.Floor" />
-            </div>
-            <div class="col-md-6">
-                <label class="form-label">Administración (COP)</label>
-                <input type="number" class="form-control" min="0" step="1000" @bind="details.AdministrationFee" />
-            </div>
-            <div class="col-md-6 d-flex align-items-end">
-                <div class="form-check mb-2">
-                    <input class="form-check-input" type="checkbox" id="elevator" @bind="details.HasElevator" />
-                    <label class="form-check-label" for="elevator">Tiene ascensor</label>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Ciudad</label>
-                <input class="form-control" @bind="details.City" />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Barrio</label>
-                <input class="form-control" @bind="details.Neighborhood" />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Dirección</label>
-                <input class="form-control" @bind="details.Address" />
-            </div>
-            <div class="col-12">
-                <label class="form-label">Descripción</label>
-                <textarea class="form-control" rows="5" maxlength="@ListingLimits.MaxDescriptionLength" @bind="details.Description" @bind:event="oninput"></textarea>
-                <div class="form-hint">@details.Description.Trim().Length caracteres · mínimo @ListingLimits.MinDescriptionLength.</div>
-            </div>
+                    @foreach (var visit in visits)
+                    {
+                        <a class="line-row small" href="rentals/visits/@visit.Id" style="justify-content: space-between; min-height: 44px">
+                            <span class="stack" style="--gap: 0">
+                                <span class="strong">@(visit.VisitorName ?? RentalsFormat.Short(visit.VisitorId))</span>
+                                <span class="muted">@VisitSummary(visit)</span>
+                            </span>
+                            <RentalStatusPill Status="@visit.Status" />
+                        </a>
+                    }
+                    <button type="button" class="btn" disabled="@(listing.Status != "Published")" @onclick="() => Open(Panel.Visit)">Solicitar visita como interesado</button>
+                </section>
+            </aside>
         </div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showDetails = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@modalBusy" @onclick="SaveDetailsAsync">Guardar</button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Fotos" @bind-IsVisible="showPhotos">
-    <ChildContent>
-        @if (listing is not null)
-        {
-            <ListingPhotosEditor ListingId="Id" Photos="listing.Photos" OnChanged="LoadAsync" />
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPhotos = false">Cerrar</button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Cambiar precio" @bind-IsVisible="showPrice">
-    <ChildContent>
-        <label class="form-label">Nuevo precio (COP)</label>
-        <input type="number" class="form-control" min="0" step="10000" @bind="priceDraft" />
-        <div class="form-hint">Mínimo $300.000 para arriendo y $30.000.000 para venta.</div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPrice = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(modalBusy || priceDraft <= 0)"
-                @onclick="() => RunModalAsync(() => Api.ChangePriceAsync(Id, new ChangeListingPriceRequest(priceDraft), CancellationToken.None), () => showPrice = false)">
-            Guardar
-        </button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Cerrar negocio" @bind-IsVisible="showClose">
-    <ChildContent>
-        <div class="mb-3">
-            <label class="form-label">Valor final (COP)</label>
-            <input type="number" class="form-control" min="0" step="10000" @bind="closeFinalPrice" />
-        </div>
-        <div class="mb-1">
-            <label class="form-label">Fecha de firma</label>
-            <input type="date" class="form-control" @bind="closeSignedOn" />
-            <div class="form-hint">No puede estar en el futuro.</div>
-        </div>
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showClose = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(modalBusy || closeFinalPrice <= 0)"
-                @onclick="() => RunModalAsync(() => Api.CloseAsync(Id, new CloseListingRequest(closeFinalPrice, closeSignedOn), CancellationToken.None), () => showClose = false)">
-            Cerrar negocio
-        </button>
-    </FooterContent>
-</Modal>
-
-<Modal Title="Solicitar visita" @bind-IsVisible="showVisit">
-    <ChildContent>
-        <p class="text-muted small">
-            Proponé hasta @VisitLimits.MaxSlots franjas de una hora, en hora de Colombia, entre las @VisitLimits.EarliestHour:00
-            y las @VisitLimits.LatestHour:00 (la última empieza a las @(VisitLimits.LatestHour - 1):00), con al menos @VisitLimits.MinLeadHours horas de antelación y hasta
-            @VisitLimits.MaxLeadDays días. El propietario acepta una, propone otras o cancela.
-        </p>
-        @for (var i = 0; i < slotDrafts.Length; i++)
-        {
-            var index = i;
-            <div class="mb-2">
-                <label class="form-label">Franja @(index + 1)@(index == 0 ? "" : " (opcional)")</label>
-                <input type="datetime-local" class="form-control" @bind="slotDrafts[index]" />
-            </div>
-        }
-        @if (modalError is not null)
-        {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
-        }
-    </ChildContent>
-    <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showVisit = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@(modalBusy || slotDrafts.All(s => s is null))" @onclick="RequestVisitAsync">Solicitar</button>
-    </FooterContent>
-</Modal>
+    }
+</div>
 
 @code {
+    private static readonly string[] RailSteps = ["Borrador", "En revisión", "Publicada", "Cerrada"];
+
     [Parameter] public Guid Id { get; set; }
 
     private ListingDto? listing;
     private IReadOnlyList<VisitDto> visits = [];
-    private bool loading = true;
+    private DetailsForm details = new();
+    private Panel panel;
+    private bool busy;
+    private long priceDraft;
+    private long closeFinalPrice;
+    private DateOnly closeSignedOn = DateOnly.FromDateTime(RentalsFormat.Today);
+
     private ApiException? loadError;
     private ApiException? actionError;
-    private bool busy;
+    private ApiException? panelError;
+    private ApiException? detailsError;
+    private ApiException? priceError;
+    private ApiException? closeError;
 
-    private bool modalBusy;
-    private ApiException? modalError;
-
-    private bool showWithdraw;
-    private bool showDetails;
-    private DetailsForm details = new();
-    private bool showPhotos;
-    private bool showPrice;
-    private long priceDraft;
-    private bool showClose;
-    private long closeFinalPrice;
-    private DateOnly closeSignedOn;
-    private bool showVisit;
-    private DateTime?[] slotDrafts = new DateTime?[VisitLimits.MaxSlots];
+    private enum Panel
+    {
+        None,
+        Withdraw,
+        Visit
+    }
 
     private bool CanEdit => listing?.Status is "Draft" or "InReview" or "Published" or "Paused";
 
-    private bool CanChangePrice => listing?.Status is "Draft" or "InReview" or "Published" or "Paused" or "Expired";
+    private bool CanChangePrice => CanEdit || listing?.Status == "Expired";
 
     private bool CanWithdraw => listing?.Status is not ("Closed" or "Withdrawn");
 
+    private bool Ready => Checklist.All(item => item.Ok);
+
+    private int DescriptionLength => details.Description.Trim().Length;
+
+    private int RailIndex => listing!.Status switch
+    {
+        "Draft" => 0,
+        "InReview" => 1,
+        "Closed" => 3,
+        "Withdrawn" => -1,
+        _ => 2
+    };
+
+    private (string Label, bool Ok, string State)[] Checklist =>
+    [
+        ("Datos del inmueble", listing!.City is not null, listing.City is not null ? "Completos" : "Pendientes"),
+        ("Precio", listing.Price is not null, listing.Price is not null ? RentalsFormat.Money(listing.Price) : "Pendiente"),
+        ("Fotos", listing.Photos.Count >= ListingLimits.MinPhotos, $"{listing.Photos.Count} de {ListingLimits.MinPhotos}")
+    ];
+
+    private string CreatedBy =>
+        Actor.Is(listing!.CreatedBy) ? "Tú"
+        : listing.CreatedBy == listing.OwnerId && listing.OwnerName is not null ? listing.OwnerName
+        : RentalsFormat.Short(listing.CreatedBy);
+
+    private (string Variant, string Title, string Text)? Note => listing!.Status switch
+    {
+        "Draft" when listing.RejectionReasons.Count > 0 =>
+            ("warning", $"Moderación la devolvió: {string.Join(", ", listing.RejectionReasons.Select(RentalsFormat.Term)).ToLowerInvariant()}", "Corrige lo necesario y vuelve a enviarla a revisión."),
+        "InReview" => ("info", "Esperando a moderación", "Puedes seguir editando; un moderador la aprueba o la rechaza con motivos."),
+        "Paused" => ("warning", "Pausada por el propietario", "No aparece en el catálogo ni recibe visitas hasta que la reanudes."),
+        "Expired" => ("warning", $"La vigencia terminó el {RentalsFormat.Moment(listing.ExpiresAt)}", "Renuévala para que vuelva a estar visible."),
+        "Suspended" => ("danger", "Suspendida por moderación", $"Motivo: {listing.StatusReason}. Solo moderación puede levantar la suspensión."),
+        "Closed" => ("ink", "Negocio cerrado", "Valor final y fecha de firma registrados. La publicación ya no se puede editar."),
+        "Withdrawn" => ("danger", "Retirada", $"Motivo: {listing.StatusReason}. La publicación no admite más cambios."),
+        _ => null
+    };
+
     protected override Task OnParametersSetAsync() => LoadAsync();
 
-    private async Task LoadAsync()
+    private static string VisitSummary(VisitDto visit) =>
+        visit.ScheduledStartsAt is { } start ? $"{RentalsFormat.Day(start)} · {RentalsFormat.Range(start)}"
+        : visit.IsNegotiating ? $"Propone {visit.ProposedSlots.Count} franjas · responde antes del {RentalsFormat.Moment(visit.RespondBy)}"
+        : "Sin franja agendada";
+
+    private async Task LoadAsync(bool keepForm = false)
     {
-        loading = true;
         try
         {
             var listingTask = Api.GetByIdAsync(Id, CancellationToken.None);
@@ -433,119 +354,69 @@ else if (listing is not null)
 
             listing = listingTask.Result;
             visits = visitsTask.Result.Items;
+
+            if (!keepForm)
+            {
+                details = DetailsForm.From(listing);
+                priceDraft = listing.Price ?? 0;
+                closeFinalPrice = listing.Price ?? 0;
+            }
+
             loadError = null;
         }
         catch (ApiException ex)
         {
             loadError = ex;
         }
-        finally
-        {
-            loading = false;
-        }
     }
 
-    private async Task RunAsync(Func<Task> action)
+    private void Open(Panel target)
+    {
+        panel = target;
+        panelError = null;
+    }
+
+    private Task RunAsync(Func<Task> action) => ExecuteAsync(action, ex => actionError = ex);
+
+    private Task SaveDetailsAsync() =>
+        ExecuteAsync(() => Api.UpdateDetailsAsync(Id, details.ToRequest(), CancellationToken.None), ex => detailsError = ex);
+
+    private Task ChangePriceAsync() =>
+        ExecuteAsync(() => Api.ChangePriceAsync(Id, new ChangeListingPriceRequest(priceDraft), CancellationToken.None), ex => priceError = ex);
+
+    private Task CloseAsync() =>
+        ExecuteAsync(() => Api.CloseAsync(Id, new CloseListingRequest(closeFinalPrice, closeSignedOn), CancellationToken.None), ex => closeError = ex);
+
+    private Task WithdrawAsync(string reason) =>
+        ExecuteAsync(async () =>
+        {
+            await Api.WithdrawAsync(Id, reason, CancellationToken.None);
+            panel = Panel.None;
+        }, ex => panelError = ex);
+
+    private Task RequestVisitAsync(IReadOnlyList<DateTimeOffset> slots) =>
+        ExecuteAsync(async () =>
+        {
+            var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Id, slots), CancellationToken.None);
+            Nav.NavigateTo($"/rentals/visits/{visitId}");
+        }, ex => panelError = ex);
+
+    private async Task ExecuteAsync(Func<Task> action, Action<ApiException?> report)
     {
         busy = true;
         try
         {
             await action();
-            actionError = null;
+            report(null);
             await LoadAsync();
         }
         catch (ApiException ex)
         {
-            actionError = ex;
+            report(ex);
         }
         finally
         {
             busy = false;
-        }
-    }
-
-    private async Task RunModalAsync(Func<Task> action, Action close)
-    {
-        modalBusy = true;
-        try
-        {
-            await action();
-            close();
-            modalError = null;
-            await LoadAsync();
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-        finally
-        {
-            modalBusy = false;
-        }
-    }
-
-    private static string Check(bool ok) => ok ? "✓" : "pendiente";
-
-    private void OpenWithdraw()
-    {
-        modalError = null;
-        showWithdraw = true;
-    }
-
-    private Task WithdrawAsync(string reason) =>
-        RunModalAsync(() => Api.WithdrawAsync(Id, reason, CancellationToken.None), () => showWithdraw = false);
-
-    private void OpenDetails()
-    {
-        details = DetailsForm.From(listing!);
-        modalError = null;
-        showDetails = true;
-    }
-
-    private Task SaveDetailsAsync() => RunModalAsync(
-        () => Api.UpdateDetailsAsync(Id, details.ToRequest(), CancellationToken.None),
-        () => showDetails = false);
-
-    private void OpenPrice()
-    {
-        priceDraft = listing!.Price ?? 0;
-        modalError = null;
-        showPrice = true;
-    }
-
-    private void OpenClose()
-    {
-        closeFinalPrice = listing!.Price ?? 0;
-        closeSignedOn = DateOnly.FromDateTime(DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date);
-        modalError = null;
-        showClose = true;
-    }
-
-    private void OpenVisit()
-    {
-        var day = DateTimeOffset.UtcNow.ToOffset(RentalsFormat.ColombiaOffset).Date.AddDays(2);
-        slotDrafts = [day.AddHours(10), day.AddHours(15), null];
-        modalError = null;
-        showVisit = true;
-    }
-
-    private async Task RequestVisitAsync()
-    {
-        modalBusy = true;
-        try
-        {
-            var slots = slotDrafts.OfType<DateTime>().Select(RentalsFormat.FromColombia).ToList();
-            var visitId = await VisitsApi.RequestAsync(new RequestVisitRequest(Id, slots), CancellationToken.None);
-            showVisit = false;
-            Nav.NavigateTo($"/rentals/visits/{visitId}");
-        }
-        catch (ApiException ex)
-        {
-            modalError = ex;
-        }
-        finally
-        {
-            modalBusy = false;
         }
     }
 
@@ -565,23 +436,23 @@ else if (listing is not null)
         public string Address { get; set; } = "";
         public string Description { get; set; } = "";
 
-        public static DetailsForm From(ListingDto l) => l.City is null
+        public static DetailsForm From(ListingDto listing) => listing.City is null
             ? new DetailsForm()
             : new DetailsForm
             {
-                Type = Enum.Parse<PropertyType>(l.Type!),
-                Area = l.Area ?? 0,
-                Bedrooms = l.Bedrooms ?? 0,
-                Bathrooms = l.Bathrooms ?? 1,
-                ParkingSpots = l.ParkingSpots ?? 0,
-                Stratum = l.Stratum ?? 1,
-                Floor = l.Floor,
-                HasElevator = l.HasElevator,
-                AdministrationFee = l.AdministrationFee ?? 0,
-                City = l.City,
-                Neighborhood = l.Neighborhood ?? "",
-                Address = l.Address ?? "",
-                Description = l.Description ?? ""
+                Type = Enum.Parse<PropertyType>(listing.Type!),
+                Area = listing.Area ?? 0,
+                Bedrooms = listing.Bedrooms ?? 0,
+                Bathrooms = listing.Bathrooms ?? 1,
+                ParkingSpots = listing.ParkingSpots ?? 0,
+                Stratum = listing.Stratum ?? 1,
+                Floor = listing.Floor,
+                HasElevator = listing.HasElevator,
+                AdministrationFee = listing.AdministrationFee ?? 0,
+                City = listing.City,
+                Neighborhood = listing.Neighborhood ?? "",
+                Address = listing.Address ?? "",
+                Description = listing.Description ?? ""
             };
 
         public UpdateListingDetailsRequest ToRequest() =>
