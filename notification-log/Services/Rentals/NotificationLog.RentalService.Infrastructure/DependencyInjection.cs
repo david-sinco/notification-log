@@ -15,6 +15,8 @@ using NotificationLog.RentalService.Infrastructure.Messaging;
 using NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
 using NotificationLog.RentalService.Infrastructure.Persistence;
 using NotificationLog.RentalService.Infrastructure.ReadModels;
+using NotificationLog.RentalService.Infrastructure.Storage;
+using NotificationLog.RentalService.Application.Common.Storage;
 using Wolverine.Marten;
 using NotificationLog.RentalService.Application.Common.Producers;
 
@@ -47,6 +49,10 @@ public static class DependencyInjection
 
         services.AddScoped<INotificationProducer, WolverineNotificationDispatcher>();
         services.AddScoped<IAccountProvisioner, WolverineAccountProvisioner>();
+
+        services.AddSingleton<AzureBlobPhotoStorage>();
+        services.AddSingleton<IPhotoStorage>(provider => provider.GetRequiredService<AzureBlobPhotoStorage>());
+        services.AddSingleton<IPhotoUrlProvider>(provider => provider.GetRequiredService<AzureBlobPhotoStorage>());
 
         services.AddRabbitMqMessaging(configuration);
 

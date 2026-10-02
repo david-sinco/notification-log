@@ -1,6 +1,7 @@
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
+using NotificationLog.RentalService.Application.Common.Storage;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.Filters;
@@ -10,8 +11,13 @@ namespace NotificationLog.RentalService.Infrastructure.ReadModels;
 internal sealed class MartenListingReadModel : IListingReadModel
 {
     private readonly IQuerySession _session;
+    private readonly IPhotoUrlProvider _photoUrls;
 
-    public MartenListingReadModel(IQuerySession session) => _session = session;
+    public MartenListingReadModel(IQuerySession session, IPhotoUrlProvider photoUrls)
+    {
+        _session = session;
+        _photoUrls = photoUrls;
+    }
 
     public async Task<(IReadOnlyList<ListingSummaryDto> Items, int TotalCount)> ListAsync(ListingFilter filter, PageRequest paging, CancellationToken ct)
     {
@@ -68,7 +74,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
                 x.Address,
                 x.Description,
                 x.Price,
-                x.Photos,
+                x.Photos.Select(fileName => new ListingPhotoDto(fileName, _photoUrls.ReadUrlFor(x.Id, fileName))).ToList(),
                 x.ExpiresAt,
                 x.RejectionReasons.Select(r => r.ToString()).ToList(),
                 x.StatusReason,

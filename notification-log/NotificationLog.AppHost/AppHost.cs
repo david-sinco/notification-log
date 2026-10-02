@@ -6,6 +6,7 @@ var databases = AddGroup("databases").WithIconName("Database");
 var messaging = AddGroup("messaging").WithIconName("ChatMultiple");
 var apis = AddGroup("apis").WithIconName("PlugConnected");
 var ui = AddGroup("ui").WithIconName("Desktop");
+var tools = AddGroup("tools").WithIconName("Toolbox");
 
 var cache = builder.AddRedis("cache")
     .WithParentRelationship(databases);
@@ -23,17 +24,37 @@ var postgres = builder.AddPostgres("postgres")
 var identityDb = postgres.AddDatabase("identity-db", "identity");
 var rentalsDb = postgres.AddDatabase("rentals");
 
+var storage = builder.AddAzureStorage("storage")
+    .RunAsEmulator(emulator => emulator.WithDataVolume())
+    .WithParentRelationship(databases);
+
+var photos = storage.AddBlobContainer("photos");
+
+storage.AddBlobs("blobs")
+    .WithAzureStorageExplorer(explorer => explorer
+        .WithHostPort(3200)
+        .WithParentRelationship(tools));
+
 AddSqlClient();
 
 var rabbitmq = builder.AddRabbitMQ("rabbitmq")
     .WithManagementPlugin()
     .WithParentRelationship(messaging);
 
-var buggregator = builder.AddContainer("buggregator", "ghcr.io/buggregator/server")
+builder.AddContainer("rabbitmq-ui", "ghcr.io/ralve-org/rabbitscout")
+    .WithHttpEndpoint(port: 3300, targetPort: 3000, isProxied: false)
+    .WithUrlForEndpoint("http", url => url.Url = "http://127.0.0.1:3300")
+    .WithEnvironment("RABBITMQ_HOST", rabbitmq.Resource.Name)
+    .WithEnvironment("RABBITMQ_PORT", "15672")
+    .WithEnvironment("RABBITMQ_PROTOCOL", "http")
+    .WaitFor(rabbitmq)
+    .WithParentRelationship(tools);
+
+var buggregator =builder.AddContainer("buggregator", "ghcr.io/buggregator/server")
     .WithEnvironment("CLIENT_SUPPORTED_EVENTS", "smtp,sms")
     .WithHttpEndpoint(port: 8000, targetPort: 8000)
     .WithEndpoint(port: 1025, targetPort: 1025, name: "smtp", scheme: "tcp")
-    .WithParentRelationship(messaging);
+    .WithParentRelationship(tools);
 
 var webClientSecret = builder.AddParameter(
     "web-client-secret",
@@ -69,7 +90,8 @@ builder.Build().Run();
 
 void AddSqlClient() =>
     builder.AddContainer("sql-client", "dbgate/dbgate")
-        .WithHttpEndpoint(port: 3000, targetPort: 3000)
+        .WithHttpEndpoint(port: 3000, targetPort: 3000, isProxied: false)
+        .WithUrlForEndpoint("http", url => url.Url = "http://127.0.0.1:3000")
         .WithEnvironment("CONNECTIONS", "sql,postgres")
         .WithEnvironment("LABEL_sql", "SQL Server (Notification)")
         .WithEnvironment("SERVER_sql", sql.Resource.Name)
@@ -85,7 +107,7 @@ void AddSqlClient() =>
         .WithEnvironment("ENGINE_postgres", "postgres@dbgate-plugin-postgres")
         .WaitFor(sql)
         .WaitFor(postgres)
-        .WithParentRelationship(databases);
+        .WithParentRelationship(tools);
 
 IResourceBuilder<ProjectResource> AddNotification() =>
     builder.AddProject<Projects.NotificationLog_ApiService>("notification", launchProfileName: "https")
@@ -136,6 +158,8 @@ IResourceBuilder<ProjectResource> AddRental() =>
         .WithHttpHealthCheck("/health")
         .WithReference(rentalsDb)
         .WaitFor(rentalsDb)
+        .WithReference(photos)
+        .WaitFor(photos)
         .WithReference(rabbitmq)
         .WaitFor(rabbitmq)
         .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])

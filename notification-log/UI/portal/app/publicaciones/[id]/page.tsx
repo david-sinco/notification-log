@@ -50,7 +50,7 @@ export default async function ListingPage({ params }: { params: Promise<{ id: st
         {listing.photos.length > 0 ? (
           <div className="gallery">
             {listing.photos.map((photo) => (
-              <img key={photo} src={photo} alt="" />
+              <img key={photo.fileName} src={photo.url} alt="" />
             ))}
           </div>
         ) : (

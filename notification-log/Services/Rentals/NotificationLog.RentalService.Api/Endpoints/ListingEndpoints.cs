@@ -4,6 +4,10 @@ using NotificationLog.RentalService.Api.Contracts.Listings;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.Filters;
+using Microsoft.AspNetCore.Mvc;
+using NotificationLog.RentalService.Application.Listings.Commands.AddListingPhoto;
+using NotificationLog.RentalService.Application.Listings.Commands.RemoveListingPhoto;
+using NotificationLog.RentalService.Application.Listings.Commands.ReorderListingPhotos;
 using NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 using NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
 using NotificationLog.RentalService.Application.Listings.Commands.DraftListing;
@@ -19,6 +23,8 @@ namespace NotificationLog.RentalService.Api.Endpoints;
 
 public static class ListingEndpoints
 {
+    private const long MaxPhotoBytes = 10 * 1024 * 1024;
+
     public static IEndpointRouteBuilder MapListings(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/listings")
@@ -46,6 +52,31 @@ public static class ListingEndpoints
         group.MapPut("/{id:guid}/details", UpdateDetailsAsync)
             .WithName("UpdateListingDetails")
             .WithSummary("Actualiza los datos del inmueble, la ubicación y la descripción")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapPost("/{id:guid}/photos", AddPhotoAsync)
+            .WithName("AddListingPhoto")
+            .WithSummary("Sube una foto (JPEG, PNG o WebP) y la añade a la publicación")
+            .WithMetadata(new RequestSizeLimitAttribute(MaxPhotoBytes))
+            .DisableAntiforgery()
+            .Produces<AddedListingPhotoResponse>(StatusCodes.Status201Created)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapDelete("/{id:guid}/photos/{fileName}", RemovePhotoAsync)
+            .WithName("RemoveListingPhoto")
+            .WithSummary("Quita una foto de la publicación")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapPut("/{id:guid}/photos/order", ReorderPhotosAsync)
+            .WithName("ReorderListingPhotos")
+            .WithSummary("Cambia el orden de las fotos de la publicación")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -157,6 +188,41 @@ public static class ListingEndpoints
             body.Address,
             body.Description), user, ct);
 
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> AddPhotoAsync(
+        Guid id,
+        IFormFile file,
+        ClaimsPrincipal user,
+        AddListingPhotoHandler handler,
+        CancellationToken ct)
+    {
+        await using var content = file.OpenReadStream();
+        var fileName = await handler.HandleAsync(new AddListingPhotoCommand(id, content), user, ct);
+
+        return Results.Created($"/api/listings/{id}", new AddedListingPhotoResponse(fileName));
+    }
+
+    private static async Task<IResult> RemovePhotoAsync(
+        Guid id,
+        string fileName,
+        ClaimsPrincipal user,
+        RemoveListingPhotoHandler handler,
+        CancellationToken ct)
+    {
+        await handler.HandleAsync(new RemoveListingPhotoCommand(id, fileName), user, ct);
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> ReorderPhotosAsync(
+        Guid id,
+        ReorderListingPhotosRequest body,
+        ClaimsPrincipal user,
+        ReorderListingPhotosHandler handler,
+        CancellationToken ct)
+    {
+        await handler.HandleAsync(new ReorderListingPhotosCommand(id, body.FileNames), user, ct);
         return Results.NoContent();
     }
 

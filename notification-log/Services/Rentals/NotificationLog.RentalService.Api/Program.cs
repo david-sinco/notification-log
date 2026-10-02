@@ -10,6 +10,7 @@ using API.Shared.Extensions;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
+builder.AddAzureBlobContainerClient("photos");
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);

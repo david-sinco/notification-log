@@ -20,7 +20,7 @@ public sealed record ListingDto(
     string? Address,
     string? Description,
     long? Price,
-    IReadOnlyList<string> Photos,
+    IReadOnlyList<ListingPhotoDto> Photos,
     DateTimeOffset? ExpiresAt,
     IReadOnlyList<string> RejectionReasons,
     string? StatusReason,

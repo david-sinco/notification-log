@@ -25,8 +25,20 @@ public sealed class ListingsApiClient(HttpClient http)
     public Task UpdateDetailsAsync(Guid id, UpdateListingDetailsRequest request, CancellationToken ct)
         => http.SendJsonAsync(HttpMethod.Put, $"/api/listings/{id}/details", request, ct);
 
-    public Task UpdatePhotosAsync(Guid id, UpdateListingPhotosRequest request, CancellationToken ct)
-        => http.SendJsonAsync(HttpMethod.Put, $"/api/listings/{id}/photos", request, ct);
+    public async Task AddPhotoAsync(Guid id, Stream content, string fileName, CancellationToken ct)
+    {
+        using var form = new MultipartFormDataContent();
+        form.Add(new StreamContent(content), "file", fileName);
+
+        var response = await http.PostAsync($"/api/listings/{id}/photos", form, ct);
+        await response.EnsureSuccessAsync(ct);
+    }
+
+    public Task RemovePhotoAsync(Guid id, string fileName, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Delete, $"/api/listings/{id}/photos/{Uri.EscapeDataString(fileName)}", null, ct);
+
+    public Task ReorderPhotosAsync(Guid id, ReorderListingPhotosRequest request, CancellationToken ct)
+        => http.SendJsonAsync(HttpMethod.Put, $"/api/listings/{id}/photos/order", request, ct);
 
     public Task ChangePriceAsync(Guid id, ChangeListingPriceRequest request, CancellationToken ct)
         => http.SendJsonAsync(HttpMethod.Patch, $"/api/listings/{id}/price", request, ct);

@@ -34,7 +34,7 @@ public sealed record ListingDto(
     string? Address,
     string? Description,
     long? Price,
-    IReadOnlyList<string> Photos,
+    IReadOnlyList<ListingPhotoDto> Photos,
     DateTimeOffset? ExpiresAt,
     IReadOnlyList<string> RejectionReasons,
     string? StatusReason,
@@ -42,6 +42,8 @@ public sealed record ListingDto(
     DateOnly? SignedOn,
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
+
+public sealed record ListingPhotoDto(string FileName, string Url);
 
 public sealed record DraftListingRequest(Guid OwnerId, Operation Operation);
 
@@ -60,7 +62,7 @@ public sealed record UpdateListingDetailsRequest(
     string Address,
     string Description);
 
-public sealed record UpdateListingPhotosRequest(IReadOnlyList<string> Photos);
+public sealed record ReorderListingPhotosRequest(IReadOnlyList<string> FileNames);
 
 public sealed record ChangeListingPriceRequest(long Price);
 

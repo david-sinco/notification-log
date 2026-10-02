@@ -128,7 +128,7 @@ else if (listing is not null)
                     <h2 class="h6 mb-0">Fotos (@listing.Photos.Count)</h2>
                     @if (CanEdit)
                     {
-                        <button class="btn btn-sm btn-outline-secondary" @onclick="OpenPhotos">Editar</button>
+                        <button class="btn btn-sm btn-outline-secondary" @onclick="() => showPhotos = true">Editar</button>
                     }
                 </div>
                 @if (listing.Photos.Count == 0)
@@ -137,10 +137,12 @@ else if (listing is not null)
                 }
                 else
                 {
-                    @foreach (var photo in listing.Photos)
-                    {
-                        <span class="chip">@photo</span>
-                    }
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var photo in listing.Photos)
+                        {
+                            <img src="@photo.Url" alt="" class="border rounded" style="width:120px;height:90px;object-fit:cover" />
+                        }
+                    </div>
                 }
             </div>
 
@@ -307,18 +309,13 @@ else if (listing is not null)
 
 <Modal Title="Fotos" @bind-IsVisible="showPhotos">
     <ChildContent>
-        <label class="form-label">Una referencia por línea</label>
-        <textarea class="form-control font-monospace" rows="8" @bind="photosDraft" @bind:event="oninput"></textarea>
-        <div class="form-hint">Entre @ListingLimits.MinPhotos y @ListingLimits.MaxPhotos fotos, sin repetidas. Reemplaza la lista completa.</div>
-        @if (modalError is not null)
+        @if (listing is not null)
         {
-            <div class="mt-3"><ErrorAlert Exception="modalError" /></div>
+            <ListingPhotosEditor ListingId="Id" Photos="listing.Photos" OnChanged="LoadAsync" />
         }
     </ChildContent>
     <FooterContent>
-        <button type="button" class="btn btn-outline-secondary" @onclick="FillSamplePhotos">Usar fotos de ejemplo</button>
-        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPhotos = false">Cancelar</button>
-        <button type="button" class="btn btn-primary" disabled="@modalBusy" @onclick="SavePhotosAsync">Guardar</button>
+        <button type="button" class="btn btn-outline-secondary" @onclick="() => showPhotos = false">Cerrar</button>
     </FooterContent>
 </Modal>
 
@@ -409,7 +406,6 @@ else if (listing is not null)
     private bool showDetails;
     private DetailsForm details = new();
     private bool showPhotos;
-    private string photosDraft = "";
     private bool showPrice;
     private long priceDraft;
     private bool showClose;
@@ -509,22 +505,6 @@ else if (listing is not null)
     private Task SaveDetailsAsync() => RunModalAsync(
         () => Api.UpdateDetailsAsync(Id, details.ToRequest(), CancellationToken.None),
         () => showDetails = false);
-
-    private void OpenPhotos()
-    {
-        photosDraft = string.Join('\n', listing!.Photos);
-        modalError = null;
-        showPhotos = true;
-    }
-
-    private void FillSamplePhotos() =>
-        photosDraft = string.Join('\n', Enumerable.Range(1, ListingLimits.MinPhotos).Select(n => $"https://fotos.llave.co/{RentalsFormat.Short(Id)}/{n}.jpg"));
-
-    private Task SavePhotosAsync()
-    {
-        var photos = photosDraft.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return RunModalAsync(() => Api.UpdatePhotosAsync(Id, new UpdateListingPhotosRequest(photos), CancellationToken.None), () => showPhotos = false);
-    }
 
     private void OpenPrice()
     {

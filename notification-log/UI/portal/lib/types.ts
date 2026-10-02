@@ -27,7 +27,7 @@ export type Listing = ListingSummary & {
   administrationFee: number | null;
   address: string | null;
   description: string | null;
-  photos: string[];
+  photos: { fileName: string; url: string }[];
   expiresAt: string | null;
 };
 

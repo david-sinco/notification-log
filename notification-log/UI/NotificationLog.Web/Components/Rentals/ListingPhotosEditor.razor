@@ -1,0 +1,111 @@
+@inject ListingsApiClient Api
+
+<label class="form-label">Agregar fotos</label>
+<InputFile class="form-control" multiple accept="image/jpeg,image/png,image/webp" disabled="@busy" OnChange="UploadAsync" />
+<div class="form-hint">
+    JPEG, PNG o WebP de hasta @(MaxPhotoBytes / 1024 / 1024) MB. Entre @ListingLimits.MinPhotos y @ListingLimits.MaxPhotos fotos.
+    Arrastrá una foto sobre otra para cambiar el orden.
+</div>
+
+@if (Photos.Count == 0)
+{
+    <p class="text-muted small mt-3 mb-0">Sin fotos.</p>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-2 mt-3">
+        @foreach (var photo in Photos)
+        {
+            <div class="position-relative border rounded @(photo.FileName == dragged ? "opacity-50" : "")"
+                 style="cursor:grab"
+                 draggable="true"
+                 @key="photo.FileName"
+                 @ondragstart="() => dragged = photo.FileName"
+                 @ondragend="() => dragged = null"
+                 @ondragover:preventDefault
+                 @ondragover="() => { }"
+                 @ondrop="() => DropAsync(photo.FileName)">
+                <img src="@photo.Url" alt="" draggable="false" style="width:120px;height:90px;object-fit:cover;display:block" />
+                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1 py-0 px-1"
+                        title="Quitar" disabled="@busy" @onclick="() => RemoveAsync(photo.FileName)">×</button>
+            </div>
+        }
+    </div>
+}
+
+@if (message is not null)
+{
+    <div class="alert alert-warning-soft small mt-3 mb-0">@message</div>
+}
+
+@if (error is not null)
+{
+    <div class="mt-3"><ErrorAlert Exception="error" /></div>
+}
+
+@code {
+    private const long MaxPhotoBytes = 10 * 1024 * 1024;
+
+    [Parameter, EditorRequired] public Guid ListingId { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<ListingPhotoDto> Photos { get; set; } = [];
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool busy;
+    private string? dragged;
+    private string? message;
+    private ApiException? error;
+
+    private Task UploadAsync(InputFileChangeEventArgs e) => RunAsync(async () =>
+    {
+        foreach (var file in e.GetMultipleFiles(ListingLimits.MaxPhotos))
+        {
+            if (file.Size > MaxPhotoBytes)
+            {
+                message = $"«{file.Name}» supera el tamaño máximo y no se subió.";
+                continue;
+            }
+
+            await using var content = file.OpenReadStream(MaxPhotoBytes);
+            await Api.AddPhotoAsync(ListingId, content, file.Name, CancellationToken.None);
+        }
+    });
+
+    private Task RemoveAsync(string fileName) =>
+        RunAsync(() => Api.RemovePhotoAsync(ListingId, fileName, CancellationToken.None));
+
+    private Task DropAsync(string target)
+    {
+        var source = dragged;
+        dragged = null;
+
+        if (source is null || source == target)
+            return Task.CompletedTask;
+
+        var order = Photos.Select(photo => photo.FileName).ToList();
+        var targetIndex = order.IndexOf(target);
+        order.Remove(source);
+        order.Insert(targetIndex, source);
+
+        return RunAsync(() => Api.ReorderPhotosAsync(ListingId, new ReorderListingPhotosRequest(order), CancellationToken.None));
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        message = null;
+        try
+        {
+            await action();
+            error = null;
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            busy = false;
+            await OnChanged.InvokeAsync();
+        }
+    }
+}
