@@ -78,26 +78,44 @@ public sealed class Listing : AggregateRoot
         SendBackToReviewIfVisible();
     }
 
-    public void UpdatePhotos(IReadOnlyList<Photo> photos)
+    public void AddPhoto(Photo photo)
     {
-        ArgumentNullException.ThrowIfNull(photos);
+        ArgumentNullException.ThrowIfNull(photo);
         EnsureEditable();
 
-        if (photos.Any(photo => photo is null))
-            throw new ArgumentException("La lista de fotos contiene elementos nulos.", nameof(photos));
-
-        if (photos.Count > ListingPolicy.MaxPhotos)
+        if (_photos.Count >= ListingPolicy.MaxPhotos)
             throw new DomainException($"Una publicación no puede tener más de {ListingPolicy.MaxPhotos} fotos.");
 
-        if (photos.Select(photo => photo.Reference).Distinct().Count() != photos.Count)
-            throw new DomainException("La publicación tiene fotos repetidas.");
+        if (_photos.Contains(photo))
+            throw new DomainException("Ya existe una foto con ese identificador en la publicación.");
 
-        if (photos.SequenceEqual(_photos))
+        RaisePhotosUpdated([.. _photos, photo]);
+    }
+
+    public void RemovePhoto(string fileName)
+    {
+        EnsureEditable();
+
+        if (_photos.All(photo => photo.FileName != fileName))
+            throw new DomainException("La foto no pertenece a esta publicación.");
+
+        RaisePhotosUpdated(_photos.Where(photo => photo.FileName != fileName).ToList());
+    }
+
+    public void ReorderPhotos(IReadOnlyList<string> fileNames)
+    {
+        ArgumentNullException.ThrowIfNull(fileNames);
+        EnsureEditable();
+
+        var current = _photos.Select(photo => photo.FileName).ToList();
+
+        if (fileNames.Count != current.Count || !fileNames.ToHashSet().SetEquals(current))
+            throw new DomainException("El nuevo orden debe incluir exactamente las fotos de la publicación.");
+
+        if (fileNames.SequenceEqual(current))
             return;
 
-        Raise(new ListingPhotosUpdated(photos.Select(photo => photo.Reference).ToList()));
-
-        SendBackToReviewIfVisible();
+        RaisePhotosUpdated(fileNames.Select(name => _photos.First(photo => photo.FileName == name)).ToList());
     }
 
     public void ChangePrice(Money price, DateTimeOffset now)
@@ -335,6 +353,13 @@ public sealed class Listing : AggregateRoot
 
     private void Raise(DomainEvent domainEvent, DateTimeOffset now)
         => Raise(domainEvent with { OccurredOn = now.UtcDateTime });
+
+    private void RaisePhotosUpdated(IReadOnlyList<Photo> photos)
+    {
+        Raise(new ListingPhotosUpdated(photos.Select(photo => photo.FileName).ToList()));
+
+        SendBackToReviewIfVisible();
+    }
 
     private void SendBackToReviewIfVisible()
     {

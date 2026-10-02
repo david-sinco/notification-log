@@ -2,6 +2,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NotificationLog.RentalService.Application.Common;
+using NotificationLog.RentalService.Application.Listings.Commands.AddListingPhoto;
 using NotificationLog.RentalService.Application.Listings.Commands.ApproveListing;
 using NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 using NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
@@ -10,12 +11,13 @@ using NotificationLog.RentalService.Application.Listings.Commands.ExpireListing;
 using NotificationLog.RentalService.Application.Listings.Commands.PauseListing;
 using NotificationLog.RentalService.Application.Listings.Commands.ReinstateListing;
 using NotificationLog.RentalService.Application.Listings.Commands.RejectListing;
+using NotificationLog.RentalService.Application.Listings.Commands.RemoveListingPhoto;
 using NotificationLog.RentalService.Application.Listings.Commands.RenewListing;
+using NotificationLog.RentalService.Application.Listings.Commands.ReorderListingPhotos;
 using NotificationLog.RentalService.Application.Listings.Commands.ResumeListing;
 using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingForReview;
 using NotificationLog.RentalService.Application.Listings.Commands.SuspendListing;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
-using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
@@ -43,6 +45,7 @@ public static class DependencyInjection
 
         services.TryAddSingleton(TimeProvider.System);
 
+        services.AddScoped<AddListingPhotoHandler>();
         services.AddScoped<ApproveListingHandler>();
         services.AddScoped<ChangeListingPriceHandler>();
         services.AddScoped<CloseListingHandler>();
@@ -51,12 +54,13 @@ public static class DependencyInjection
         services.AddScoped<PauseListingHandler>();
         services.AddScoped<ReinstateListingHandler>();
         services.AddScoped<RejectListingHandler>();
+        services.AddScoped<RemoveListingPhotoHandler>();
         services.AddScoped<RenewListingHandler>();
+        services.AddScoped<ReorderListingPhotosHandler>();
         services.AddScoped<ResumeListingHandler>();
         services.AddScoped<SubmitListingForReviewHandler>();
         services.AddScoped<SuspendListingHandler>();
         services.AddScoped<UpdateListingDetailsHandler>();
-        services.AddScoped<UpdateListingPhotosHandler>();
         services.AddScoped<WithdrawListingHandler>();
 
         services.AddScoped<RegisterCompanyOwnerHandler>();

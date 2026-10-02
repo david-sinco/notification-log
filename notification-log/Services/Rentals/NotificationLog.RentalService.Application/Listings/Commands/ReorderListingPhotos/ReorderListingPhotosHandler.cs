@@ -4,27 +4,26 @@ using Application.Shared.Common;
 using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Listings;
-using NotificationLog.RentalService.Domain.Listings.ValueObjects;
 
-namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
+namespace NotificationLog.RentalService.Application.Listings.Commands.ReorderListingPhotos;
 
-public sealed class UpdateListingPhotosHandler(
+public sealed class ReorderListingPhotosHandler(
     IListingRepository listings,
     IUnitOfWork uow,
-    IValidator<UpdateListingPhotosCommand> validator)
+    IValidator<ReorderListingPhotosCommand> validator)
 {
     private readonly IListingRepository _listings = listings;
     private readonly IUnitOfWork _uow = uow;
-    private readonly IValidator<UpdateListingPhotosCommand> _validator = validator;
+    private readonly IValidator<ReorderListingPhotosCommand> _validator = validator;
 
-    public async Task HandleAsync(UpdateListingPhotosCommand cmd, ClaimsPrincipal user, CancellationToken ct)
+    public async Task HandleAsync(ReorderListingPhotosCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
         Listing.EnsureCanManage(listing, user);
 
-        listing.UpdatePhotos(cmd.Photos.Select(Photo.Create).ToList());
+        listing.ReorderPhotos(cmd.FileNames);
 
         await _listings.AppendAsync(listing, ct);
         await _uow.SaveChangesAsync(ct);

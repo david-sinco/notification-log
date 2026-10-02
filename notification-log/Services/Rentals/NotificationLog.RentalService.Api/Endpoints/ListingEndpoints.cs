@@ -12,7 +12,6 @@ using NotificationLog.RentalService.Application.Listings.Commands.RenewListing;
 using NotificationLog.RentalService.Application.Listings.Commands.ResumeListing;
 using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingForReview;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
-using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingPhotos;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
 using API.Shared.Extensions;
 
@@ -47,14 +46,6 @@ public static class ListingEndpoints
         group.MapPut("/{id:guid}/details", UpdateDetailsAsync)
             .WithName("UpdateListingDetails")
             .WithSummary("Actualiza los datos del inmueble, la ubicación y la descripción")
-            .Produces(StatusCodes.Status204NoContent)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status404NotFound)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
-        group.MapPut("/{id:guid}/photos", UpdatePhotosAsync)
-            .WithName("UpdateListingPhotos")
-            .WithSummary("Reemplaza las fotos de la publicación")
             .Produces(StatusCodes.Status204NoContent)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -166,17 +157,6 @@ public static class ListingEndpoints
             body.Address,
             body.Description), user, ct);
 
-        return Results.NoContent();
-    }
-
-    private static async Task<IResult> UpdatePhotosAsync(
-        Guid id,
-        UpdateListingPhotosRequest body,
-        ClaimsPrincipal user,
-        UpdateListingPhotosHandler handler,
-        CancellationToken ct)
-    {
-        await handler.HandleAsync(new UpdateListingPhotosCommand(id, body.Photos), user, ct);
         return Results.NoContent();
     }
 
