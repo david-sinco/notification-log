@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Usuarios · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 1400px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+<div style="flex: 1 1 232px; background: #101A16">
+<dc-import name="Nav" active="users" hint-size="100%,760px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px clamp(16px, 4vw, 44px) 64px">
+<div style="max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+
+<header style="display: flex; flex-direction: column; gap: 6px">
+<div style="font: 500 12px/1.4 'JetBrains Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #56615B">Cuenta · solo administradores</div>
+<h1 style="margin: 0; font: 700 clamp(30px, 4.4vw, 44px)/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em">Usuarios</h1>
+<p style="margin: 0; color: #56615B">Busca por correo o teléfono, asigna el rol y bloquea o desbloquea el acceso.</p>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<section aria-label="Resultados" style="flex: 2 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<label for="user-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Buscar usuario</label>
+<input id="user-search" type="search" value="{{search}}" onChange="{{onSearch}}" placeholder="Correo o teléfono" style="min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 15px 'Onest', sans-serif; color: #101A16">
+<sc-for list="{{list}}" as="u" hint-placeholder-count="5">
+<button type="button" aria-pressed="{{u.pressed}}" onClick="{{u.pick}}" style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px; border-radius: 16px; border: 2px solid {{u.border}}; background: #FFFFFF; color: #101A16; font: 400 15px 'Onest', sans-serif; text-align: left; cursor: pointer">
+<span style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+<span style="font-weight: 600">{{u.name}}</span>
+<span style="flex: none; display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{u.pillBg}}; color: {{u.pillFg}}">{{u.state}}</span>
+</span>
+<span style="font-size: 14px; color: #56615B; overflow-wrap: anywhere">{{u.identifier}}</span>
+<span style="font-size: 13px; color: #56615B">{{u.role}}</span>
+</button>
+</sc-for>
+</section>
+
+<section aria-label="Detalle del usuario" style="flex: 3 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px">
+
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+<h2 style="margin: 0; font: 700 26px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">{{cur.title}}</h2>
+<span style="font: 400 12px 'JetBrains Mono', monospace; color: #56615B; overflow-wrap: anywhere">{{cur.id}}</span>
+</div>
+<span style="display: inline-flex; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: {{cur.pillBg}}; color: {{cur.pillFg}}">{{cur.state}}</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr)); gap: 10px">
+<sc-for list="{{cur.access}}" as="a" hint-placeholder-count="2">
+<div style="display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 14px; background: #F3F5F1">
+<span style="font-size: 12px; color: #56615B">{{a.label}}</span>
+<span style="font-weight: 600; overflow-wrap: anywhere">{{a.value}}</span>
+<span style="font-size: 13px; font-weight: 600; color: {{a.fg}}">{{a.verified}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<fieldset style="margin: 0; display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<legend style="float: left; padding: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Rol</legend>
+<div style="clear: both; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 10px">
+<sc-for list="{{roles}}" as="r" hint-placeholder-count="4">
+<button type="button" role="radio" aria-checked="{{r.checked}}" onClick="{{r.pick}}" style="display: flex; flex-direction: column; gap: 4px; min-height: 84px; padding: 14px; border-radius: 14px; border: 2px solid {{r.border}}; background: {{r.bg}}; color: #101A16; font-family: 'Onest', sans-serif; text-align: left; cursor: pointer">
+<span style="font-weight: 600; font-size: 15px">{{r.label}}</span>
+<span style="font-size: 13px; color: #3F4A44">{{r.hint}}</span>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+<span style="font-size: 14px; color: #56615B">{{roleHint}}</span>
+<button type="button" onClick="{{saveRole}}" disabled="{{roleClean}}" style="min-height: 46px; padding: 0 20px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer; opacity: {{roleOpacity}}">Guardar rol</button>
+</div>
+</fieldset>
+
+<sc-if value="{{cur.unlocked}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 22px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Bloquear acceso</h2>
+<span style="font-size: 14px; color: #56615B">Cierra todas las sesiones del usuario de inmediato.</span>
+</div>
+<div role="group" aria-label="Duración del bloqueo" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{durations}}" as="d" hint-placeholder-count="5">
+<button type="button" aria-pressed="{{d.pressed}}" onClick="{{d.pick}}" style="min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid {{d.border}}; background: {{d.bg}}; color: {{d.fg}}; font: 600 13px 'Onest', sans-serif; cursor: pointer">{{d.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{customDate}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="lock-until" style="font-size: 13px; font-weight: 600">Bloquear hasta</label>
+<input id="lock-until" type="datetime-local" value="{{until}}" onChange="{{changeUntil}}" style="min-height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; font: 400 15px 'Onest', sans-serif; color: #101A16">
+</div>
+</sc-if>
+<button type="button" onClick="{{lock}}" style="align-self: flex-start; min-height: 46px; padding: 0 20px; border: 0; border-radius: 12px; background: #B42318; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">{{lockLabel}}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{cur.locked}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px; padding: 22px; border-radius: 18px; background: #FCE7E4; color: #7A150D">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<strong style="font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Acceso bloqueado</strong>
+<span style="font-size: 14px">{{cur.lockText}}</span>
+</div>
+<button type="button" onClick="{{unlock}}" style="min-height: 46px; padding: 0 20px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Desbloquear</button>
+</div>
+</sc-if>
+
+</section>
+</div>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1400}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = {
+selected: 2, search: '', roleDraft: null, duration: '24h', until: '2026-10-09T18:00',
+users: [
+{ id: 1, uid: '0a4e7d21-6c3b-4f18-9b02-d5c1e8a39f70', name: 'David González', me: true, email: 'david@llave.co', emailOk: true, phone: '+57 310 555 0100', phoneOk: true, role: 'Administrador', locked: null },
+{ id: 2, uid: '3f2a9c1e-7b40-4d1a-9a55-0c2e61b7d410', name: 'Camila Ramírez Ospina', email: 'c.ramirez@correo.co', emailOk: true, phone: '+57 300 555 0142', phoneOk: false, role: 'Propietario', locked: null },
+{ id: 3, uid: '7c5b1e90-2d4a-4e67-8f13-b9a0c6d2e481', name: 'Paula Henao', email: 'paula@llave.co', emailOk: true, phone: '', phoneOk: false, role: 'Moderador', locked: null },
+{ id: 4, uid: '9d14e0aa-52c3-4f6b-8e07-a1b3c9f02e55', name: 'Laura Montoya Arango', email: 'laura@correo.co', emailOk: true, phone: '', phoneOk: false, role: 'Visitor', locked: null },
+{ id: 5, uid: 'c8e3f7a6-9b1d-4c52-a074-e6f2d0b85a13', name: 'Mateo Rojas', email: 'mateo.r@correo.co', emailOk: false, phone: '+57 318 555 0139', phoneOk: true, role: 'Visitor', locked: 'Bloqueado hasta el 5 oct, 08:00' },
+],
+};
+}
+patch(id, change, extra) {
+this.setState(Object.assign({ users: this.state.users.map((u) => u.id === id ? Object.assign({}, u, change) : u) }, extra || {}));
+}
+renderVals() {
+const s = this.state;
+const u = s.users.find((x) => x.id === s.selected);
+const roleDraft = s.roleDraft ?? u.role;
+const q = s.search.trim().toLowerCase();
+const pill = (locked) => locked ? ['Bloqueado', '#FCE7E4', '#B42318'] : ['Activo', '#DDF3E6', '#0B5C3F'];
+const durations = [['1h', '1 hora', 'Bloqueado durante 1 hora'], ['24h', '24 horas', 'Bloqueado hasta el 3 oct, 12:00'], ['7d', '7 días', 'Bloqueado hasta el 9 oct, 12:00'], ['custom', 'Elegir fecha', 'Bloqueado hasta ' + s.until.replace('T', ', ')], ['forever', 'Indefinido', 'Bloqueo indefinido']];
+const chosen = durations.find((d) => d[0] === s.duration);
+return {
+search: s.search,
+onSearch: (e) => this.setState({ search: e.target.value }),
+list: s.users.filter((x) => !q || (x.email + ' ' + x.phone).toLowerCase().includes(q)).map((x) => ({
+name: x.me ? x.name + ' · tú' : x.name, identifier: x.email || x.phone, role: x.role,
+state: pill(x.locked)[0], pillBg: pill(x.locked)[1], pillFg: pill(x.locked)[2],
+pressed: x.id === s.selected ? 'true' : 'false', border: x.id === s.selected ? '#101A16' : '#DFE4DD',
+pick: () => this.setState({ selected: x.id, roleDraft: null }),
+})),
+cur: {
+title: u.me ? 'Mi perfil' : u.name, id: u.uid,
+state: pill(u.locked)[0], pillBg: pill(u.locked)[1], pillFg: pill(u.locked)[2],
+access: [
+{ label: 'Correo', value: u.email || 'Sin correo', verified: !u.email ? 'No registrado' : u.emailOk ? 'Verificado' : 'Sin verificar', fg: u.email && u.emailOk ? '#0B5C3F' : '#8A4300' },
+{ label: 'Teléfono', value: u.phone || 'Sin teléfono', verified: !u.phone ? 'No registrado' : u.phoneOk ? 'Verificado' : 'Sin verificar', fg: u.phone && u.phoneOk ? '#0B5C3F' : '#8A4300' },
+],
+unlocked: !u.locked, locked: !!u.locked, lockText: u.locked || '',
+},
+roles: [
+['Administrador', 'Todo, incluidos usuarios y roles.'],
+['Moderador', 'Revisa, suspende y retira publicaciones.'],
+['Propietario', 'Publica inmuebles y atiende visitas.'],
+['Visitor', 'Pide visitas a publicaciones.'],
+].map(([label, hint]) => ({
+label, hint, checked: roleDraft === label ? 'true' : 'false', border: roleDraft === label ? '#101A16' : '#DFE4DD', bg: roleDraft === label ? '#C9F26B' : '#FFFFFF',
+pick: () => this.setState({ roleDraft: label }),
+})),
+roleHint: roleDraft === u.role ? 'Rol actual: ' + u.role + '.' : 'Reemplaza el rol ' + u.role + ' por ' + roleDraft + '.',
+roleClean: roleDraft === u.role, roleOpacity: roleDraft === u.role ? 0.45 : 1,
+saveRole: () => this.patch(u.id, { role: roleDraft }, { roleDraft: null }),
+durations: durations.map(([k, label]) => ({
+label, pressed: s.duration === k ? 'true' : 'false', bg: s.duration === k ? '#101A16' : '#FFFFFF', fg: s.duration === k ? '#FFFFFF' : '#101A16', border: s.duration === k ? '#101A16' : '#C5CCC4',
+pick: () => this.setState({ duration: k }),
+})),
+customDate: s.duration === 'custom',
+until: s.until,
+changeUntil: (e) => this.setState({ until: e.target.value }),
+lockLabel: s.duration === 'forever' ? 'Bloquear indefinidamente' : 'Bloquear y cerrar sesiones',
+lock: () => this.patch(u.id, { locked: chosen[2] }),
+unlock: () => this.patch(u.id, { locked: null }),
+};
+}
+}
+</script>
+</body>
+</html>

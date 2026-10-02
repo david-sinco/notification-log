@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Publicaciones · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 1500px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+<div style="flex: 1 1 232px; background: #101A16">
+<dc-import name="Nav" active="listings" hint-size="100%,760px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px clamp(16px, 4vw, 44px) 64px">
+<div style="max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+
+<header style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="font: 500 12px/1.4 'JetBrains Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #56615B">Arriendos</div>
+<h1 style="margin: 0; font: 700 clamp(30px, 4.4vw, 44px)/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em">Publicaciones</h1>
+<p style="margin: 0; color: #56615B">Inmuebles en venta o arriendo, desde el borrador hasta el cierre.</p>
+</div>
+<button type="button" onClick="{{toggleCreate}}" style="min-height: 46px; padding: 0 20px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 15px 'Onest', sans-serif; cursor: pointer">Nueva publicación</button>
+</header>
+
+<sc-if value="{{creating}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Nueva publicación" style="display: flex; flex-direction: column; gap: 16px; padding: 22px; border-radius: 18px; background: #101A16; color: #FFFFFF">
+<h2 style="margin: 0; font: 700 22px/1.2 'Bricolage Grotesque', sans-serif">Nuevo borrador</h2>
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<fieldset style="flex: 1 1 260px; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px">
+<legend style="padding: 0; margin-bottom: 8px; font-size: 13px; color: #B9C6BD">Operación</legend>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{createOps}}" as="op" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{op.pressed}}" onClick="{{op.pick}}" style="flex: 1; min-height: 64px; padding: 0 16px; border-radius: 14px; border: 1px solid {{op.border}}; background: {{op.bg}}; color: {{op.fg}}; font: 600 16px 'Onest', sans-serif; cursor: pointer; text-align: left">{{op.label}}</button>
+</sc-for>
+</div>
+</fieldset>
+<div style="flex: 1 1 260px; display: flex; flex-direction: column; gap: 8px">
+<label for="create-owner" style="font-size: 13px; color: #B9C6BD">Propietario</label>
+<select id="create-owner" style="min-height: 64px; padding: 0 14px; border-radius: 14px; border: 1px solid #3A4A41; background: #1B2822; color: #FFFFFF; font: 500 15px 'Onest', sans-serif">
+<option>Camila Ramírez Ospina · CC 1.036.554.210</option>
+<option>Inmobiliaria Andes S.A.S. · NIT 901.223.118-4</option>
+<option>Julián Ortiz Mejía · CC 71.224.905</option>
+</select>
+<span style="font-size: 13px; color: #B9C6BD">La publicación queda a nombre del propietario; tú quedas como quien la creó.</span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end">
+<button type="button" onClick="{{toggleCreate}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid #3A4A41; background: transparent; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Cancelar</button>
+<a href="Publicacion.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; padding: 0 18px; border-radius: 12px; background: #C9F26B; color: #101A16; font-weight: 600; font-size: 14px; text-decoration: none">Crear borrador y completar</a>
+</div>
+</section>
+</sc-if>
+
+<section aria-label="Filtros" style="display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<label for="search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Buscar</label>
+<input id="search" type="search" value="{{search}}" onChange="{{onSearch}}" placeholder="Ciudad, barrio o dirección" style="flex: 1 1 240px; min-height: 46px; padding: 0 16px; box-sizing: border-box; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 15px 'Onest', sans-serif; color: #101A16">
+<div role="group" aria-label="Operación" style="display: flex; gap: 4px; padding: 4px; border-radius: 12px; background: #E4E8E2">
+<sc-for list="{{opFilters}}" as="f" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}" style="min-height: 38px; padding: 0 14px; border: 0; border-radius: 9px; background: {{f.bg}}; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">{{f.label}}</button>
+</sc-for>
+</div>
+<label style="display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; cursor: pointer">
+<input type="checkbox" checked="{{onlyMine}}" onChange="{{toggleMine}}" style="width: 20px; height: 20px; accent-color: #101A16">
+Solo donde participo
+</label>
+</div>
+<div role="group" aria-label="Estado" style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{statusFilters}}" as="s" hint-placeholder-count="9">
+<button type="button" aria-pressed="{{s.pressed}}" onClick="{{s.pick}}" style="min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid {{s.border}}; background: {{s.bg}}; color: {{s.fg}}; font: 600 13px 'Onest', sans-serif; cursor: pointer">{{s.label}} · {{s.count}}</button>
+</sc-for>
+</div>
+</section>
+
+<sc-if value="{{empty}}" hint-placeholder-val="{{ false }}">
+<div style="padding: 48px 20px; border: 1px dashed #C5CCC4; border-radius: 18px; text-align: center; color: #56615B">No se encontraron publicaciones con estos filtros.</div>
+</sc-if>
+
+<section aria-label="Resultados" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 16px">
+<sc-for list="{{items}}" as="l" hint-placeholder-count="8">
+<a href="Publicacion.dc.html" style="display: flex; flex-direction: column; border-radius: 18px; overflow: hidden; background: #FFFFFF; border: 1px solid #DFE4DD; text-decoration: none; color: #101A16">
+<span style="position: relative; display: flex; align-items: center; justify-content: center; height: 150px; background: {{l.tone}}; font: 500 11px 'JetBrains Mono', monospace; color: #3F4A44">
+{{l.photoLabel}}
+<span style="position: absolute; left: 12px; top: 12px; display: inline-flex; align-items: center; padding: 4px 10px; border-radius: 999px; font: 600 12px 'Onest', sans-serif; background: {{l.pillBg}}; color: {{l.pillFg}}">{{l.status}}</span>
+</span>
+<span style="display: flex; flex-direction: column; gap: 4px; padding: 14px 16px 16px">
+<span style="font: 700 21px/1.1 'Bricolage Grotesque', sans-serif">{{l.price}}</span>
+<span style="font-weight: 600">{{l.title}}</span>
+<span style="font-size: 13px; color: #56615B">{{l.opLabel}} · {{l.facts}}</span>
+<span style="font: 400 12px 'JetBrains Mono', monospace; color: #56615B; margin-top: 6px">{{l.id}} · {{l.updated}}</span>
+</span>
+</a>
+</sc-for>
+</section>
+
+<nav aria-label="Paginación" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px">
+<span style="font-size: 14px; color: #56615B">{{shown}} de 34 publicaciones · página 1 de 4</span>
+<div style="display: flex; gap: 8px">
+<button type="button" disabled="{{ true }}" style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #DFE4DD; background: #F3F5F1; color: #56615B; font: 600 14px 'Onest', sans-serif">Anterior</button>
+<button type="button" style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">Siguiente</button>
+</div>
+</nav>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1500}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = { creating: false, createOp: 'Rent', op: 'all', status: 'all', search: '', onlyMine: false };
+}
+renderVals() {
+const s = this.state;
+const pill = {
+Draft: ['Borrador', '#E9ECE7', '#3F4A44'],
+InReview: ['En revisión', '#E4EBFD', '#1D3FA8'],
+Published: ['Publicada', '#DDF3E6', '#0B5C3F'],
+Paused: ['Pausada', '#FCEBD2', '#8A4300'],
+Expired: ['Vencida', '#FCEBD2', '#8A4300'],
+Closed: ['Cerrada', '#101A16', '#FFFFFF'],
+Withdrawn: ['Retirada', '#FCE7E4', '#B42318'],
+Suspended: ['Suspendida', '#FCE7E4', '#B42318'],
+};
+const raw = [
+['Published', 'Rent', 'Apartamento en Laureles, Medellín', '$2.400.000', '3 hab · 92 m²', 'a41f', 'hoy 09:12', '#DCE6DA', true, 9],
+['InReview', 'Rent', 'Apartaestudio en Chapinero, Bogotá', '$1.650.000', '1 hab · 38 m²', '7c20', 'ayer 16:20', '#E6E0D2', false, 6],
+['Published', 'Sale', 'Apartamento en El Poblado, Medellín', '$520.000.000', '2 hab · 74 m²', 'e913', 'ayer 11:05', '#D9E2E8', true, 12],
+['Draft', 'Rent', 'Borrador sin datos del inmueble', 'Sin precio', '3 de 5 fotos', '0b7d', '30 sep', '#E9ECE7', true, 3],
+['Paused', 'Rent', 'Apartamento en Granada, Cali', '$1.900.000', '2 hab · 66 m²', '55aa', '29 sep', '#E3DCE6', false, 7],
+['Expired', 'Sale', 'Apartamento en Cabecera, Bucaramanga', '$310.000.000', '3 hab · 88 m²', 'c3d8', '27 sep', '#E8E2D6', false, 8],
+['Suspended', 'Rent', 'Apartaestudio en Manga, Cartagena', '$1.400.000', '1 hab · 35 m²', '91f4', '26 sep', '#DAE5E3', false, 5],
+['Closed', 'Rent', 'Apartamento en Cedritos, Bogotá', '$2.100.000', '2 hab · 70 m²', '2e6b', '22 sep', '#E1E6DA', true, 10],
+].map((r) => ({ statusKey: r[0], op: r[1], title: r[2], price: r[3], facts: r[4], id: r[5], updated: r[6], tone: r[7], mine: r[8], photoLabel: r[9] + ' fotos', status: pill[r[0]][0], pillBg: pill[r[0]][1], pillFg: pill[r[0]][2], opLabel: r[1] === 'Rent' ? 'Arriendo' : 'Venta' }));
+const q = s.search.trim().toLowerCase();
+const base = raw.filter((l) => (s.op === 'all' || l.op === s.op) && (!s.onlyMine || l.mine) && (!q || l.title.toLowerCase().includes(q)));
+const items = base.filter((l) => s.status === 'all' || l.statusKey === s.status);
+const chip = (key, label, count) => ({
+label, count, pressed: s.status === key ? 'true' : 'false',
+bg: s.status === key ? '#101A16' : '#FFFFFF', fg: s.status === key ? '#FFFFFF' : '#101A16', border: s.status === key ? '#101A16' : '#C5CCC4',
+pick: () => this.setState({ status: key }),
+});
+return {
+creating: s.creating,
+toggleCreate: () => this.setState({ creating: !s.creating }),
+createOps: [['Rent', 'Arriendo'], ['Sale', 'Venta']].map(([key, label]) => ({
+label, pressed: s.createOp === key ? 'true' : 'false',
+bg: s.createOp === key ? '#C9F26B' : '#1B2822', fg: s.createOp === key ? '#101A16' : '#FFFFFF', border: s.createOp === key ? '#C9F26B' : '#3A4A41',
+pick: () => this.setState({ createOp: key }),
+})),
+search: s.search,
+onSearch: (e) => this.setState({ search: e.target.value }),
+onlyMine: s.onlyMine,
+toggleMine: () => this.setState({ onlyMine: !s.onlyMine }),
+opFilters: [['all', 'Todas'], ['Rent', 'Arriendo'], ['Sale', 'Venta']].map(([key, label]) => ({
+label, pressed: s.op === key ? 'true' : 'false', bg: s.op === key ? '#FFFFFF' : 'transparent', pick: () => this.setState({ op: key }),
+})),
+statusFilters: [chip('all', 'Todas', base.length)].concat(Object.keys(pill).map((k) => chip(k, pill[k][0], base.filter((l) => l.statusKey === k).length))),
+items,
+shown: items.length,
+empty: items.length === 0,
+};
+}
+}
+</script>
+</body>
+</html>

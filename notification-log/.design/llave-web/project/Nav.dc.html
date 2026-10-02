@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Navegación</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+</style>
+</helmet>
+<nav aria-label="Principal" style="display: flex; flex-direction: column; gap: 22px; padding: 22px 14px 18px; box-sizing: border-box; background: #101A16; color: #E6ECE6; font-family: 'Onest', system-ui, sans-serif; font-size: 14px; line-height: 1.3">
+<a href="Main.dc.html" style="display: flex; align-items: center; gap: 10px; padding: 0 8px; color: #FFFFFF; text-decoration: none">
+<span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 11px; background: #C9F26B; color: #101A16">
+<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3M14 9l2 2"></path></svg>
+</span>
+<span style="display: flex; flex-direction: column">
+<span style="font: 700 20px/1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">Llave</span>
+<span style="font: 500 10px/1.6 'JetBrains Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #9FB0A6">Backoffice</span>
+</span>
+</a>
+<sc-for list="{{groups}}" as="group" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="padding: 0 10px; font: 500 10px/1.6 'JetBrains Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #9FB0A6">{{group.title}}</div>
+<div style="display: flex; flex-wrap: wrap; gap: 4px">
+<sc-for list="{{group.items}}" as="item" hint-placeholder-count="4">
+<a href="{{item.href}}" aria-current="{{item.current}}" style="flex: 1 1 150px; display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; box-sizing: border-box; border-radius: 11px; text-decoration: none; font-weight: {{item.weight}}; background: {{item.bg}}; color: {{item.fg}}">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{item.d}}"></path></svg>
+<span>{{item.label}}</span>
+</a>
+</sc-for>
+</div>
+</div>
+</sc-for>
+<div style="display: flex; align-items: center; gap: 10px; padding: 12px 10px; border-radius: 14px; background: #1B2822">
+<span style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 999px; background: #2C3D34; color: #FFFFFF; font-weight: 600">DG</span>
+<span style="display: flex; flex-direction: column; flex: 1; min-width: 0">
+<span style="color: #FFFFFF; font-weight: 600">David González</span>
+<span style="color: #9FB0A6; font-size: 12px">Administrador</span>
+</span>
+<a href="Acceso.dc.html" style="display: flex; align-items: center; min-height: 44px; color: #C9F26B; font-size: 12px; font-weight: 600; text-decoration: none">Salir</a>
+</div>
+</nav>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"active":{"editor":"enum","options":["panel","listings","visits","owners","visitors","moderation","triggers","templates","recipients","notifications","profile","users"],"default":"panel"},"$preview":{"width":260,"height":900}}'>
+class Component extends DCLogic {
+renderVals() {
+const active = this.props.active ?? 'panel';
+const item = (key, label, href, d) => ({
+label, href, d,
+current: key === active ? 'page' : 'false',
+bg: key === active ? '#C9F26B' : 'transparent',
+fg: key === active ? '#101A16' : '#E6ECE6',
+weight: key === active ? 600 : 500,
+});
+return {
+groups: [
+{ title: 'Inicio', items: [
+item('panel', 'Panel', 'Main.dc.html', 'M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z'),
+] },
+{ title: 'Arriendos', items: [
+item('listings', 'Publicaciones', 'Publicaciones.dc.html', 'M4 20V9l8-5 8 5v11M9 20v-6h6v6'),
+item('visits', 'Visitas', 'Visitas.dc.html', 'M5 6h14v14H5zM5 10h14M9 3v4M15 3v4'),
+item('owners', 'Propietarios', 'Propietarios.dc.html', 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 20c1-4 4-5 8-5s7 1 8 5'),
+item('visitors', 'Visitantes', 'Visitantes.dc.html', 'M9 11a3 3 0 100-6 3 3 0 000 6zM3 19c.6-3 2.6-4 6-4s5.4 1 6 4M17 8v6M14 11h6'),
+item('moderation', 'Moderación', 'Moderacion.dc.html', 'M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4'),
+] },
+{ title: 'Notificaciones', items: [
+item('triggers', 'Triggers', 'Triggers.dc.html', 'M13 3L5 14h6l-1 7 8-11h-6z'),
+item('templates', 'Plantillas', 'Plantillas.dc.html', 'M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5'),
+item('recipients', 'Destinatarios', 'Destinatarios.dc.html', 'M4 6h16v12H4zM4 7l8 6 8-6'),
+item('notifications', 'Envíos', 'Envios.dc.html', 'M6 16V11a6 6 0 1112 0v5l2 2H4zM10 21h4'),
+] },
+{ title: 'Cuenta', items: [
+item('profile', 'Mi perfil', 'Usuarios.dc.html', 'M12 12a4 4 0 100-8 4 4 0 000 8zM4 20c1-4 4-5 8-5s7 1 8 5'),
+item('users', 'Usuarios', 'Usuarios.dc.html', 'M8 11a3 3 0 100-6 3 3 0 000 6zM16 11a3 3 0 100-6 3 3 0 000 6zM2 19c.5-3 2.5-4 6-4s5.5 1 6 4M15 15c3 0 5 1 6 4'),
+] },
+],
+};
+}
+}
+</script>
+</body>
+</html>

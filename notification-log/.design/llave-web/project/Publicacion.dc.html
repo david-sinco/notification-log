@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Publicación · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 2000px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+<div style="flex: 1 1 232px; background: #101A16">
+<dc-import name="Nav" active="listings" hint-size="100%,760px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 28px clamp(16px, 4vw, 44px) 64px">
+<div style="max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+
+<a href="Publicaciones.dc.html" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600">← Publicaciones</a>
+
+<header style="display: flex; flex-direction: column; gap: 18px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<span style="display: inline-flex; align-items: center; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: {{pillBg}}; color: {{pillFg}}">{{statusLabel}}</span>
+<span style="font: 400 12px 'JetBrains Mono', monospace; color: #56615B">a41f-22c0 · Arriendo</span>
+</div>
+<h1 style="margin: 0; font: 700 clamp(28px, 4vw, 42px)/1.04 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em">Apartamento en Laureles, Medellín</h1>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{actions}}" as="a" hint-placeholder-count="3">
+<button type="button" onClick="{{a.run}}" disabled="{{a.disabled}}" style="min-height: 46px; padding: 0 18px; border-radius: 12px; border: 1px solid {{a.border}}; background: {{a.bg}}; color: {{a.fg}}; font: 600 14px 'Onest', sans-serif; cursor: pointer; opacity: {{a.opacity}}">{{a.label}}</button>
+</sc-for>
+</div>
+</div>
+
+<ol aria-label="Ciclo de vida" style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); gap: 6px">
+<sc-for list="{{rail}}" as="r" hint-placeholder-count="4">
+<li style="display: flex; flex-direction: column; gap: 6px">
+<span aria-hidden="true" style="height: 6px; border-radius: 999px; background: {{r.bar}}"></span>
+<span style="font-size: 13px; font-weight: {{r.weight}}; color: {{r.fg}}">{{r.label}}</span>
+</li>
+</sc-for>
+</ol>
+
+<sc-if value="{{hasNote}}" hint-placeholder-val="{{ true }}">
+<div role="status" style="display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: {{noteBg}}; color: {{noteFg}}">
+<strong>{{noteTitle}}</strong>
+<span style="font-size: 14px">{{noteText}}</span>
+</div>
+</sc-if>
+</header>
+
+<sc-if value="{{showWithdraw}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Retirar publicación" style="display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 18px; background: #FFFFFF; border: 2px solid #B42318">
+<h2 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Retirar publicación</h2>
+<label for="withdraw-reason" style="font-size: 14px; color: #56615B">La publicación deja de estar disponible. Indica el motivo.</label>
+<textarea id="withdraw-reason" rows="3" style="padding: 12px 14px; border-radius: 12px; border: 1px solid #C5CCC4; font: 400 15px 'Onest', sans-serif; color: #101A16; resize: vertical"></textarea>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end">
+<button type="button" onClick="{{closePanel}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">Cancelar</button>
+<button type="button" onClick="{{confirmWithdraw}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0; background: #B42318; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Retirar publicación</button>
+</div>
+</section>
+</sc-if>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<div style="flex: 3 1 460px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+
+<section aria-label="Fotos" style="display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font: 700 22px/1.2 'Bricolage Grotesque', sans-serif">Fotos</h2>
+<span style="font-size: 14px; color: #56615B">{{photoCount}} de 30 · mínimo 5 para enviar a revisión. Arrastra para ordenar o usa las flechas; la primera es la portada.</span>
+</div>
+<button type="button" onClick="{{addPhoto}}" style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">Agregar fotos</button>
+</div>
+
+<ul style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(150px, 100%), 1fr)); gap: 12px">
+<sc-for list="{{photos}}" as="p" hint-placeholder-count="6">
+<li draggable="true" onDragStart="{{p.dragStart}}" onDragOver="{{p.dragOver}}" onDrop="{{p.drop}}" onDragEnd="{{dragEnd}}" style="display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; border: 2px solid {{p.border}}; background: #FFFFFF; opacity: {{p.opacity}}; cursor: grab">
+<div style="position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; height: 104px; background: {{p.tone}}">
+<span style="font-weight: 600; color: #26302B">{{p.label}}</span>
+<span style="font: 400 11px 'JetBrains Mono', monospace; color: #3F4A44">{{p.file}}</span>
+<span style="position: absolute; left: 8px; top: 8px; display: inline-flex; align-items: center; justify-content: center; min-width: 24px; height: 24px; padding: 0 7px; box-sizing: border-box; border-radius: 999px; background: {{p.badgeBg}}; color: {{p.badgeFg}}; font: 600 12px 'Onest', sans-serif">{{p.badge}}</span>
+</div>
+<div style="display: flex; border-top: 1px solid #EEF1EC">
+<button type="button" aria-label="{{p.leftLabel}}" onClick="{{p.left}}" disabled="{{p.first}}" style="flex: 1; min-height: 44px; border: 0; background: transparent; color: #101A16; font-size: 18px; cursor: pointer">←</button>
+<button type="button" aria-label="{{p.rightLabel}}" onClick="{{p.right}}" disabled="{{p.last}}" style="flex: 1; min-height: 44px; border: 0; border-left: 1px solid #EEF1EC; background: transparent; color: #101A16; font-size: 18px; cursor: pointer">→</button>
+<button type="button" aria-label="{{p.removeLabel}}" onClick="{{p.remove}}" style="flex: 1; min-height: 44px; border: 0; border-left: 1px solid #EEF1EC; background: transparent; color: #B42318; font: 600 13px 'Onest', sans-serif; cursor: pointer">Quitar</button>
+</div>
+</li>
+</sc-for>
+</ul>
+
+<div aria-live="polite" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: {{saveBg}}; color: {{saveFg}}">
+<span style="font-size: 14px; font-weight: 600">{{saveText}}</span>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" onClick="{{discardOrder}}" disabled="{{clean}}" style="min-height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid {{discardBorder}}; background: transparent; color: {{saveFg}}; font: 600 14px 'Onest', sans-serif; cursor: pointer; opacity: {{btnOpacity}}">Descartar</button>
+<button type="button" onClick="{{saveOrder}}" disabled="{{clean}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0; background: #C9F26B; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer; opacity: {{btnOpacity}}">Guardar orden</button>
+</div>
+</div>
+</section>
+
+<section aria-label="Datos del inmueble" style="display: flex; flex-direction: column; gap: 18px; padding: 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h2 style="margin: 0; font: 700 22px/1.2 'Bricolage Grotesque', sans-serif">Datos del inmueble</h2>
+<span style="font-size: 14px; color: #56615B">Editar datos o fotos de una publicación visible la devuelve a revisión.</span>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px">
+<div role="group" aria-label="Tipo" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 600">Tipo</span>
+<div style="display: flex; gap: 8px">
+<sc-for list="{{types}}" as="t" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{t.pressed}}" onClick="{{t.pick}}" style="flex: 1; min-height: 46px; border-radius: 12px; border: 1px solid {{t.border}}; background: {{t.bg}}; color: {{t.fg}}; font: 600 14px 'Onest', sans-serif; cursor: pointer">{{t.label}}</button>
+</sc-for>
+</div>
+</div>
+<div role="group" aria-label="Estrato" style="flex: 1 1 240px; display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 600">Estrato</span>
+<div style="display: flex; gap: 6px">
+<sc-for list="{{strata}}" as="e" hint-placeholder-count="6">
+<button type="button" aria-pressed="{{e.pressed}}" onClick="{{e.pick}}" style="flex: 1; min-width: 0; min-height: 46px; border-radius: 12px; border: 1px solid {{e.border}}; background: {{e.bg}}; color: {{e.fg}}; font: 600 15px 'Onest', sans-serif; cursor: pointer">{{e.label}}</button>
+</sc-for>
+</div>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 14px">
+<sc-for list="{{fields}}" as="f" hint-placeholder-count="9">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="{{f.id}}" style="font-size: 13px; font-weight: 600">{{f.label}}</label>
+<input id="{{f.id}}" type="{{f.type}}" value="{{f.value}}" onChange="{{f.change}}" style="min-height: 46px; padding: 0 14px; box-sizing: border-box; width: 100%; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 15px 'Onest', sans-serif; color: #101A16">
+</div>
+</sc-for>
+</div>
+
+<label style="display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer">
+<input type="checkbox" checked="{{elevator}}" onChange="{{toggleElevator}}" style="width: 20px; height: 20px; accent-color: #101A16">
+Tiene ascensor
+</label>
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; gap: 12px">
+<label for="description" style="font-size: 13px; font-weight: 600">Descripción</label>
+<span style="font: 400 12px 'JetBrains Mono', monospace; color: {{descFg}}">{{descCount}} / 2000 · mínimo 100</span>
+</div>
+<textarea id="description" rows="5" value="{{description}}" onChange="{{changeDescription}}" style="padding: 12px 14px; border-radius: 12px; border: 1px solid #C5CCC4; font: 400 15px/1.5 'Onest', sans-serif; color: #101A16; resize: vertical"></textarea>
+</div>
+
+<div style="display: flex; justify-content: flex-end">
+<button type="button" style="min-height: 46px; padding: 0 20px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Guardar datos</button>
+</div>
+</section>
+
+</div>
+
+<aside style="flex: 2 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+
+<section aria-label="Para enviar a revisión" style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 18px; background: #101A16; color: #FFFFFF">
+<h2 style="margin: 0; font: 700 18px/1.2 'Bricolage Grotesque', sans-serif">Para enviar a revisión</h2>
+<sc-for list="{{checklist}}" as="c" hint-placeholder-count="3">
+<div style="display: flex; align-items: center; gap: 10px">
+<span aria-hidden="true" style="flex: none; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 999px; background: {{c.bg}}; color: #101A16; font-size: 13px; font-weight: 700">{{c.mark}}</span>
+<span style="flex: 1">{{c.label}}</span>
+<span style="font-size: 13px; color: #B9C6BD">{{c.state}}</span>
+</div>
+</sc-for>
+</section>
+
+<section aria-label="Precio" style="display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<h2 style="margin: 0; font-size: 13px; font-weight: 600; color: #56615B">Precio de arriendo</h2>
+<div style="font: 700 34px/1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">{{priceLabel}}</div>
+<label for="new-price" style="font-size: 13px; font-weight: 600">Nuevo precio (COP)</label>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<input id="new-price" type="number" step="10000" value="{{priceDraft}}" onChange="{{changePriceDraft}}" style="flex: 1 1 140px; min-width: 0; min-height: 46px; padding: 0 14px; box-sizing: border-box; border-radius: 12px; border: 1px solid #C5CCC4; font: 400 15px 'Onest', sans-serif; color: #101A16">
+<button type="button" onClick="{{applyPrice}}" style="min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">Cambiar</button>
+</div>
+<span style="font-size: 13px; color: #56615B">Mínimo $300.000 en arriendo y $30.000.000 en venta. Una vez publicada, solo cambia una vez cada 24 horas.</span>
+</section>
+
+<sc-if value="{{canClose}}" hint-placeholder-val="{{ false }}">
+<section aria-label="Cerrar negocio" style="display: flex; flex-direction: column; gap: 12px; padding: 20px; border-radius: 18px; background: #C9F26B; color: #101A16">
+<h2 style="margin: 0; font: 700 18px/1.2 'Bricolage Grotesque', sans-serif">Cerrar negocio</h2>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="final-price" style="font-size: 13px; font-weight: 600">Valor final (COP)</label>
+<input id="final-price" type="number" step="10000" value="{{priceDraft}}" onChange="{{changePriceDraft}}" style="min-height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid #101A16; background: #FFFFFF; font: 400 15px 'Onest', sans-serif; color: #101A16">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="signed-on" style="font-size: 13px; font-weight: 600">Fecha de firma · no puede ser futura</label>
+<input id="signed-on" type="date" value="{{signedOn}}" onChange="{{changeSigned}}" style="min-height: 46px; padding: 0 14px; border-radius: 12px; border: 1px solid #101A16; background: #FFFFFF; font: 400 15px 'Onest', sans-serif; color: #101A16">
+</div>
+<button type="button" onClick="{{confirmClose}}" style="min-height: 46px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Cerrar negocio</button>
+</section>
+</sc-if>
+
+<section aria-label="Vigencia y participantes" style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<h2 style="margin: 0; font: 700 18px/1.2 'Bricolage Grotesque', sans-serif">Vigencia y participantes</h2>
+<sc-for list="{{facts}}" as="k" hint-placeholder-count="4">
+<div style="display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid #EEF1EC; font-size: 14px">
+<span style="color: #56615B">{{k.label}}</span>
+<span style="font-weight: 600; text-align: right">{{k.value}}</span>
+</div>
+</sc-for>
+<a href="Propietarios.dc.html" style="display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600">Ver propietario</a>
+</section>
+
+<section aria-label="Visitas" style="display: flex; flex-direction: column; gap: 10px; padding: 20px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<h2 style="margin: 0; font: 700 18px/1.2 'Bricolage Grotesque', sans-serif">Visitas</h2>
+<sc-for list="{{visits}}" as="v" hint-placeholder-count="3">
+<a href="Visitas.dc.html" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; min-height: 44px; padding-top: 10px; border-top: 1px solid #EEF1EC; text-decoration: none; color: #101A16; font-size: 14px">
+<span style="display: flex; flex-direction: column">
+<span style="font-weight: 600">{{v.who}}</span>
+<span style="color: #56615B">{{v.when}}</span>
+</span>
+<span style="display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{v.bg}}; color: {{v.fg}}">{{v.status}}</span>
+</a>
+</sc-for>
+<a href="Visitas.dc.html" style="display: inline-flex; align-items: center; justify-content: center; min-height: 46px; border-radius: 12px; border: 1px solid #C5CCC4; color: #101A16; font-size: 14px; font-weight: 600; text-decoration: none">Solicitar visita como interesado</a>
+</section>
+
+</aside>
+</div>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"estado":{"editor":"enum","options":["Draft","InReview","Published","Paused","Expired","Suspended","Closed","Withdrawn"],"default":"Draft","section":"Publicación"},"$preview":{"width":1360,"height":2000}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+const photos = [
+['sala.jpg', 'Sala', '#DCE6DA'], ['cocina.jpg', 'Cocina', '#E6E0D2'], ['alcoba-principal.jpg', 'Alcoba principal', '#D9E2E8'],
+['bano.jpg', 'Baño', '#E3DCE6'], ['balcon.jpg', 'Balcón', '#E8E2D6'], ['fachada.jpg', 'Fachada', '#DAE5E3'],
+].map(([file, label, tone]) => ({ file, label, tone }));
+this.state = {
+status: null, panel: null, photos, saved: photos.map((p) => p.file), dragging: null, over: null, justSaved: false,
+type: 'Apartment', stratum: 4, elevator: true, price: 2400000, priceDraft: 2400000, signedOn: '2026-10-02',
+form: { area: '92', bedrooms: '3', bathrooms: '2', parking: '1', floor: '7', fee: '380000', city: 'Medellín', hood: 'Laureles', address: 'Circular 73 # 39-21' },
+description: 'Apartamento iluminado en el corazón de Laureles, a dos cuadras del segundo parque. Sala comedor con balcón, cocina integral abierta y tres alcobas con clóset.',
+};
+}
+move(from, to) {
+const photos = this.state.photos.slice();
+if (to < 0 || to >= photos.length || from === to) return;
+const [item] = photos.splice(from, 1);
+photos.splice(to, 0, item);
+this.setState({ photos, dragging: null, over: null, justSaved: false });
+}
+renderVals() {
+const s = this.state;
+const status = s.status ?? this.props.estado ?? 'Draft';
+const go = (next) => () => this.setState({ status: next, panel: null });
+const info = {
+Draft: ['Borrador', '#E9ECE7', '#3F4A44'], InReview: ['En revisión', '#E4EBFD', '#1D3FA8'], Published: ['Publicada', '#DDF3E6', '#0B5C3F'],
+Paused: ['Pausada', '#FCEBD2', '#8A4300'], Expired: ['Vencida', '#FCEBD2', '#8A4300'], Suspended: ['Suspendida', '#FCE7E4', '#B42318'],
+Closed: ['Cerrada', '#101A16', '#FFFFFF'], Withdrawn: ['Retirada', '#FCE7E4', '#B42318'],
+}[status];
+const descCount = s.description.trim().length;
+const ready = s.photos.length >= 5 && descCount >= 100;
+const btn = (label, kind, run, disabled) => ({
+label, run, disabled: !!disabled, opacity: disabled ? 0.45 : 1,
+bg: kind === 'primary' ? '#101A16' : '#FFFFFF', fg: kind === 'primary' ? '#FFFFFF' : kind === 'danger' ? '#B42318' : '#101A16',
+border: kind === 'primary' ? '#101A16' : kind === 'danger' ? '#E3A7A0' : '#C5CCC4',
+});
+const withdraw = btn('Retirar', 'danger', () => this.setState({ panel: 'withdraw' }));
+const actions = {
+Draft: [btn('Enviar a revisión', 'primary', go('InReview'), !ready), withdraw],
+InReview: [withdraw],
+Published: [btn('Pausar', 'ghost', go('Paused')), btn('Renovar vigencia', 'ghost', go('Published')), withdraw],
+Paused: [btn('Reanudar', 'primary', go('Published')), withdraw],
+Expired: [btn('Renovar vigencia', 'primary', go('Published')), withdraw],
+Suspended: [withdraw], Closed: [], Withdrawn: [],
+}[status];
+const notes = {
+Draft: ['Moderación la devolvió: fotos de baja calidad', 'Corrige lo necesario y vuelve a enviarla a revisión.', '#FCEBD2', '#5E2E00'],
+InReview: ['Esperando a moderación', 'Puedes seguir editando; un moderador la aprueba o la rechaza con motivos.', '#E4EBFD', '#16307F'],
+Paused: ['Pausada por el propietario', 'No aparece en el catálogo ni recibe visitas hasta que la reanudes.', '#FCEBD2', '#5E2E00'],
+Expired: ['La vigencia terminó el 27 de septiembre', 'Renuévala para que vuelva a estar visible.', '#FCEBD2', '#5E2E00'],
+Suspended: ['Suspendida por moderación', 'Motivo: el precio no coincide con el inmueble. Solo moderación puede levantar la suspensión.', '#FCE7E4', '#7A150D'],
+Closed: ['Negocio cerrado', 'Valor final y fecha de firma registrados. La publicación ya no se puede editar.', '#101A16', '#FFFFFF'],
+Withdrawn: ['Retirada', 'La publicación dejó de estar disponible y no admite más cambios.', '#FCE7E4', '#7A150D'],
+}[status];
+const railIndex = { Draft: 0, InReview: 1, Published: 2, Paused: 2, Expired: 2, Suspended: 2, Closed: 3, Withdrawn: -1 }[status];
+const order = s.photos.map((p) => p.file);
+const moved = order.filter((f, i) => s.saved[i] !== f).length;
+const clean = moved === 0;
+const money = (n) => '$' + Number(n || 0).toLocaleString('es-CO');
+const visitPill = { 'Por responder': ['#FCEBD2', '#8A4300'], Agendada: ['#DDF3E6', '#0B5C3F'], Realizada: ['#E9ECE7', '#3F4A44'] };
+const field = (id, label, type) => ({ id, label, type, value: s.form[id], change: (e) => this.setState({ form: Object.assign({}, s.form, { [id]: e.target.value }) }) });
+return {
+statusLabel: info[0], pillBg: info[1], pillFg: info[2],
+actions,
+rail: ['Borrador', 'En revisión', 'Publicada', 'Cerrada'].map((label, i) => ({
+label, bar: i < railIndex ? '#101A16' : i === railIndex ? '#0B6B4A' : '#D3D9D1',
+fg: i === railIndex ? '#101A16' : '#56615B', weight: i === railIndex ? 600 : 400,
+})),
+hasNote: !!notes, noteTitle: notes ? notes[0] : '', noteText: notes ? notes[1] : '', noteBg: notes ? notes[2] : '', noteFg: notes ? notes[3] : '',
+showWithdraw: s.panel === 'withdraw',
+closePanel: () => this.setState({ panel: null }),
+confirmWithdraw: go('Withdrawn'),
+photoCount: s.photos.length,
+photos: s.photos.map((p, i) => ({
+file: p.file, label: p.label, tone: p.tone,
+badge: i === 0 ? 'Portada' : String(i + 1), badgeBg: i === 0 ? '#101A16' : '#FFFFFF', badgeFg: i === 0 ? '#FFFFFF' : '#101A16',
+border: s.over === i && s.dragging !== null && s.dragging !== i ? '#0B6B4A' : s.saved[i] !== p.file ? '#C9F26B' : '#DFE4DD',
+opacity: s.dragging === i ? 0.4 : 1,
+first: i === 0, last: i === s.photos.length - 1,
+leftLabel: 'Mover ' + p.label + ' antes', rightLabel: 'Mover ' + p.label + ' después', removeLabel: 'Quitar ' + p.label,
+dragStart: () => this.setState({ dragging: i }),
+dragOver: (e) => { e.preventDefault(); if (s.over !== i) this.setState({ over: i }); },
+drop: (e) => { e.preventDefault(); if (s.dragging !== null) this.move(s.dragging, i); },
+left: () => this.move(i, i - 1),
+right: () => this.move(i, i + 1),
+remove: () => { const file = p.file; this.setState({ photos: s.photos.filter((x) => x.file !== file), saved: s.saved.filter((f) => f !== file) }); },
+})),
+dragEnd: () => this.setState({ dragging: null, over: null }),
+addPhoto: () => {
+const n = s.photos.length + 1;
+const photo = { file: 'foto-' + n + '.jpg', label: 'Foto nueva ' + n, tone: '#E9ECE7' };
+this.setState({ photos: s.photos.concat([photo]), saved: s.saved.concat([photo.file]) });
+},
+clean,
+saveText: clean ? (s.justSaved ? 'Orden guardado. Así se verá en el catálogo.' : 'El orden coincide con el guardado.') : moved + ' fotos cambiaron de posición. Guarda para actualizar el orden.',
+saveBg: clean ? '#F3F5F1' : '#101A16', saveFg: clean ? '#56615B' : '#FFFFFF', discardBorder: clean ? '#C5CCC4' : '#56615B', btnOpacity: clean ? 0.45 : 1,
+saveOrder: () => this.setState({ saved: order, justSaved: true }),
+discardOrder: () => this.setState({ photos: s.saved.map((f) => s.photos.find((p) => p.file === f)), justSaved: false }),
+types: [['Apartment', 'Apartamento'], ['Studio', 'Apartaestudio']].map(([key, label]) => ({
+label, pressed: s.type === key ? 'true' : 'false', bg: s.type === key ? '#101A16' : '#FFFFFF', fg: s.type === key ? '#FFFFFF' : '#101A16', border: s.type === key ? '#101A16' : '#C5CCC4',
+pick: () => this.setState({ type: key }),
+})),
+strata: [1, 2, 3, 4, 5, 6].map((n) => ({
+label: String(n), pressed: s.stratum === n ? 'true' : 'false', bg: s.stratum === n ? '#101A16' : '#FFFFFF', fg: s.stratum === n ? '#FFFFFF' : '#101A16', border: s.stratum === n ? '#101A16' : '#C5CCC4',
+pick: () => this.setState({ stratum: n }),
+})),
+fields: [
+field('area', 'Área (m²)', 'number'), field('bedrooms', 'Habitaciones', 'number'), field('bathrooms', 'Baños', 'number'),
+field('parking', 'Parqueaderos', 'number'), field('floor', 'Piso', 'number'), field('fee', 'Administración (COP)', 'number'),
+field('city', 'Ciudad', 'text'), field('hood', 'Barrio', 'text'), field('address', 'Dirección', 'text'),
+],
+elevator: s.elevator,
+toggleElevator: () => this.setState({ elevator: !s.elevator }),
+description: s.description,
+changeDescription: (e) => this.setState({ description: e.target.value }),
+descCount, descFg: descCount >= 100 ? '#56615B' : '#B42318',
+checklist: [
+{ label: 'Datos del inmueble', ok: descCount >= 100, state: descCount >= 100 ? 'Completos' : 'Descripción corta' },
+{ label: 'Precio', ok: s.price > 0, state: money(s.price) },
+{ label: 'Fotos', ok: s.photos.length >= 5, state: s.photos.length + ' de 5' },
+].map((c) => Object.assign(c, { mark: c.ok ? '✓' : '·', bg: c.ok ? '#C9F26B' : '#56615B' })),
+priceLabel: money(s.price),
+priceDraft: s.priceDraft,
+changePriceDraft: (e) => this.setState({ priceDraft: e.target.value }),
+applyPrice: () => this.setState({ price: Number(s.priceDraft) || s.price }),
+canClose: status === 'Published' || status === 'Paused',
+signedOn: s.signedOn,
+changeSigned: (e) => this.setState({ signedOn: e.target.value }),
+confirmClose: go('Closed'),
+facts: [
+{ label: 'Propietario', value: 'Camila Ramírez Ospina' },
+{ label: 'Creada por', value: 'David González' },
+{ label: 'Creada', value: '18 sep 2026' },
+{ label: 'Vence', value: '18 oct 2026' },
+],
+visits: [
+['Laura Montoya', 'Propone 3 franjas · responde antes del 3 oct', 'Por responder'],
+['Andrés Pérez', 'Sáb 3 oct · 10:00 – 11:00', 'Agendada'],
+['Sofía Cárdenas', 'Mié 30 sep · 15:00 – 16:00', 'Realizada'],
+].map(([who, when, st]) => ({ who, when, status: st, bg: visitPill[st][0], fg: visitPill[st][1] })),
+};
+}
+}
+</script>
+</body>
+</html>

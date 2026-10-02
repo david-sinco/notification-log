@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Destinatarios · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 1300px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+<div style="flex: 1 1 232px; background: #101A16">
+<dc-import name="Nav" active="recipients" hint-size="100%,760px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px clamp(16px, 4vw, 44px) 64px">
+<div style="max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+
+<header style="display: flex; flex-direction: column; gap: 6px">
+<div style="font: 500 12px/1.4 'JetBrains Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #56615B">Notificaciones</div>
+<h1 style="margin: 0; font: 700 clamp(30px, 4.4vw, 44px)/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em">Destinatarios</h1>
+<p style="margin: 0; color: #56615B">Copia de los usuarios que pueden recibir avisos. Se actualiza sola cuando cambia la cuenta de origen.</p>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<section aria-label="Lista de destinatarios" style="flex: 2 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<label for="recipient-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%)">Buscar destinatario</label>
+<input id="recipient-search" type="search" value="{{search}}" onChange="{{onSearch}}" placeholder="Nombre, correo o teléfono" style="min-height: 46px; padding: 0 16px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 15px 'Onest', sans-serif; color: #101A16">
+<sc-for list="{{list}}" as="r" hint-placeholder-count="5">
+<button type="button" aria-pressed="{{r.pressed}}" onClick="{{r.pick}}" style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; border: 2px solid {{r.border}}; background: #FFFFFF; color: #101A16; font: 400 15px 'Onest', sans-serif; text-align: left; cursor: pointer">
+<span aria-hidden="true" style="flex: none; display: flex; align-items: center; justify-content: center; width: 42px; height: 42px; border-radius: 999px; background: #E9ECE7; font-weight: 600">{{r.initials}}</span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<span style="font-weight: 600">{{r.name}}</span>
+<span style="font-size: 13px; color: #56615B">{{r.reach}}</span>
+</span>
+</button>
+</sc-for>
+</section>
+
+<section aria-label="Detalle del destinatario" style="flex: 3 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 18px; padding: 22px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 style="margin: 0; font: 700 26px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">{{cur.name}}</h2>
+<span style="font: 400 12px 'JetBrains Mono', monospace; color: #56615B; overflow-wrap: anywhere">user_id {{cur.id}}</span>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 14px; background: #F3F5F1">
+<strong>Solo lectura</strong>
+<span style="font-size: 14px; color: #56615B">Los datos llegan desde la cuenta del usuario. Para cambiarlos, edita el usuario; aquí se reflejan en segundos.</span>
+<a href="Usuarios.dc.html" style="align-self: flex-start; display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600">Abrir usuario</a>
+</div>
+
+<sc-if value="{{cur.optedOut}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="display: flex; flex-direction: column; gap: 2px; padding: 12px 16px; border-radius: 14px; background: #FCEBD2; color: #5E2E00">
+<strong>No acepta notificaciones</strong>
+<span style="font-size: 14px">Ningún canal le entrega avisos mientras no dé su consentimiento.</span>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">¿Por dónde se le puede avisar?</h3>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 10px">
+<sc-for list="{{cur.channels}}" as="c" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px; border: 1px solid {{c.border}}; background: {{c.bg}}">
+<span style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+<span style="font-weight: 600">{{c.label}}</span>
+<span style="font-size: 12px; font-weight: 600; color: {{c.fg}}">{{c.state}}</span>
+</span>
+<span style="font-size: 14px; color: #56615B; overflow-wrap: anywhere">{{c.detail}}</span>
+</div>
+</sc-for>
+</div>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 12px">
+<sc-for list="{{cur.facts}}" as="k" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; color: #56615B">{{k.label}}</span>
+<span style="font-weight: 600; overflow-wrap: anywhere">{{k.value}}</span>
+</div>
+</sc-for>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">Atributos para plantillas</h3>
+<div style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{cur.attrs}}" as="a" hint-placeholder-count="3">
+<span style="display: inline-flex; gap: 6px; padding: 5px 10px; border-radius: 9px; background: #E9ECE7; font: 400 13px 'JetBrains Mono', monospace; overflow-wrap: anywhere"><span style="color: #56615B">recipient.{{a.k}}</span><span>{{a.v}}</span></span>
+</sc-for>
+</div>
+</div>
+
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">Últimos envíos</h3>
+<a href="Envios.dc.html" style="font-size: 14px; font-weight: 600">Ver todos</a>
+</div>
+<sc-for list="{{cur.sends}}" as="n" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid #EEF1EC">
+<span aria-hidden="true" style="flex: none; width: 10px; height: 10px; border-radius: 999px; background: {{n.dot}}"></span>
+<span style="flex: 1 1 160px; font: 500 13px 'JetBrains Mono', monospace">{{n.key}}</span>
+<span style="font-size: 13px; color: #56615B">{{n.channel}} · {{n.at}}</span>
+<span style="font-size: 13px; font-weight: 600; color: {{n.fg}}">{{n.status}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1300}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = { selected: 1, search: '' };
+}
+renderVals() {
+const s = this.state;
+const people = [
+{ id: 1, uid: '3f2a9c1e-7b40-4d1a-9a55-0c2e61b7d410', name: 'Camila Ramírez Ospina', email: 'c.ramirez@correo.co', phone: '+57 300 555 0142', accepts: true, push: true, attrs: { role: 'Propietario', city: 'Medellín' } },
+{ id: 2, uid: '9d14e0aa-52c3-4f6b-8e07-a1b3c9f02e55', name: 'Laura Montoya Arango', email: 'laura@correo.co', phone: '', accepts: true, push: true, attrs: { role: 'Visitor' } },
+{ id: 3, uid: 'b7c0d5f2-1a9e-4c33-b6d8-44e0f1a27c90', name: 'Julián Ortiz Mejía', email: '', phone: '+57 311 555 0177', accepts: true, push: false, attrs: { role: 'Propietario' } },
+{ id: 4, uid: '51e8a3c7-0d2f-4b9a-9c61-7f3d2e8b1a06', name: 'Hannah Becker', email: 'h.becker@correo.co', phone: '+57 320 555 0108', accepts: false, push: false, attrs: { role: 'Propietario', language: 'en' } },
+{ id: 5, uid: 'e2f6b914-8c7d-4a05-b3e2-5d9a0c41f7b8', name: 'Andrés Pérez Londoño', email: 'andres.p@correo.co', phone: '+57 312 555 0153', accepts: true, push: false, attrs: { role: 'Visitor' } },
+];
+const q = s.search.trim().toLowerCase();
+const reach = (p) => {
+if (!p.accepts) return 'No acepta notificaciones';
+const list = [p.email && 'Email', p.phone && 'SMS', p.push && 'Push'].filter(Boolean);
+return list.length ? list.join(' · ') : 'Sin canales disponibles';
+};
+const p = people.find((x) => x.id === s.selected);
+const channel = (label, ok, address, missing) => {
+const on = ok && p.accepts;
+return { label, state: on ? 'Disponible' : 'No disponible', fg: on ? '#0B5C3F' : '#8A4300', bg: on ? '#FFFFFF' : '#F3F5F1', border: on ? '#0B6B4A' : '#DFE4DD', detail: !ok ? missing : p.accepts ? address : address + ' · sin consentimiento' };
+};
+const send = (key, ch, at, ok) => ({ key, channel: ch, at, status: ok ? 'Enviado' : 'Falló', dot: ok ? '#0B6B4A' : '#B42318', fg: ok ? '#0B5C3F' : '#B42318' });
+return {
+search: s.search,
+onSearch: (e) => this.setState({ search: e.target.value }),
+list: people.filter((x) => !q || (x.name + ' ' + x.email + ' ' + x.phone).toLowerCase().includes(q)).map((x) => ({
+name: x.name, reach: reach(x), initials: x.name.split(' ').slice(0, 2).map((w) => w[0]).join(''),
+pressed: x.id === s.selected ? 'true' : 'false', border: x.id === s.selected ? '#101A16' : '#DFE4DD',
+pick: () => this.setState({ selected: x.id }),
+})),
+cur: {
+name: p.name, id: p.uid, optedOut: !p.accepts,
+channels: [
+channel('Email', !!p.email, p.email, 'Sin correo confirmado'),
+channel('SMS', !!p.phone, p.phone, 'Sin teléfono confirmado'),
+channel('Push', p.push, 'Dispositivo registrado', 'Sin dispositivo registrado'),
+channel('WhatsApp', false, '', 'El canal todavía no tiene proveedor'),
+],
+facts: [
+{ label: 'Acepta notificaciones', value: p.accepts ? 'Sí' : 'No' },
+{ label: 'Idioma', value: 'es-CO' },
+{ label: 'Zona horaria', value: 'America/Bogota' },
+],
+attrs: Object.keys(p.attrs).map((k) => ({ k, v: p.attrs[k] })),
+sends: p.accepts
+? [send('visit.requested', 'Email', 'hoy 11:42', true), send('visit.scheduled', 'Push', 'hoy 10:15', false), send('listing.approved', 'Email', 'ayer 09:03', true)]
+: [send('account.verification', 'Email', '17 sep 19:30', true)],
+},
+};
+}
+}
+</script>
+</body>
+</html>

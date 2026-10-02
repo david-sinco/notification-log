@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Panel · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 1500px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+<div style="flex: 1 1 232px; background: #101A16">
+<dc-import name="Nav" active="panel" hint-size="100%,760px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px clamp(16px, 4vw, 44px) 64px">
+<div style="max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px">
+
+<header style="display: flex; flex-direction: column; gap: 8px">
+<div style="font: 500 12px/1.4 'JetBrains Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #56615B">Viernes 2 de octubre</div>
+<h1 style="margin: 0; font: 700 clamp(30px, 4.4vw, 46px)/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em">Hola, David. Hay 6 cosas esperándote.</h1>
+<p style="margin: 0; max-width: 620px; color: #56615B">Del anuncio a la entrega de la llave: publicaciones, visitas y los avisos que salen en cada paso.</p>
+</header>
+
+<section aria-label="Pendientes" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 14px">
+<sc-for list="{{queue}}" as="q" hint-placeholder-count="3">
+<a href="{{q.href}}" style="display: flex; flex-direction: column; gap: 14px; padding: 20px; border-radius: 18px; text-decoration: none; background: {{q.bg}}; color: {{q.fg}}">
+<span style="display: flex; align-items: baseline; gap: 10px">
+<span style="font: 700 52px/0.9 'Bricolage Grotesque', sans-serif; letter-spacing: -0.03em">{{q.count}}</span>
+<span style="font-weight: 600">{{q.title}}</span>
+</span>
+<span style="font-size: 14px; color: {{q.sub}}">{{q.text}}</span>
+<span style="font-weight: 600; font-size: 14px">{{q.cta}} →</span>
+</a>
+</sc-for>
+</section>
+
+<section aria-label="Resumen" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 0; background: #FFFFFF; border: 1px solid #DFE4DD; border-radius: 18px; overflow: hidden">
+<sc-for list="{{stats}}" as="s" hint-placeholder-count="6">
+<a href="{{s.href}}" style="display: flex; flex-direction: column; gap: 2px; padding: 16px 18px; text-decoration: none; color: #101A16; border-right: 1px solid #EEF1EC; border-bottom: 1px solid #EEF1EC">
+<span style="font-size: 13px; color: #56615B">{{s.label}}</span>
+<span style="font: 700 26px/1.1 'Bricolage Grotesque', sans-serif">{{s.value}}</span>
+</a>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<section style="flex: 3 1 420px; min-width: 0; background: #FFFFFF; border: 1px solid #DFE4DD; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px">
+<h2 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Publicaciones con actividad reciente</h2>
+<a href="Publicaciones.dc.html" style="font-size: 14px; font-weight: 600">Ver todas</a>
+</div>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{listings}}" as="l" hint-placeholder-count="5">
+<a href="Publicacion.dc.html" style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #EEF1EC; text-decoration: none; color: #101A16">
+<span style="flex: none; display: flex; align-items: center; justify-content: center; width: 56px; height: 44px; border-radius: 10px; background: {{l.tone}}; font: 500 10px 'JetBrains Mono', monospace; color: #3F4A44">foto</span>
+<span style="flex: 1 1 180px; min-width: 0; display: flex; flex-direction: column">
+<span style="font-weight: 600">{{l.title}}</span>
+<span style="font-size: 13px; color: #56615B">{{l.meta}}</span>
+</span>
+<span style="font-weight: 600">{{l.price}}</span>
+<span style="display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{l.pillBg}}; color: {{l.pillFg}}">{{l.status}}</span>
+</a>
+</sc-for>
+</div>
+</section>
+
+<section style="flex: 2 1 300px; min-width: 0; background: #FFFFFF; border: 1px solid #DFE4DD; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 12px">
+<h2 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Últimos envíos</h2>
+<a href="Envios.dc.html" style="font-size: 14px; font-weight: 600">Ver historial</a>
+</div>
+<div style="display: flex; flex-direction: column">
+<sc-for list="{{sends}}" as="n" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 10px; padding: 11px 0; border-top: 1px solid #EEF1EC">
+<span aria-hidden="true" style="flex: none; width: 10px; height: 10px; border-radius: 999px; background: {{n.dot}}"></span>
+<span style="flex: 1; min-width: 0; display: flex; flex-direction: column">
+<span style="font: 500 13px 'JetBrains Mono', monospace; overflow-wrap: anywhere">{{n.key}}</span>
+<span style="font-size: 13px; color: #56615B; overflow-wrap: anywhere">{{n.channel}} · {{n.dest}}</span>
+</span>
+<span style="font-size: 12px; font-weight: 600; color: {{n.fg}}">{{n.status}}</span>
+</div>
+</sc-for>
+</div>
+</section>
+
+</div>
+
+<section style="background: #FFFFFF; border: 1px solid #DFE4DD; border-radius: 18px; padding: 20px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">El recorrido de una publicación</h2>
+<ol style="margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px">
+<sc-for list="{{steps}}" as="st" hint-placeholder-count="4">
+<li style="display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 14px; background: #F3F5F1">
+<span style="font: 500 12px 'JetBrains Mono', monospace; color: #56615B">Paso {{st.n}}</span>
+<span style="font-weight: 600">{{st.title}}</span>
+<span style="font-size: 14px; color: #56615B">{{st.text}}</span>
+<a href="{{st.href}}" style="font-size: 14px; font-weight: 600">{{st.cta}}</a>
+</li>
+</sc-for>
+</ol>
+</section>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":1500}}'>
+class Component extends DCLogic {
+renderVals() {
+const pill = {
+'En revisión': ['#E4EBFD', '#1D3FA8'],
+'Publicada': ['#DDF3E6', '#0B5C3F'],
+'Borrador': ['#E9ECE7', '#3F4A44'],
+'Pausada': ['#FCEBD2', '#8A4300'],
+'Cerrada': ['#101A16', '#FFFFFF'],
+};
+const listing = (title, meta, price, status, tone) => ({ title, meta, price, status, tone, pillBg: pill[status][0], pillFg: pill[status][1] });
+const send = (key, channel, dest, ok) => ({ key, channel, dest, status: ok ? 'Enviado' : 'Falló', dot: ok ? '#0B6B4A' : '#B42318', fg: ok ? '#0B5C3F' : '#B42318' });
+return {
+queue: [
+{ count: 3, title: 'publicaciones en revisión', text: 'La más antigua espera desde ayer a las 16:20.', cta: 'Abrir moderación', href: 'Moderacion.dc.html', bg: '#101A16', fg: '#FFFFFF', sub: '#B9C6BD' },
+{ count: 2, title: 'visitas por responder', text: 'Una vence hoy a las 18:00 si nadie responde.', cta: 'Responder visitas', href: 'Visitas.dc.html', bg: '#C9F26B', fg: '#101A16', sub: '#2C3D1A' },
+{ count: 1, title: 'borrador incompleto', text: 'Le faltan 2 fotos para poder enviarse a revisión.', cta: 'Completar borrador', href: 'Publicacion.dc.html', bg: '#FFFFFF', fg: '#101A16', sub: '#56615B' },
+],
+stats: [
+{ label: 'Publicadas', value: 24, href: 'Publicaciones.dc.html' },
+{ label: 'Propietarios', value: 17, href: 'Propietarios.dc.html' },
+{ label: 'Triggers', value: 9, href: 'Triggers.dc.html' },
+{ label: 'Plantillas', value: 14, href: 'Plantillas.dc.html' },
+{ label: 'Destinatarios', value: 86, href: 'Destinatarios.dc.html' },
+{ label: 'Envíos', value: 412, href: 'Envios.dc.html' },
+],
+listings: [
+listing('Apartamento en Laureles, Medellín', 'Arriendo · 3 hab · 92 m²', '$2.400.000', 'En revisión', '#DCE6DA'),
+listing('Apartaestudio en Chapinero, Bogotá', 'Arriendo · 1 hab · 38 m²', '$1.650.000', 'Publicada', '#E6E0D2'),
+listing('Apartamento en El Poblado, Medellín', 'Venta · 2 hab · 74 m²', '$520.000.000', 'Pausada', '#D9E2E8'),
+listing('Apartamento en Granada, Cali', 'Arriendo · sin datos todavía', 'Sin precio', 'Borrador', '#E9ECE7'),
+listing('Apartaestudio en Cabecera, Bucaramanga', 'Arriendo · 1 hab · 41 m²', '$1.200.000', 'Cerrada', '#E3DCE6'),
+],
+sends: [
+send('visit.requested', 'Email', 'c.ramirez@correo.co', true),
+send('listing.approved', 'SMS', '+57 300 555 0142', true),
+send('visit.scheduled', 'Push', 'dispositivo de Laura M.', false),
+send('account.verification', 'Email', 'j.ortiz@correo.co', true),
+send('listing.rejected', 'Email', 'inmobiliaria@andes.co', true),
+],
+steps: [
+{ n: 1, title: 'Registra al propietario', text: 'Persona natural o jurídica.', cta: 'Ir a propietarios', href: 'Propietarios.dc.html' },
+{ n: 2, title: 'Crea la publicación', text: 'Datos, precio y al menos 5 fotos.', cta: 'Nueva publicación', href: 'Publicaciones.dc.html' },
+{ n: 3, title: 'Apruébala', text: 'Desde la cola de moderación.', cta: 'Ir a moderación', href: 'Moderacion.dc.html' },
+{ n: 4, title: 'Agenda la visita', text: 'Y cierra el negocio cuando se firme.', cta: 'Ver visitas', href: 'Visitas.dc.html' },
+],
+};
+}
+}
+</script>
+</body>
+</html>

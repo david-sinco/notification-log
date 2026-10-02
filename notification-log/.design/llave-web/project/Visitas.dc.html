@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Visitas · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 1600px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+<div style="flex: 1 1 232px; background: #101A16">
+<dc-import name="Nav" active="visits" hint-size="100%,760px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; padding: 36px clamp(16px, 4vw, 44px) 64px">
+<div style="max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px">
+
+<header style="display: flex; flex-direction: column; gap: 6px">
+<div style="font: 500 12px/1.4 'JetBrains Mono', monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #56615B">Arriendos</div>
+<h1 style="margin: 0; font: 700 clamp(30px, 4.4vw, 44px)/1.02 'Bricolage Grotesque', sans-serif; letter-spacing: -0.025em">Visitas</h1>
+<p style="margin: 0; color: #56615B">Visitante y anfitrión negocian por turnos hasta acordar una franja de una hora, en hora de Colombia.</p>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+
+<section aria-label="Lista de visitas" style="flex: 2 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 10px">
+<div role="group" aria-label="Filtrar por estado" style="display: flex; flex-wrap: wrap; gap: 6px">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="4">
+<button type="button" aria-pressed="{{f.pressed}}" onClick="{{f.pick}}" style="min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid {{f.border}}; background: {{f.bg}}; color: {{f.fg}}; font: 600 13px 'Onest', sans-serif; cursor: pointer">{{f.label}}</button>
+</sc-for>
+</div>
+<sc-for list="{{list}}" as="v" hint-placeholder-count="5">
+<button type="button" aria-pressed="{{v.pressed}}" onClick="{{v.pick}}" style="display: flex; flex-direction: column; gap: 6px; padding: 14px 16px; border-radius: 16px; border: 2px solid {{v.border}}; background: #FFFFFF; color: #101A16; font: 400 15px 'Onest', sans-serif; text-align: left; cursor: pointer">
+<span style="display: flex; justify-content: space-between; align-items: center; gap: 10px">
+<span style="font-weight: 600">{{v.visitor}}</span>
+<span style="display: inline-flex; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{v.pillBg}}; color: {{v.pillFg}}">{{v.statusLabel}}</span>
+</span>
+<span style="font-size: 14px; color: #56615B">{{v.listing}}</span>
+<span style="font-size: 13px; color: #56615B">{{v.summary}}</span>
+</button>
+</sc-for>
+</section>
+
+<section aria-label="Detalle de la visita" style="flex: 3 1 420px; min-width: 0; display: flex; flex-direction: column; gap: 16px; padding: 22px; border-radius: 18px; background: #FFFFFF; border: 1px solid #DFE4DD">
+
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<span style="display: inline-flex; padding: 4px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; background: {{cur.pillBg}}; color: {{cur.pillFg}}">{{cur.statusLabel}}</span>
+<span style="font: 400 12px 'JetBrains Mono', monospace; color: #56615B">{{cur.id}}</span>
+</div>
+<h2 style="margin: 0; font: 700 26px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">{{cur.heading}}</h2>
+<a href="Publicacion.dc.html" style="align-self: flex-start; font-size: 14px; font-weight: 600">{{cur.listing}}</a>
+</div>
+
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 10px">
+<div style="display: flex; flex-direction: column; padding: 12px 14px; border-radius: 12px; background: #F3F5F1">
+<span style="font-size: 12px; color: #56615B">Visitante</span>
+<span style="font-weight: 600">{{cur.visitor}}</span>
+</div>
+<div style="display: flex; flex-direction: column; padding: 12px 14px; border-radius: 12px; background: #F3F5F1">
+<span style="font-size: 12px; color: #56615B">Anfitrión</span>
+<span style="font-weight: 600">{{cur.host}}</span>
+</div>
+<div style="display: flex; flex-direction: column; padding: 12px 14px; border-radius: 12px; background: #F3F5F1">
+<span style="font-size: 12px; color: #56615B">Actúas como</span>
+<span style="font-weight: 600">{{roleLabel}}</span>
+</div>
+</div>
+
+<div role="status" style="display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; border-radius: 14px; background: {{bannerBg}}; color: {{bannerFg}}">
+<strong>{{bannerTitle}}</strong>
+<span style="font-size: 14px">{{bannerText}}</span>
+</div>
+
+<sc-if value="{{hasSlots}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">{{slotsTitle}}</h3>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr)); gap: 10px">
+<sc-for list="{{slots}}" as="sl" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; border: 1px solid #DFE4DD">
+<span style="display: flex; flex-direction: column">
+<span style="font: 700 20px/1.1 'Bricolage Grotesque', sans-serif">{{sl.day}}</span>
+<span style="font: 500 14px 'JetBrains Mono', monospace; color: #56615B">{{sl.range}}</span>
+</span>
+<sc-if value="{{myTurn}}" hint-placeholder-val="{{ true }}">
+<button type="button" onClick="{{sl.accept}}" style="min-height: 44px; border: 0; border-radius: 11px; background: #101A16; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Aceptar esta franja</button>
+</sc-if>
+</div>
+</sc-for>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<sc-for list="{{actions}}" as="a" hint-placeholder-count="2">
+<button type="button" onClick="{{a.run}}" style="min-height: 46px; padding: 0 18px; border-radius: 12px; border: 1px solid {{a.border}}; background: {{a.bg}}; color: {{a.fg}}; font: 600 14px 'Onest', sans-serif; cursor: pointer">{{a.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{showPicker}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 14px; padding: 18px; border-radius: 16px; background: #101A16; color: #FFFFFF">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<h3 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Proponer otras franjas</h3>
+<span style="font-size: 14px; color: #B9C6BD">Hasta 3 franjas de una hora, entre las 7:00 y las 19:00, con al menos 24 horas de antelación y hasta 14 días. Reemplazan a las actuales.</span>
+</div>
+<div role="group" aria-label="Día" style="display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px">
+<sc-for list="{{days}}" as="d" hint-placeholder-count="7">
+<button type="button" aria-pressed="{{d.pressed}}" onClick="{{d.pick}}" style="flex: none; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 64px; min-height: 64px; border-radius: 14px; border: 1px solid {{d.border}}; background: {{d.bg}}; color: {{d.fg}}; font-family: 'Onest', sans-serif; cursor: pointer">
+<span style="font-size: 12px">{{d.week}}</span>
+<span style="font: 700 20px/1.1 'Bricolage Grotesque', sans-serif">{{d.num}}</span>
+</button>
+</sc-for>
+</div>
+<div role="group" aria-label="Hora de inicio" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 6px">
+<sc-for list="{{hours}}" as="h" hint-placeholder-count="12">
+<button type="button" aria-pressed="{{h.pressed}}" onClick="{{h.toggle}}" style="min-height: 44px; border-radius: 11px; border: 1px solid {{h.border}}; background: {{h.bg}}; color: {{h.fg}}; font: 500 14px 'JetBrains Mono', monospace; cursor: pointer">{{h.label}}</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 14px; font-weight: 600">{{pickedCount}} de 3</span>
+<sc-for list="{{picked}}" as="p" hint-placeholder-count="2">
+<button type="button" onClick="{{p.remove}}" aria-label="{{p.aria}}" style="min-height: 44px; padding: 0 12px; border-radius: 999px; border: 0; background: #C9F26B; color: #101A16; font: 600 13px 'Onest', sans-serif; cursor: pointer">{{p.label}} ×</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end">
+<button type="button" onClick="{{closePanel}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid #3A4A41; background: transparent; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Cancelar</button>
+<button type="button" onClick="{{sendProposal}}" disabled="{{noPicked}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0; background: #C9F26B; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer; opacity: {{sendOpacity}}">Enviar propuesta</button>
+</div>
+</div>
+</sc-if>
+
+<sc-if value="{{showCancel}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 18px; border-radius: 16px; border: 2px solid #B42318">
+<h3 style="margin: 0; font: 700 20px/1.2 'Bricolage Grotesque', sans-serif">Cancelar visita</h3>
+<label for="cancel-reason" style="font-size: 14px; color: #56615B">Indica el motivo. Cancelar con menos de 12 horas cuenta como cancelación tardía.</label>
+<textarea id="cancel-reason" rows="3" style="padding: 12px 14px; border-radius: 12px; border: 1px solid #C5CCC4; font: 400 15px 'Onest', sans-serif; color: #101A16; resize: vertical"></textarea>
+<div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end">
+<button type="button" onClick="{{closePanel}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">Volver</button>
+<button type="button" onClick="{{confirmCancel}}" style="min-height: 44px; padding: 0 18px; border-radius: 12px; border: 0; background: #B42318; color: #FFFFFF; font: 600 14px 'Onest', sans-serif; cursor: pointer">Cancelar visita</button>
+</div>
+</div>
+</sc-if>
+
+<div style="display: flex; flex-direction: column; gap: 10px">
+<h3 style="margin: 0; font-size: 14px; font-weight: 600">Historial</h3>
+<ol style="margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column">
+<sc-for list="{{history}}" as="e" hint-placeholder-count="3">
+<li style="display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid #EEF1EC">
+<span aria-hidden="true" style="flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 999px; background: {{e.dot}}"></span>
+<span style="display: flex; flex-direction: column">
+<span style="font-weight: 600">{{e.who}}</span>
+<span style="font-size: 14px; color: #56615B">{{e.text}}</span>
+</span>
+</li>
+</sc-for>
+</ol>
+</div>
+
+</section>
+</div>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"actuoComo":{"editor":"enum","options":["anfitrion","visitante"],"default":"anfitrion","section":"Visita"},"$preview":{"width":1360,"height":1600}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = {
+selected: 'v-81c2', filter: 'all', panel: null, day: 0, picked: [],
+visits: [
+{ id: 'v-81c2', visitor: 'Laura Montoya', host: 'Camila Ramírez', listing: 'Apartamento en Laureles, Medellín', status: 'AwaitingHost', respondBy: 'vie 2 oct, 18:00',
+slots: [['Sáb 3 oct', 10], ['Sáb 3 oct', 15], ['Dom 4 oct', 11]],
+history: [['Laura Montoya · visitante', 'Pidió la visita y propuso 3 franjas.', 'visitor']] },
+{ id: 'v-3f07', visitor: 'Andrés Pérez', host: 'Camila Ramírez', listing: 'Apartamento en Laureles, Medellín', status: 'AwaitingVisitor', respondBy: 'sáb 3 oct, 09:00',
+slots: [['Lun 5 oct', 17], ['Mar 6 oct', 8]],
+history: [['Andrés Pérez · visitante', 'Pidió la visita y propuso 2 franjas.', 'visitor'], ['Camila Ramírez · anfitrión', 'Propuso otras 2 franjas.', 'host']] },
+{ id: 'v-a9d4', visitor: 'Sofía Cárdenas', host: 'Camila Ramírez', listing: 'Apartaestudio en Chapinero, Bogotá', status: 'Scheduled', scheduled: ['Jue 1 oct', 9], slots: [],
+history: [['Sofía Cárdenas · visitante', 'Pidió la visita y propuso 1 franja.', 'visitor'], ['Camila Ramírez · anfitrión', 'Aceptó jue 1 oct, 09:00.', 'host']] },
+{ id: 'v-5521', visitor: 'Mateo Rojas', host: 'Inmobiliaria Andes', listing: 'Apartamento en El Poblado, Medellín', status: 'Cancelled', slots: [],
+history: [['Mateo Rojas · visitante', 'Pidió la visita.', 'visitor'], ['Mateo Rojas · visitante', 'Canceló: «Ya encontré otro inmueble». Cancelación tardía.', 'visitor']] },
+{ id: 'v-07be', visitor: 'Valentina Gil', host: 'Julián Ortiz', listing: 'Apartamento en Granada, Cali', status: 'Expired', slots: [],
+history: [['Valentina Gil · visitante', 'Pidió la visita.', 'visitor'], ['Sistema', 'Venció: el anfitrión no respondió a tiempo.', 'system']] },
+],
+};
+}
+patch(id, change, entry) {
+this.setState({ panel: null, picked: [], visits: this.state.visits.map((v) => v.id === id ? Object.assign({}, v, change, { history: v.history.concat([entry]) }) : v) });
+}
+renderVals() {
+const s = this.state;
+const role = (this.props.actuoComo ?? 'anfitrion') === 'anfitrion' ? 'host' : 'visitor';
+const meta = {
+AwaitingHost: ['Espera al anfitrión', '#FCEBD2', '#8A4300'], AwaitingVisitor: ['Espera al visitante', '#E4EBFD', '#1D3FA8'], Scheduled: ['Agendada', '#DDF3E6', '#0B5C3F'],
+Completed: ['Realizada', '#101A16', '#FFFFFF'], NoShow: ['No asistió', '#FCE7E4', '#B42318'], Cancelled: ['Cancelada', '#FCE7E4', '#B42318'], Expired: ['Vencida', '#E9ECE7', '#3F4A44'],
+};
+const range = (h) => String(h).padStart(2, '0') + ':00 – ' + String(h + 1).padStart(2, '0') + ':00';
+const open = (v) => v.status === 'AwaitingHost' || v.status === 'AwaitingVisitor';
+const group = (v) => open(v) ? 'open' : v.status === 'Scheduled' ? 'scheduled' : 'closed';
+const view = (v) => ({
+id: v.id, visitor: v.visitor, host: v.host, listing: v.listing, statusLabel: meta[v.status][0], pillBg: meta[v.status][1], pillFg: meta[v.status][2],
+summary: v.scheduled ? v.scheduled[0] + ' · ' + range(v.scheduled[1]) : open(v) ? v.slots.length + ' franjas propuestas · responde antes del ' + v.respondBy : 'Sin franja agendada',
+heading: v.scheduled ? 'Visita el ' + v.scheduled[0].toLowerCase() + ', ' + range(v.scheduled[1]) : 'Visita por acordar',
+});
+const cur = s.visits.find((v) => v.id === s.selected);
+const me = role === 'host' ? cur.host : cur.visitor;
+const myTurn = (cur.status === 'AwaitingHost' && role === 'host') || (cur.status === 'AwaitingVisitor' && role === 'visitor');
+const whoLabel = role === 'host' ? cur.host + ' · anfitrión' : cur.visitor + ' · visitante';
+const btn = (label, kind, run) => ({ label, run, bg: kind === 'primary' ? '#101A16' : '#FFFFFF', fg: kind === 'primary' ? '#FFFFFF' : kind === 'danger' ? '#B42318' : '#101A16', border: kind === 'primary' ? '#101A16' : kind === 'danger' ? '#E3A7A0' : '#C5CCC4' });
+const actions = [];
+if (myTurn) actions.push(btn('Proponer otras franjas', 'ghost', () => this.setState({ panel: 'slots', picked: [] })));
+if (cur.status === 'Scheduled' && role === 'host') {
+actions.push(btn('Se realizó', 'primary', () => this.patch(cur.id, { status: 'Completed' }, [whoLabel, 'Marcó la visita como realizada.', 'host'])));
+actions.push(btn('No asistió', 'ghost', () => this.patch(cur.id, { status: 'NoShow' }, [whoLabel, 'Marcó que el visitante no asistió.', 'host'])));
+}
+if (open(cur) || cur.status === 'Scheduled') actions.push(btn('Cancelar visita', 'danger', () => this.setState({ panel: 'cancel' })));
+const banners = {
+AwaitingHost: myTurn ? ['Te toca responder antes del ' + cur.respondBy, 'Acepta una de las franjas, propone otras o cancela. Si no respondes, la visita vence.'] : ['Le toca responder al anfitrión antes del ' + cur.respondBy, 'Si no responde, la visita vence.'],
+AwaitingVisitor: myTurn ? ['Te toca responder antes del ' + cur.respondBy, 'Acepta una de las franjas, propone otras o cancela. Si no respondes, la visita vence.'] : ['Le toca responder al visitante antes del ' + cur.respondBy, 'Si no responde, la visita vence.'],
+Scheduled: ['Visita agendada', 'El anfitrión registra el resultado cuando empieza; si no lo hace, se da por realizada 72 horas después de que termine.'],
+Completed: ['Visita realizada', 'El anfitrión confirmó que la visita se hizo.'],
+NoShow: ['El visitante no asistió', 'El anfitrión registró la inasistencia.'],
+Cancelled: ['Visita cancelada', 'Ya no admite cambios.'],
+Expired: ['La visita venció', 'Nadie respondió dentro del plazo.'],
+}[cur.status];
+const strong = myTurn;
+const weekdays = ['Sáb', 'Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie'];
+const days = Array.from({ length: 14 }, (_, i) => ({ week: weekdays[i % 7], num: 3 + i, label: weekdays[i % 7] + ' ' + (3 + i) + ' oct' }));
+const key = (d, h) => d + '|' + h;
+const full = s.picked.length >= 3;
+return {
+filters: [['all', 'Todas'], ['open', 'Por responder'], ['scheduled', 'Agendadas'], ['closed', 'Cerradas']].map(([k, label]) => ({
+label, pressed: s.filter === k ? 'true' : 'false', bg: s.filter === k ? '#101A16' : '#FFFFFF', fg: s.filter === k ? '#FFFFFF' : '#101A16', border: s.filter === k ? '#101A16' : '#C5CCC4',
+pick: () => this.setState({ filter: k }),
+})),
+list: s.visits.filter((v) => s.filter === 'all' || group(v) === s.filter).map((v) => Object.assign(view(v), {
+pressed: v.id === s.selected ? 'true' : 'false', border: v.id === s.selected ? '#101A16' : '#DFE4DD',
+pick: () => this.setState({ selected: v.id, panel: null, picked: [] }),
+})),
+cur: view(cur),
+roleLabel: (role === 'host' ? 'Anfitrión' : 'Visitante') + ' · ' + me,
+myTurn,
+bannerTitle: banners[0], bannerText: banners[1],
+bannerBg: strong ? '#C9F26B' : '#F3F5F1', bannerFg: '#101A16',
+hasSlots: cur.slots.length > 0 && open(cur),
+slotsTitle: 'Franjas propuestas',
+slots: cur.slots.map(([day, h]) => ({
+day, range: range(h),
+accept: () => this.patch(cur.id, { status: 'Scheduled', scheduled: [day, h], slots: [] }, [whoLabel, 'Aceptó ' + day.toLowerCase() + ', ' + range(h) + '.', role]),
+})),
+actions,
+showPicker: s.panel === 'slots',
+showCancel: s.panel === 'cancel',
+closePanel: () => this.setState({ panel: null, picked: [] }),
+days: days.map((d, i) => ({
+week: d.week, num: d.num, pressed: s.day === i ? 'true' : 'false',
+bg: s.day === i ? '#C9F26B' : '#1B2822', fg: s.day === i ? '#101A16' : '#FFFFFF', border: s.day === i ? '#C9F26B' : '#3A4A41',
+pick: () => this.setState({ day: i }),
+})),
+hours: Array.from({ length: 12 }, (_, i) => 7 + i).map((h) => {
+const on = s.picked.includes(key(s.day, h));
+return {
+label: String(h).padStart(2, '0') + ':00', pressed: on ? 'true' : 'false',
+bg: on ? '#C9F26B' : 'transparent', fg: on ? '#101A16' : full ? '#7E8F85' : '#FFFFFF', border: on ? '#C9F26B' : '#3A4A41',
+toggle: () => this.setState({ picked: on ? s.picked.filter((k) => k !== key(s.day, h)) : full ? s.picked : s.picked.concat([key(s.day, h)]) }),
+};
+}),
+pickedCount: s.picked.length,
+picked: s.picked.map((k) => {
+const [d, h] = k.split('|').map(Number);
+const label = days[d].label + ' · ' + String(h).padStart(2, '0') + ':00';
+return { label, aria: 'Quitar ' + label, remove: () => this.setState({ picked: s.picked.filter((x) => x !== k) }) };
+}),
+noPicked: s.picked.length === 0,
+sendOpacity: s.picked.length === 0 ? 0.45 : 1,
+sendProposal: () => this.patch(cur.id, {
+status: role === 'host' ? 'AwaitingVisitor' : 'AwaitingHost', respondBy: 'dom 4 oct, 18:00',
+slots: s.picked.map((k) => { const [d, h] = k.split('|').map(Number); return [days[d].label, h]; }),
+}, [whoLabel, 'Propuso otras ' + s.picked.length + ' franjas.', role]),
+confirmCancel: () => this.patch(cur.id, { status: 'Cancelled', slots: [] }, [whoLabel, 'Canceló la visita.', role]),
+history: cur.history.map(([who, text, by]) => ({ who, text, dot: by === 'host' ? '#0B6B4A' : by === 'system' ? '#8A948D' : '#1D3FA8' })),
+};
+}
+}
+</script>
+</body>
+</html>

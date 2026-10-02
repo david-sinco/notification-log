@@ -1,0 +1,41 @@
+{
+  "v": 3,
+  "createdOnFiles": { "v": 1, "at": "2026-10-02T15:00:00Z" },
+  "title": "Rediseño Web NotificationLog",
+  "launch": { "view": "canvas" },
+  "pages": [],
+  "boards": {
+    "Main.dc.html": { "x": 0, "y": 0, "w": 1360, "h": 1500, "title": "Panel", "expand": "fill" },
+    "Publicaciones.dc.html": { "x": 1440, "y": 0, "w": 1360, "h": 1500, "title": "Publicaciones", "expand": "fill", "is_interactive": true },
+    "Publicacion.dc.html": { "x": 2880, "y": 0, "w": 1360, "h": 2000, "title": "Publicación · detalle y fotos", "expand": "fill", "is_interactive": true },
+    "Visitas.dc.html": { "x": 4320, "y": 0, "w": 1360, "h": 1600, "title": "Visitas · negociación de franjas", "expand": "fill", "is_interactive": true },
+    "Moderacion.dc.html": { "x": 0, "y": 2620, "w": 1360, "h": 1700, "title": "Moderación", "expand": "fill", "is_interactive": true },
+    "Propietarios.dc.html": { "x": 1440, "y": 2620, "w": 1360, "h": 1300, "title": "Propietarios", "expand": "fill", "is_interactive": true },
+    "Visitantes.dc.html": { "x": 2880, "y": 2620, "w": 1360, "h": 1300, "title": "Visitantes", "expand": "fill" },
+    "Nav.dc.html": { "x": 4320, "y": 2620, "w": 260, "h": 900, "title": "Navegación (componente)" },
+    "Triggers.dc.html": { "x": 0, "y": 4440, "w": 1360, "h": 1600, "title": "Triggers", "expand": "fill", "is_interactive": true },
+    "Plantillas.dc.html": { "x": 1440, "y": 4440, "w": 1360, "h": 1700, "title": "Plantillas · editor y versiones", "expand": "fill", "is_interactive": true },
+    "Envios.dc.html": { "x": 2880, "y": 4440, "w": 1360, "h": 1400, "title": "Envíos", "expand": "fill", "is_interactive": true },
+    "Destinatarios.dc.html": { "x": 4320, "y": 4440, "w": 1360, "h": 1300, "title": "Destinatarios", "expand": "fill", "is_interactive": true },
+    "Usuarios.dc.html": { "x": 0, "y": 6260, "w": 1360, "h": 1400, "title": "Usuarios y mi perfil", "expand": "fill", "is_interactive": true },
+    "Acceso.dc.html": { "x": 1440, "y": 6260, "w": 1360, "h": 900, "title": "Acceso · ingreso, registro y verificación", "expand": "fill", "is_interactive": true }
+  },
+  "order": [
+    "Main.dc.html",
+    "Publicaciones.dc.html",
+    "Publicacion.dc.html",
+    "Visitas.dc.html",
+    "Moderacion.dc.html",
+    "Propietarios.dc.html",
+    "Visitantes.dc.html",
+    "Nav.dc.html",
+    "Triggers.dc.html",
+    "Plantillas.dc.html",
+    "Envios.dc.html",
+    "Destinatarios.dc.html",
+    "Usuarios.dc.html",
+    "Acceso.dc.html"
+  ],
+  "notes": {},
+  "designSystems": []
+}

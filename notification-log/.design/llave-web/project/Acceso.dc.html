@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Acceso · Llave</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=Onest:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#0B6B4A}a:hover{color:#084D36}
+</style>
+</helmet>
+<div style="display: flex; flex-wrap: wrap; min-height: 900px; background: #F3F5F1; color: #101A16; font-family: 'Onest', system-ui, sans-serif; font-size: 15px; line-height: 1.45">
+
+<div style="flex: 1 1 380px; display: flex; flex-direction: column; justify-content: space-between; gap: 40px; padding: clamp(24px, 5vw, 56px); box-sizing: border-box; background: #101A16; color: #FFFFFF">
+<div style="display: flex; align-items: center; gap: 10px">
+<span style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 12px; background: #C9F26B; color: #101A16">
+<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="15" r="4"></circle><path d="M11 12l9-9M16 7l3 3M14 9l2 2"></path></svg>
+</span>
+<span style="font: 700 24px/1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">Llave</span>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px">
+<h1 style="margin: 0; font: 700 clamp(36px, 6vw, 68px)/0.98 'Bricolage Grotesque', sans-serif; letter-spacing: -0.03em">Del anuncio a la entrega de la <span style="color: #C9F26B">llave</span>.</h1>
+<p style="margin: 0; max-width: 440px; color: #B9C6BD">Publica inmuebles, acuerda visitas y recibe un aviso en cada paso.</p>
+</div>
+<span style="font: 500 11px/1.6 'JetBrains Mono', monospace; letter-spacing: 0.1em; text-transform: uppercase; color: #9FB0A6">Backoffice</span>
+</div>
+
+<main style="flex: 1 1 380px; min-width: 0; display: flex; align-items: center; justify-content: center; padding: clamp(24px, 5vw, 56px); box-sizing: border-box">
+<div style="width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 22px">
+
+<div role="tablist" aria-label="Acceso" style="display: flex; gap: 4px; padding: 4px; border-radius: 14px; background: #E4E8E2">
+<sc-for list="{{tabs}}" as="t" hint-placeholder-count="2">
+<button type="button" role="tab" aria-selected="{{t.selected}}" onClick="{{t.pick}}" style="flex: 1; min-height: 44px; border: 0; border-radius: 11px; background: {{t.bg}}; color: #101A16; font: 600 15px 'Onest', sans-serif; cursor: pointer">{{t.label}}</button>
+</sc-for>
+</div>
+
+<sc-if value="{{isSignIn}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 30px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">Ingresa a tu cuenta</h2>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="si-id" style="font-size: 13px; font-weight: 600">Correo o teléfono</label>
+<input id="si-id" type="text" autocomplete="username" placeholder="nombre@correo.co" style="min-height: 50px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 16px 'Onest', sans-serif; color: #101A16">
+</div>
+<div role="group" aria-label="Método" style="display: flex; gap: 8px">
+<sc-for list="{{methods}}" as="m" hint-placeholder-count="2">
+<button type="button" aria-pressed="{{m.pressed}}" onClick="{{m.pick}}" style="flex: 1; min-height: 44px; border-radius: 999px; border: 1px solid {{m.border}}; background: {{m.bg}}; color: {{m.fg}}; font: 600 13px 'Onest', sans-serif; cursor: pointer">{{m.label}}</button>
+</sc-for>
+</div>
+<sc-if value="{{withPassword}}" hint-placeholder-val="{{ true }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="si-pass" style="font-size: 13px; font-weight: 600">Contraseña</label>
+<input id="si-pass" type="password" autocomplete="current-password" style="min-height: 50px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 16px 'Onest', sans-serif; color: #101A16">
+</div>
+</sc-if>
+<sc-if value="{{codeSent}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="si-code" style="font-size: 13px; font-weight: 600">Código de 6 dígitos</label>
+<input id="si-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" style="min-height: 56px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 500 26px 'JetBrains Mono', monospace; letter-spacing: 0.4em; text-align: center; color: #101A16">
+<span style="font-size: 13px; color: #56615B">Lo enviamos al correo o teléfono que escribiste.</span>
+</div>
+</sc-if>
+<button type="button" onClick="{{signInAction}}" style="min-height: 50px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 15px 'Onest', sans-serif; cursor: pointer">{{signInLabel}}</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isRegister}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 30px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">Crea tu cuenta</h2>
+<div role="radiogroup" aria-label="¿Qué quieres hacer?" style="display: flex; gap: 8px">
+<sc-for list="{{intents}}" as="r" hint-placeholder-count="2">
+<button type="button" role="radio" aria-checked="{{r.checked}}" onClick="{{r.pick}}" style="flex: 1; display: flex; flex-direction: column; gap: 2px; min-height: 72px; padding: 12px 14px; border-radius: 14px; border: 2px solid {{r.border}}; background: {{r.bg}}; color: #101A16; font-family: 'Onest', sans-serif; text-align: left; cursor: pointer">
+<span style="font-weight: 600; font-size: 15px">{{r.label}}</span>
+<span style="font-size: 13px; color: #3F4A44">{{r.hint}}</span>
+</button>
+</sc-for>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="re-name" style="font-size: 13px; font-weight: 600">Nombre</label>
+<input id="re-name" type="text" autocomplete="name" style="min-height: 50px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 16px 'Onest', sans-serif; color: #101A16">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="re-id" style="font-size: 13px; font-weight: 600">Correo o teléfono</label>
+<input id="re-id" type="text" autocomplete="username" style="min-height: 50px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 16px 'Onest', sans-serif; color: #101A16">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="re-pass" style="font-size: 13px; font-weight: 600">Contraseña</label>
+<input id="re-pass" type="password" autocomplete="new-password" style="min-height: 50px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 400 16px 'Onest', sans-serif; color: #101A16">
+</div>
+<label style="display: flex; align-items: flex-start; gap: 10px; min-height: 44px; cursor: pointer">
+<input type="checkbox" defaultChecked="{{ true }}" style="flex: none; width: 20px; height: 20px; margin-top: 2px; accent-color: #101A16">
+<span>Acepto recibir avisos sobre mis publicaciones y visitas.</span>
+</label>
+<span style="font-size: 13px; color: #56615B">Idioma es-CO y zona America/Bogota, tomados de tu navegador.</span>
+<button type="button" onClick="{{goVerify}}" style="min-height: 50px; border: 0; border-radius: 12px; background: #101A16; color: #FFFFFF; font: 600 15px 'Onest', sans-serif; cursor: pointer">Crear cuenta</button>
+</div>
+</sc-if>
+
+<sc-if value="{{isVerify}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font: 700 30px/1.1 'Bricolage Grotesque', sans-serif; letter-spacing: -0.02em">Verifica tu cuenta</h2>
+<p style="margin: 0; color: #56615B">Escribe el código de 6 dígitos que te enviamos para activar la cuenta.</p>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<label for="ve-code" style="font-size: 13px; font-weight: 600">Código de verificación</label>
+<input id="ve-code" type="text" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" style="min-height: 60px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; font: 500 28px 'JetBrains Mono', monospace; letter-spacing: 0.4em; text-align: center; color: #101A16">
+</div>
+<a href="Main.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 50px; border-radius: 12px; background: #101A16; color: #FFFFFF; font-weight: 600; text-decoration: none">Verificar y entrar</a>
+<div aria-live="polite" style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px">
+<span style="font-size: 14px; color: #56615B">{{resendText}}</span>
+<button type="button" onClick="{{resend}}" style="min-height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid #C5CCC4; background: #FFFFFF; color: #101A16; font: 600 14px 'Onest', sans-serif; cursor: pointer">Reenviar código</button>
+</div>
+</div>
+</sc-if>
+
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1360,"height":900}}'>
+class Component extends DCLogic {
+constructor(props) {
+super(props);
+this.state = { step: 'signin', method: 'password', codeSent: false, intent: 'Propietario', resent: false };
+}
+renderVals() {
+const s = this.state;
+const withCode = s.method === 'code';
+return {
+tabs: [['signin', 'Ingresar'], ['register', 'Crear cuenta']].map(([k, label]) => {
+const on = s.step === k || (k === 'register' && s.step === 'verify');
+return { label, selected: on ? 'true' : 'false', bg: on ? '#FFFFFF' : 'transparent', pick: () => this.setState({ step: k, codeSent: false, resent: false }) };
+}),
+isSignIn: s.step === 'signin', isRegister: s.step === 'register', isVerify: s.step === 'verify',
+methods: [['password', 'Con contraseña'], ['code', 'Con código']].map(([k, label]) => ({
+label, pressed: s.method === k ? 'true' : 'false', bg: s.method === k ? '#101A16' : '#FFFFFF', fg: s.method === k ? '#FFFFFF' : '#101A16', border: s.method === k ? '#101A16' : '#C5CCC4',
+pick: () => this.setState({ method: k, codeSent: false }),
+})),
+withPassword: !withCode,
+codeSent: withCode && s.codeSent,
+signInLabel: !withCode ? 'Ingresar' : s.codeSent ? 'Ingresar con el código' : 'Enviarme un código',
+signInAction: () => { if (withCode && !s.codeSent) this.setState({ codeSent: true }); },
+intents: [['Propietario', 'Quiero publicar', 'Soy propietario'], ['Visitor', 'Quiero visitar', 'Busco inmueble']].map(([k, label, hint]) => ({
+label, hint, checked: s.intent === k ? 'true' : 'false', border: s.intent === k ? '#101A16' : '#DFE4DD', bg: s.intent === k ? '#C9F26B' : '#FFFFFF',
+pick: () => this.setState({ intent: k }),
+})),
+goVerify: () => this.setState({ step: 'verify', resent: false }),
+resendText: s.resent ? 'Código reenviado. Revisa tu bandeja.' : '¿No llegó?',
+resend: () => this.setState({ resent: true }),
+};
+}
+}
+</script>
+</body>
+</html>
