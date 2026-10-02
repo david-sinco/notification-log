@@ -3,7 +3,6 @@ using JasperFx.Events.Daemon;
 using Marten;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using NotificationLog.RentalService.Application.Abstractions;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Visitors.Queries;
@@ -16,7 +15,6 @@ using NotificationLog.RentalService.Infrastructure.Messaging;
 using NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
 using NotificationLog.RentalService.Infrastructure.Persistence;
 using NotificationLog.RentalService.Infrastructure.ReadModels;
-using NotificationLog.RentalService.Infrastructure.Scheduling;
 using Wolverine.Marten;
 using NotificationLog.RentalService.Application.Common.Producers;
 
@@ -47,7 +45,6 @@ public static class DependencyInjection
         services.AddScoped<IVisitorReadModel, MartenVisitorReadModel>();
         services.AddScoped<IVisitReadModel, MartenVisitReadModel>();
 
-        services.AddScoped<ICommandScheduler, WolverineCommandScheduler>();
         services.AddScoped<INotificationProducer, WolverineNotificationDispatcher>();
         services.AddScoped<IAccountProvisioner, WolverineAccountProvisioner>();
 

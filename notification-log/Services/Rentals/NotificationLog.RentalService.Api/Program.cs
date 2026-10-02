@@ -37,7 +37,6 @@ if (app.Environment.IsDevelopment())
             .WithPkce(Pkce.Sha256)
             .WithRedirectUri($"{context.Request.Scheme}://{context.Request.Host}/scalar/")
             .WithSelectedScopes(["openid", "roles", OidcScope.Rentals.ToScopeName()])));
-    app.MapDevIdentity();
 }
 
 app.MapDefaultEndpoints();

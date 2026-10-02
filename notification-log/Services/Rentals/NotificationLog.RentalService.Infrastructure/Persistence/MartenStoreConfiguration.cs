@@ -2,8 +2,6 @@ using Domain.Shared.EventSourcing;
 using JasperFx.Events.Projections;
 using Marten;
 using NotificationLog.RentalService.Domain.Listings;
-using NotificationLog.RentalService.Infrastructure.DecisionProjections;
-using NotificationLog.RentalService.Infrastructure.IdentityReplica;
 using NotificationLog.RentalService.Infrastructure.ReadModels;
 using Weasel.Core;
 
@@ -25,7 +23,6 @@ internal static class MartenStoreConfiguration
         options.Projections.Add(new VisitorViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitViewProjection(), ProjectionLifecycle.Inline);
 
-        options.Schema.For<PersonVerificationDocument>().Index(x => x.UserId);
         options.Schema.For<OwnerDocumentReservation>();
         options.Schema.For<OwnerNitReservation>();
         options.Schema.For<VisitorDocumentReservation>();
