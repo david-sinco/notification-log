@@ -153,7 +153,7 @@ error contract: `NotFoundException` → 404, `AppValidationException` → 400
 (`ValidationProblemDetails`), `DomainException` → **422**, anything else → 500.
 
 `NotificationLog.Web` never references the domain projects. It calls the API through four typed
-clients (`Api/*ApiClient.cs`) whose base address is `https+http://apiservice`, resolved by Aspire
+clients (`Api/*ApiClient.cs`) whose base address is `https+http://notification`, resolved by Aspire
 service discovery. Every client calls `response.EnsureSuccessAsync(ct)`, which parses the
 ProblemDetails body and throws `ApiException` — the pages render that via `ErrorAlert`.
 

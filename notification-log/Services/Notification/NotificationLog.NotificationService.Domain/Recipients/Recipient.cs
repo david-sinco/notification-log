@@ -53,6 +53,8 @@ public sealed class Recipient : AggregateRoot
         if (!string.IsNullOrWhiteSpace(timeZone)) TimeZone = timeZone.Trim();
     }
 
+    public void ChangeNotificationConsent(bool acceptsNotifications) => AcceptsNotifications = acceptsNotifications;
+
     // ---------- Canales ----------
 
     public void ChangeEmail(string? email) => Email = NormalizeEmail(email);

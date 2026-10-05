@@ -6,15 +6,34 @@ option csharp_namespace = "NotificationLog.Contracts.Identity";
 
 import "google/protobuf/timestamp.proto";
 
+// UPSERT, no "solo alta". A pesar del nombre, este mensaje no significa "se acaba de crear un
+// usuario": es un snapshot completo del perfil (event-carried state transfer) y el consumidor lo
+// aplica como upsert por user_id — si no conoce al usuario lo crea, y si ya lo conoce reemplaza
+// TODOS sus campos con los de este mensaje. Identity lo publica al verificar una cuenta y también
+// cuando el alta por la cola identity-accounts reescribe el perfil de una que ya existía.
+//
+// Consecuencias para quien lo produce:
+//   - Siempre va el perfil entero. No hay campos "sin cambio": lo que no venga se pierde.
+//   - Recibirlo dos veces deja el mismo estado, así que reintentar es inofensivo.
+//   - No hay número de versión por usuario: si dos mensajes del mismo user_id llegan en desorden,
+//     gana el último que se procesa, no el más reciente según occurred_at.
 message UserCreated {
   string event_id = 1;
   google.protobuf.Timestamp occurred_at = 2;
   int32 schema_version = 3;
 
+  // Clave del upsert. string y no un tipo Guid nativo (protobuf no tiene): se parsea del lado del
+  // consumidor.
   string user_id = 10;
+
+  // email y phone llevan solo el valor VERIFICADO. Cadena vacía significa "no hay valor
+  // verificado", nunca "sin cambio": el upsert borra el que el consumidor tuviera guardado.
   string name = 11;
   string email = 12;
   string phone = 13;
+
+  // locale y time_zone son la excepción: vacíos NO pisan el valor guardado; el consumidor conserva
+  // el que tenía (o su valor por defecto si el usuario es nuevo).
   string locale = 14;
   string time_zone = 15;
   bool accepts_notifications = 16;

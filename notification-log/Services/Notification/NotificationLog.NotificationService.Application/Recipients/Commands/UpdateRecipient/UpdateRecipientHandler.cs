@@ -22,9 +22,15 @@ public sealed class UpdateRecipientHandler
         var recipient = await _recipients.GetByIdAsync(cmd.RecipientId, ct)
             ?? throw new NotFoundException(nameof(Recipient), cmd.RecipientId);
 
-        // Vacío no significa "no tocar": significa que el dato ya no está verificado.
-        recipient.ChangeEmail(cmd.Email);
-        recipient.ChangePhone(cmd.Phone);
+        if (cmd.Name is not null)
+            recipient.ChangeName(cmd.Name);
+
+        recipient.ChangeEmail(cmd.IsEmailVerified ? cmd.Email : null);
+        recipient.ChangePhone(cmd.IsPhoneVerified ? cmd.Phone : null);
+        recipient.ChangeLocalization(cmd.Locale, cmd.TimeZone);
+
+        if (cmd.AcceptsNotifications is { } acceptsNotifications)
+            recipient.ChangeNotificationConsent(acceptsNotifications);
 
         await _uow.SaveChangesAsync(ct);
     }

@@ -10,7 +10,13 @@ public static class PersonVerificationChangedHandler
         => syncService.HandleAsync(
             new UpdateRecipientCommand(
                 RecipientId: Guid.Parse(message.UserId),
+                Name: null,
                 Email: message.Email,
-                Phone: message.Phone),
+                IsEmailVerified: !string.IsNullOrWhiteSpace(message.Email),
+                Phone: message.Phone,
+                IsPhoneVerified: !string.IsNullOrWhiteSpace(message.Phone),
+                Locale: null,
+                TimeZone: null,
+                AcceptsNotifications: null),
             ct);
 }

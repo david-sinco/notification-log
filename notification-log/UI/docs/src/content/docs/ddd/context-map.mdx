@@ -57,11 +57,11 @@ Dos decisiones de este contrato evitan acoplar a los consumidores a los detalles
 - **`schema_version`:** permite evolucionar el contrato sin romper consumidores viejos.
 - **Snapshot, no delta:** el mensaje trae el perfil completo del usuario. Si se pierde uno, el siguiente trae todo de nuevo — ningún consumidor queda permanentemente desincronizado. Es lo que se llama *event-carried state transfer*.
 
-<Callout kind="honesto" title="Un pendiente real de este contrato">
+<Callout kind="honesto" title="Un nombre que quedó corto">
 
-`UserCreated` es hoy el único mensaje que lleva el perfil completo, y `RecipientSyncService` lo **ignora si el destinatario ya existe**. Consecuencia: cambiar el nombre, el idioma o la zona horaria de una cuenta ya creada no llega nunca a Notifications.
+`UserCreated` es el único mensaje que lleva el perfil completo, y `RecipientSyncService` lo aplica como ***upsert***: crea el destinatario si no existe y, si ya existe, reemplaza su perfil con el del mensaje. Al principio lo ignoraba cuando el destinatario ya existía, y cambiar el nombre, el idioma o la zona horaria de una cuenta ya creada no llegaba nunca a Notifications.
 
-Falta un evento de actualización de perfil, o que el consumidor haga *upsert*. Está anotado en `notification-log/todo.md`, y es un buen ejemplo de que un Published Language se diseña por casos de uso, no de una vez: el primer mensaje cubrió el alta y nadie había necesitado todavía el cambio.
+El nombre del mensaje sigue diciendo "creado" aunque ya signifique "este es el perfil vigente"; por eso la semántica de upsert está escrita en el propio `.proto`. Es un buen ejemplo de que un Published Language se diseña por casos de uso, no de una vez: el primer mensaje cubrió el alta y nadie había necesitado todavía el cambio.
 
 </Callout>
 
@@ -116,7 +116,7 @@ Fíjate en lo pequeño que es. Un ACL bien hecho es aburrido por diseño: **no t
         <text x="775" y="105" text-anchor="middle" font-size="10" font-weight="700" fill="#14532d">Recipient</text>
         <text x="775" y="123" text-anchor="middle" font-size="8.5" fill="#14532d">(propio)</text>
 
-        <text x="345" y="230" text-anchor="middle" font-size="9.5" fill="#64748b">RecipientSyncService decide: crear, o no hacer nada si ya existe</text>
+        <text x="345" y="230" text-anchor="middle" font-size="9.5" fill="#64748b">RecipientSyncService decide: crear, o actualizar el perfil si ya existe</text>
     </svg>
     <p class="ddd-diagram-caption">
         El mensaje cruza tres traducciones antes de tocar una regla de negocio: Protobuf → comando de
@@ -168,7 +168,7 @@ La lección vale más que la réplica: **una réplica local es una decisión de 
 
 Como el mensaje llega como snapshot, descomponerlo en varios comandos (uno por campo cambiado) habría roto la atomicidad: si el tercer comando fallaba, los dos anteriores ya habrían hecho commit. Con un único comando que aplica todos los campos sobre la misma instancia, la atomicidad sale gratis — un solo `SaveChangesAsync`.
 
-Las dos sobrecargas también documentan la asimetría del contrato: `UserCreated` **solo crea** (si ya existe, no hace nada), `PersonVerificationChanged` **solo actualiza**.
+Las dos sobrecargas también documentan la asimetría del contrato: `UserCreated` **crea o actualiza** (es un *upsert* del perfil completo), `PersonVerificationChanged` **solo actualiza** el contacto.
 
 <Callout kind="advertencia" title="Por qué esto NO es Conformist">
 

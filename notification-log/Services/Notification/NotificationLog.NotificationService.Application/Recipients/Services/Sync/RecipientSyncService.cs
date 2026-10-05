@@ -18,10 +18,24 @@ public sealed class RecipientSyncService
 
     public async Task HandleAsync(CreateRecipientCommand command, CancellationToken ct)
     {
-        if (await _recipients.ExistsAsync(command.RecipientId, ct))
+        if (!await _recipients.ExistsAsync(command.RecipientId, ct))
+        {
+            await _createRecipient.HandleAsync(command, ct);
             return;
+        }
 
-        await _createRecipient.HandleAsync(command, ct);
+        await _updateRecipient.HandleAsync(
+            new UpdateRecipientCommand(
+                RecipientId: command.RecipientId,
+                Name: command.Name,
+                Email: command.Email,
+                IsEmailVerified: !string.IsNullOrWhiteSpace(command.Email),
+                Phone: command.Phone,
+                IsPhoneVerified: !string.IsNullOrWhiteSpace(command.Phone),
+                Locale: command.Locale,
+                TimeZone: command.TimeZone,
+                AcceptsNotifications: command.AcceptsNotifications),
+            ct);
     }
 
     public Task HandleAsync(UpdateRecipientCommand command, CancellationToken ct)

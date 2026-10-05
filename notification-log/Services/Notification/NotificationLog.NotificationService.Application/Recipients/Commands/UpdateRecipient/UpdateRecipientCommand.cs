@@ -2,5 +2,11 @@ namespace NotificationLog.NotificationService.Application.Recipients.Commands.Up
 
 public sealed record UpdateRecipientCommand(
     Guid RecipientId,
+    string? Name,
     string? Email,
-    string? Phone);
+    bool IsEmailVerified,
+    string? Phone,
+    bool IsPhoneVerified,
+    string? Locale,
+    string? TimeZone,
+    bool? AcceptsNotifications);

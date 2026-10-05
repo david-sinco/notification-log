@@ -1,21 +1,9 @@
 # Pendientes
 
-## Prioridad alta
-
-- [x] **Token hacia las APIs.** `AccessTokenHandler` agrega `Authorization: Bearer` en los tres clientes y `CookieOidcRefresher` renueva el token con el refresh token al validar la cookie (patrón `BlazorWebAppOidcServer`).
-  - [ ] La renovación solo ocurre en una petición HTTP. Con `InteractiveServer` global, un circuito abierto más de 15 min (vida del access token) sin recargar la página sigue enviando el token vencido y las APIs responden 401.
-- [ ] **Validar tokens en Rentals y Notification.**
-  - [x] OpenIddict Validation con su audience en las dos APIs.
-  - [x] Toda la API de Notification (triggers, plantillas, destinatarios y envíos) solo para el administrador (scope `notifications` + `AdministradorPolicy`).
-  - Policies por rol.
-  - Actor desde `sub` en lugar de `ActorId` en el body.
-  - Rutas `/api/me/...` en lugar de `/api/users/{userId}/...`.
-
 ## Identity
 
 - [ ] UI de administración de usuarios en la Web: listado, roles, bloquear y desbloquear.
 - [ ] Agregar o cambiar el correo o el celular de una cuenta existente, con código y evento `UserContactChanged`.
-- [ ] **Propagar los cambios de perfil.** `UserCreated` es el único evento que lleva el perfil completo y `RecipientSyncService` lo ignora si el destinatario ya existe, así que actualizar nombre, idioma o zona horaria (por ejemplo con un mensaje a la cola `identity-accounts` de una cuenta que ya está) no llega a Notification. Falta un evento de actualización de perfil, o que el consumidor haga upsert.
 - [ ] Recuperar y cambiar la contraseña.
 - [ ] Páginas de error del protocolo, acceso denegado y confirmación de cierre de sesión.
 - [ ] Apariencia por cliente en el login, según el `client_id` validado.
@@ -29,6 +17,7 @@
 - [ ] **Impedir que un visitante inicie sesión en el backoffice.** El rol `Visitor` solo usa el portal; hoy puede autenticarse en la Web con el cliente `web` y entrar a las páginas que no exigen rol (Panel, Publicaciones, Visitas, Notificaciones, Mi perfil).
 - [ ] **Título del inmueble dentro de `VisitView`.** `VisitViewProjection` copia tipo, barrio y ciudad de la publicación cuando se pide la visita; si después llega un `ListingDetailsUpdated`, las visitas ya existentes conservan el título anterior. Propagarlo a las visitas de esa publicación.
 - [ ] **Nombre de quien creó la publicación.** `ListingView.CreatedBy` es un id de usuario de Identity y Rentals no conoce nombres de usuarios; la Web muestra «Tú», el propietario o el id corto.
+- [ ] **Renovar el access token dentro del circuito.** `CookieOidcRefresher` solo renueva en una petición HTTP. Con `InteractiveServer` global, un circuito abierto más de 15 min (vida del access token) sin recargar la página sigue enviando el token vencido y las APIs responden 401.
 
 ## Portal (Next.js)
 
@@ -40,7 +29,6 @@
 
 - [ ] **Log de eventos reproducible** (estilo Kafka) para reconstruir estado o alimentar servicios nuevos; hoy RabbitMQ solo garantiza la entrega.
 - [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
-- [ ] Responder 403 en lugar de 400 para "no es tuyo" en las visitas de Rentals (`ForbiddenException`); publicaciones y propietarios ya lo hacen.
 - [ ] **Recordatorios programados en Notification** (reemplaza `WarnListingExpiryCommand` y `WarnListingExpiryHandler`; el porqué está en `EventSourcingProblems.md`, caso 1).
   - **Idea.** Un agregado nuevo en Notification (`Reminder`, o `ScheduledReminder`) que funciona como `Notification`, pero diferido: se registra ahora y se envía después. El productor no dice cómo ni cuándo enviar; eso ya está configurado en Notification. Rentals solo manda tres cosas: la **clave** de la configuración (por ejemplo `publicacion.vence.pronto`), el **id del flujo** que origina el recordatorio (el `ListingId`) y el **payload** con los valores que reemplazan los placeholders de la plantilla.
   - **Configuración** (lado de Notification, como `NotificationTrigger`).
@@ -86,7 +74,6 @@
     - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
     - bloqueo por cancelaciones tardías o inasistencias repetidas (`IsLateCancellation`, `NoShow`);
     - que el anfitrión no agende dos visitas a la misma hora.
-- [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.
 - [ ] **Quitar la réplica de Identity (`IIdentityReplica`) y cambiar antes la regla de visitas.**
   - **Qué es hoy.** `IIdentityReplica` **no** consulta la base de Identity: lee la base de *Rentals* (Marten,
     esquema `rentals`), el documento `PersonVerificationDocument`. Es una copia local de un dato ajeno.
@@ -148,6 +135,5 @@
 
 - [ ] Buggregator: quitar `localhost:1025` y `localhost:8000` fijos del appsettings de Notification y tomarlos de Aspire.
 - [ ] Redirect URIs y audiences con puertos fijos en `AppHost/appsettings.json`: mantenerlos alineados con los `launchSettings`.
-- [ ] Actualizar los nombres viejos (`apiservice`, `webfrontend`) en las páginas de tutoriales y en `CLAUDE.md`.
 - [ ] Actualizar `Person.md`, que describe el diseño anterior.
 - [ ] Tests para Identity, el login de la Web y el outbox.
