@@ -14,7 +14,6 @@
 
 - [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro), en `Web/wwwroot/app.css` y en `UI/portal/app/globals.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
 - [ ] Página propia de acceso denegado: `/authentication/access-denied` todavía responde texto plano.
-- [ ] **Impedir que un visitante inicie sesión en el backoffice.** El rol `Visitor` solo usa el portal; hoy puede autenticarse en la Web con el cliente `web` y entrar a las páginas que no exigen rol (Panel, Publicaciones, Visitas, Notificaciones, Mi perfil).
 - [ ] **Título del inmueble dentro de `VisitView`.** `VisitViewProjection` copia tipo, barrio y ciudad de la publicación cuando se pide la visita; si después llega un `ListingDetailsUpdated`, las visitas ya existentes conservan el título anterior. Propagarlo a las visitas de esa publicación.
 - [ ] **Nombre de quien creó la publicación.** `ListingView.CreatedBy` es un id de usuario de Identity y Rentals no conoce nombres de usuarios; la Web muestra «Tú», el propietario o el id corto.
 - [ ] **Renovar el access token dentro del circuito.** `CookieOidcRefresher` solo renueva en una petición HTTP. Con `InteractiveServer` global, un circuito abierto más de 15 min (vida del access token) sin recargar la página sigue enviando el token vencido y las APIs responden 401.
@@ -94,7 +93,6 @@
     `/rentals/identity` de la Web ya no existe). `ListingAccess` se queda sin dependencias y vuelve a ser estático.
   - **De dónde viene el nombre.** `Person` e `IsDocumentVerified` —que ningún mensaje llena, solo el endpoint dev—
     venían del servicio de Personas que iba a reemplazar esto, también pendiente más abajo.
-- [ ] Reiniciar la base de Rentals (esquema `rentals` de Marten): los flujos guardados tienen eventos que ya no existen (ofertas, reservas, reportes, asesor, consultas, favoritos, búsquedas) y `ListingDrafted` cambió de forma, así que no se pueden reconstruir.
 - [ ] Rol `Asesor` en la base de Identity: el seeder crea `Moderador`, pero el rol viejo y sus asignaciones siguen ahí. Borrarlo o migrar a sus usuarios.
 - [ ] Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas futuras y avisar a los visitantes. Al cerrarlo o retirarlo ya se hace (`ListingLifecycleProcess.OnNoLongerAvailableAsync`).
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).

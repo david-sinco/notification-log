@@ -6,4 +6,6 @@ public static class IdentityRoles
     public const string Propietario = "Propietario";
     public const string Moderador = "Moderador";
     public const string Visitor = "Visitor";
+
+    public static readonly string[] Backoffice = [Administrador, Propietario, Moderador];
 }

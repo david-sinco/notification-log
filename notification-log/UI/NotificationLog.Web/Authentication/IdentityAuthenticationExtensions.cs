@@ -8,6 +8,8 @@ public static class IdentityAuthenticationExtensions
     public static IServiceCollection AddIdentityAuthentication(this IServiceCollection services, IConfiguration configuration)
     {
         var identity = configuration.GetSection("Identity");
+        var portalUrl = configuration["Portal:Url"]
+            ?? throw new InvalidOperationException("Falta la configuración 'Portal:Url'.");
 
         services.AddAuthentication(options =>
             {
@@ -38,6 +40,17 @@ public static class IdentityAuthenticationExtensions
 
                 options.TokenValidationParameters.NameClaimType = IdentityClaims.Name;
                 options.TokenValidationParameters.RoleClaimType = IdentityClaims.Role;
+
+                options.Events.OnTokenValidated = context =>
+                {
+                    if (!IdentityRoles.Backoffice.Any(context.Principal!.IsInRole))
+                    {
+                        context.HandleResponse();
+                        context.Response.Redirect(portalUrl);
+                    }
+
+                    return Task.CompletedTask;
+                };
             });
 
         services.AddSingleton<CookieOidcRefresher>();

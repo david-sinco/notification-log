@@ -184,6 +184,7 @@ void AddWeb() =>
         .WithEnvironment("Identity__Authority", oidcConfig["Issuer"])
         .WithEnvironment("Identity__ClientId", webClientConfig["ClientId"])
         .WithEnvironment("Identity__ClientSecret", webClientSecret)
+        .WithEnvironment("Portal__Url", portalClientConfig["Url"])
         .WithHttpsUrlsOnly()
         .WithParentRelationship(ui);
 
