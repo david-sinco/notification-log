@@ -1,10 +1,6 @@
 @page "/"
 @using System.Globalization
 @inject DashboardApiClient DashboardApi
-@inject TriggersApiClient TriggersApi
-@inject TemplatesApiClient TemplatesApi
-@inject RecipientsApiClient RecipientsApi
-@inject NotificationsApiClient NotificationsApi
 @inject RentalsActor Actor
 
 <PageTitle>Panel · Llave</PageTitle>
@@ -45,8 +41,6 @@
         </a>
     </section>
 
-    <ErrorAlert Exception="notificationsError" />
-
     <section class="stats" aria-label="Resumen">
         <a class="stat" href="rentals/listings"><span class="smaller muted">Publicadas</span><span class="stat-value">@Count(dashboard?.Published)</span></a>
         @if (Actor.IsStaff)
@@ -57,13 +51,7 @@
         {
             <a class="stat" href="rentals/listings"><span class="smaller muted">Cerradas</span><span class="stat-value">@Count(dashboard?.Closed)</span></a>
         }
-        <a class="stat" href="triggers"><span class="smaller muted">Triggers</span><span class="stat-value">@Count(triggers)</span></a>
-        <a class="stat" href="templates"><span class="smaller muted">Plantillas</span><span class="stat-value">@Count(templates)</span></a>
-        <a class="stat" href="recipients"><span class="smaller muted">Destinatarios</span><span class="stat-value">@Count(recipients)</span></a>
-        @if (isAdmin)
-        {
-            <a class="stat" href="notifications"><span class="smaller muted">Envíos</span><span class="stat-value">@Count(notifications?.TotalCount)</span></a>
-        }
+        <a class="stat" href="rentals/visits"><span class="smaller muted">Visitas</span><span class="stat-value">@Count(dashboard?.Visits)</span></a>
     </section>
 
     <div class="split">
@@ -102,36 +90,31 @@
             }
         </section>
 
-        @if (isAdmin)
-        {
         <section class="card card-tight" style="flex: 2 1 300px; --gap: 12px">
             <div class="row row-between row-baseline">
-                <h2 class="h2 h2-sm">Últimos envíos</h2>
-                <a class="small strong" href="notifications">Ver historial</a>
+                <h2 class="h2 h2-sm">Últimas visitas</h2>
+                <a class="small strong" href="rentals/visits">Ver todas</a>
             </div>
-            @if (notifications is { Items.Count: 0 })
+            @if (dashboard is { RecentVisits.Count: 0 })
             {
-                <EmptyState Text="Todavía no se envió ninguna notificación." />
+                <EmptyState Text="Todavía no hay visitas." />
             }
-            else if (notifications is not null)
+            else if (dashboard is not null)
             {
                 <div>
-                    @foreach (var notification in notifications.Items)
+                    @foreach (var visit in dashboard.RecentVisits)
                     {
-                        var sent = notification.Status == nameof(DeliveryStatus.Sent);
-                        <div class="line-row" style="flex-wrap: nowrap; padding: 11px 0">
-                            <span class="dot @(sent ? "" : "dot-danger")" aria-hidden="true"></span>
+                        <a class="line-row" href="rentals/visits/@visit.Id" style="gap: 12px; padding: 11px 0">
                             <span class="stack grow" style="--gap: 0; --basis: 0">
-                                <span class="event-key smaller">@notification.EventKey</span>
-                                <span class="smaller muted wrap-any">@ChannelLabels.Name(notification.Channel) · @notification.Destination</span>
+                                <span class="strong">@RentalsFormat.ListingTitle(visit.ListingType, visit.ListingNeighborhood, visit.ListingCity)</span>
+                                <span class="smaller muted wrap-any">@visit.VisitorName · @VisitWhen(visit)</span>
                             </span>
-                            <span class="smaller strong @(sent ? "text-success" : "text-danger")">@(sent ? "Enviado" : "Falló")</span>
-                        </div>
+                            <RentalStatusPill Status="@visit.Status" />
+                        </a>
                     }
                 </div>
             }
         </section>
-        }
     </div>
 
     <section class="card card-tight" style="--gap: 16px">
@@ -169,15 +152,9 @@
     [CascadingParameter] private Task<AuthenticationState> AuthState { get; set; } = null!;
 
     private ApiException? rentalsError;
-    private ApiException? notificationsError;
     private string greetingName = "";
-    private bool isAdmin;
 
     private DashboardDto? dashboard;
-    private PagedResult<NotificationDto>? notifications;
-    private int? triggers;
-    private int? templates;
-    private int? recipients;
 
     private int Pending => dashboard is null ? 0 : dashboard.InReview + dashboard.VisitsAwaitingHost + dashboard.MyDrafts;
 
@@ -209,14 +186,14 @@
     private static string Facts(ListingSummaryDto listing) =>
         listing.Bedrooms is null ? "sin datos todavía" : $"{listing.Bedrooms} hab · {listing.Area:0.#} m²";
 
+    private static string VisitWhen(VisitDto visit) =>
+        visit.FirstSlot is { } slot ? RentalsFormat.Moment(slot) : "sin franja";
+
     protected override async Task OnInitializedAsync()
     {
-        var user = (await AuthState).User;
+        greetingName = (await AuthState).User.Identity?.Name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
 
-        greetingName = user.Identity?.Name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
-        isAdmin = user.IsInRole(IdentityRoles.Administrador);
-
-        await Task.WhenAll(LoadRentalsAsync(), LoadNotificationsAsync());
+        await LoadRentalsAsync();
     }
 
     private async Task LoadRentalsAsync()
@@ -228,31 +205,6 @@
         catch (ApiException ex)
         {
             rentalsError = ex;
-        }
-    }
-
-    private async Task LoadNotificationsAsync()
-    {
-        try
-        {
-            var none = CancellationToken.None;
-            var triggersTask = TriggersApi.ListAsync(null, null, 1, 1, none);
-            var templatesTask = TemplatesApi.ListAsync(null, null, null, 1, 1, none);
-            var recipientsTask = RecipientsApi.ListAsync(null, null, 1, 1, none);
-            var notificationsTask = isAdmin
-                ? NotificationsApi.ListAsync(null, null, null, null, 1, 5, none)
-                : null;
-
-            await Task.WhenAll(triggersTask, templatesTask, recipientsTask, notificationsTask ?? Task.CompletedTask);
-
-            triggers = triggersTask.Result.TotalCount;
-            templates = templatesTask.Result.TotalCount;
-            recipients = recipientsTask.Result.TotalCount;
-            notifications = notificationsTask?.Result;
-        }
-        catch (ApiException ex)
-        {
-            notificationsError = ex;
         }
     }
 }

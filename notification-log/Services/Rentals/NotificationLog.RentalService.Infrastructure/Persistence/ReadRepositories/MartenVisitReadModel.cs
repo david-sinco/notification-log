@@ -40,7 +40,7 @@ internal sealed class MartenVisitReadModel : IVisitReadModel
     public async Task<VisitDto?> GetAsync(Guid id, CancellationToken ct)
         => await _session.LoadAsync<VisitView>(id, ct) is { } view ? ToDto(view) : null;
 
-    private static VisitDto ToDto(VisitView x) => new(
+    internal static VisitDto ToDto(VisitView x) => new(
         x.Id,
         x.ListingId,
         x.HostId,

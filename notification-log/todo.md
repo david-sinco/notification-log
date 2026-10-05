@@ -2,9 +2,11 @@
 
 ## Prioridad alta
 
-- [ ] **Token hacia las APIs.** Enviar el access token desde la Web con un `DelegatingHandler` que agregue `Authorization: Bearer` y lo renueve con el refresh token (patrón `BlazorWebAppOidcServer`).
+- [x] **Token hacia las APIs.** `AccessTokenHandler` agrega `Authorization: Bearer` en los tres clientes y `CookieOidcRefresher` renueva el token con el refresh token al validar la cookie (patrón `BlazorWebAppOidcServer`).
+  - [ ] La renovación solo ocurre en una petición HTTP. Con `InteractiveServer` global, un circuito abierto más de 15 min (vida del access token) sin recargar la página sigue enviando el token vencido y las APIs responden 401.
 - [ ] **Validar tokens en Rentals y Notification.**
-  - OpenIddict Validation con su audience, más `LocalhostSubdomainHandler` para llegar a Identity.
+  - [x] OpenIddict Validation con su audience en las dos APIs.
+  - [x] Toda la API de Notification (triggers, plantillas, destinatarios y envíos) solo para el administrador (scope `notifications` + `AdministradorPolicy`).
   - Policies por rol.
   - Actor desde `sub` en lugar de `ActorId` en el body.
   - Rutas `/api/me/...` en lugar de `/api/users/{userId}/...`.
@@ -84,18 +86,6 @@
     - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
     - bloqueo por cancelaciones tardías o inasistencias repetidas (`IsLateCancellation`, `NoShow`);
     - que el anfitrión no agende dos visitas a la misma hora.
-- [x] **Configurar en Notification las notificaciones de visitas.** Triggers, configuraciones (correo y SMS) y plantillas sembrados en la migración `VisitNotifications`. Las claves están en `VisitNotificationKeys` (Domain de Rentals). Todas llevan los datos comunes de `VisitNotificationData` (`visit_id`, `listing_id`, `listing_type`, `listing_operation`, `listing_neighborhood`, `listing_city`, `listing_address`, `listing_price`) más los propios; las plantillas usan `StrictVariables`, así que solo pueden usar esos datos (más `recipient.*`):
-
-  | Clave                    | Destinatario                    | Datos propios           |
-  |---                       |---                              |---                      |
-  | `visita.solicitada`      | anfitrión                       | `visitor_name`, `slots` |
-  | `visita.contrapropuesta` | la otra parte                   | `slots`                 |
-  | `visita.agendada`        | quien había propuesto la franja | `starts_at`             |
-  | `visita.cancelada`       | la otra parte                   | `reason`                |
-  | `visita.realizada`       | visitante                       | `starts_at`             |
-  | `visita.inasistencia`    | visitante                       | `starts_at`             |
-
-  Las fechas (`slots`, `starts_at`) van ya formateadas en hora de Colombia (`yyyy-MM-dd HH:mm`). El destinatario tiene que existir en la réplica de destinatarios de Notification; un `Owner` sin cuenta no recibe nada (ver "Rediseñar la creación de `Owner` y su cuenta").
 - [ ] Visitas con el usuario del token en lugar de `ActorId` en el body, como ya hacen publicaciones y propietarios.
 - [ ] **Quitar la réplica de Identity (`IIdentityReplica`) y cambiar antes la regla de visitas.**
   - **Qué es hoy.** `IIdentityReplica` **no** consulta la base de Identity: lee la base de *Rentals* (Marten,

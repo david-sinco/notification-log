@@ -1,4 +1,5 @@
 using NotificationLog.Web.Api.Rentals.Listings;
+using NotificationLog.Web.Api.Rentals.Visits;
 
 namespace NotificationLog.Web.Api.Rentals.Dashboard;
 
@@ -11,4 +12,6 @@ public sealed record DashboardDto(
     int Published,
     int? Owners,
     int? Closed,
-    IReadOnlyList<ListingSummaryDto> RecentListings);
+    IReadOnlyList<ListingSummaryDto> RecentListings,
+    int Visits,
+    IReadOnlyList<VisitDto> RecentVisits);

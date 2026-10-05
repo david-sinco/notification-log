@@ -45,6 +45,14 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
             .OrderBy(x => x.RespondBy)
             .Take(1)
             .ToList();
+        var visits = batch.Query<VisitView>()
+            .Where(x => isStaff || x.HostId == userId || x.VisitorId == userId)
+            .Count();
+        var recentVisits = batch.Query<VisitView>()
+            .Where(x => isStaff || x.HostId == userId || x.VisitorId == userId)
+            .OrderByDescending(x => x.UpdatedAt)
+            .Take(RecentCount)
+            .ToList();
 
         var owners = isStaff ? batch.Query<OwnerView>().Count() : null;
         var closed = isStaff ? null : batch.Query<ListingView>().Where(x => x.Status == ListingStatus.Closed).Count();
@@ -60,6 +68,8 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
             (int)await published,
             owners is null ? null : (int)await owners,
             closed is null ? null : (int)await closed,
-            (await recent).Select(x => MartenListingReadModel.ToSummary(x, _photoUrls)).ToList());
+            (await recent).Select(x => MartenListingReadModel.ToSummary(x, _photoUrls)).ToList(),
+            (int)await visits,
+            (await recentVisits).Select(MartenVisitReadModel.ToDto).ToList());
     }
 }

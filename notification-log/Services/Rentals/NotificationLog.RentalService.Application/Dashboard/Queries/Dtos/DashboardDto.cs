@@ -1,4 +1,5 @@
 using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
+using NotificationLog.RentalService.Application.Visits.Queries.Dtos;
 
 namespace NotificationLog.RentalService.Application.Dashboard.Queries.Dtos;
 
@@ -11,4 +12,6 @@ public sealed record DashboardDto(
     int Published,
     int? Owners,
     int? Closed,
-    IReadOnlyList<ListingSummaryDto> RecentListings);
+    IReadOnlyList<ListingSummaryDto> RecentListings,
+    int Visits,
+    IReadOnlyList<VisitDto> RecentVisits);
