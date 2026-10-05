@@ -1,3 +1,4 @@
+using NotificationLog.RentalService.Infrastructure.Persistence.Projections;
 using NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositories;
 using NotificationLog.RentalService.Infrastructure.Persistence.Repositories;
 using Application.Shared.Abstractions;
@@ -36,6 +37,8 @@ public static class DependencyInjection
             .ApplyAllDatabaseChangesOnStartup()
             .IntegrateWithWolverine()
             .AddAsyncDaemon(DaemonMode.Solo);
+
+        services.AddHostedService<ViewRebuilder>();
 
         services.AddScoped<AggregateStreams>();
         services.AddScoped<IUnitOfWork, MartenUnitOfWork>();

@@ -31,7 +31,9 @@ internal static class MartenStoreConfiguration
             .Index(x => x.UpdatedAt);
         options.Schema.For<VisitView>()
             .Duplicate(x => x.Status)
-            .Duplicate(x => x.HostId);
+            .Duplicate(x => x.HostId)
+            .Duplicate(x => x.VisitorId)
+            .Duplicate(x => x.ListingId);
 
         options.Schema.For<OwnerDocumentReservation>();
         options.Schema.For<OwnerNitReservation>();

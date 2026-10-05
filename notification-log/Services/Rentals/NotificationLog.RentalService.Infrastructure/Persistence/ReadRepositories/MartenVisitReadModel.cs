@@ -1,10 +1,10 @@
-using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
 using NotificationLog.RentalService.Application.Visits.Queries;
 using NotificationLog.RentalService.Application.Visits.Queries.Dtos;
 using NotificationLog.RentalService.Application.Visits.Queries.Filters;
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 namespace NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositories;
 
@@ -34,46 +34,34 @@ internal sealed class MartenVisitReadModel : IVisitReadModel
             .Take(paging.PageSize)
             .ToListAsync(ct);
 
-        return (await ToDtosAsync(items, ct), (int)stats.TotalResults);
+        return (items.Select(ToDto).ToList(), (int)stats.TotalResults);
     }
 
     public async Task<VisitDto?> GetAsync(Guid id, CancellationToken ct)
-        => await _session.LoadAsync<VisitView>(id, ct) is { } view ? (await ToDtosAsync([view], ct))[0] : null;
+        => await _session.LoadAsync<VisitView>(id, ct) is { } view ? ToDto(view) : null;
 
-    private async Task<IReadOnlyList<VisitDto>> ToDtosAsync(IReadOnlyList<VisitView> visits, CancellationToken ct)
-    {
-        var listings = (await _session.LoadManyAsync<ListingView>(ct, visits.Select(x => x.ListingId).Distinct().ToArray()))
-            .ToDictionary(x => x.Id);
-        var visitors = (await _session.LoadManyAsync<VisitorView>(ct, visits.Select(x => x.VisitorId).Distinct().ToArray()))
-            .ToDictionary(x => x.Id, x => x.DisplayName);
-        var hosts = (await _session.LoadManyAsync<OwnerView>(ct, visits.Select(x => x.HostId).Distinct().ToArray()))
-            .ToDictionary(x => x.Id, x => x.DisplayName());
-
-        return visits.Select(x =>
-        {
-            var listing = listings.GetValueOrDefault(x.ListingId);
-
-            return new VisitDto(
-                x.Id,
-                x.ListingId,
-                x.HostId,
-                x.VisitorId,
-                x.Status.ToString(),
-                x.ProposedSlots,
-                x.RespondBy,
-                x.ScheduledStartsAt,
-                x.ScheduledEndsAt,
-                x.CancelledBy?.ToString(),
-                x.CancellationReason,
-                x.IsLateCancellation,
-                x.ClosedBy?.ToString(),
-                x.RequestedAt,
-                x.UpdatedAt,
-                listing?.Type?.ToString(),
-                listing?.Neighborhood,
-                listing?.City,
-                visitors.GetValueOrDefault(x.VisitorId),
-                hosts.GetValueOrDefault(x.HostId));
-        }).ToList();
-    }
+    private static VisitDto ToDto(VisitView x) => new(
+        x.Id,
+        x.ListingId,
+        x.HostId,
+        x.VisitorId,
+        x.Status.ToString(),
+        x.ProposedSlots,
+        x.RespondBy,
+        x.ScheduledStartsAt,
+        x.ScheduledEndsAt,
+        x.CancelledBy?.ToString(),
+        x.CancellationReason,
+        x.IsLateCancellation,
+        x.ClosedBy?.ToString(),
+        x.RequestedAt,
+        x.UpdatedAt,
+        x.ListingType?.ToString(),
+        x.ListingNeighborhood,
+        x.ListingCity,
+        x.VisitorName,
+        x.HostName,
+        x.History
+            .Select(entry => new VisitHistoryEntryDto(entry.At, entry.By.ToString(), entry.Action, entry.Slots, entry.Reason, entry.IsLate))
+            .ToList());
 }

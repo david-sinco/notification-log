@@ -16,4 +16,5 @@ public sealed class VisitorView
     public string Phone { get; set; } = string.Empty;
     public DateTimeOffset RegisteredAt { get; set; }
     public DateTimeOffset? ProfileCompletedAt { get; set; }
+    public int VisitCount { get; set; }
 }

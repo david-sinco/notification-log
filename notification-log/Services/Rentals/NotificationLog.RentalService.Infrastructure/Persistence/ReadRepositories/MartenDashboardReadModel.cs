@@ -51,10 +51,6 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
 
         await batch.Execute(ct);
 
-        var recentListings = await recent;
-        var ownerNames = (await _session.LoadManyAsync<OwnerView>(ct, recentListings.Select(x => x.OwnerId).Distinct().ToArray()))
-            .ToDictionary(x => x.Id, x => x.DisplayName());
-
         return new DashboardDto(
             (int)await inReview,
             (await oldestInReview).FirstOrDefault()?.UpdatedAt,
@@ -64,8 +60,6 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
             (int)await published,
             owners is null ? null : (int)await owners,
             closed is null ? null : (int)await closed,
-            recentListings
-                .Select(x => MartenListingReadModel.ToSummary(x, ownerNames.GetValueOrDefault(x.OwnerId), _photoUrls))
-                .ToList());
+            (await recent).Select(x => MartenListingReadModel.ToSummary(x, _photoUrls)).ToList());
     }
 }

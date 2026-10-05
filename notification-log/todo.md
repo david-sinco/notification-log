@@ -24,7 +24,9 @@
 
 - [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro), en `Web/wwwroot/app.css` y en `UI/portal/app/globals.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
 - [ ] Página propia de acceso denegado: `/authentication/access-denied` todavía responde texto plano.
-- [ ] **Historial de la negociación de una visita desde el lado de lectura.** Construirlo con una proyección de los eventos de `Visit` (`VisitRequested`, `VisitCounterProposed`, `VisitScheduled`, `VisitCancelled`, `VisitExpired`, `VisitCompleted`, `VisitNoShow`: quién, cuándo y qué franjas) y exponerlo en `VisitDto`. Hoy `Visits.razor` lo deriva del estado actual de la visita, así que no muestra las contrapropuestas intermedias.
+- [ ] **Impedir que un visitante inicie sesión en el backoffice.** El rol `Visitor` solo usa el portal; hoy puede autenticarse en la Web con el cliente `web` y entrar a las páginas que no exigen rol (Panel, Publicaciones, Visitas, Notificaciones, Mi perfil).
+- [ ] **Título del inmueble dentro de `VisitView`.** `VisitViewProjection` copia tipo, barrio y ciudad de la publicación cuando se pide la visita; si después llega un `ListingDetailsUpdated`, las visitas ya existentes conservan el título anterior. Propagarlo a las visitas de esa publicación.
+- [ ] **Nombre de quien creó la publicación.** `ListingView.CreatedBy` es un id de usuario de Identity y Rentals no conoce nombres de usuarios; la Web muestra «Tú», el propietario o el id corto.
 
 ## Portal (Next.js)
 

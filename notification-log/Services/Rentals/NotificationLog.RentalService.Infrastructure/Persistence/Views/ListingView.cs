@@ -6,6 +6,7 @@ public sealed class ListingView
 {
     public Guid Id { get; set; }
     public Guid OwnerId { get; set; }
+    public string OwnerName { get; set; } = string.Empty;
     public Guid CreatedBy { get; set; }
     public Operation Operation { get; set; }
     public ListingStatus Status { get; set; }

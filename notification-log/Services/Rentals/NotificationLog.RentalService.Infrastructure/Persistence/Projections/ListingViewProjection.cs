@@ -1,29 +1,36 @@
-using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Domain.Shared.EventSourcing;
 using JasperFx.Events;
+using Marten;
 using Marten.Events.Aggregation;
 using NotificationLog.RentalService.Domain.Listings.Enums;
 using NotificationLog.RentalService.Domain.Listings.Events;
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 namespace NotificationLog.RentalService.Infrastructure.Persistence.Projections;
 
 public sealed class ListingViewProjection : SingleStreamProjection<ListingView, Guid>
 {
-    public override ListingView? Evolve(ListingView? snapshot, Guid id, IEvent e)
+    public override async ValueTask<ListingView?> EvolveAsync(
+        ListingView? snapshot, Guid id, IQuerySession session, IEvent e, CancellationToken cancellation)
     {
         var at = EventTime.Of((IDomainEvent)e.Data);
 
         if (e.Data is ListingDrafted drafted)
+        {
+            var owner = await session.LoadAsync<OwnerView>(drafted.OwnerId, cancellation);
+
             return new ListingView
             {
                 Id = id,
                 OwnerId = drafted.OwnerId,
+                OwnerName = owner?.DisplayName() ?? string.Empty,
                 CreatedBy = drafted.CreatedBy,
                 Operation = drafted.Operation,
                 Status = ListingStatus.Draft,
                 CreatedAt = at,
                 UpdatedAt = at
             };
+        }
 
         if (snapshot is null)
             return null;

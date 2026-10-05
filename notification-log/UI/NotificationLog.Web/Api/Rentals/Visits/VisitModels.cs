@@ -19,8 +19,9 @@ public sealed record VisitDto(
     string? ListingType,
     string? ListingNeighborhood,
     string? ListingCity,
-    string? VisitorName,
-    string? HostName)
+    string VisitorName,
+    string HostName,
+    IReadOnlyList<VisitHistoryEntryDto> History)
 {
     public bool IsNegotiating => Status is nameof(VisitStatus.AwaitingHost) or nameof(VisitStatus.AwaitingVisitor);
 

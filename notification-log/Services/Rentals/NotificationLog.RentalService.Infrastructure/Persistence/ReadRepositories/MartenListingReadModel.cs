@@ -1,4 +1,3 @@
-using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
@@ -6,6 +5,7 @@ using NotificationLog.RentalService.Application.Common.Storage;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.Filters;
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 namespace NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositories;
 
@@ -50,51 +50,43 @@ internal sealed class MartenListingReadModel : IListingReadModel
             .Take(paging.PageSize)
             .ToListAsync(ct);
 
-        var owners = await _session.LoadManyAsync<OwnerView>(ct, items.Select(x => x.OwnerId).Distinct().ToArray());
-        var ownerNames = owners.ToDictionary(x => x.Id, x => x.DisplayName());
-
-        return (items.Select(x => ToSummary(x, ownerNames.GetValueOrDefault(x.OwnerId), _photoUrls)).ToList(), (int)stats.TotalResults);
+        return (items.Select(x => ToSummary(x, _photoUrls)).ToList(), (int)stats.TotalResults);
     }
 
     public async Task<ListingDto?> GetAsync(Guid id, CancellationToken ct)
-    {
-        if (await _session.LoadAsync<ListingView>(id, ct) is not { } x)
-            return null;
+        => await _session.LoadAsync<ListingView>(id, ct) is { } x
+            ? new ListingDto(
+                x.Id,
+                x.OwnerId,
+                x.CreatedBy,
+                x.Operation.ToString(),
+                x.Status.ToString(),
+                x.Type?.ToString(),
+                x.Area,
+                x.Bedrooms,
+                x.Bathrooms,
+                x.ParkingSpots,
+                x.Stratum,
+                x.Floor,
+                x.HasElevator,
+                x.AdministrationFee,
+                x.City,
+                x.Neighborhood,
+                x.Address,
+                x.Description,
+                x.Price,
+                x.Photos.Select(fileName => new ListingPhotoDto(fileName, _photoUrls.ReadUrlFor(x.Id, fileName))).ToList(),
+                x.ExpiresAt,
+                x.RejectionReasons.Select(r => r.ToString()).ToList(),
+                x.StatusReason,
+                x.FinalPrice,
+                x.SignedOn,
+                x.CreatedAt,
+                x.UpdatedAt,
+                x.OwnerName)
+            : null;
 
-        var owner = await _session.LoadAsync<OwnerView>(x.OwnerId, ct);
-
-        return new ListingDto(
-            x.Id,
-            x.OwnerId,
-            x.CreatedBy,
-            x.Operation.ToString(),
-            x.Status.ToString(),
-            x.Type?.ToString(),
-            x.Area,
-            x.Bedrooms,
-            x.Bathrooms,
-            x.ParkingSpots,
-            x.Stratum,
-            x.Floor,
-            x.HasElevator,
-            x.AdministrationFee,
-            x.City,
-            x.Neighborhood,
-            x.Address,
-            x.Description,
-            x.Price,
-            x.Photos.Select(fileName => new ListingPhotoDto(fileName, _photoUrls.ReadUrlFor(x.Id, fileName))).ToList(),
-            x.ExpiresAt,
-            x.RejectionReasons.Select(r => r.ToString()).ToList(),
-            x.StatusReason,
-            x.FinalPrice,
-            x.SignedOn,
-            x.CreatedAt,
-            x.UpdatedAt,
-            owner?.DisplayName());
-    }
-
-    internal static ListingSummaryDto ToSummary(ListingView x, string? ownerName, IPhotoUrlProvider photoUrls) =>
+    internal static ListingSummaryDto ToSummary(ListingView x, IPhotoUrlProvider photoUrls) =>
         new(
             x.Id,
             x.Operation.ToString(),
@@ -108,7 +100,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
             x.OwnerId,
             x.CreatedBy,
             x.UpdatedAt,
-            ownerName,
+            x.OwnerName,
             x.Photos.Count > 0 ? photoUrls.ReadUrlFor(x.Id, x.Photos[0]) : null,
             x.Photos.Count);
 }

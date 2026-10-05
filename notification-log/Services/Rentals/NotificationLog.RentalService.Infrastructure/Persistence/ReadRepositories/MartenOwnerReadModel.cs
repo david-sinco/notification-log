@@ -1,10 +1,10 @@
-using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
 using NotificationLog.RentalService.Application.Owners.Queries.Filters;
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 namespace NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositories;
 
@@ -42,30 +42,13 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
             .Take(paging.PageSize)
             .ToListAsync(ct);
 
-        var counts = await ListingCountsAsync(items.Select(x => x.Id).ToArray(), ct);
-
-        return (items.Select(x => ToDto(x, counts.GetValueOrDefault(x.Id))).ToList(), (int)stats.TotalResults);
+        return (items.Select(ToDto).ToList(), (int)stats.TotalResults);
     }
 
     public async Task<OwnerDto?> GetAsync(Guid id, CancellationToken ct)
-        => await _session.LoadAsync<OwnerView>(id, ct) is { } view
-            ? ToDto(view, (await ListingCountsAsync([id], ct)).GetValueOrDefault(id))
-            : null;
+        => await _session.LoadAsync<OwnerView>(id, ct) is { } view ? ToDto(view) : null;
 
-    private async Task<Dictionary<Guid, int>> ListingCountsAsync(Guid[] ownerIds, CancellationToken ct)
-    {
-        if (ownerIds.Length == 0)
-            return [];
-
-        var owned = await _session.Query<ListingView>()
-            .Where(x => x.OwnerId.IsOneOf(ownerIds))
-            .Select(x => x.OwnerId)
-            .ToListAsync(ct);
-
-        return owned.GroupBy(x => x).ToDictionary(g => g.Key, g => g.Count());
-    }
-
-    private static OwnerDto ToDto(OwnerView x, int listingCount) => new(
+    private static OwnerDto ToDto(OwnerView x) => new(
         x.Id,
         x.CreatedBy,
         x.Type.ToString(),
@@ -78,5 +61,5 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
         x.Email,
         x.Phone,
         x.RegisteredAt,
-        listingCount);
+        x.ListingCount);
 }

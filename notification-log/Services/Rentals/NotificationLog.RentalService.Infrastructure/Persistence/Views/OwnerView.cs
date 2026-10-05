@@ -18,6 +18,7 @@ public sealed class OwnerView
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public DateTimeOffset RegisteredAt { get; set; }
+    public int ListingCount { get; set; }
 
     public string DisplayName() => LegalName ?? $"{FirstNames} {LastNames}";
 }

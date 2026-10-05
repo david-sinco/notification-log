@@ -31,7 +31,7 @@
             {
                 <a class="list-item @(visit.Id == current?.Id ? "active" : "")" href="rentals/visits/@visit.Id" aria-current="@(visit.Id == current?.Id ? "true" : "false")">
                     <span class="row row-between" style="flex-wrap: nowrap">
-                        <span class="strong">@VisitorName(visit)</span>
+                        <span class="strong">@visit.VisitorName</span>
                         <RentalStatusPill Status="@visit.Status" />
                     </span>
                     <span class="small muted">@ListingTitle(visit)</span>
@@ -53,8 +53,8 @@
                 </div>
 
                 <div class="grid-auto" style="--min: 160px; --gap: 10px">
-                    <div class="fact fact-box"><span class="fact-label">Visitante</span><span class="fact-value">@VisitorName(current)</span></div>
-                    <div class="fact fact-box"><span class="fact-label">Anfitrión</span><span class="fact-value">@HostName(current)</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Visitante</span><span class="fact-value">@current.VisitorName</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Anfitrión</span><span class="fact-value">@current.HostName</span></div>
                     <div class="fact fact-box"><span class="fact-label">Actúas como</span><span class="fact-value">@(IsHost ? "Anfitrión" : IsVisitor ? "Visitante" : "Observador")</span></div>
                 </div>
 
@@ -196,36 +196,35 @@
         _ => ("La visita venció", "Nadie respondió dentro del plazo.")
     };
 
-    private IEnumerable<(string Who, string Text, string Dot)> History
+    private IEnumerable<(string Who, string Text, string Dot)> History => current!.History.Select(entry =>
     {
-        get
+        var who = entry.By switch
         {
-            var visit = current!;
+            "Visitor" => $"{current.VisitorName} · visitante",
+            "Host" => $"{current.HostName} · anfitrión",
+            _ => "Sistema"
+        };
+        var dot = entry.By switch
+        {
+            "Visitor" => "dot-info",
+            "Host" => "",
+            _ => "dot-neutral"
+        };
+        var slots = string.Join(" · ", entry.Slots.Select(slot => $"{RentalsFormat.Day(slot)} {RentalsFormat.Range(slot)}"));
+        var text = entry.Action switch
+        {
+            "Requested" => $"Pidió la visita y propuso: {slots}.",
+            "CounterProposed" => $"Propuso otras franjas: {slots}.",
+            "Scheduled" => $"Aceptó {slots}.",
+            "Cancelled" => $"Canceló: «{entry.Reason}».{(entry.IsLate ? " Cancelación tardía." : "")}",
+            "Expired" => "Venció: nadie respondió a tiempo.",
+            "Completed" => "Marcó la visita como realizada.",
+            "NoShow" => "Marcó que el visitante no asistió.",
+            _ => entry.Action
+        };
 
-            yield return ($"{VisitorName(visit)} · visitante", $"Pidió la visita el {RentalsFormat.Moment(visit.RequestedAt)}.", "dot-info");
-
-            if (visit.IsNegotiating && visit.Status == "AwaitingVisitor")
-                yield return ($"{HostName(visit)} · anfitrión", $"Propuso otras {visit.ProposedSlots.Count} franjas.", "");
-
-            if (visit.ScheduledStartsAt is { } start)
-                yield return ("Acuerdo", $"Se agendó para el {RentalsFormat.Day(start)}, {RentalsFormat.Range(start)}.", "");
-
-            if (visit.Status == "Cancelled")
-                yield return (
-                    RentalsFormat.Term(visit.CancelledBy),
-                    $"Canceló: «{visit.CancellationReason}».{(visit.IsLateCancellation ? " Cancelación tardía." : "")}",
-                    "dot-danger");
-
-            if (visit.Status == "Expired")
-                yield return ("Sistema", "Venció: nadie respondió a tiempo.", "dot-neutral");
-
-            if (visit.Status == "Completed")
-                yield return (RentalsFormat.Term(visit.ClosedBy), "Marcó la visita como realizada.", "");
-
-            if (visit.Status == "NoShow")
-                yield return ("Anfitrión", "Marcó que el visitante no asistió.", "dot-danger");
-        }
-    }
+        return (who, $"{text} {RentalsFormat.Moment(entry.At)}", entry.Action is "Cancelled" or "NoShow" ? "dot-danger" : dot);
+    });
 
     protected override async Task OnParametersSetAsync()
     {
@@ -240,10 +239,6 @@
 
     private static string Group(VisitDto visit) =>
         visit.IsNegotiating ? "open" : visit.Status == "Scheduled" ? "scheduled" : "closed";
-
-    private static string VisitorName(VisitDto visit) => visit.VisitorName ?? $"Visitante {RentalsFormat.Short(visit.VisitorId)}";
-
-    private static string HostName(VisitDto visit) => visit.HostName ?? $"Anfitrión {RentalsFormat.Short(visit.HostId)}";
 
     private static string ListingTitle(VisitDto visit) =>
         RentalsFormat.ListingTitle(visit.ListingType, visit.ListingNeighborhood, visit.ListingCity);

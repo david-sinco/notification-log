@@ -32,12 +32,10 @@
                     <NavIcon Path="M12 12a4 4 0 100-8 4 4 0 000 8zM4 20c1-4 4-5 8-5s7 1 8 5" /> Propietarios
                 </NavLink>
             </AuthorizeView>
-            <AuthorizeView Roles="@VisitorRoles">
+            <AuthorizeView Roles="@StaffRoles">
                 <NavLink class="nav-link" href="rentals/visitors">
                     <NavIcon Path="M9 11a3 3 0 100-6 3 3 0 000 6zM3 19c.6-3 2.6-4 6-4s5.4 1 6 4M17 8v6M14 11h6" /> Visitantes
                 </NavLink>
-            </AuthorizeView>
-            <AuthorizeView Roles="@StaffRoles">
                 <NavLink class="nav-link" href="rentals/moderation">
                     <NavIcon Path="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" /> Moderación
                 </NavLink>
@@ -83,5 +81,4 @@
 @code {
     private const string StaffRoles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador}";
     private const string OwnerRoles = $"{StaffRoles},{IdentityRoles.Propietario}";
-    private const string VisitorRoles = $"{StaffRoles},{IdentityRoles.Visitor}";
 }

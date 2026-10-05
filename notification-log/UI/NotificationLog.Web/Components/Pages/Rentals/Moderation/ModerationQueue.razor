@@ -42,7 +42,7 @@
                     <div class="stack" style="flex: 2 1 300px; --gap: 8px">
                         <a class="h2 h2-sm link-plain" href="rentals/listings/@listing.Id">@RentalsFormat.ListingTitle(listing.Type, listing.Neighborhood, listing.City)</a>
                         <span class="muted">@RentalsFormat.Term(listing.Operation) · @RentalsFormat.Money(listing.Price) · @listing.Bedrooms hab · @listing.Area?.ToString("0.#") m² · estrato @listing.Stratum</span>
-                        <span class="small muted">@(listing.OwnerName ?? RentalsFormat.Short(listing.OwnerId)) · enviada el @RentalsFormat.Moment(listing.UpdatedAt)</span>
+                        <span class="small muted">@listing.OwnerName · enviada el @RentalsFormat.Moment(listing.UpdatedAt)</span>
                         <div class="row" style="--gap: 6px">
                             <StatusPill Text="@($"{listing.Photos.Count} fotos")" Variant="success" />
                             <StatusPill Text="@($"Descripción de {listing.Description?.Length ?? 0} caracteres")" Variant="success" />
@@ -171,7 +171,7 @@
 
     private static string NoteFor(ListingDto listing) => listing.Status == "Suspended"
         ? $"Suspendida el {RentalsFormat.Moment(listing.UpdatedAt)}: «{listing.StatusReason}»"
-        : $"{RentalsFormat.Term(listing.Operation)} · {RentalsFormat.Money(listing.Price)} · {listing.OwnerName ?? RentalsFormat.Short(listing.OwnerId)}";
+        : $"{RentalsFormat.Term(listing.Operation)} · {RentalsFormat.Money(listing.Price)} · {listing.OwnerName}";
 
     private async Task LoadAsync()
     {

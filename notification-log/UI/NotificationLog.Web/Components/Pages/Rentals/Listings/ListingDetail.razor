@@ -230,7 +230,7 @@
 
                 <section class="card card-tight" aria-label="Vigencia y participantes" style="--gap: 10px">
                     <h2 class="h2 h2-xs">Vigencia y participantes</h2>
-                    <div class="kv"><span class="muted">Propietario</span><span>@(listing.OwnerName ?? RentalsFormat.Short(listing.OwnerId))</span></div>
+                    <div class="kv"><span class="muted">Propietario</span><span>@listing.OwnerName</span></div>
                     <div class="kv"><span class="muted">Creada por</span><span>@CreatedBy</span></div>
                     <div class="kv"><span class="muted">Creada</span><span>@RentalsFormat.Moment(listing.CreatedAt)</span></div>
                     <div class="kv"><span class="muted">Vence</span><span>@RentalsFormat.Moment(listing.ExpiresAt)</span></div>
@@ -252,7 +252,7 @@
                     {
                         <a class="line-row small" href="rentals/visits/@visit.Id" style="justify-content: space-between; min-height: 44px">
                             <span class="stack" style="--gap: 0">
-                                <span class="strong">@(visit.VisitorName ?? RentalsFormat.Short(visit.VisitorId))</span>
+                                <span class="strong">@visit.VisitorName</span>
                                 <span class="muted">@VisitSummary(visit)</span>
                             </span>
                             <RentalStatusPill Status="@visit.Status" />
@@ -321,7 +321,7 @@
 
     private string CreatedBy =>
         Actor.Is(listing!.CreatedBy) ? "Tú"
-        : listing.CreatedBy == listing.OwnerId && listing.OwnerName is not null ? listing.OwnerName
+        : listing.CreatedBy == listing.OwnerId ? listing.OwnerName
         : RentalsFormat.Short(listing.CreatedBy);
 
     private (string Variant, string Title, string Text)? Note => listing!.Status switch

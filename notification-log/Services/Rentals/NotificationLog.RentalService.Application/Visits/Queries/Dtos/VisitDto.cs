@@ -20,4 +20,5 @@ public sealed record VisitDto(
     string? ListingNeighborhood,
     string? ListingCity,
     string? VisitorName,
-    string? HostName);
+    string? HostName,
+    IReadOnlyList<VisitHistoryEntryDto> History);
