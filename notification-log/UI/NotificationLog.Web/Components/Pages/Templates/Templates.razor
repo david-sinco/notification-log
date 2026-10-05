@@ -1,6 +1,7 @@
 @page "/templates"
 @page "/templates/new"
 @page "/templates/{Id:guid}"
+@attribute [Authorize(Roles = IdentityRoles.Administrador)]
 @using System.Text.RegularExpressions
 @inject TemplatesApiClient Api
 @inject NavigationManager Nav

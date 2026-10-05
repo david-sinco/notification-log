@@ -1,6 +1,8 @@
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NotificationLog.Web.Api.Recipients;
 using NotificationLog.Web.Api.Templates;
 using NotificationLog.Web.Api.Triggers;
+using NotificationLog.Web.Authentication;
 
 namespace NotificationLog.Web.Api.Notifications;
 
@@ -12,7 +14,11 @@ internal static class NotificationApi
 
     public static IServiceCollection AddNotificationApi(this IServiceCollection services)
     {
+        services.AddHttpContextAccessor();
+        services.TryAddTransient<AccessTokenHandler>();
+
         services.AddHttpClient(nameof(NotificationApi), client => client.BaseAddress = new(BaseAddress))
+            .AddHttpMessageHandler<AccessTokenHandler>()
             .AddTypedClient<TriggersApiClient>()
             .AddTypedClient<TemplatesApiClient>()
             .AddTypedClient<RecipientsApiClient>()

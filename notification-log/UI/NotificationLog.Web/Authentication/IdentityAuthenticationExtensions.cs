@@ -33,12 +33,18 @@ public static class IdentityAuthenticationExtensions
                 options.GetClaimsFromUserInfoEndpoint = false;
 
                 options.Scope.Clear();
-                foreach (var scope in new[] { "openid", "email", "phone", "roles", "offline_access", "identity", "rentals" })
+                foreach (var scope in new[] { "openid", "email", "phone", "roles", "offline_access", "identity", "rentals", "notifications" })
                     options.Scope.Add(scope);
 
                 options.TokenValidationParameters.NameClaimType = IdentityClaims.Name;
                 options.TokenValidationParameters.RoleClaimType = IdentityClaims.Role;
             });
+
+        services.AddSingleton<CookieOidcRefresher>();
+        services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+            .Configure<CookieOidcRefresher>((options, refresher) =>
+                options.Events.OnValidatePrincipal = context =>
+                    refresher.ValidateOrRefreshCookieAsync(context, OpenIdConnectDefaults.AuthenticationScheme));
 
         services.AddAuthorization();
         services.AddCascadingAuthenticationState();

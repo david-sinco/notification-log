@@ -43,23 +43,25 @@
         </div>
     </div>
 
-    <div class="nav-group">
-        <div class="nav-group-title">Notificaciones</div>
-        <div class="nav-links">
-            <NavLink class="nav-link" href="triggers">
-                <NavIcon Path="M13 3L5 14h6l-1 7 8-11h-6z" /> Triggers
-            </NavLink>
-            <NavLink class="nav-link" href="templates">
-                <NavIcon Path="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" /> Plantillas
-            </NavLink>
-            <NavLink class="nav-link" href="recipients">
-                <NavIcon Path="M4 6h16v12H4zM4 7l8 6 8-6" /> Destinatarios
-            </NavLink>
-            <NavLink class="nav-link" href="notifications">
-                <NavIcon Path="M6 16V11a6 6 0 1112 0v5l2 2H4zM10 21h4" /> Envíos
-            </NavLink>
+    <AuthorizeView Roles="@IdentityRoles.Administrador">
+        <div class="nav-group">
+            <div class="nav-group-title">Notificaciones</div>
+            <div class="nav-links">
+                <NavLink class="nav-link" href="triggers">
+                    <NavIcon Path="M13 3L5 14h6l-1 7 8-11h-6z" /> Triggers
+                </NavLink>
+                <NavLink class="nav-link" href="templates">
+                    <NavIcon Path="M6 3h9l4 4v14H6zM14 3v5h5M9 13h7M9 17h5" /> Plantillas
+                </NavLink>
+                <NavLink class="nav-link" href="recipients">
+                    <NavIcon Path="M4 6h16v12H4zM4 7l8 6 8-6" /> Destinatarios
+                </NavLink>
+                <NavLink class="nav-link" href="notifications">
+                    <NavIcon Path="M6 16V11a6 6 0 1112 0v5l2 2H4zM10 21h4" /> Envíos
+                </NavLink>
+            </div>
         </div>
-    </div>
+    </AuthorizeView>
 
     <div class="nav-group">
         <div class="nav-group-title">Cuenta</div>

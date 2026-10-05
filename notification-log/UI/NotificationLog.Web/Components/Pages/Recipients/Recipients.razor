@@ -1,5 +1,6 @@
 @page "/recipients"
 @page "/recipients/{Id:guid}"
+@attribute [Authorize(Roles = IdentityRoles.Administrador)]
 @inject RecipientsApiClient Api
 @inject NotificationsApiClient NotificationsApi
 

@@ -60,7 +60,10 @@
         <a class="stat" href="triggers"><span class="smaller muted">Triggers</span><span class="stat-value">@Count(triggers)</span></a>
         <a class="stat" href="templates"><span class="smaller muted">Plantillas</span><span class="stat-value">@Count(templates)</span></a>
         <a class="stat" href="recipients"><span class="smaller muted">Destinatarios</span><span class="stat-value">@Count(recipients)</span></a>
-        <a class="stat" href="notifications"><span class="smaller muted">Envíos</span><span class="stat-value">@Count(notifications?.TotalCount)</span></a>
+        @if (isAdmin)
+        {
+            <a class="stat" href="notifications"><span class="smaller muted">Envíos</span><span class="stat-value">@Count(notifications?.TotalCount)</span></a>
+        }
     </section>
 
     <div class="split">
@@ -99,6 +102,8 @@
             }
         </section>
 
+        @if (isAdmin)
+        {
         <section class="card card-tight" style="flex: 2 1 300px; --gap: 12px">
             <div class="row row-between row-baseline">
                 <h2 class="h2 h2-sm">Últimos envíos</h2>
@@ -126,6 +131,7 @@
                 </div>
             }
         </section>
+        }
     </div>
 
     <section class="card card-tight" style="--gap: 16px">
@@ -165,6 +171,7 @@
     private ApiException? rentalsError;
     private ApiException? notificationsError;
     private string greetingName = "";
+    private bool isAdmin;
 
     private DashboardDto? dashboard;
     private PagedResult<NotificationDto>? notifications;
@@ -204,7 +211,10 @@
 
     protected override async Task OnInitializedAsync()
     {
-        greetingName = (await AuthState).User.Identity?.Name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        var user = (await AuthState).User;
+
+        greetingName = user.Identity?.Name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "";
+        isAdmin = user.IsInRole(IdentityRoles.Administrador);
 
         await Task.WhenAll(LoadRentalsAsync(), LoadNotificationsAsync());
     }
@@ -229,14 +239,16 @@
             var triggersTask = TriggersApi.ListAsync(null, null, 1, 1, none);
             var templatesTask = TemplatesApi.ListAsync(null, null, null, 1, 1, none);
             var recipientsTask = RecipientsApi.ListAsync(null, null, 1, 1, none);
-            var notificationsTask = NotificationsApi.ListAsync(null, null, null, null, 1, 5, none);
+            var notificationsTask = isAdmin
+                ? NotificationsApi.ListAsync(null, null, null, null, 1, 5, none)
+                : null;
 
-            await Task.WhenAll(triggersTask, templatesTask, recipientsTask, notificationsTask);
+            await Task.WhenAll(triggersTask, templatesTask, recipientsTask, notificationsTask ?? Task.CompletedTask);
 
             triggers = triggersTask.Result.TotalCount;
             templates = templatesTask.Result.TotalCount;
             recipients = recipientsTask.Result.TotalCount;
-            notifications = notificationsTask.Result;
+            notifications = notificationsTask?.Result;
         }
         catch (ApiException ex)
         {

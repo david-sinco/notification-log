@@ -1,3 +1,5 @@
+using API.Shared.Extensions;
+using Domain.Shared.Authorization;
 using NotificationLog.ApiService.Contracts.Triggers;
 using NotificationLog.NotificationService.Application.Common;
 using NotificationLog.NotificationService.Application.Triggers.Commands.AddConfiguration;
@@ -17,7 +19,9 @@ public static class TriggerEndpoints
 {
     public static IEndpointRouteBuilder MapTriggers(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/triggers").WithTags("Triggers");
+        var group = app.MapGroup("/api/triggers")
+            .WithTags("Triggers")
+            .RequireAuthorization(OidcScope.Notifications.ToScopeName(), AuthorizationExtensions.AdministradorPolicy);
 
         group.MapPost("/", CreateAsync)
             .WithName("CreateTrigger")

@@ -20,7 +20,7 @@ public static class OidcScopeExtensions
     {
         OidcScope.Identity => OidcScopeNames.Identity,
         OidcScope.Rentals => OidcScopeNames.Rentals,
-        OidcScope.Notifications => OidcScopeNames.Rentals,
+        OidcScope.Notifications => OidcScopeNames.Notifications,
         _ => throw new ArgumentOutOfRangeException(nameof(scope), scope, "Scope OIDC desconocido.")
     };
 }

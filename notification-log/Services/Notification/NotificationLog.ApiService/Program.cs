@@ -1,4 +1,6 @@
 using API.Shared.Exceptions;
+using API.Shared.Extensions;
+using Domain.Shared.Authorization;
 using Microsoft.EntityFrameworkCore;
 using NotificationLog.ApiService.Endpoints;
 using NotificationLog.NotificationService.Application;
@@ -14,6 +16,7 @@ builder.AddServiceDefaults();
 
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddOpenIdDictAuthorization(builder.Configuration, [OidcScope.Notifications]);
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
@@ -30,6 +33,9 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 if (app.Environment.IsDevelopment())
 {

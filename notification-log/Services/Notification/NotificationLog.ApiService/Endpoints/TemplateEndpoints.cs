@@ -1,4 +1,6 @@
-﻿using NotificationLog.ApiService.Contracts.Templates;
+﻿using API.Shared.Extensions;
+using Domain.Shared.Authorization;
+using NotificationLog.ApiService.Contracts.Templates;
 using NotificationLog.NotificationService.Application.Common;
 using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
 using NotificationLog.NotificationService.Application.Templates.Commands.PublishTemplateVersion;
@@ -13,7 +15,9 @@ public static class TemplateEndpoints
 {
     public static IEndpointRouteBuilder MapTemplates(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/templates").WithTags("Templates");
+        var group = app.MapGroup("/api/templates")
+            .WithTags("Templates")
+            .RequireAuthorization(OidcScope.Notifications.ToScopeName(), AuthorizationExtensions.AdministradorPolicy);
 
         group.MapPost("/", CreateAsync)
             .WithName("CreateTemplate")

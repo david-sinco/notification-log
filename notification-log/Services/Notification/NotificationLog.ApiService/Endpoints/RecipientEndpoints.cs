@@ -1,4 +1,6 @@
-﻿using NotificationLog.NotificationService.Application.Common;
+﻿using API.Shared.Extensions;
+using Domain.Shared.Authorization;
+using NotificationLog.NotificationService.Application.Common;
 using NotificationLog.NotificationService.Application.Recipients.Dtos;
 using NotificationLog.NotificationService.Application.Recipients.Queries.GetRecipientById;
 using NotificationLog.NotificationService.Application.Recipients.Queries.ListRecipients;
@@ -9,7 +11,9 @@ public static class RecipientEndpoints
 {
     public static IEndpointRouteBuilder MapRecipients(this IEndpointRouteBuilder app)
     {
-        var group = app.MapGroup("/api/recipients").WithTags("Recipients");
+        var group = app.MapGroup("/api/recipients")
+            .WithTags("Recipients")
+            .RequireAuthorization(OidcScope.Notifications.ToScopeName(), AuthorizationExtensions.AdministradorPolicy);
 
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetRecipientById")

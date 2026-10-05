@@ -1,5 +1,6 @@
 @page "/triggers"
 @page "/triggers/{Id:guid}"
+@attribute [Authorize(Roles = IdentityRoles.Administrador)]
 @using System.Text.RegularExpressions
 @inject TriggersApiClient Api
 @inject TemplatesApiClient TemplatesApi

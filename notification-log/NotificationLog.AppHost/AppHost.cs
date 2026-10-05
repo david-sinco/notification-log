@@ -117,6 +117,8 @@ IResourceBuilder<ProjectResource> AddNotification() =>
         .WithReference(rabbitmq)
         .WaitFor(rabbitmq)
         .WaitFor(buggregator)
+        .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])
+        .WithEnvironment("Oidc__Audience", oidcConfig["Audiences:Notifications"])
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 
@@ -135,6 +137,7 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Seed__Clients__0__ClientSecret", webClientSecret)
         .WithEnvironment("Seed__Clients__0__Scopes__0", webClientConfig["Scopes:0"])
         .WithEnvironment("Seed__Clients__0__Scopes__1", webClientConfig["Scopes:1"])
+        .WithEnvironment("Seed__Clients__0__Scopes__2", webClientConfig["Scopes:2"])
         .WithEnvironment("Seed__Clients__0__RedirectUris__0", webClientConfig["RedirectUris:0"])
         .WithEnvironment("Seed__Clients__0__PostLogoutRedirectUris__0", webClientConfig["PostLogoutRedirectUris:0"])
         .WithEnvironment("Seed__Clients__0__RegistrationRole", webClientConfig["RegistrationRole"])
