@@ -1,11 +1,11 @@
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Domain.Shared.EventSourcing;
 using JasperFx.Events;
 using Marten.Events.Aggregation;
 using NotificationLog.RentalService.Domain.Visitors.Enums;
 using NotificationLog.RentalService.Domain.Visitors.Events;
-using NotificationLog.RentalService.Infrastructure.DecisionProjections;
 
-namespace NotificationLog.RentalService.Infrastructure.ReadModels;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Projections;
 
 public sealed class VisitorViewProjection : SingleStreamProjection<VisitorView, Guid>
 {

@@ -1,8 +1,9 @@
+using NotificationLog.RentalService.Infrastructure.Persistence.Reservations;
 using Marten;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Visitors;
 
-namespace NotificationLog.RentalService.Infrastructure.Persistence;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Repositories;
 
 internal sealed class MartenVisitorRepository : IVisitorRepository
 {

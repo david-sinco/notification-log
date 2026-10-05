@@ -1,8 +1,10 @@
+using NotificationLog.RentalService.Infrastructure.Persistence.Projections;
+using NotificationLog.RentalService.Infrastructure.Persistence.Reservations;
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Domain.Shared.EventSourcing;
 using JasperFx.Events.Projections;
 using Marten;
 using NotificationLog.RentalService.Domain.Listings;
-using NotificationLog.RentalService.Infrastructure.ReadModels;
 using Weasel.Core;
 
 namespace NotificationLog.RentalService.Infrastructure.Persistence;
@@ -22,6 +24,14 @@ internal static class MartenStoreConfiguration
         options.Projections.Add(new OwnerViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitorViewProjection(), ProjectionLifecycle.Inline);
         options.Projections.Add(new VisitViewProjection(), ProjectionLifecycle.Inline);
+
+        options.Schema.For<ListingView>()
+            .Duplicate(x => x.Status)
+            .Duplicate(x => x.OwnerId)
+            .Index(x => x.UpdatedAt);
+        options.Schema.For<VisitView>()
+            .Duplicate(x => x.Status)
+            .Duplicate(x => x.HostId);
 
         options.Schema.For<OwnerDocumentReservation>();
         options.Schema.For<OwnerNitReservation>();

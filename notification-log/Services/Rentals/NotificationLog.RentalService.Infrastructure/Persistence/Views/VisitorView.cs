@@ -1,7 +1,7 @@
 using NotificationLog.RentalService.Domain.Common.Enums;
 using NotificationLog.RentalService.Domain.Visitors.Enums;
 
-namespace NotificationLog.RentalService.Infrastructure.ReadModels;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 public sealed class VisitorView
 {

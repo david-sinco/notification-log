@@ -1,8 +1,11 @@
+using NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositories;
+using NotificationLog.RentalService.Infrastructure.Persistence.Repositories;
 using Application.Shared.Abstractions;
 using JasperFx.Events.Daemon;
 using Marten;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using NotificationLog.RentalService.Application.Dashboard.Queries;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Visitors.Queries;
@@ -14,7 +17,6 @@ using NotificationLog.RentalService.Domain.Visits;
 using NotificationLog.RentalService.Infrastructure.Messaging;
 using NotificationLog.RentalService.Infrastructure.Messaging.Publishers;
 using NotificationLog.RentalService.Infrastructure.Persistence;
-using NotificationLog.RentalService.Infrastructure.ReadModels;
 using NotificationLog.RentalService.Infrastructure.Storage;
 using NotificationLog.RentalService.Application.Common.Storage;
 using Wolverine.Marten;
@@ -46,6 +48,7 @@ public static class DependencyInjection
         services.AddScoped<IOwnerReadModel, MartenOwnerReadModel>();
         services.AddScoped<IVisitorReadModel, MartenVisitorReadModel>();
         services.AddScoped<IVisitReadModel, MartenVisitReadModel>();
+        services.AddScoped<IDashboardReadModel, MartenDashboardReadModel>();
 
         services.AddScoped<INotificationProducer, WolverineNotificationDispatcher>();
         services.AddScoped<IAccountProvisioner, WolverineAccountProvisioner>();

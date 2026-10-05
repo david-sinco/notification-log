@@ -1,6 +1,6 @@
 using NotificationLog.RentalService.Domain.Visits;
 
-namespace NotificationLog.RentalService.Infrastructure.Persistence;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Repositories;
 
 internal sealed class MartenVisitRepository : IVisitRepository
 {

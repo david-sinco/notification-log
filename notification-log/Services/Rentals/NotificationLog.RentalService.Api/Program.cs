@@ -43,6 +43,7 @@ if (app.Environment.IsDevelopment())
 app.MapDefaultEndpoints();
 
 app.MapCatalog();
+app.MapDashboard();
 app.MapListings();
 app.MapModeration();
 app.MapOwners();

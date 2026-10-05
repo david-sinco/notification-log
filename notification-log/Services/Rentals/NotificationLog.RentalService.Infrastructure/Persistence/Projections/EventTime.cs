@@ -1,6 +1,6 @@
 using Domain.Shared.EventSourcing;
 
-namespace NotificationLog.RentalService.Infrastructure.DecisionProjections;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Projections;
 
 internal static class EventTime
 {

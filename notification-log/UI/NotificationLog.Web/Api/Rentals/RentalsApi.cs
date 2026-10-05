@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using NotificationLog.Web.Api.Rentals.Dashboard;
 using NotificationLog.Web.Api.Rentals.Listings;
 using NotificationLog.Web.Api.Rentals.Owners;
 using NotificationLog.Web.Api.Rentals.Visitors;
@@ -23,7 +24,8 @@ internal static class RentalsApi
             .AddTypedClient<ListingsApiClient>()
             .AddTypedClient<ModerationApiClient>()
             .AddTypedClient<VisitsApiClient>()
-            .AddTypedClient<VisitorsApiClient>();
+            .AddTypedClient<VisitorsApiClient>()
+            .AddTypedClient<DashboardApiClient>();
 
         return services;
     }

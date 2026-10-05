@@ -1,3 +1,4 @@
+using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
@@ -5,7 +6,7 @@ using NotificationLog.RentalService.Application.Visits.Queries;
 using NotificationLog.RentalService.Application.Visits.Queries.Dtos;
 using NotificationLog.RentalService.Application.Visits.Queries.Filters;
 
-namespace NotificationLog.RentalService.Infrastructure.ReadModels;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositories;
 
 internal sealed class MartenVisitReadModel : IVisitReadModel
 {

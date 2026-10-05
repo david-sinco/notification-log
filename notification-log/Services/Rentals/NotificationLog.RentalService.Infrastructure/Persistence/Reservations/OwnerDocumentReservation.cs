@@ -1,4 +1,4 @@
-namespace NotificationLog.RentalService.Infrastructure.Persistence;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Reservations;
 
 internal sealed class OwnerDocumentReservation
 {

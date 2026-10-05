@@ -1,6 +1,6 @@
 using NotificationLog.RentalService.Domain.Visits.Enums;
 
-namespace NotificationLog.RentalService.Infrastructure.ReadModels;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 public sealed class VisitView
 {

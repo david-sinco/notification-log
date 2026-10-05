@@ -1,6 +1,6 @@
 using NotificationLog.RentalService.Domain.Listings.Enums;
 
-namespace NotificationLog.RentalService.Infrastructure.ReadModels;
+namespace NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
 public sealed class ListingView
 {

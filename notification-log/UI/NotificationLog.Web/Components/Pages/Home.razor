@@ -1,8 +1,6 @@
 @page "/"
 @using System.Globalization
-@inject ListingsApiClient ListingsApi
-@inject VisitsApiClient VisitsApi
-@inject OwnersApiClient OwnersApi
+@inject DashboardApiClient DashboardApi
 @inject TriggersApiClient TriggersApi
 @inject TemplatesApiClient TemplatesApi
 @inject RecipientsApiClient RecipientsApi
@@ -23,7 +21,7 @@
     <section class="grid-auto" aria-label="Pendientes" style="--min: 280px; --gap: 14px">
         <a class="queue-card queue-card-ink" href="@(Actor.IsStaff ? "rentals/moderation" : "rentals/listings")">
             <span class="row row-baseline">
-                <span class="queue-count">@Count(inReview?.TotalCount)</span>
+                <span class="queue-count">@Count(dashboard?.InReview)</span>
                 <span class="strong">publicaciones en revisión</span>
             </span>
             <span>@InReviewText</span>
@@ -31,7 +29,7 @@
         </a>
         <a class="queue-card queue-card-lime" href="rentals/visits">
             <span class="row row-baseline">
-                <span class="queue-count">@Count(awaitingVisits?.TotalCount)</span>
+                <span class="queue-count">@Count(dashboard?.VisitsAwaitingHost)</span>
                 <span class="strong">visitas por responder</span>
             </span>
             <span>@VisitsText</span>
@@ -39,7 +37,7 @@
         </a>
         <a class="queue-card" href="rentals/listings">
             <span class="row row-baseline">
-                <span class="queue-count">@Count(drafts)</span>
+                <span class="queue-count">@Count(dashboard?.MyDrafts)</span>
                 <span class="strong">borradores tuyos</span>
             </span>
             <span>Necesitan datos, precio y al menos @ListingLimits.MinPhotos fotos para enviarse a revisión.</span>
@@ -50,14 +48,14 @@
     <ErrorAlert Exception="notificationsError" />
 
     <section class="stats" aria-label="Resumen">
-        <a class="stat" href="rentals/listings"><span class="smaller muted">Publicadas</span><span class="stat-value">@Count(published)</span></a>
+        <a class="stat" href="rentals/listings"><span class="smaller muted">Publicadas</span><span class="stat-value">@Count(dashboard?.Published)</span></a>
         @if (Actor.IsStaff)
         {
-            <a class="stat" href="rentals/owners"><span class="smaller muted">Propietarios</span><span class="stat-value">@Count(owners)</span></a>
+            <a class="stat" href="rentals/owners"><span class="smaller muted">Propietarios</span><span class="stat-value">@Count(dashboard?.Owners)</span></a>
         }
         else
         {
-            <a class="stat" href="rentals/listings"><span class="smaller muted">Cerradas</span><span class="stat-value">@Count(closed)</span></a>
+            <a class="stat" href="rentals/listings"><span class="smaller muted">Cerradas</span><span class="stat-value">@Count(dashboard?.Closed)</span></a>
         }
         <a class="stat" href="triggers"><span class="smaller muted">Triggers</span><span class="stat-value">@Count(triggers)</span></a>
         <a class="stat" href="templates"><span class="smaller muted">Plantillas</span><span class="stat-value">@Count(templates)</span></a>
@@ -71,14 +69,14 @@
                 <h2 class="h2 h2-sm">Publicaciones con actividad reciente</h2>
                 <a class="small strong" href="rentals/listings">Ver todas</a>
             </div>
-            @if (recentListings is { Count: 0 })
+            @if (dashboard is { RecentListings.Count: 0 })
             {
                 <EmptyState Text="Todavía no hay publicaciones." />
             }
-            else if (recentListings is not null)
+            else if (dashboard is not null)
             {
                 <div>
-                    @foreach (var listing in recentListings)
+                    @foreach (var listing in dashboard.RecentListings)
                     {
                         <a class="line-row" href="rentals/listings/@listing.Id" style="gap: 12px; padding: 12px 0">
                             @if (listing.CoverUrl is null)
@@ -168,19 +166,13 @@
     private ApiException? notificationsError;
     private string greetingName = "";
 
-    private PagedResult<ListingSummaryDto>? inReview;
-    private PagedResult<VisitDto>? awaitingVisits;
-    private IReadOnlyList<ListingSummaryDto>? recentListings;
+    private DashboardDto? dashboard;
     private PagedResult<NotificationDto>? notifications;
-    private int? drafts;
-    private int? published;
-    private int? owners;
-    private int? closed;
     private int? triggers;
     private int? templates;
     private int? recipients;
 
-    private int Pending => (inReview?.TotalCount ?? 0) + (awaitingVisits?.TotalCount ?? 0) + (drafts ?? 0);
+    private int Pending => dashboard is null ? 0 : dashboard.InReview + dashboard.VisitsAwaitingHost + dashboard.MyDrafts;
 
     private string Greeting
     {
@@ -197,11 +189,11 @@
         }
     }
 
-    private string InReviewText => inReview is { Items.Count: > 0 }
-        ? $"La más antigua espera desde el {RentalsFormat.Moment(inReview.Items.Min(listing => listing.UpdatedAt))}."
+    private string InReviewText => dashboard?.OldestInReviewSince is { } since
+        ? $"La más antigua espera desde el {RentalsFormat.Moment(since)}."
         : "Ninguna publicación espera aprobación.";
 
-    private string VisitsText => awaitingVisits?.Items.Where(visit => visit.RespondBy is not null).Select(visit => visit.RespondBy).Min() is { } respondBy
+    private string VisitsText => dashboard?.NextVisitRespondBy is { } respondBy
         ? $"La próxima vence el {RentalsFormat.Moment(respondBy)} si nadie responde."
         : "Ningún anfitrión tiene solicitudes pendientes.";
 
@@ -221,25 +213,7 @@
     {
         try
         {
-            var none = CancellationToken.None;
-            var inReviewTask = ListingsApi.ListAsync(null, ListingStatus.InReview, null, null, 1, 50, none);
-            var publishedTask = ListingsApi.ListAsync(null, ListingStatus.Published, null, null, 1, 1, none);
-            var draftsTask = ListingsApi.ListAsync(null, ListingStatus.Draft, null, Actor.Id ?? Guid.Empty, 1, 1, none);
-            var recentTask = ListingsApi.ListAsync(null, null, null, null, 1, 5, none);
-            var visitsTask = VisitsApi.ListAsync(null, null, VisitStatus.AwaitingHost, 1, 50, none);
-            var ownersTask = Actor.IsStaff ? OwnersApi.ListAsync(null, null, null, 1, 1, none) : null;
-            var closedTask = Actor.IsStaff ? null : ListingsApi.ListAsync(null, ListingStatus.Closed, null, null, 1, 1, none);
-
-            await Task.WhenAll(inReviewTask, publishedTask, draftsTask, recentTask, visitsTask);
-
-            inReview = inReviewTask.Result;
-            published = publishedTask.Result.TotalCount;
-            drafts = draftsTask.Result.TotalCount;
-            recentListings = recentTask.Result.Items;
-            awaitingVisits = visitsTask.Result;
-
-            owners = ownersTask is null ? null : (await ownersTask).TotalCount;
-            closed = closedTask is null ? null : (await closedTask).TotalCount;
+            dashboard = await DashboardApi.GetAsync(CancellationToken.None);
         }
         catch (ApiException ex)
         {
