@@ -18,6 +18,8 @@
     <Project Path="Services/Rentals/NotificationLog.RentalService.Application/NotificationLog.RentalService.Application.csproj" Id="11af1296-291e-4fa2-b873-c1b4b337f88e" />
     <Project Path="Services/Rentals/NotificationLog.RentalService.Domain/NotificationLog.RentalService.Domain.csproj" Id="b9ce4509-f318-417f-829c-6a8cc20c6b2c" />
     <Project Path="Services/Rentals/NotificationLog.RentalService.Infrastructure/NotificationLog.RentalService.Infrastructure.csproj" />
+    <Project Path="Services/Rentals/NotificationLog.RentalService.IntegrationTests/NotificationLog.RentalService.IntegrationTests.csproj" Id="13da73c4-d5ce-43cb-95a1-15a49c911962" />
+    <Project Path="Services/Rentals/NotificationLog.RentalService.UnitTests/NotificationLog.RentalService.UnitTests.csproj" Id="a7599488-7968-497b-95c2-7d406a3f91ba" />
   </Folder>
   <Folder Name="/Shared/">
     <Project Path="Shared/API.Shared/API.Shared.csproj" Id="ad7ab09d-2640-4acc-b357-95268c08bc74" />

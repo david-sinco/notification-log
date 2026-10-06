@@ -56,6 +56,7 @@
 
 ## Rentals
 
+- [ ] **Un propietario no puede completar su perfil de visitante.** `Owner` y `Visitor` usan el id del usuario como id de flujo y `AggregateStreams.LoadAsync` lee el flujo sin mirar su tipo: `PUT /api/visitors/me/profile` de un propietario registrado responde 422 con «El evento 'NaturalOwnerRegistered' no pertenece al agregado Visitor». Lo detectó el escenario «El anfitrión no puede pedir visita a su propia publicación» de `NegociacionDeVisita.feature`, que falla hasta que se corrija.
 - [ ] **Schedules para tareas programadas** (vencer una publicación, avisar que está por vencer, recordatorios de visita). Reemplaza el `ApplyExpiry` calculado en `Listing.Status` y en `MartenListingReadModel`, y también `ICommandScheduler`, `WolverineCommandScheduler`, `ScheduledCommandsHandler` y `ExpireListingCommand`.
   - **Datos del dominio.** Por ahora solo `StreamId`, `ScheduledTo` (fecha y hora) y `Kind` (string que identifica cómo se procesa, por ejemplo `listing.expire` o `listing.warn-expiry`). El agregado declara sus schedules a partir de su estado; `Listing` los deriva de `IsVisible` y `ExpiresAt`.
   - **Programar.** Mensaje programado de Wolverine por el outbox (`IMartenOutbox` enrolado en la misma sesión de Marten), para que sea atómico con los eventos. La dependencia queda invertida: la interfaz en Application y la implementación en Infrastructure. `AggregateStreams` compara los schedules del agregado al cargarlo y al hacer append, y programa solo los nuevos.
