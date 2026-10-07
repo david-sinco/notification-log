@@ -15,19 +15,24 @@ public sealed class TestAuthHandler(
     public const string SchemeName = "Test";
     public const string UserHeader = "X-Test-User";
     public const string RoleHeader = "X-Test-Role";
+    public const string EmailHeader = "X-Test-Email";
 
     protected override Task<AuthenticateResult> HandleAuthenticateAsync()
     {
         if (!Request.Headers.TryGetValue(UserHeader, out var user))
             return Task.FromResult(AuthenticateResult.NoResult());
 
-        var identity = new ClaimsIdentity(
-            [
-                new Claim("sub", user.ToString()),
-                new Claim(ClaimTypes.Role, Request.Headers[RoleHeader].ToString()),
-                new Claim(OpenIddictConstants.Claims.Private.Scope, OidcScopeNames.Rentals)
-            ],
-            SchemeName);
+        List<Claim> claims =
+        [
+            new Claim("sub", user.ToString()),
+            new Claim(ClaimTypes.Role, Request.Headers[RoleHeader].ToString()),
+            new Claim(OpenIddictConstants.Claims.Private.Scope, OidcScopeNames.Rentals)
+        ];
+
+        if (Request.Headers.TryGetValue(EmailHeader, out var email))
+            claims.Add(new Claim(OpenIddictConstants.Claims.Email, email.ToString()));
+
+        var identity = new ClaimsIdentity(claims, SchemeName);
 
         return Task.FromResult(AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), SchemeName)));
     }

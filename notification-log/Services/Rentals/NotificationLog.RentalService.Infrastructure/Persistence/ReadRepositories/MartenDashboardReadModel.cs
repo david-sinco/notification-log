@@ -23,6 +23,11 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
 
     public async Task<DashboardDto> GetAsync(Guid userId, bool isStaff, CancellationToken ct)
     {
+        Guid[] ownerIds = [.. await _session.Query<OwnerView>()
+            .Where(x => x.RelatedUserId == userId)
+            .Select(x => x.Id)
+            .ToListAsync(ct)];
+
         var batch = _session.CreateBatchQuery();
 
         var inReview = batch.Query<ListingView>().Where(x => x.Status == ListingStatus.InReview).Count();
@@ -33,7 +38,7 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
             .ToList();
         var published = batch.Query<ListingView>().Where(x => x.Status == ListingStatus.Published).Count();
         var myDrafts = batch.Query<ListingView>()
-            .Where(x => x.Status == ListingStatus.Draft && (x.OwnerId == userId || x.CreatedBy == userId))
+            .Where(x => x.Status == ListingStatus.Draft && (ownerIds.Contains(x.OwnerId) || x.CreatedBy == userId))
             .Count();
         var recent = batch.Query<ListingView>().OrderByDescending(x => x.UpdatedAt).Take(RecentCount).ToList();
 

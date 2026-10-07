@@ -10,6 +10,7 @@ public enum DocumentType
 public sealed record OwnerDto(
     Guid Id,
     Guid CreatedBy,
+    Guid? RelatedUserId,
     string Type,
     string? FirstNames,
     string? LastNames,

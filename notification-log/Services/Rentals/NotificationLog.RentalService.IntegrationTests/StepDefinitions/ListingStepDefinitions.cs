@@ -65,11 +65,11 @@ public sealed class ListingStepDefinitions(RentalsClient client, ScenarioState s
         => _client.SetUpAsync(_state.User(name), HttpMethod.Post, $"{ListingUrl}/pause");
 
     [When("{string} crea una publicación de {word} a su nombre")]
-    public Task DraftsInOwnName(string name, string operation) => DraftAsync(name, operation, _state.User(name).Id);
+    public Task DraftsInOwnName(string name, string operation) => DraftAsync(name, operation, _state.OwnerOf(name));
 
     [When("{string} crea una publicación de {word} a nombre de {string}")]
     public Task DraftsOnBehalfOf(string name, string operation, string owner)
-        => DraftAsync(name, operation, _state.User(owner).Id);
+        => DraftAsync(name, operation, _state.OwnerOf(owner));
 
     [When("{string} crea una publicación de {word} a nombre de un propietario inexistente")]
     public Task DraftsForAMissingOwner(string name, string operation) => DraftAsync(name, operation, Guid.NewGuid());
@@ -170,7 +170,7 @@ public sealed class ListingStepDefinitions(RentalsClient client, ScenarioState s
 
     [Then("la publicación pertenece a {string}")]
     public async Task ListingBelongsTo(string owner)
-        => Assert.AreEqual(_state.User(owner).Id, (await ListingAsync()).OwnerId);
+        => Assert.AreEqual(_state.OwnerOf(owner), (await ListingAsync()).OwnerId);
 
     [Then("la publicación tiene {int} fotos")]
     public async Task ListingHasPhotos(int count) => Assert.HasCount(count, await PhotosAsync());

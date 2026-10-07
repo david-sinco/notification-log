@@ -1,5 +1,4 @@
 using Domain.Shared.Authorization;
-using NotificationLog.Contracts.Identity;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
@@ -19,8 +18,7 @@ public class RegisterCompanyOwnerHandlerTests : ApplicationScenario
             .And(_ => TheNitIsFree(), "Y que ningún propietario tiene ese NIT")
             .When(_ => Registers("900123456-8"), "Cuando se registra como persona jurídica con NIT 900123456-8")
             .Then(_ => ResultIs(Accepted), "Entonces se acepta")
-            .And(_ => TheOwnerIsSavedWithTheUserId(), "Y el propietario se guarda con el identificador del usuario")
-            .And(_ => AnAccountIsRequested(), "Y se solicita una cuenta con rol Propietario a nombre de la razón social")
+            .And(_ => TheOwnerIsSavedRelatedToTheUser(), "Y el propietario se guarda con un identificador nuevo, relacionado con el usuario")
             .BDDfy("Un propietario registra su empresa");
 
     [TestMethod]
@@ -46,7 +44,6 @@ public class RegisterCompanyOwnerHandlerTests : ApplicationScenario
             .When(_ => Registers("900123456-8"), "Cuando se registra como persona jurídica")
             .Then(_ => IsRejectedWith("Ya existe un propietario con ese NIT."), "Entonces se rechaza: Ya existe un propietario con ese NIT.")
             .And(_ => NothingIsSaved(), "Y no se guarda nada")
-            .And(_ => NoAccountIsRequested(), "Y no se solicita ninguna cuenta")
             .BDDfy("No se admiten dos propietarios con el mismo NIT");
 
     [TestMethod]
@@ -56,13 +53,20 @@ public class RegisterCompanyOwnerHandlerTests : ApplicationScenario
             .Then(_ => FailsValidationOn("Nit"), "Entonces la validación falla en el NIT")
             .BDDfy("El registro exige el NIT");
 
-    private void AUserWithRole(UserRole role) => UserIs(role, _userId);
+    private void AUserWithRole(UserRole role)
+    {
+        UserIs(role, _userId);
+        UserReservation().Returns(true);
+    }
 
     private void TheNitIsFree() => Reservation().Returns(true);
 
     private void TheNitIsTaken() => Reservation().Returns(false);
 
-    private void TheUserIsAlreadyAnOwner() => Exists(OwnerFactory.Natural(_userId));
+    private void TheUserIsAlreadyAnOwner() => UserReservation().Returns(false);
+
+    private Task<bool> UserReservation()
+        => Owners.TryReserveUserAsync(Arg.Any<Guid>(), _userId, Arg.Any<CancellationToken>());
 
     private Task<bool> Reservation()
         => Owners.TryReserveCompanyAsync(Arg.Any<Guid>(), Arg.Any<Nit>(), Arg.Any<CancellationToken>());
@@ -73,23 +77,12 @@ public class RegisterCompanyOwnerHandlerTests : ApplicationScenario
             User,
             CancellationToken.None));
 
-    private void TheOwnerIsSavedWithTheUserId()
+    private void TheOwnerIsSavedRelatedToTheUser()
     {
-        Assert.AreEqual(_userId, _ownerId);
+        Assert.AreNotEqual(_userId, _ownerId);
         Owners.Received(1).AppendAsync(
-            Arg.Is<Owner>(owner => owner.Id == _userId && owner.CreatedBy == _userId), Arg.Any<CancellationToken>());
+            Arg.Is<Owner>(owner => owner.Id == _ownerId && owner.CreatedBy == _userId && owner.RelatedUserId == _userId),
+            Arg.Any<CancellationToken>());
         IsSaved();
     }
-
-    private void AnAccountIsRequested()
-        => Accounts.Received(1).RequestAccountAsync(
-            Arg.Is<AccountCreationRequested>(request =>
-                request.UserId == _ownerId.ToString()
-                && request.Email == "andes@example.com"
-                && request.Phone == "+576011234567"
-                && request.Name == "Inmobiliaria Andes"
-                && request.Role == nameof(UserRole.Propietario)),
-            Arg.Any<CancellationToken>());
-
-    private void NoAccountIsRequested() => Accounts.DidNotReceiveWithAnyArgs().RequestAccountAsync(default!, default);
 }

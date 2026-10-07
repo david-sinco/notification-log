@@ -39,10 +39,6 @@ public static class RabbitMqMessagingExtensions
             opts.PublishMessage<NotificationDispatchRequested>()
                 .ToRabbitQueue("notification-dispatch")
                 .UseProtobufSerialization();
-
-            opts.PublishMessage<AccountCreationRequested>()
-                .ToRabbitQueue("identity-accounts")
-                .UseProtobufSerialization();
         });
 
         return services;

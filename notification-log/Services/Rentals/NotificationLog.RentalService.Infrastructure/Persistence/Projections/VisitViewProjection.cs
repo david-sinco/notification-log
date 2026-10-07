@@ -20,7 +20,6 @@ public sealed class VisitViewProjection : SingleStreamProjection<VisitView, Guid
         {
             var listing = await session.LoadAsync<ListingView>(requested.ListingId, cancellation);
             var visitor = await session.LoadAsync<VisitorView>(requested.VisitorId, cancellation);
-            var host = await session.LoadAsync<OwnerView>(requested.HostId, cancellation);
 
             return new VisitView
             {
@@ -32,7 +31,7 @@ public sealed class VisitViewProjection : SingleStreamProjection<VisitView, Guid
                 ListingNeighborhood = listing?.Neighborhood,
                 ListingCity = listing?.City,
                 VisitorName = visitor?.DisplayName ?? string.Empty,
-                HostName = host?.DisplayName() ?? string.Empty,
+                HostName = listing?.OwnerName ?? string.Empty,
                 Status = VisitStatus.AwaitingHost,
                 ProposedSlots = [.. requested.Slots],
                 RespondBy = requested.RespondBy,

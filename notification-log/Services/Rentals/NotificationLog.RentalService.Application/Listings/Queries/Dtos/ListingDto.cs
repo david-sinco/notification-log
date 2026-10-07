@@ -3,6 +3,7 @@ namespace NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 public sealed record ListingDto(
     Guid Id,
     Guid OwnerId,
+    Guid? OwnerUserId,
     Guid CreatedBy,
     string Operation,
     string Status,

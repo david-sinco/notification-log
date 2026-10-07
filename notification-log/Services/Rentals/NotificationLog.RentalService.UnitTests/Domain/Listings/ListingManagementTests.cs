@@ -41,5 +41,5 @@ public class ListingManagementTests : DomainScenario
         _user = TestUser.With(role, id);
     }
 
-    private void TriesToManageTheListing() => Try(() => Listing.EnsureCanManage(_listing, _user));
+    private void TriesToManageTheListing() => Try(() => _listing.EnsureCanManage(_user, ListingFactory.Owner));
 }

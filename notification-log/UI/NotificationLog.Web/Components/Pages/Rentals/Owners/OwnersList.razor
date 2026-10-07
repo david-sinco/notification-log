@@ -1,6 +1,5 @@
 @page "/rentals/owners"
 @attribute [Authorize(Roles = $"{IdentityRoles.Administrador},{IdentityRoles.Moderador},{IdentityRoles.Propietario}")]
-@using System.Net
 @inject OwnersApiClient Api
 @inject RentalsActor Actor
 
@@ -14,6 +13,8 @@
     </header>
 
     <ErrorAlert Exception="error" />
+
+    <ClaimOwnerPrompt OnClaimed="LoadAsync" />
 
     <div class="split">
         <section class="stack" aria-label="Lista de propietarios" style="flex: 3 1 420px">
@@ -41,18 +42,20 @@
                 @foreach (var owner in owners)
                 {
                     var company = owner.Type == "Company";
-                    <article class="card card-tight row" style="padding: 16px; flex-direction: row; --gap: 14px">
+                    var isSelected = owner.Id == selected?.Id;
+                    <button type="button" class="list-item @(isSelected ? "active" : "")" style="flex-direction: row; align-items: center; gap: 14px"
+                            aria-pressed="@(isSelected ? "true" : "false")" @onclick="() => Select(owner)">
                         <span class="avatar @(company ? "avatar-ink" : "avatar-lime")" aria-hidden="true">@RentalsFormat.Initials(OwnerLabels.Name(owner))</span>
-                        <div class="stack grow" style="--gap: 2px">
+                        <span class="stack grow" style="--gap: 2px">
                             <span class="row" style="--gap: 8px">
                                 <span class="strong">@OwnerLabels.Name(owner)</span>
                                 <StatusPill Text="@OwnerLabels.Type(owner.Type)" />
                             </span>
                             <span class="mono smaller muted">@OwnerLabels.Identification(owner)</span>
                             <span class="small muted wrap-any">@owner.Email · @owner.Phone</span>
-                        </div>
-                        <a class="link" href="rentals/listings">@owner.ListingCount @(owner.ListingCount == 1 ? "publicación" : "publicaciones")</a>
-                    </article>
+                        </span>
+                        <span class="small strong">@ListingCount(owner)</span>
+                    </button>
                 }
             </div>
 
@@ -62,7 +65,37 @@
             }
         </section>
 
-        @if (CanRegister)
+        @if (selected is not null)
+        {
+            <section class="card" aria-label="Detalle del propietario" style="flex: 2 1 320px; --gap: 16px">
+                <div class="page-head">
+                    <div class="row" style="--gap: 8px">
+                        <StatusPill Text="@OwnerLabels.Type(selected.Type)" />
+                        <span class="id">@RentalsFormat.Short(selected.Id)</span>
+                    </div>
+                    <h2 class="h2">@OwnerLabels.Name(selected)</h2>
+                    <span class="mono smaller muted">@OwnerLabels.Identification(selected)</span>
+                </div>
+
+                <div class="grid-auto" style="--min: 160px; --gap: 10px">
+                    <div class="fact fact-box"><span class="fact-label">Correo</span><span class="fact-value wrap-any">@selected.Email</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Teléfono</span><span class="fact-value">@selected.Phone</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Registrado</span><span class="fact-value">@RentalsFormat.Moment(selected.RegisteredAt)</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Registró</span><span class="fact-value">@(Actor.Is(selected.CreatedBy) ? "Tú" : RentalsFormat.Short(selected.CreatedBy))</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Usuario</span><span class="fact-value">@UserLabel(selected)</span></div>
+                    <div class="fact fact-box"><span class="fact-label">Publicaciones</span><span class="fact-value">@selected.ListingCount</span></div>
+                </div>
+
+                <div class="row">
+                    <a class="btn" href="rentals/listings">Ver publicaciones</a>
+                    @if (CanRegister)
+                    {
+                        <button type="button" class="btn btn-primary" @onclick="() => selected = null">Nuevo propietario</button>
+                    }
+                </div>
+            </section>
+        }
+        else if (CanRegister)
         {
             <section class="card" aria-label="Registrar propietario" style="flex: 2 1 320px; --gap: 16px">
                 <h2 class="h2">Registrar propietario</h2>
@@ -140,6 +173,7 @@
     private bool busy;
     private ApiException? error;
     private ApiException? createError;
+    private OwnerDto? selected;
 
     private string search = "";
     private string? typeFilter;
@@ -157,6 +191,18 @@
 
     private bool CanRegister => loaded && (Actor.IsStaff || owners.Count == 0);
 
+    private static string ListingCount(OwnerDto owner)
+        => $"{owner.ListingCount} {(owner.ListingCount == 1 ? "publicación" : "publicaciones")}";
+
+    private string UserLabel(OwnerDto owner) => owner.RelatedUserId switch
+    {
+        null => "Sin reclamar",
+        { } id when Actor.Is(id) => "Tú",
+        { } id => RentalsFormat.Short(id)
+    };
+
+    private void Select(OwnerDto owner) => selected = owner;
+
     protected override Task OnInitializedAsync() => LoadAsync();
 
     private async Task LoadAsync()
@@ -173,6 +219,7 @@
                 owners = await LoadOwnRecordAsync();
             }
 
+            selected = owners.FirstOrDefault(owner => owner.Id == selected?.Id);
             error = null;
         }
         catch (ApiException ex)
@@ -185,17 +232,7 @@
         }
     }
 
-    private async Task<IReadOnlyList<OwnerDto>> LoadOwnRecordAsync()
-    {
-        try
-        {
-            return [await Api.GetByIdAsync(Actor.Require(), CancellationToken.None)];
-        }
-        catch (ApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound)
-        {
-            return [];
-        }
-    }
+    private Task<IReadOnlyList<OwnerDto>> LoadOwnRecordAsync() => Api.ListMineAsync(CancellationToken.None);
 
     private Task RefreshAsync()
     {

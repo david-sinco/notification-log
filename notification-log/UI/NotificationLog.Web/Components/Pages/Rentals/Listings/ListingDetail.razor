@@ -321,7 +321,7 @@
 
     private string CreatedBy =>
         Actor.Is(listing!.CreatedBy) ? "Tú"
-        : listing.CreatedBy == listing.OwnerId ? listing.OwnerName
+        : listing.CreatedBy == listing.OwnerUserId ? listing.OwnerName
         : RentalsFormat.Short(listing.CreatedBy);
 
     private (string Variant, string Title, string Text)? Note => listing!.Status switch

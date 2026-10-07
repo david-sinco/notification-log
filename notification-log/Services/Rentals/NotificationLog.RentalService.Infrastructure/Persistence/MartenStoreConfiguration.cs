@@ -37,6 +37,7 @@ internal static class MartenStoreConfiguration
 
         options.Schema.For<OwnerDocumentReservation>();
         options.Schema.For<OwnerNitReservation>();
+        options.Schema.For<OwnerUserReservation>();
         options.Schema.For<VisitorDocumentReservation>();
     }
 }

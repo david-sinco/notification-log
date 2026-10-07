@@ -5,16 +5,19 @@ using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Listings;
+using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 
 public sealed class UpdateListingDetailsHandler(
     IListingRepository listings,
+    IOwnerRepository owners,
     IUnitOfWork uow,
     IValidator<UpdateListingDetailsCommand> validator)
 {
     private readonly IListingRepository _listings = listings;
+    private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
     private readonly IValidator<UpdateListingDetailsCommand> _validator = validator;
 
@@ -23,7 +26,8 @@ public sealed class UpdateListingDetailsHandler(
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        Listing.EnsureCanManage(listing, user);
+        var owner = await _owners.GetAsync(listing.OwnerId, ct);
+        listing.EnsureCanManage(user, owner.RelatedUserId);
 
         var details = PropertyDetails.Create(
             cmd.Type,

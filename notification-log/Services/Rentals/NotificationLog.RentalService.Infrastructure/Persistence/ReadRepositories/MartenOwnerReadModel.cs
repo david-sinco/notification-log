@@ -48,9 +48,36 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
     public async Task<OwnerDto?> GetAsync(Guid id, CancellationToken ct)
         => await _session.LoadAsync<OwnerView>(id, ct) is { } view ? ToDto(view) : null;
 
+    public async Task<IReadOnlyList<OwnerDto>> ListRelatedToAsync(Guid userId, CancellationToken ct)
+    {
+        var owners = await _session.Query<OwnerView>()
+            .Where(x => x.RelatedUserId == userId)
+            .OrderBy(x => x.RegisteredAt)
+            .ToListAsync(ct);
+
+        return owners.Select(ToDto).ToList();
+    }
+
+    public async Task<IReadOnlyList<OwnerDto>> ListClaimableAsync(string? email, string? phone, CancellationToken ct)
+    {
+        var byEmail = !string.IsNullOrEmpty(email);
+        var byPhone = !string.IsNullOrEmpty(phone);
+
+        if (!byEmail && !byPhone)
+            return [];
+
+        var owners = await _session.Query<OwnerView>()
+            .Where(x => x.RelatedUserId == null && ((byEmail && x.Email == email) || (byPhone && x.Phone == phone)))
+            .OrderBy(x => x.RegisteredAt)
+            .ToListAsync(ct);
+
+        return owners.Select(ToDto).ToList();
+    }
+
     private static OwnerDto ToDto(OwnerView x) => new(
         x.Id,
         x.CreatedBy,
+        x.RelatedUserId,
         x.Type.ToString(),
         x.FirstNames,
         x.LastNames,

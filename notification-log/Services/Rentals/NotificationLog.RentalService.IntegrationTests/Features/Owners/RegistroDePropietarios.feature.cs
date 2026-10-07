@@ -27,8 +27,10 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("es"), "Features/Owners", "Registro de propietarios", "  Un propietario se registra a sí mismo, o lo registra un administrador o moderad" +
-                "or.\r\n  El documento y el NIT son únicos entre propietarios.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("es"), "Features/Owners", "Registro de propietarios", @"  Un propietario se registra a sí mismo, o lo registra un administrador o moderador.
+  El documento y el NIT son únicos entre propietarios.
+  Registrar un propietario no crea usuarios: el que registra un moderador queda sin usuario
+  hasta que lo reclama quien confirmó su correo o su teléfono.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
 #line 1 "RegistroDePropietarios.feature"
 #line hidden
@@ -118,25 +120,25 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         
         public virtual async global::System.Threading.Tasks.Task FeatureBackgroundAsync()
         {
-#line 6
+#line 8
   #line hidden
-#line 7
+#line 9
     await testRunner.GivenAsync("el usuario \"Ana\" con rol Propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 8
+#line 10
     await testRunner.AndAsync("el usuario \"Pedro\" con rol Propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 9
+#line 11
     await testRunner.AndAsync("el usuario \"Marta\" con rol Moderador", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 10
+#line 12
     await testRunner.AndAsync("el usuario \"Víctor\" con rol Visitor", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Owners/RegistroDePropietarios.feature.ndjson", 12);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Owners/RegistroDePropietarios.feature.ndjson", 18);
         }
         
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un propietario se registra como persona natural")]
@@ -150,7 +152,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario se registra como persona natural", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 12
+#line 14
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -160,7 +162,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
                 global::Reqnroll.Table table8 = new global::Reqnroll.Table(new string[] {
@@ -177,11 +179,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
                             "52123456",
                             "ana@example.com",
                             "3001234567"});
-#line 13
+#line 15
     await testRunner.WhenAsync("\"Ana\" se registra como propietaria persona natural con:", ((string)(null)), table8, "Cuando ");
 #line hidden
-#line 16
-    await testRunner.ThenAsync("el propietario queda registrado con el identificador de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 18
+    await testRunner.ThenAsync("el propietario queda registrado y relacionado con \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
                 global::Reqnroll.Table table9 = new global::Reqnroll.Table(new string[] {
                             "tipo",
@@ -195,11 +197,8 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
                             "52123456",
                             "ana@example.com",
                             "+573001234567"});
-#line 17
+#line 19
     await testRunner.AndAsync("\"Ana\" puede consultar ese propietario con:", ((string)(null)), table9, "Y ");
-#line hidden
-#line 20
-    await testRunner.AndAsync("se solicita una cuenta con rol Propietario para \"ana@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -216,7 +215,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario se registra como persona jurídica", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 22
+#line 23
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -226,7 +225,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
                 global::Reqnroll.Table table10 = new global::Reqnroll.Table(new string[] {
@@ -239,11 +238,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
                             "900123456-8",
                             "andes@example.com",
                             "6011234567"});
-#line 23
+#line 24
     await testRunner.WhenAsync("\"Ana\" se registra como propietaria persona jurídica con:", ((string)(null)), table10, "Cuando ");
 #line hidden
-#line 26
-    await testRunner.ThenAsync("el propietario queda registrado con el identificador de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 27
+    await testRunner.ThenAsync("el propietario queda registrado y relacionado con \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
                 global::Reqnroll.Table table11 = new global::Reqnroll.Table(new string[] {
                             "tipo",
@@ -253,7 +252,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
                             "Company",
                             "Inmobiliaria Andes",
                             "900123456-8"});
-#line 27
+#line 28
     await testRunner.AndAsync("\"Ana\" puede consultar ese propietario con:", ((string)(null)), table11, "Y ");
 #line hidden
             }
@@ -271,7 +270,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un moderador registra a un propietario en su nombre", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 31
+#line 32
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -281,16 +280,19 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 32
+#line 33
     await testRunner.WhenAsync("\"Marta\" registra un propietario persona natural con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 33
+#line 34
     await testRunner.ThenAsync("el propietario queda registrado con un identificador nuevo", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 34
+#line 35
+    await testRunner.AndAsync("el propietario queda sin usuario relacionado", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 36
     await testRunner.AndAsync("\"Marta\" puede consultar ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -308,7 +310,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario no puede registrarse dos veces", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 36
+#line 38
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -318,16 +320,16 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 37
+#line 39
     await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 38
+#line 40
     await testRunner.WhenAsync("\"Ana\" se registra como propietaria persona natural con documento \"80765432\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 39
+#line 41
     await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya estás registrado como p" +
                         "ropietario.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -346,7 +348,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos propietarios con el mismo documento", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 41
+#line 43
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -356,16 +358,16 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 42
+#line 44
     await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 43
+#line 45
     await testRunner.WhenAsync("\"Pedro\" se registra como propietario persona natural con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 44
+#line 46
     await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya existe un propietario c" +
                         "on ese documento.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -384,7 +386,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos propietarios con el mismo NIT", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 46
+#line 48
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -394,16 +396,16 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 47
+#line 49
     await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con NIT \"900123456-8\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 48
+#line 50
     await testRunner.WhenAsync("\"Pedro\" se registra como propietario persona jurídica con NIT \"900123456-8\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 49
+#line 51
     await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya existe un propietario c" +
                         "on ese NIT.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -422,7 +424,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un NIT con dígito de verificación incorrecto se rechaza", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 51
+#line 53
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -432,13 +434,13 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 52
+#line 54
     await testRunner.WhenAsync("\"Ana\" se registra como propietaria persona jurídica con NIT \"900123456-1\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 53
+#line 55
     await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El dígito de verific" +
                         "ación del NIT no es correcto.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -457,7 +459,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un visitante no puede registrar propietarios", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 55
+#line 57
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -467,13 +469,13 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 56
+#line 58
     await testRunner.WhenAsync("\"Víctor\" se registra como propietario persona natural con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 57
+#line 59
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -491,7 +493,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario no puede consultar a otro propietario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 59
+#line 61
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -501,16 +503,16 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 60
+#line 62
     await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 61
+#line 63
     await testRunner.WhenAsync("\"Pedro\" consulta el propietario de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 62
+#line 64
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -528,7 +530,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Solo moderación puede listar los propietarios", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 64
+#line 66
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -538,23 +540,280 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             else
             {
                 await this.ScenarioStartAsync();
-#line 6
+#line 8
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 65
+#line 67
     await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con documento \"52123456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 66
+#line 68
     await testRunner.WhenAsync("\"Ana\" lista los propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 67
+#line 69
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 68
+#line 70
     await testRunner.WhenAsync("\"Marta\" lista los propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 69
+#line 71
     await testRunner.ThenAsync("la lista contiene 1 propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El propietario aparece para reclamar a quien tiene su correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El propietario aparece para reclamar a quien tiene su correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task ElPropietarioApareceParaReclamarAQuienTieneSuCorreo()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "10";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El propietario aparece para reclamar a quien tiene su correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 73
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 8
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 74
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario persona natural para \"Ana\" con documento \"521" +
+                        "23456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 75
+    await testRunner.WhenAsync("\"Ana\" consulta los propietarios que puede reclamar", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 76
+    await testRunner.ThenAsync("la respuesta contiene solo ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El propietario no aparece para reclamar a quien tiene otro correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El propietario no aparece para reclamar a quien tiene otro correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task ElPropietarioNoApareceParaReclamarAQuienTieneOtroCorreo()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "11";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El propietario no aparece para reclamar a quien tiene otro correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 78
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 8
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 79
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario persona natural para \"Ana\" con documento \"521" +
+                        "23456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 80
+    await testRunner.WhenAsync("\"Pedro\" consulta los propietarios que puede reclamar", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 81
+    await testRunner.ThenAsync("la respuesta no contiene propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Reclamar relaciona al propietario con el usuario")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Reclamar relaciona al propietario con el usuario")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task ReclamarRelacionaAlPropietarioConElUsuario()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "12";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Reclamar relaciona al propietario con el usuario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 83
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 8
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 84
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario persona natural para \"Ana\" con documento \"521" +
+                        "23456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 85
+    await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 86
+    await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 87
+    await testRunner.AndAsync("el propietario queda relacionado con \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 88
+    await testRunner.WhenAsync("\"Ana\" consulta sus propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 89
+    await testRunner.ThenAsync("la respuesta contiene solo ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un propietario reclamado no se puede reclamar otra vez")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un propietario reclamado no se puede reclamar otra vez")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task UnPropietarioReclamadoNoSePuedeReclamarOtraVez()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "13";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario reclamado no se puede reclamar otra vez", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 91
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 8
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 92
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario persona natural para \"Ana\" con documento \"521" +
+                        "23456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 93
+    await testRunner.AndAsync("que \"Ana\" reclamó ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 94
+    await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 95
+    await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El propietario ya fu" +
+                        "e reclamado.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se reclama un propietario con otro correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se reclama un propietario con otro correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task NoSeReclamaUnPropietarioConOtroCorreo()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "14";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se reclama un propietario con otro correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 97
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 8
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 98
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario persona natural para \"Ana\" con documento \"521" +
+                        "23456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 99
+    await testRunner.WhenAsync("\"Pedro\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 100
+    await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Tu correo o teléfono" +
+                        " confirmado no coincide con el del propietario.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 101
+    await testRunner.AndAsync("el propietario queda sin usuario relacionado", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Quien reclama al propietario gestiona las publicaciones que creó el moderador")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Quien reclama al propietario gestiona las publicaciones que creó el moderador")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task QuienReclamaAlPropietarioGestionaLasPublicacionesQueCreoElModerador()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "15";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Quien reclama al propietario gestiona las publicaciones que creó el moderador", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 103
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 8
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 104
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario persona natural para \"Ana\" con documento \"521" +
+                        "23456\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 105
+    await testRunner.WhenAsync("\"Marta\" crea una publicación de arriendo a nombre de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 106
+    await testRunner.AndAsync("\"Ana\" fija el precio en 1800000", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 107
+    await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 108
+    await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 109
+    await testRunner.AndAsync("\"Ana\" fija el precio en 1800000", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 110
+    await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

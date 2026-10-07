@@ -5,16 +5,19 @@ using FluentValidation;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Listings;
+using NotificationLog.RentalService.Domain.Owners;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.ChangeListingPrice;
 
 public sealed class ChangeListingPriceHandler(
     IListingRepository listings,
+    IOwnerRepository owners,
     IUnitOfWork uow,
     IValidator<ChangeListingPriceCommand> validator,
     TimeProvider time)
 {
     private readonly IListingRepository _listings = listings;
+    private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
     private readonly IValidator<ChangeListingPriceCommand> _validator = validator;
     private readonly TimeProvider _time = time;
@@ -24,7 +27,8 @@ public sealed class ChangeListingPriceHandler(
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        Listing.EnsureCanManage(listing, user);
+        var owner = await _owners.GetAsync(listing.OwnerId, ct);
+        listing.EnsureCanManage(user, owner.RelatedUserId);
 
         listing.ChangePrice(Money.Create(cmd.Price), _time.GetUtcNow());
 

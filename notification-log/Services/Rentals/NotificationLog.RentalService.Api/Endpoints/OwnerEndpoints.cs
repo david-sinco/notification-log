@@ -2,6 +2,7 @@ using System.Security.Claims;
 using API.Shared.Extensions;
 using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Owners;
+using NotificationLog.RentalService.Application.Owners.Commands.ClaimOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
 using NotificationLog.RentalService.Application.Owners.Queries;
@@ -40,9 +41,28 @@ public static class OwnerEndpoints
             .WithSummary("Lista todos los propietarios")
             .Produces<PagedResult<OwnerDto>>();
 
+        group.MapPost("/{id:guid}/claim", ClaimAsync)
+            .WithName("ClaimOwner")
+            .WithSummary("Reclama un propietario sin usuario cuyo correo o teléfono coincide con el confirmado del usuario")
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status403Forbidden)
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapGet("/mine", ListMineAsync)
+            .WithName("ListMyOwners")
+            .WithSummary("Lista los propietarios relacionados con el usuario")
+            .Produces<IReadOnlyList<OwnerDto>>();
+
+        group.MapGet("/claimable", ListClaimableAsync)
+            .WithName("ListClaimableOwners")
+            .WithSummary("Lista los propietarios sin usuario que coinciden con el correo o el teléfono confirmado del usuario")
+            .Produces<IReadOnlyList<OwnerDto>>();
+
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetOwnerById")
-            .WithSummary("Obtiene un propietario que registraste, o cualquiera si eres administrador o moderador")
+            .WithSummary("Obtiene un propietario tuyo o que registraste, o cualquiera si eres administrador o moderador")
             .Produces<OwnerDto>()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
@@ -80,6 +100,29 @@ public static class OwnerEndpoints
         ListOwnersHandler handler,
         CancellationToken ct)
         => Results.Ok(await handler.HandleAsync(filter, paging, ct));
+
+    private static async Task<IResult> ClaimAsync(
+        Guid id,
+        ClaimsPrincipal user,
+        ClaimOwnerHandler handler,
+        CancellationToken ct)
+    {
+        await handler.HandleAsync(new ClaimOwnerCommand(id), user, ct);
+
+        return Results.NoContent();
+    }
+
+    private static async Task<IResult> ListMineAsync(
+        ClaimsPrincipal user,
+        ListMyOwnersHandler handler,
+        CancellationToken ct)
+        => Results.Ok(await handler.HandleAsync(user, ct));
+
+    private static async Task<IResult> ListClaimableAsync(
+        ClaimsPrincipal user,
+        ListClaimableOwnersHandler handler,
+        CancellationToken ct)
+        => Results.Ok(await handler.HandleAsync(user, ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,

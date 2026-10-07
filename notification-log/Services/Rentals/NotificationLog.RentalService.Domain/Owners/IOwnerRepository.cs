@@ -12,4 +12,6 @@ public interface IOwnerRepository
     Task<bool> TryReserveNaturalAsync(Guid ownerId, IdentityDocument document, CancellationToken cancellationToken = default);
 
     Task<bool> TryReserveCompanyAsync(Guid ownerId, Nit nit, CancellationToken cancellationToken = default);
+
+    Task<bool> TryReserveUserAsync(Guid ownerId, Guid userId, CancellationToken cancellationToken = default);
 }

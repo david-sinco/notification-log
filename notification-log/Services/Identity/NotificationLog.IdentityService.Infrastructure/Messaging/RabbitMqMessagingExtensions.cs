@@ -17,7 +17,6 @@ internal static class RabbitMqMessagingExtensions
 {
     public const string UsersExchange = "identity.users";
     public const string VerificationCodesExchange = "identity.verification-codes";
-    public const string AccountsQueue = "identity-accounts";
     public const string WolverineSchema = "wolverine";
 
     public static IServiceCollection AddRabbitMqMessaging(this IServiceCollection services, IConfiguration configuration)
@@ -44,10 +43,6 @@ internal static class RabbitMqMessagingExtensions
                 {
                     PreferredObjectCreationHandling = JsonObjectCreationHandling.Populate
                 }));
-
-            opts.ListenToRabbitQueue(AccountsQueue)
-                .DefaultIncomingMessage<AccountCreationRequested>()
-                .UseProtobufSerialization();
 
             opts.PublishMessage<UserCreated>()
                 .ToRabbitExchange(UsersExchange, exchange => exchange.ExchangeType = ExchangeType.Fanout)

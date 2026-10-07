@@ -9,5 +9,6 @@ public sealed record CompanyOwnerRegistered(
     string Nit,
     int NitCheckDigit,
     string Email,
-    string Phone
+    string Phone,
+    Guid? RelatedUserId = null
 ) : DomainEvent;

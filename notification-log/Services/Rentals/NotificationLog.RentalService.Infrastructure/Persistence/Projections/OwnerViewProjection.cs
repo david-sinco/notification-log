@@ -14,6 +14,7 @@ public sealed class OwnerViewProjection : MultiStreamProjection<OwnerView, Guid>
     {
         Identity<NaturalOwnerRegistered>(e => e.OwnerId);
         Identity<CompanyOwnerRegistered>(e => e.OwnerId);
+        Identity<OwnerClaimed>(e => e.OwnerId);
         Identity<ListingDrafted>(e => e.OwnerId);
     }
 
@@ -28,6 +29,7 @@ public sealed class OwnerViewProjection : MultiStreamProjection<OwnerView, Guid>
                 {
                     Id = id,
                     CreatedBy = n.CreatedBy,
+                    RelatedUserId = n.RelatedUserId,
                     Type = OwnerType.Natural,
                     FirstNames = n.FirstNames,
                     LastNames = n.LastNames,
@@ -42,6 +44,7 @@ public sealed class OwnerViewProjection : MultiStreamProjection<OwnerView, Guid>
                 {
                     Id = id,
                     CreatedBy = c.CreatedBy,
+                    RelatedUserId = c.RelatedUserId,
                     Type = OwnerType.Company,
                     LegalName = c.LegalName,
                     Nit = c.Nit,
@@ -50,6 +53,9 @@ public sealed class OwnerViewProjection : MultiStreamProjection<OwnerView, Guid>
                     Phone = c.Phone,
                     RegisteredAt = at
                 };
+            case OwnerClaimed claimed when snapshot is not null:
+                snapshot.RelatedUserId = claimed.UserId;
+                return snapshot;
             case ListingDrafted when snapshot is not null:
                 snapshot.ListingCount++;
                 return snapshot;

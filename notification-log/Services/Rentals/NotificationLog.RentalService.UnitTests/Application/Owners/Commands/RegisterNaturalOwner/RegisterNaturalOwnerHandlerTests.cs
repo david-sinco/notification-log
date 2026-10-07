@@ -1,5 +1,4 @@
 using Domain.Shared.Authorization;
-using NotificationLog.Contracts.Identity;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
 using NotificationLog.RentalService.Domain.Common.Enums;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
@@ -23,8 +22,7 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
             .And(_ => TheDocumentIsFree(), "Y que ningún propietario tiene ese documento")
             .When(_ => Registers("Ana"), "Cuando se registra como persona natural")
             .Then(_ => ResultIs(Accepted), "Entonces se acepta")
-            .And(_ => TheOwnerIsSavedWithTheUserId(), "Y el propietario se guarda con el identificador del usuario")
-            .And(_ => AnAccountIsRequested(), "Y se solicita una cuenta con rol Propietario, su correo, su teléfono y su nombre")
+            .And(_ => TheOwnerIsSavedRelatedToTheUser(), "Y el propietario se guarda con un identificador nuevo, relacionado con el usuario")
             .BDDfy("Un propietario se registra a sí mismo");
 
     [TestMethod]
@@ -33,8 +31,8 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
             .And(_ => TheDocumentIsFree(), "Y que ningún propietario tiene ese documento")
             .When(_ => Registers("Ana"), "Cuando registra a un propietario persona natural")
             .Then(_ => ResultIs(Accepted), "Entonces se acepta")
-            .And(_ => TheOwnerIsSavedWithANewId(), "Y el propietario se guarda con un identificador nuevo, creado por el moderador")
-            .BDDfy("Un moderador registra a un propietario con un identificador nuevo");
+            .And(_ => TheOwnerIsSavedWithoutRelatedUser(), "Y el propietario se guarda con un identificador nuevo, creado por el moderador y sin usuario relacionado")
+            .BDDfy("Un moderador registra a un propietario sin usuario relacionado");
 
     [TestMethod]
     public void OnlyOwnersAndStaffCanRegisterOwners() =>
@@ -68,7 +66,6 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
             .Then(_ => IsRejectedWith("Ya existe un propietario con ese documento."),
                 "Entonces se rechaza: Ya existe un propietario con ese documento.")
             .And(_ => NothingIsSaved(), "Y no se guarda nada")
-            .And(_ => NoAccountIsRequested(), "Y no se solicita ninguna cuenta")
             .BDDfy("No se admiten dos propietarios con el mismo documento");
 
     [TestMethod]
@@ -78,13 +75,20 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
             .Then(_ => FailsValidationOn("FirstNames"), "Entonces la validación falla en los nombres")
             .BDDfy("El registro exige los nombres");
 
-    private void AUserWithRole(UserRole role) => UserIs(role, _userId);
+    private void AUserWithRole(UserRole role)
+    {
+        UserIs(role, _userId);
+        UserReservation().Returns(true);
+    }
 
     private void TheDocumentIsFree() => Reservation().Returns(true);
 
     private void TheDocumentIsTaken() => Reservation().Returns(false);
 
-    private void TheUserIsAlreadyAnOwner() => Exists(OwnerFactory.Natural(_userId));
+    private void TheUserIsAlreadyAnOwner() => UserReservation().Returns(false);
+
+    private Task<bool> UserReservation()
+        => Owners.TryReserveUserAsync(Arg.Any<Guid>(), _userId, Arg.Any<CancellationToken>());
 
     private Task<bool> Reservation()
         => Owners.TryReserveNaturalAsync(Arg.Any<Guid>(), Arg.Any<IdentityDocument>(), Arg.Any<CancellationToken>());
@@ -96,34 +100,17 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
             User,
             CancellationToken.None));
 
-    private void TheOwnerIsSavedWithTheUserId()
-    {
-        Assert.AreEqual(_userId, _ownerId);
-        TheOwnerIsSaved();
-    }
+    private void TheOwnerIsSavedRelatedToTheUser() => TheOwnerIsSavedRelatedTo(_userId);
 
-    private void TheOwnerIsSavedWithANewId()
+    private void TheOwnerIsSavedWithoutRelatedUser() => TheOwnerIsSavedRelatedTo(null);
+
+    private void TheOwnerIsSavedRelatedTo(Guid? relatedUserId)
     {
         Assert.AreNotEqual(_userId, _ownerId);
-        TheOwnerIsSaved();
-    }
-
-    private void TheOwnerIsSaved()
-    {
         Owners.Received(1).AppendAsync(
-            Arg.Is<Owner>(owner => owner.Id == _ownerId && owner.CreatedBy == _userId), Arg.Any<CancellationToken>());
+            Arg.Is<Owner>(owner =>
+                owner.Id == _ownerId && owner.CreatedBy == _userId && owner.RelatedUserId == relatedUserId),
+            Arg.Any<CancellationToken>());
         IsSaved();
     }
-
-    private void AnAccountIsRequested()
-        => Accounts.Received(1).RequestAccountAsync(
-            Arg.Is<AccountCreationRequested>(request =>
-                request.UserId == _ownerId.ToString()
-                && request.Email == "ana@example.com"
-                && request.Phone == "+573001234567"
-                && request.Name == "Ana Gómez Rincón"
-                && request.Role == nameof(UserRole.Propietario)),
-            Arg.Any<CancellationToken>());
-
-    private void NoAccountIsRequested() => Accounts.DidNotReceiveWithAnyArgs().RequestAccountAsync(default!, default);
 }

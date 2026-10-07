@@ -54,7 +54,6 @@ public static class DependencyInjection
         services.AddScoped<IDashboardReadModel, MartenDashboardReadModel>();
 
         services.AddScoped<INotificationProducer, WolverineNotificationDispatcher>();
-        services.AddScoped<IAccountProvisioner, WolverineAccountProvisioner>();
 
         services.AddSingleton<AzureBlobPhotoStorage>();
         services.AddSingleton<IPhotoStorage>(provider => provider.GetRequiredService<AzureBlobPhotoStorage>());

@@ -29,10 +29,10 @@ public class ListingPauseTests : DomainScenario
             {
                 { ListingStatus.Published, Accepted },
                 { ListingStatus.Paused, Accepted },
-                { ListingStatus.Draft, "Solo se puede pausar una publicación publicada." },
-                { ListingStatus.InReview, "Solo se puede pausar una publicación publicada." },
-                { ListingStatus.Expired, "Solo se puede pausar una publicación publicada." },
-                { ListingStatus.Suspended, "Solo se puede pausar una publicación publicada." },
+                { ListingStatus.Draft, "Solo se puede pausar una publicación en estado publicado." },
+                { ListingStatus.InReview, "Solo se puede pausar una publicación en estado publicado." },
+                { ListingStatus.Expired, "Solo se puede pausar una publicación en estado publicado." },
+                { ListingStatus.Suspended, "Solo se puede pausar una publicación en estado publicado." },
             })
             .BDDfy("Solo se pausa una publicación publicada");
 

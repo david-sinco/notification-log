@@ -34,7 +34,7 @@
                     </div>
                 </fieldset>
                 <div class="stack grow" style="--gap: 8px; --basis: 260px">
-                    @if (Actor.IsStaff)
+                    @if (Actor.IsStaff || owners.Count > 1)
                     {
                         <label class="smaller muted" for="create-owner">Propietario</label>
                         <select id="create-owner" class="select" style="min-height: 64px" @bind="createOwnerId">
@@ -44,7 +44,15 @@
                                 <option value="@owner.Id">@OwnerLabels.Name(owner) · @OwnerLabels.Identification(owner)</option>
                             }
                         </select>
-                        <span class="smaller muted">La publicación queda a nombre del propietario; tú quedas como quien la creó.</span>
+                        @if (Actor.IsStaff)
+                        {
+                            <span class="smaller muted">La publicación queda a nombre del propietario; tú quedas como quien la creó.</span>
+                        }
+                    }
+                    else if (owners.Count == 0)
+                    {
+                        <span class="smaller muted">Propietario</span>
+                        <span class="strong">Primero registra tu perfil de propietario.</span>
                     }
                     else
                     {
@@ -60,6 +68,8 @@
             </div>
         </section>
     }
+
+    <ClaimOwnerPrompt OnClaimed="LoadAsync" />
 
     <ErrorAlert Exception="error" />
 
@@ -206,14 +216,19 @@
     {
         creating = !creating;
         createError = null;
-        createOwnerId = Actor.IsStaff ? Guid.Empty : Actor.Id ?? Guid.Empty;
+        createOwnerId = Guid.Empty;
 
-        if (!creating || !Actor.IsStaff)
+        if (!creating)
             return;
 
         try
         {
-            owners = (await OwnersApi.ListAsync(null, null, null, 1, 100, CancellationToken.None)).Items;
+            owners = Actor.IsStaff
+                ? (await OwnersApi.ListAsync(null, null, null, 1, 100, CancellationToken.None)).Items
+                : await OwnersApi.ListMineAsync(CancellationToken.None);
+
+            if (!Actor.IsStaff && owners.Count == 1)
+                createOwnerId = owners[0].Id;
         }
         catch (ApiException ex)
         {

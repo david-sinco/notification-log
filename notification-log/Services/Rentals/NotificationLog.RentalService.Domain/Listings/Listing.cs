@@ -193,7 +193,7 @@ public sealed class Listing : AggregateRoot
             return;
 
         if (Status != ListingStatus.Published)
-            throw new DomainException("Solo se puede pausar una publicación publicada.");
+            throw new DomainException("Solo se puede pausar una publicación en estado publicado.");
 
         Raise(new ListingPaused());
     }
@@ -377,14 +377,12 @@ public sealed class Listing : AggregateRoot
     private static DateTimeOffset OccurredAt(DomainEvent domainEvent)
         => new(DateTime.SpecifyKind(domainEvent.OccurredOn, DateTimeKind.Utc));
 
-    public static Guid HostOf(Listing listing) => listing.OwnerId;
-
-    public static void EnsureCanManage(Listing listing, ClaimsPrincipal user)
+    public void EnsureCanManage(ClaimsPrincipal user, Guid? ownerUserId)
     {
         if (user.IsAdministrador() || user.IsModerador())
             return;
 
-        if (!user.IsPropietario() || listing.OwnerId != user.GetUserId())
+        if (!user.IsPropietario() || ownerUserId is null || ownerUserId != user.GetUserId())
             throw new ForbiddenException("No tienes permiso para gestionar esta publicación.");
     }
 }

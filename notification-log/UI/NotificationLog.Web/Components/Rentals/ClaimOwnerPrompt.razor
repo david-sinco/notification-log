@@ -1,0 +1,63 @@
+@inject OwnersApiClient Api
+@inject RentalsActor Actor
+
+<ErrorAlert Exception="error" />
+
+@if (candidate is not null)
+{
+    <section class="card" aria-label="Reclamar propietario" style="--gap: 12px">
+        <h2 class="h2">¿Eres este propietario?</h2>
+        <p class="muted">Hay un propietario registrado con tu correo o tu teléfono confirmado. Si eres tú, sus publicaciones quedan a tu nombre.</p>
+        <div class="stack" style="--gap: 2px">
+            <span class="strong">@OwnerLabels.Name(candidate)</span>
+            <span class="mono smaller muted">@OwnerLabels.Identification(candidate)</span>
+            <span class="small muted wrap-any">@candidate.Email · @candidate.Phone</span>
+        </div>
+        <div class="row row-end">
+            <button type="button" class="btn btn-sm btn-lime" disabled="@busy" @onclick="ClaimAsync">Sí, soy yo</button>
+        </div>
+    </section>
+}
+
+@code {
+    [Parameter] public EventCallback OnClaimed { get; set; }
+
+    private OwnerDto? candidate;
+    private ApiException? error;
+    private bool busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Actor.IsStaff)
+            return;
+
+        try
+        {
+            candidate = (await Api.ListClaimableAsync(CancellationToken.None)).FirstOrDefault();
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+    }
+
+    private async Task ClaimAsync()
+    {
+        busy = true;
+        try
+        {
+            await Api.ClaimAsync(candidate!.Id, CancellationToken.None);
+            candidate = null;
+            error = null;
+            await OnClaimed.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

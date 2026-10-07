@@ -37,7 +37,6 @@ public abstract class ApplicationScenario : DomainScenario
             .AddSingleton(Visits)
             .AddSingleton(UnitOfWork)
             .AddSingleton(Notifications)
-            .AddSingleton(Accounts)
             .AddSingleton(PhotoStorage)
             .AddSingleton(ListingViews)
             .AddSingleton(OwnerViews)
@@ -54,7 +53,6 @@ public abstract class ApplicationScenario : DomainScenario
     protected IVisitRepository Visits { get; } = Substitute.For<IVisitRepository>();
     protected IUnitOfWork UnitOfWork { get; } = Substitute.For<IUnitOfWork>();
     protected INotificationProducer Notifications { get; } = Substitute.For<INotificationProducer>();
-    protected IAccountProvisioner Accounts { get; } = Substitute.For<IAccountProvisioner>();
     protected IPhotoStorage PhotoStorage { get; } = Substitute.For<IPhotoStorage>();
     protected IListingReadModel ListingViews { get; } = Substitute.For<IListingReadModel>();
     protected IOwnerReadModel OwnerViews { get; } = Substitute.For<IOwnerReadModel>();
@@ -66,7 +64,7 @@ public abstract class ApplicationScenario : DomainScenario
 
     protected THandler Handler<THandler>() where THandler : notnull => _services.GetRequiredService<THandler>();
 
-    protected void UserIs(UserRole role, Guid id) => User = TestUser.With(role, id);
+    protected void UserIs(UserRole role, Guid id, string? email = null) => User = TestUser.With(role, id, email);
 
     protected void OwnerSignsIn() => UserIs(UserRole.Propietario, ListingFactory.Owner);
 
@@ -81,9 +79,16 @@ public abstract class ApplicationScenario : DomainScenario
     protected void AThirdPartySignsIn() => UserIs(UserRole.Visitor, Guid.NewGuid());
 
     protected void AnyListingIs(Listing listing)
-        => Listings.LoadAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(listing);
+    {
+        Listings.LoadAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(listing);
+        Exists(OwnerFactory.Natural(listing.OwnerId));
+    }
 
-    protected void Exists(Listing listing) => Listings.LoadAsync(listing.Id, Arg.Any<CancellationToken>()).Returns(listing);
+    protected void Exists(Listing listing)
+    {
+        Listings.LoadAsync(listing.Id, Arg.Any<CancellationToken>()).Returns(listing);
+        Exists(OwnerFactory.Natural(listing.OwnerId));
+    }
 
     protected void Exists(Visit visit) => Visits.LoadAsync(visit.Id, Arg.Any<CancellationToken>()).Returns(visit);
 

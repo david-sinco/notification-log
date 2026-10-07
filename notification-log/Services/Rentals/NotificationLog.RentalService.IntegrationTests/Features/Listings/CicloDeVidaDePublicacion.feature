@@ -133,7 +133,7 @@ Característica: Ciclo de vida de una publicación
     Escenario: No se puede pausar un borrador
       Dada una publicación de arriendo de "Ana" en estado "Borrador"
       Cuando "Ana" pausa la publicación
-      Entonces la solicitud se rechaza por regla de negocio con el mensaje "Solo se puede pausar una publicación publicada."
+      Entonces la solicitud se rechaza por regla de negocio con el mensaje "Solo se puede pausar una publicación en estado publicado."
 
   Regla: La vigencia es de un mes y se renueva cuando quedan 7 días o menos
 

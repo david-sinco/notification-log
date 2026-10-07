@@ -20,6 +20,7 @@ public sealed record ListingSummaryDto(
 public sealed record ListingDto(
     Guid Id,
     Guid OwnerId,
+    Guid? OwnerUserId,
     Guid CreatedBy,
     string Operation,
     string Status,

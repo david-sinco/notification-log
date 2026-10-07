@@ -11,5 +11,6 @@ public sealed record NaturalOwnerRegistered(
     DocumentType DocumentType,
     string DocumentNumber,
     string Email,
-    string Phone
+    string Phone,
+    Guid? RelatedUserId = null
 ) : DomainEvent;

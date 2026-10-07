@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using NotificationLog.IdentityService.Application.Users.Commands.CreateAccount;
 using NotificationLog.IdentityService.Application.Users.Commands.LockUser;
 using NotificationLog.IdentityService.Application.Users.Commands.RegisterAccount;
 using NotificationLog.IdentityService.Application.Users.Commands.RequestSignInCode;
@@ -26,7 +25,6 @@ public static class DependencyInjection
         services.AddScoped<VerificationCodeSender>();
 
         services.AddScoped<RegisterAccountHandler>();
-        services.AddScoped<CreateAccountHandler>();
         services.AddScoped<ResendVerificationCodeHandler>();
         services.AddScoped<VerifyAccountHandler>();
         services.AddScoped<SignInHandler>();

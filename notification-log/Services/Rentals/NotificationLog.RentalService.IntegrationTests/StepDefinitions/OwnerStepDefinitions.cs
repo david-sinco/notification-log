@@ -6,9 +6,8 @@ using NotificationLog.RentalService.Domain.Common.Enums;
 namespace NotificationLog.RentalService.IntegrationTests.StepDefinitions;
 
 [Binding]
-public sealed class OwnerStepDefinitions(RentalsApi api, RentalsClient client, ScenarioState state)
+public sealed class OwnerStepDefinitions(RentalsClient client, ScenarioState state)
 {
-    private readonly RentalsApi _api = api;
     private readonly RentalsClient _client = client;
     private readonly ScenarioState _state = state;
 
@@ -17,12 +16,12 @@ public sealed class OwnerStepDefinitions(RentalsApi api, RentalsClient client, S
 
     [Given("que {string} está registrada/registrado como propietaria/propietario con documento {string}")]
     public async Task OwnerIsRegisteredWithDocument(string name, string document)
-        => await RememberOwnerAsync(await _client.SetUpAsync<CreatedOwnerResponse>(
+        => RememberOwner(name, await _client.SetUpAsync<CreatedOwnerResponse>(
             _state.User(name), HttpMethod.Post, "/api/owners/natural", NaturalOwner(name, document)));
 
     [Given("que {string} está registrada/registrado como propietaria/propietario con NIT {string}")]
     public async Task OwnerIsRegisteredWithNit(string name, string nit)
-        => await RememberOwnerAsync(await _client.SetUpAsync<CreatedOwnerResponse>(
+        => RememberOwner(name, await _client.SetUpAsync<CreatedOwnerResponse>(
             _state.User(name), HttpMethod.Post, "/api/owners/company", CompanyOwner(name, nit)));
 
     [When("{string} se registra como propietaria/propietario persona natural con:")]
@@ -53,22 +52,65 @@ public sealed class OwnerStepDefinitions(RentalsApi api, RentalsClient client, S
     public Task RegistersNaturalWithDocument(string name, string document)
         => RegisterAsync(name, "/api/owners/natural", NaturalOwner(name, document));
 
+    [Given("que {string} registró un propietario persona natural para {string} con documento {string}")]
+    [When("{string} registra un propietario persona natural para {string} con documento {string}")]
+    public async Task RegistersNaturalOnBehalfOf(string name, string owner, string document)
+        => RememberOwner(owner, await _client.SetUpAsync<CreatedOwnerResponse>(
+            _state.User(name), HttpMethod.Post, "/api/owners/natural", NaturalOwner(owner, document)));
+
+    [Given("que {string} reclamó ese propietario")]
+    public Task HasClaimedThatOwner(string name)
+        => _client.SetUpAsync(_state.User(name), HttpMethod.Post, $"/api/owners/{_state.OwnerId}/claim");
+
     [When("{string} se registra como propietaria/propietario persona jurídica con NIT {string}")]
     public Task RegistersCompanyWithNit(string name, string nit)
         => RegisterAsync(name, "/api/owners/company", CompanyOwner(name, nit));
 
     [When("{string} consulta el propietario de {string}")]
     public Task QueriesTheOwnerOf(string name, string owner)
-        => _client.SendAsync(_state.User(name), HttpMethod.Get, $"/api/owners/{_state.User(owner).Id}");
+        => _client.SendAsync(_state.User(name), HttpMethod.Get, $"/api/owners/{_state.OwnerOf(owner)}");
+
+    [When("{string} consulta los propietarios que puede reclamar")]
+    public Task QueriesClaimableOwners(string name)
+        => _client.SendAsync(_state.User(name), HttpMethod.Get, "/api/owners/claimable");
+
+    [When("{string} consulta sus propietarios")]
+    public Task QueriesTheirOwners(string name) => _client.SendAsync(_state.User(name), HttpMethod.Get, "/api/owners/mine");
+
+    [When("{string} reclama ese propietario")]
+    public Task ClaimsThatOwner(string name)
+        => _client.SendAsync(_state.User(name), HttpMethod.Post, $"/api/owners/{_state.OwnerId}/claim");
 
     [When("{string} lista los propietarios")]
     public Task ListsOwners(string name) => _client.SendAsync(_state.User(name), HttpMethod.Get, "/api/owners");
 
-    [Then("el propietario queda registrado con el identificador de {string}")]
-    public void OwnerIsRegisteredWithTheIdOf(string name)
+    [Then("el propietario queda registrado y relacionado con {string}")]
+    public async Task OwnerIsRegisteredAndRelatedTo(string name)
     {
         Assert.AreEqual(HttpStatusCode.Created, _state.Response!.StatusCode);
-        Assert.AreEqual(_state.User(name).Id, _state.OwnerId);
+        Assert.AreNotEqual(_state.User(name).Id, _state.OwnerId);
+        await OwnerIsRelatedTo(name);
+    }
+
+    [Then("el propietario queda relacionado con {string}")]
+    public async Task OwnerIsRelatedTo(string name)
+        => Assert.AreEqual(_state.User(name).Id, (await RegisteredOwnerAsync()).RelatedUserId);
+
+    [Then("el propietario queda sin usuario relacionado")]
+    public async Task OwnerHasNoRelatedUser() => Assert.IsNull((await RegisteredOwnerAsync()).RelatedUserId);
+
+    [Then("la respuesta contiene solo ese propietario")]
+    public async Task ResponseContainsOnlyThatOwner()
+    {
+        Assert.AreEqual(HttpStatusCode.OK, _state.Response!.StatusCode);
+        Assert.AreEqual(_state.OwnerId, (await _client.ReadAsync<List<OwnerDto>>()).Single().Id);
+    }
+
+    [Then("la respuesta no contiene propietarios")]
+    public async Task ResponseContainsNoOwners()
+    {
+        Assert.AreEqual(HttpStatusCode.OK, _state.Response!.StatusCode);
+        Assert.IsEmpty(await _client.ReadAsync<List<OwnerDto>>());
     }
 
     [Then("el propietario queda registrado con un identificador nuevo")]
@@ -98,30 +140,21 @@ public sealed class OwnerStepDefinitions(RentalsApi api, RentalsClient client, S
             Assert.AreEqual(expected[column], ValueOf(owner, column), $"Columna '{column}'.");
     }
 
-    [Then("se solicita una cuenta con rol {word} para {string}")]
-    public void AnAccountIsRequested(string role, string email)
-    {
-        var request = _api.Accounts.Requested.Single();
-
-        Assert.AreEqual(role, request.Role);
-        Assert.AreEqual(email, request.Email);
-        Assert.AreEqual(_state.OwnerId.ToString(), request.UserId);
-    }
-
     private async Task RegisterAsync(string name, string url, object body)
     {
         var response = await _client.SendAsync(_state.User(name), HttpMethod.Post, url, body);
 
         if (response.IsSuccessStatusCode)
-            await RememberOwnerAsync(await _client.ReadAsync<CreatedOwnerResponse>());
+            RememberOwner(name, await _client.ReadAsync<CreatedOwnerResponse>());
     }
 
-    private Task RememberOwnerAsync(CreatedOwnerResponse created)
+    private void RememberOwner(string name, CreatedOwnerResponse created)
     {
         _state.OwnerId = created.Id;
-
-        return Task.CompletedTask;
+        _state.AddOwner(name, created.Id);
     }
+
+    private Task<OwnerDto> RegisteredOwnerAsync() => _client.QueryAsync<OwnerDto>($"/api/owners/{_state.OwnerId}");
 
     private static RegisterNaturalOwnerRequest NaturalOwner(string name, string document)
         => new(name, "Gómez Rincón", DocumentType.CitizenshipCard, document, $"{name}@example.com", "3001234567");

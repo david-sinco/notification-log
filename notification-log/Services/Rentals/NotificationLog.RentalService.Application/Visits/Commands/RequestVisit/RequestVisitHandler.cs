@@ -8,6 +8,7 @@ using NotificationLog.RentalService.Application.Common.Producers;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.Enums;
+using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Visitors;
 using NotificationLog.RentalService.Domain.Visitors.Enums;
 using NotificationLog.RentalService.Domain.Visits;
@@ -17,6 +18,7 @@ namespace NotificationLog.RentalService.Application.Visits.Commands.RequestVisit
 public sealed class RequestVisitHandler(
     IVisitRepository visits,
     IListingRepository listings,
+    IOwnerRepository owners,
     IVisitorRepository visitors,
     IUnitOfWork uow,
     INotificationProducer notifications,
@@ -25,6 +27,7 @@ public sealed class RequestVisitHandler(
 {
     private readonly IVisitRepository _visits = visits;
     private readonly IListingRepository _listings = listings;
+    private readonly IOwnerRepository _owners = owners;
     private readonly IVisitorRepository _visitors = visitors;
     private readonly IUnitOfWork _uow = uow;
     private readonly INotificationProducer _notifications = notifications;
@@ -45,10 +48,12 @@ public sealed class RequestVisitHandler(
         if (listing.Status != ListingStatus.Published)
             throw new AppValidationException("Solo se pueden visitar publicaciones publicadas.");
 
+        var owner = await _owners.GetAsync(listing.OwnerId, ct);
+
         var visit = Visit.Request(
             Guid.NewGuid(),
             listing.Id,
-            Listing.HostOf(listing),
+            owner.HostUserId,
             visitorId,
             cmd.Slots.Select(TimeSlot.Create).ToList(),
             null,

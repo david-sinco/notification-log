@@ -80,6 +80,7 @@ public sealed class RentalsClient(RentalsApi api, ScenarioState state)
         {
             request.Headers.Add(TestAuthHandler.UserHeader, user.Id.ToString());
             request.Headers.Add(TestAuthHandler.RoleHeader, user.Role.ToString());
+            request.Headers.Add(TestAuthHandler.EmailHeader, user.Email);
         }
 
         return _http.SendAsync(request);

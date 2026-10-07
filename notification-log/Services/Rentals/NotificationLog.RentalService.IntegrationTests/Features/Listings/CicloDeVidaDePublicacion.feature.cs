@@ -886,7 +886,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Listings
 #line hidden
 #line 136
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Solo se puede pausar" +
-                        " una publicación publicada.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+                        " una publicación en estado publicado.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

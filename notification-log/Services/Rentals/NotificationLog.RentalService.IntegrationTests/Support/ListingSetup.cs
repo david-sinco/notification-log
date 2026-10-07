@@ -26,7 +26,7 @@ public sealed class ListingSetup(RentalsApi api, RentalsClient client, ScenarioS
         int photos = RequiredPhotos)
     {
         var created = await _client.SetUpAsync<CreatedListingResponse>(
-            owner, HttpMethod.Post, "/api/listings", new DraftListingRequest(owner.Id, operation));
+            owner, HttpMethod.Post, "/api/listings", new DraftListingRequest(_state.OwnerOf(owner.Name), operation));
 
         var url = $"/api/listings/{created.Id}";
 

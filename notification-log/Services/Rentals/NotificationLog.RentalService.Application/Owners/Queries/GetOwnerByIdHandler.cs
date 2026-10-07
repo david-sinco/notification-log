@@ -15,8 +15,10 @@ public sealed class GetOwnerByIdHandler(IOwnerReadModel owners)
     {
         var owner = await _owners.GetAsync(id, ct) ?? throw new NotFoundException(nameof(Owner), id);
 
-        if (!user.IsAdministrador() && !user.IsModerador() && owner.CreatedBy != user.GetUserId())
-            throw new ForbiddenException("Solo puedes consultar los propietarios que registraste.");
+        var userId = user.GetUserId();
+
+        if (!user.IsAdministrador() && !user.IsModerador() && owner.CreatedBy != userId && owner.RelatedUserId != userId)
+            throw new ForbiddenException("Solo puedes consultar tus propietarios o los que registraste.");
 
         return owner;
     }

@@ -9,7 +9,7 @@ public static class ReadModels
 {
     public static ListingDto Listing(Guid id)
         => new(
-            id, ListingFactory.Owner, ListingFactory.Owner, "Rent", "Published", "Apartment", 68m, 2, 2, 1, 4, 5, true,
+            id, ListingFactory.Owner, ListingFactory.Owner, ListingFactory.Owner, "Rent", "Published", "Apartment", 68m, 2, 2, 1, 4, 5, true,
             320_000, "Bogotá", "Chapinero", "Calle 60 # 9-45", "Descripción", 1_800_000, [], null, [], null, null, null,
             Clock.Now, Clock.Now, "Ana Gómez Rincón");
 
@@ -18,9 +18,9 @@ public static class ReadModels
             Guid.NewGuid(), "Rent", "Published", "Apartment", "Bogotá", "Chapinero", 1_800_000, 2, 68m,
             ListingFactory.Owner, ListingFactory.Owner, Clock.Now, "Ana Gómez Rincón", null, 5);
 
-    public static OwnerDto Owner(Guid id, Guid createdBy)
+    public static OwnerDto Owner(Guid id, Guid createdBy, Guid? relatedUserId = null)
         => new(
-            id, createdBy, "Natural", "Ana", "Gómez Rincón", "CitizenshipCard", "52123456", null, null,
+            id, createdBy, relatedUserId, "Natural", "Ana", "Gómez Rincón", "CitizenshipCard", "52123456", null, null,
             "ana@example.com", "+573001234567", Clock.Now, 0);
 
     public static VisitorDto Visitor(Guid id)

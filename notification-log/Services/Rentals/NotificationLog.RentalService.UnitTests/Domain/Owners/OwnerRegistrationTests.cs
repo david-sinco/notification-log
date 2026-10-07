@@ -49,6 +49,7 @@ public class OwnerRegistrationTests : DomainScenario
         => Try(() => _owner = Owner.RegisterNatural(
             id,
             User,
+            null,
             PersonName.Create("Ana", "Gómez Rincón"),
             IdentityDocument.Create(DocumentType.CitizenshipCard, "52123456"),
             ContactInfo.Create("ana@example.com", "3001234567")));
@@ -57,6 +58,7 @@ public class OwnerRegistrationTests : DomainScenario
         => Try(() => _owner = Owner.RegisterCompany(
             Guid.NewGuid(),
             User,
+            null,
             LegalName.Create("Inmobiliaria Andes"),
             Nit.Create("900123456-8"),
             ContactInfo.Create("andes@example.com", "6011234567")));

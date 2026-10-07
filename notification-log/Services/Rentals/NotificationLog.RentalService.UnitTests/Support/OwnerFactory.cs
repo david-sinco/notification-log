@@ -6,14 +6,19 @@ namespace NotificationLog.RentalService.UnitTests.Support;
 
 public static class OwnerFactory
 {
-    public static Owner Natural(Guid id)
+    public const string Email = "ana@example.com";
+
+    public static Owner Natural(Guid id) => Natural(id, id);
+
+    public static Owner Natural(Guid id, Guid? relatedUserId)
     {
         var owner = Owner.RegisterNatural(
             id,
-            id,
+            Guid.NewGuid(),
+            relatedUserId,
             PersonName.Create("Ana", "Gómez Rincón"),
             IdentityDocument.Create(DocumentType.CitizenshipCard, "52123456"),
-            ContactInfo.Create("ana@example.com", "3001234567"));
+            ContactInfo.Create(Email, "3001234567"));
 
         owner.ClearDomainEvents();
 

@@ -15,7 +15,6 @@ public sealed class RentalsApi(string connectionString) : WebApplicationFactory<
 {
     public TestClock Clock { get; } = new();
     public RecordingNotificationProducer Notifications { get; } = new();
-    public RecordingAccountProvisioner Accounts { get; } = new();
     public InMemoryPhotoStorage Photos { get; } = new();
 
     public async Task ResetAsync()
@@ -24,7 +23,6 @@ public sealed class RentalsApi(string connectionString) : WebApplicationFactory<
 
         Clock.Reset();
         Notifications.Clear();
-        Accounts.Clear();
         Photos.Clear();
     }
 
@@ -46,9 +44,6 @@ public sealed class RentalsApi(string connectionString) : WebApplicationFactory<
 
             services.RemoveAll<INotificationProducer>();
             services.AddSingleton<INotificationProducer>(Notifications);
-
-            services.RemoveAll<IAccountProvisioner>();
-            services.AddSingleton<IAccountProvisioner>(Accounts);
 
             services.RemoveAll<IPhotoStorage>();
             services.AddSingleton<IPhotoStorage>(Photos);

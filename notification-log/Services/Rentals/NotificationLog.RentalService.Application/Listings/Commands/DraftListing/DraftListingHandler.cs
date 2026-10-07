@@ -26,11 +26,11 @@ public sealed class DraftListingHandler(
 
         var userId = user.GetUserId();
 
-        if (user.IsPropietario() && cmd.OwnerId != userId)
-            throw new ForbiddenException("Un propietario solo puede crear publicaciones a su nombre.");
+        var owner = await _owners.LoadAsync(cmd.OwnerId, ct)
+            ?? throw new AppValidationException("El propietario no está registrado.");
 
-        if (await _owners.LoadAsync(cmd.OwnerId, ct) is null)
-            throw new AppValidationException("El propietario no está registrado.");
+        if (user.IsPropietario() && owner.RelatedUserId != userId)
+            throw new ForbiddenException("Un propietario solo puede crear publicaciones a su nombre.");
 
         var listing = Listing.Draft(Guid.NewGuid(), cmd.OwnerId, userId, cmd.Operation);
         await _listings.AppendAsync(listing, ct);

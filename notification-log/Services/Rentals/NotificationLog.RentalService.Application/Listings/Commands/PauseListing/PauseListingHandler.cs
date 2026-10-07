@@ -2,18 +2,21 @@ using System.Security.Claims;
 using Application.Shared.Abstractions;
 using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Listings;
+using NotificationLog.RentalService.Domain.Owners;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.PauseListing;
 
-public sealed class PauseListingHandler(IListingRepository listings, IUnitOfWork uow)
+public sealed class PauseListingHandler(IListingRepository listings, IOwnerRepository owners, IUnitOfWork uow)
 {
     private readonly IListingRepository _listings = listings;
+    private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
 
     public async Task HandleAsync(PauseListingCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
-        Listing.EnsureCanManage(listing, user);
+        var owner = await _owners.GetAsync(listing.OwnerId, ct);
+        listing.EnsureCanManage(user, owner.RelatedUserId);
 
         listing.Pause();
 

@@ -14,6 +14,7 @@ public sealed class Owner : AggregateRoot
     private Owner() { }
 
     public Guid CreatedBy { get; private set; }
+    public Guid? RelatedUserId { get; private set; }
     public OwnerType Type { get; private set; }
     public PersonName? Name { get; private set; }
     public IdentityDocument? Document { get; private set; }
@@ -21,8 +22,10 @@ public sealed class Owner : AggregateRoot
     public Nit? Nit { get; private set; }
     public ContactInfo? Contact { get; private set; }
 
+    public Guid HostUserId => RelatedUserId ?? CreatedBy;
+
     public static Owner RegisterNatural(
-        Guid id, Guid createdBy, PersonName name, IdentityDocument document, ContactInfo contact)
+        Guid id, Guid createdBy, Guid? relatedUserId, PersonName name, IdentityDocument document, ContactInfo contact)
     {
         Guard.RequireId(id, "El identificador del propietario es obligatorio.");
         Guard.RequireId(createdBy, "El usuario que registra al propietario es obligatorio.");
@@ -34,13 +37,13 @@ public sealed class Owner : AggregateRoot
 
         owner.Raise(new NaturalOwnerRegistered(
             id, createdBy, name.FirstNames, name.LastNames, document.Type, document.Number,
-            contact.Email, contact.Phone));
+            contact.Email, contact.Phone, relatedUserId));
 
         return owner;
     }
 
     public static Owner RegisterCompany(
-        Guid id, Guid createdBy, LegalName legalName, Nit nit, ContactInfo contact)
+        Guid id, Guid createdBy, Guid? relatedUserId, LegalName legalName, Nit nit, ContactInfo contact)
     {
         Guard.RequireId(id, "El identificador del propietario es obligatorio.");
         Guard.RequireId(createdBy, "El usuario que registra al propietario es obligatorio.");
@@ -51,9 +54,25 @@ public sealed class Owner : AggregateRoot
         var owner = new Owner();
 
         owner.Raise(new CompanyOwnerRegistered(
-            id, createdBy, legalName.Value, nit.Number, nit.CheckDigit, contact.Email, contact.Phone));
+            id, createdBy, legalName.Value, nit.Number, nit.CheckDigit, contact.Email, contact.Phone, relatedUserId));
 
         return owner;
+    }
+
+    public void Claim(Guid userId, string? verifiedEmail, string? verifiedPhone)
+    {
+        Guard.RequireId(userId, "El usuario que reclama al propietario es obligatorio.");
+
+        if (RelatedUserId is not null)
+            throw new DomainException("El propietario ya fue reclamado.");
+
+        var emailMatches = !string.IsNullOrEmpty(verifiedEmail) && verifiedEmail == Contact?.Email;
+        var phoneMatches = !string.IsNullOrEmpty(verifiedPhone) && verifiedPhone == Contact?.Phone;
+
+        if (!emailMatches && !phoneMatches)
+            throw new DomainException("Tu correo o teléfono confirmado no coincide con el del propietario.");
+
+        Raise(new OwnerClaimed(Id, userId));
     }
 
     public override void Apply(IDomainEvent domainEvent)
@@ -62,6 +81,7 @@ public sealed class Owner : AggregateRoot
         {
             case NaturalOwnerRegistered e: When(e); break;
             case CompanyOwnerRegistered e: When(e); break;
+            case OwnerClaimed e: When(e); break;
 
             default:
                 throw new DomainException(
@@ -73,6 +93,7 @@ public sealed class Owner : AggregateRoot
     {
         Id = e.OwnerId;
         CreatedBy = e.CreatedBy;
+        RelatedUserId = e.RelatedUserId;
         Type = OwnerType.Natural;
         Name = PersonName.FromStorage(e.FirstNames, e.LastNames);
         Document = IdentityDocument.FromStorage(e.DocumentType, e.DocumentNumber);
@@ -83,9 +104,12 @@ public sealed class Owner : AggregateRoot
     {
         Id = e.OwnerId;
         CreatedBy = e.CreatedBy;
+        RelatedUserId = e.RelatedUserId;
         Type = OwnerType.Company;
         LegalName = LegalName.FromStorage(e.LegalName);
         Nit = Nit.FromStorage(e.Nit, e.NitCheckDigit);
         Contact = ContactInfo.FromStorage(e.Email, e.Phone);
     }
+
+    private void When(OwnerClaimed e) => RelatedUserId = e.UserId;
 }

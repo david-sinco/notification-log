@@ -19,6 +19,7 @@ using NotificationLog.RentalService.Application.Listings.Commands.SubmitListingF
 using NotificationLog.RentalService.Application.Listings.Commands.SuspendListing;
 using NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 using NotificationLog.RentalService.Application.Listings.Commands.WithdrawListing;
+using NotificationLog.RentalService.Application.Owners.Commands.ClaimOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
 using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
 using NotificationLog.RentalService.Application.Dashboard.Queries;
@@ -66,6 +67,7 @@ public static class DependencyInjection
 
         services.AddScoped<RegisterCompanyOwnerHandler>();
         services.AddScoped<RegisterNaturalOwnerHandler>();
+        services.AddScoped<ClaimOwnerHandler>();
 
         services.AddScoped<CompleteVisitorProfileHandler>();
 
@@ -80,6 +82,8 @@ public static class DependencyInjection
         services.AddScoped<GetListingByIdHandler>();
         services.AddScoped<GetOwnerByIdHandler>();
         services.AddScoped<ListOwnersHandler>();
+        services.AddScoped<ListMyOwnersHandler>();
+        services.AddScoped<ListClaimableOwnersHandler>();
         services.AddScoped<GetVisitorByIdHandler>();
         services.AddScoped<ListVisitorsHandler>();
         services.AddScoped<GetVisitByIdHandler>();
