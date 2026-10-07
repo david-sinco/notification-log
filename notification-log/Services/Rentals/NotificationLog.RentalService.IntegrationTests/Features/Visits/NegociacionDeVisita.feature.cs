@@ -176,14 +176,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table14 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table12 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table14.AddRow(new string[] {
+                table12.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table14.AddRow(new string[] {
+                table12.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 19
-      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table14, "Cuando ");
+      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table12, "Cuando ");
 #line hidden
 #line 23
       await testRunner.ThenAsync("la visita queda en estado \"Esperando al anfitrión\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
@@ -384,18 +384,18 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table15 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table13 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table15.AddRow(new string[] {
+                table13.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table15.AddRow(new string[] {
+                table13.AddRow(new string[] {
                             "2026-10-07 12:00"});
-                table15.AddRow(new string[] {
+                table13.AddRow(new string[] {
                             "2026-10-08 10:00"});
-                table15.AddRow(new string[] {
+                table13.AddRow(new string[] {
                             "2026-10-08 12:00"});
 #line 56
-      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table15, "Cuando ");
+      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table13, "Cuando ");
 #line hidden
 #line 62
       await testRunner.ThenAsync("la solicitud se rechaza por validación", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
@@ -429,14 +429,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table16 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table14 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table16.AddRow(new string[] {
+                table14.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table16.AddRow(new string[] {
+                table14.AddRow(new string[] {
                             "2026-10-07 10:00"});
 #line 65
-      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table16, "Cuando ");
+      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table14, "Cuando ");
 #line hidden
 #line 69
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Las franjas propuest" +
@@ -470,14 +470,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table17 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table15 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table17.AddRow(new string[] {
+                table15.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table17.AddRow(new string[] {
+                table15.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table17, "Dado ");
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table15, "Dado ");
 #line hidden
 #line 80
       await testRunner.WhenAsync("\"Ana\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
@@ -519,21 +519,21 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table18 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table16 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table18.AddRow(new string[] {
+                table16.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table18.AddRow(new string[] {
+                table16.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table18, "Dado ");
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table16, "Dado ");
 #line hidden
-                global::Reqnroll.Table table19 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table17 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table19.AddRow(new string[] {
+                table17.AddRow(new string[] {
                             "2026-10-09 08:00"});
 #line 86
-      await testRunner.WhenAsync("\"Ana\" propone otras franjas:", ((string)(null)), table19, "Cuando ");
+      await testRunner.WhenAsync("\"Ana\" propone otras franjas:", ((string)(null)), table17, "Cuando ");
 #line hidden
 #line 89
       await testRunner.ThenAsync("la visita queda en estado \"Esperando al visitante\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
@@ -581,14 +581,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table20 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table18 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table20.AddRow(new string[] {
+                table18.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table20.AddRow(new string[] {
+                table18.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table20, "Dado ");
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table18, "Dado ");
 #line hidden
 #line 97
       await testRunner.WhenAsync("\"Víctor\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
@@ -625,14 +625,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table21 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table19 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table21.AddRow(new string[] {
+                table19.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table21.AddRow(new string[] {
+                table19.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table21, "Dado ");
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table19, "Dado ");
 #line hidden
 #line 101
       await testRunner.WhenAsync("\"Ana\" agenda la visita para el \"2026-10-09 08:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
@@ -669,14 +669,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table22 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table20 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table22.AddRow(new string[] {
+                table20.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table22.AddRow(new string[] {
+                table20.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table22, "Dado ");
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table20, "Dado ");
 #line hidden
 #line 105
       await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-06 11:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
@@ -716,24 +716,24 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table23 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table21 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table23.AddRow(new string[] {
+                table21.AddRow(new string[] {
                             "2026-10-07 10:00"});
-                table23.AddRow(new string[] {
+                table21.AddRow(new string[] {
                             "2026-10-08 15:00"});
 #line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table23, "Dado ");
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table21, "Dado ");
 #line hidden
 #line 110
       await testRunner.GivenAsync("que \"Ana\" agendó la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-                global::Reqnroll.Table table24 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table22 = new global::Reqnroll.Table(new string[] {
                             "franja"});
-                table24.AddRow(new string[] {
+                table22.AddRow(new string[] {
                             "2026-10-09 08:00"});
 #line 111
-      await testRunner.WhenAsync("\"Víctor\" propone otras franjas:", ((string)(null)), table24, "Cuando ");
+      await testRunner.WhenAsync("\"Víctor\" propone otras franjas:", ((string)(null)), table22, "Cuando ");
 #line hidden
 #line 114
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"La visita ya no está" +

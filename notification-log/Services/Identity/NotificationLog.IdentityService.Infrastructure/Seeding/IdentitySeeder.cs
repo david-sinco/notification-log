@@ -1,8 +1,11 @@
+using Application.Shared.Abstractions;
 using Domain.Shared.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using NotificationLog.IdentityService.Application.Abstractions;
+using NotificationLog.IdentityService.Domain.Users;
 using NotificationLog.IdentityService.Domain.Users.Enums;
 using NotificationLog.IdentityService.Domain.Users.ValueObjects;
 using NotificationLog.IdentityService.Infrastructure.Persistence;
@@ -27,7 +30,12 @@ public sealed class IdentitySeeder : IHostedService
         var services = scope.ServiceProvider;
 
         await SeedRolesAsync(services.GetRequiredService<RoleManager<IdentityRole<Guid>>>());
-        await SeedAdminAsync(services.GetRequiredService<UserManager<ApplicationUser>>());
+        await SeedAdminAsync(
+            services.GetRequiredService<UserManager<ApplicationUser>>(),
+            services.GetRequiredService<IUserRepository>(),
+            services.GetRequiredService<IUserEventPublisher>(),
+            services.GetRequiredService<IUnitOfWork>(),
+            ct);
         await SeedScopesAsync(services.GetRequiredService<IOpenIddictScopeManager>(), ct);
         await SeedClientsAsync(services.GetRequiredService<IOpenIddictApplicationManager>(), ct);
     }
@@ -43,30 +51,42 @@ public sealed class IdentitySeeder : IHostedService
         }
     }
 
-    private async Task SeedAdminAsync(UserManager<ApplicationUser> users)
+    private async Task SeedAdminAsync(
+        UserManager<ApplicationUser> users,
+        IUserRepository repository,
+        IUserEventPublisher events,
+        IUnitOfWork uow,
+        CancellationToken ct)
     {
         var login = LoginIdentifier.TryParse(_options.Admin.Email);
 
         if (login is not { Channel: LoginChannel.Email } || string.IsNullOrWhiteSpace(_options.Admin.Password))
             return;
 
-        if (await users.FindByEmailAsync(login.Value) is not null)
-            return;
-
-        var admin = new ApplicationUser(Guid.NewGuid())
+        if (await users.FindByEmailAsync(login.Value) is null)
         {
-            Name = "Administrador",
-            Email = login.Value,
-            EmailConfirmed = true
-        };
+            var admin = new ApplicationUser(Guid.NewGuid())
+            {
+                Name = "Administrador",
+                Email = login.Value,
+                EmailConfirmed = true,
+                AcceptsNotifications = true
+            };
 
-        var created = await users.CreateAsync(admin, _options.Admin.Password);
+            var created = await users.CreateAsync(admin, _options.Admin.Password);
 
-        if (!created.Succeeded)
-            throw new InvalidOperationException(
-                $"No se pudo crear el administrador inicial: {string.Join(" ", created.Errors.Select(e => e.Description))}");
+            if (!created.Succeeded)
+                throw new InvalidOperationException(
+                    $"No se pudo crear el administrador inicial: {string.Join(" ", created.Errors.Select(e => e.Description))}");
 
-        await users.AddToRoleAsync(admin, nameof(UserRole.Administrador));
+            await users.AddToRoleAsync(admin, nameof(UserRole.Administrador));
+        }
+
+        var user = await repository.FindByLoginAsync(login, ct)
+            ?? throw new InvalidOperationException("No se encontró el administrador inicial.");
+
+        await events.PublishUserCreatedAsync(user, ct);
+        await uow.SaveChangesAsync(ct);
     }
 
     private async Task SeedScopesAsync(IOpenIddictScopeManager scopes, CancellationToken ct)

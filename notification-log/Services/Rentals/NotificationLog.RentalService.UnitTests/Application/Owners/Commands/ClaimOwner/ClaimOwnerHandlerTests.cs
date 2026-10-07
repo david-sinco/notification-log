@@ -49,9 +49,9 @@ public class ClaimOwnerHandlerTests : ApplicationScenario
             .Then(_ => IsNotFound(), "Entonces el propietario no se encuentra")
             .BDDfy("No se puede reclamar un propietario que no existe");
 
-    private void AnUnclaimedOwner() => Exists(_owner = OwnerFactory.Natural(Guid.NewGuid(), null));
+    private void AnUnclaimedOwner() => Exists(_owner = OwnerFactory.Registered(Guid.NewGuid(), null));
 
-    private void AMissingOwner() => _owner = OwnerFactory.Natural(Guid.NewGuid(), null);
+    private void AMissingOwner() => _owner = OwnerFactory.Registered(Guid.NewGuid(), null);
 
     private void AnOwnerSignsInWith(string email) => UserIs(UserRole.Propietario, _userId, email);
 

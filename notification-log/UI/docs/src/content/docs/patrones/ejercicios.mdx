@@ -122,7 +122,7 @@ Rentals pasa la consulta como objeto; Notifications tiene cuatro repositorios co
 
 **Ficha:** [9 · Outbox](/patrones/outbox) · **Dificultad:** alta
 
-`RegisterNaturalOwnerHandler` guarda el propietario y **después** publica la petición de cuenta. Haz que las dos cosas ocurran en la misma transacción, como en Identity.
+`RegisterOwnerHandler` guarda el propietario y **después** publica la petición de cuenta. Haz que las dos cosas ocurran en la misma transacción, como en Identity.
 
 **La parte difícil no es el código:** es demostrar que funciona. Diseña la forma de comprobarlo —cómo provocas el fallo en el instante exacto— antes de tocar nada.
 

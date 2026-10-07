@@ -23,7 +23,7 @@ public sealed class ListingViewProjection : SingleStreamProjection<ListingView, 
             {
                 Id = id,
                 OwnerId = drafted.OwnerId,
-                OwnerName = owner?.DisplayName() ?? string.Empty,
+                OwnerName = owner?.Name ?? string.Empty,
                 CreatedBy = drafted.CreatedBy,
                 Operation = drafted.Operation,
                 Status = ListingStatus.Draft,

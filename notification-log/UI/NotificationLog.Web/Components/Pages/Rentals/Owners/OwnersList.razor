@@ -9,7 +9,7 @@
     <header class="page-head">
         <p class="eyebrow">Arriendos</p>
         <h1 class="title">Propietarios</h1>
-        <p class="muted">Personas naturales o jurídicas a cuyo nombre quedan las publicaciones.</p>
+        <p class="muted">Personas o empresas a cuyo nombre quedan las publicaciones.</p>
     </header>
 
     <ErrorAlert Exception="error" />
@@ -22,14 +22,8 @@
             {
                 <div class="row">
                     <label class="sr-only" for="owner-search">Buscar propietario</label>
-                    <input id="owner-search" type="search" class="input input-search grow" style="--basis: 220px" placeholder="Nombre, razón social o documento"
+                    <input id="owner-search" type="search" class="input input-search grow" style="--basis: 220px" placeholder="Nombre, correo o teléfono"
                            @bind="search" @bind:after="RefreshAsync" />
-                    <div class="segmented" role="group" aria-label="Tipo">
-                        @foreach (var (key, label) in TypeFilters)
-                        {
-                            <button type="button" aria-pressed="@(typeFilter == key ? "true" : "false")" @onclick="() => SetTypeAsync(key)">@label</button>
-                        }
-                    </div>
                 </div>
             }
 
@@ -41,17 +35,12 @@
             <div class="stack" style="--gap: 10px">
                 @foreach (var owner in owners)
                 {
-                    var company = owner.Type == "Company";
                     var isSelected = owner.Id == selected?.Id;
                     <button type="button" class="list-item @(isSelected ? "active" : "")" style="flex-direction: row; align-items: center; gap: 14px"
                             aria-pressed="@(isSelected ? "true" : "false")" @onclick="() => Select(owner)">
-                        <span class="avatar @(company ? "avatar-ink" : "avatar-lime")" aria-hidden="true">@RentalsFormat.Initials(OwnerLabels.Name(owner))</span>
+                        <span class="avatar avatar-lime" aria-hidden="true">@RentalsFormat.Initials(owner.Name)</span>
                         <span class="stack grow" style="--gap: 2px">
-                            <span class="row" style="--gap: 8px">
-                                <span class="strong">@OwnerLabels.Name(owner)</span>
-                                <StatusPill Text="@OwnerLabels.Type(owner.Type)" />
-                            </span>
-                            <span class="mono smaller muted">@OwnerLabels.Identification(owner)</span>
+                            <span class="strong">@owner.Name</span>
                             <span class="small muted wrap-any">@owner.Email · @owner.Phone</span>
                         </span>
                         <span class="small strong">@ListingCount(owner)</span>
@@ -69,12 +58,8 @@
         {
             <section class="card" aria-label="Detalle del propietario" style="flex: 2 1 320px; --gap: 16px">
                 <div class="page-head">
-                    <div class="row" style="--gap: 8px">
-                        <StatusPill Text="@OwnerLabels.Type(selected.Type)" />
-                        <span class="id">@RentalsFormat.Short(selected.Id)</span>
-                    </div>
-                    <h2 class="h2">@OwnerLabels.Name(selected)</h2>
-                    <span class="mono smaller muted">@OwnerLabels.Identification(selected)</span>
+                    <span class="id">@RentalsFormat.Short(selected.Id)</span>
+                    <h2 class="h2">@selected.Name</h2>
                 </div>
 
                 <div class="grid-auto" style="--min: 160px; --gap: 10px">
@@ -99,52 +84,11 @@
         {
             <section class="card" aria-label="Registrar propietario" style="flex: 2 1 320px; --gap: 16px">
                 <h2 class="h2">Registrar propietario</h2>
-                <div class="choices" role="group" aria-label="Tipo de propietario">
-                    <button type="button" class="choice choice-left" aria-pressed="@(company ? "false" : "true")" @onclick="() => company = false">
-                        <span>Persona natural</span>
-                        <span>Nombres y documento</span>
-                    </button>
-                    <button type="button" class="choice choice-left" aria-pressed="@(company ? "true" : "false")" @onclick="() => company = true">
-                        <span>Persona jurídica</span>
-                        <span>Razón social y NIT</span>
-                    </button>
-                </div>
                 <div class="grid-auto" style="--min: 190px; --gap: 14px">
-                    @if (company)
-                    {
-                        <div class="field">
-                            <label class="label" for="o-legal">Razón social</label>
-                            <input id="o-legal" class="input" @bind="legalName" />
-                        </div>
-                        <div class="field">
-                            <label class="label" for="o-nit">NIT</label>
-                            <input id="o-nit" class="input" @bind="nit" />
-                        </div>
-                    }
-                    else
-                    {
-                        <div class="field">
-                            <label class="label" for="o-doc-type">Tipo de documento</label>
-                            <select id="o-doc-type" class="select" @bind="documentType">
-                                @foreach (var type in RentalsFormat.Values<DocumentType>())
-                                {
-                                    <option value="@type">@OwnerLabels.Document(type.ToString())</option>
-                                }
-                            </select>
-                        </div>
-                        <div class="field">
-                            <label class="label" for="o-doc">Número de documento</label>
-                            <input id="o-doc" class="input" @bind="documentNumber" />
-                        </div>
-                        <div class="field">
-                            <label class="label" for="o-first">Nombres</label>
-                            <input id="o-first" class="input" @bind="firstNames" />
-                        </div>
-                        <div class="field">
-                            <label class="label" for="o-last">Apellidos</label>
-                            <input id="o-last" class="input" @bind="lastNames" />
-                        </div>
-                    }
+                    <div class="field">
+                        <label class="label" for="o-name">Nombre</label>
+                        <input id="o-name" class="input" placeholder="Persona o empresa" @bind="name" />
+                    </div>
                     <div class="field">
                         <label class="label" for="o-email">Correo</label>
                         <input id="o-email" type="email" class="input" @bind="email" />
@@ -154,9 +98,9 @@
                         <input id="o-phone" type="tel" class="input" @bind="phone" />
                     </div>
                 </div>
-                <span class="smaller muted">El correo y el teléfono se usan para avisarle de visitas y cambios de estado.</span>
+                <span class="smaller muted">El correo y el teléfono identifican al propietario y se usan para avisarle de visitas y cambios de estado.</span>
                 <ErrorAlert Exception="createError" />
-                <button type="button" class="btn btn-primary" disabled="@busy" @onclick="RegisterAsync">@(company ? "Registrar persona jurídica" : "Registrar persona natural")</button>
+                <button type="button" class="btn btn-primary" disabled="@busy" @onclick="RegisterAsync">Registrar propietario</button>
             </section>
         }
     </div>
@@ -164,8 +108,6 @@
 
 @code {
     private const int PageSize = 20;
-
-    private static readonly (string? Key, string Label)[] TypeFilters = [(null, "Todos"), ("Natural", "Naturales"), ("Company", "Jurídicas")];
 
     private PagedResult<OwnerDto>? page;
     private IReadOnlyList<OwnerDto> owners = [];
@@ -176,16 +118,9 @@
     private OwnerDto? selected;
 
     private string search = "";
-    private string? typeFilter;
     private int currentPage = 1;
 
-    private bool company;
-    private string firstNames = "";
-    private string lastNames = "";
-    private DocumentType documentType = DocumentType.CitizenshipCard;
-    private string documentNumber = "";
-    private string legalName = "";
-    private string nit = "";
+    private string name = "";
     private string email = "";
     private string phone = "";
 
@@ -211,7 +146,7 @@
         {
             if (Actor.IsStaff)
             {
-                page = await Api.ListAsync(null, string.IsNullOrWhiteSpace(search) ? null : search, typeFilter, currentPage, PageSize, CancellationToken.None);
+                page = await Api.ListAsync(null, string.IsNullOrWhiteSpace(search) ? null : search, currentPage, PageSize, CancellationToken.None);
                 owners = page.Items;
             }
             else
@@ -240,12 +175,6 @@
         return LoadAsync();
     }
 
-    private Task SetTypeAsync(string? type)
-    {
-        typeFilter = type;
-        return RefreshAsync();
-    }
-
     private Task GoToPageAsync(int target)
     {
         currentPage = target;
@@ -257,13 +186,9 @@
         busy = true;
         try
         {
-            if (company)
-                await Api.RegisterCompanyAsync(new RegisterCompanyOwnerRequest(legalName, nit, email, phone), CancellationToken.None);
-            else
-                await Api.RegisterNaturalAsync(
-                    new RegisterNaturalOwnerRequest(firstNames, lastNames, documentType, documentNumber, email, phone), CancellationToken.None);
+            await Api.RegisterAsync(new RegisterOwnerRequest(name, email, phone), CancellationToken.None);
 
-            firstNames = lastNames = documentNumber = legalName = nit = email = phone = "";
+            name = email = phone = "";
             createError = null;
             await LoadAsync();
         }

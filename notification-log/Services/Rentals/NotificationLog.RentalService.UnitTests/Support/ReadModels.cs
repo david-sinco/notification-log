@@ -20,8 +20,7 @@ public static class ReadModels
 
     public static OwnerDto Owner(Guid id, Guid createdBy, Guid? relatedUserId = null)
         => new(
-            id, createdBy, relatedUserId, "Natural", "Ana", "Gómez Rincón", "CitizenshipCard", "52123456", null, null,
-            "ana@example.com", "+573001234567", Clock.Now, 0);
+            id, createdBy, relatedUserId, "Ana Gómez Rincón", "ana@example.com", "+573001234567", Clock.Now, 0);
 
     public static VisitorDto Visitor(Guid id)
         => new(

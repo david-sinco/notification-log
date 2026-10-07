@@ -84,7 +84,7 @@ Decide y defiéndelo. La respuesta correcta no es obvia.
 
 **Módulo:** [2 · Estado contra hechos](/event-sourcing/por-que)
 
-**Objetivo:** no escribir código, sino **juzgar** el que hay. `Owner` tiene dos eventos (`NaturalOwnerRegistered`, `CompanyOwnerRegistered`), ninguna transición posterior, y un flujo de exactamente un evento por agregado.
+**Objetivo:** no escribir código, sino **juzgar** el que hay. `Owner` tiene dos eventos (`OwnerRegistered`, `OwnerClaimed`), una sola transición posterior, y un flujo de uno o dos eventos por agregado.
 
 **El ejercicio:** aplica la tabla de tres criterios del módulo 2 a `Owner`. Después responde tres preguntas:
 

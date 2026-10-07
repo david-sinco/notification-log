@@ -1,14 +1,12 @@
 using Domain.Shared.Authorization;
-using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
-using NotificationLog.RentalService.Domain.Common.Enums;
-using NotificationLog.RentalService.Domain.Common.ValueObjects;
+using NotificationLog.RentalService.Application.Owners.Commands.RegisterOwner;
 using NotificationLog.RentalService.Domain.Owners;
 using NSubstitute;
 
-namespace NotificationLog.RentalService.UnitTests.Application.Owners.Commands.RegisterNaturalOwner;
+namespace NotificationLog.RentalService.UnitTests.Application.Owners.Commands.RegisterOwner;
 
 [TestClass]
-public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
+public class RegisterOwnerHandlerTests : ApplicationScenario
 {
     private readonly Guid _userId = Guid.NewGuid();
     private Guid _ownerId;
@@ -19,8 +17,8 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
     [TestMethod]
     public void AnOwnerRegistersThemselves() =>
         this.Given(_ => AUserWithRole(UserRole.Propietario), "Dado un usuario con rol Propietario que todavía no está registrado")
-            .And(_ => TheDocumentIsFree(), "Y que ningún propietario tiene ese documento")
-            .When(_ => Registers("Ana"), "Cuando se registra como persona natural")
+            .And(_ => TheContactIsFree(), "Y que ningún propietario tiene ese correo ni ese teléfono")
+            .When(_ => Registers("Ana Gómez Rincón"), "Cuando se registra como propietario")
             .Then(_ => ResultIs(Accepted), "Entonces se acepta")
             .And(_ => TheOwnerIsSavedRelatedToTheUser(), "Y el propietario se guarda con un identificador nuevo, relacionado con el usuario")
             .BDDfy("Un propietario se registra a sí mismo");
@@ -28,8 +26,8 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
     [TestMethod]
     public void StaffRegistersAnOwnerWithANewIdentifier() =>
         this.Given(_ => AUserWithRole(UserRole.Moderador), "Dado un moderador")
-            .And(_ => TheDocumentIsFree(), "Y que ningún propietario tiene ese documento")
-            .When(_ => Registers("Ana"), "Cuando registra a un propietario persona natural")
+            .And(_ => TheContactIsFree(), "Y que ningún propietario tiene ese correo ni ese teléfono")
+            .When(_ => Registers("Ana Gómez Rincón"), "Cuando registra a un propietario")
             .Then(_ => ResultIs(Accepted), "Entonces se acepta")
             .And(_ => TheOwnerIsSavedWithoutRelatedUser(), "Y el propietario se guarda con un identificador nuevo, creado por el moderador y sin usuario relacionado")
             .BDDfy("Un moderador registra a un propietario sin usuario relacionado");
@@ -37,8 +35,8 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
     [TestMethod]
     public void OnlyOwnersAndStaffCanRegisterOwners() =>
         this.Given(_ => AUserWithRole(Role), "Dado un usuario con rol <role>")
-            .And(_ => TheDocumentIsFree(), "Y que ningún propietario tiene ese documento")
-            .When(_ => Registers("Ana"), "Cuando registra un propietario persona natural")
+            .And(_ => TheContactIsFree(), "Y que ningún propietario tiene ese correo ni ese teléfono")
+            .When(_ => Registers("Ana Gómez Rincón"), "Cuando registra un propietario")
             .Then(_ => ResultIs(Result), "Entonces <result>")
             .WithExamples(new ExampleTable("role", "result")
             {
@@ -53,27 +51,37 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
     public void AnOwnerCannotRegisterTwice() =>
         this.Given(_ => AUserWithRole(UserRole.Propietario), "Dado un usuario con rol Propietario")
             .And(_ => TheUserIsAlreadyAnOwner(), "Y que ya está registrado como propietario")
-            .When(_ => Registers("Ana"), "Cuando se registra de nuevo")
+            .When(_ => Registers("Ana Gómez Rincón"), "Cuando se registra de nuevo")
             .Then(_ => IsRejectedWith("Ya estás registrado como propietario."), "Entonces se rechaza: Ya estás registrado como propietario.")
             .And(_ => NothingIsSaved(), "Y no se guarda nada")
             .BDDfy("Un propietario no puede registrarse dos veces");
 
     [TestMethod]
-    public void TheDocumentMustBeUnique() =>
+    public void TheEmailMustBeUnique() =>
         this.Given(_ => AUserWithRole(UserRole.Propietario), "Dado un usuario con rol Propietario")
-            .And(_ => TheDocumentIsTaken(), "Y que otro propietario ya tiene ese documento")
-            .When(_ => Registers("Ana"), "Cuando se registra como persona natural")
-            .Then(_ => IsRejectedWith("Ya existe un propietario con ese documento."),
-                "Entonces se rechaza: Ya existe un propietario con ese documento.")
+            .And(_ => TheEmailIsTaken(), "Y que otro propietario ya tiene ese correo")
+            .When(_ => Registers("Ana Gómez Rincón"), "Cuando se registra como propietario")
+            .Then(_ => IsRejectedWith("Ya existe un propietario con ese correo."),
+                "Entonces se rechaza: Ya existe un propietario con ese correo.")
             .And(_ => NothingIsSaved(), "Y no se guarda nada")
-            .BDDfy("No se admiten dos propietarios con el mismo documento");
+            .BDDfy("No se admiten dos propietarios con el mismo correo");
 
     [TestMethod]
-    public void TheNamesAreRequired() =>
+    public void ThePhoneMustBeUnique() =>
         this.Given(_ => AUserWithRole(UserRole.Propietario), "Dado un usuario con rol Propietario")
-            .When(_ => Registers(string.Empty), "Cuando se registra sin nombres")
-            .Then(_ => FailsValidationOn("FirstNames"), "Entonces la validación falla en los nombres")
-            .BDDfy("El registro exige los nombres");
+            .And(_ => ThePhoneIsTaken(), "Y que otro propietario ya tiene ese teléfono")
+            .When(_ => Registers("Ana Gómez Rincón"), "Cuando se registra como propietario")
+            .Then(_ => IsRejectedWith("Ya existe un propietario con ese teléfono."),
+                "Entonces se rechaza: Ya existe un propietario con ese teléfono.")
+            .And(_ => NothingIsSaved(), "Y no se guarda nada")
+            .BDDfy("No se admiten dos propietarios con el mismo teléfono");
+
+    [TestMethod]
+    public void TheNameIsRequired() =>
+        this.Given(_ => AUserWithRole(UserRole.Propietario), "Dado un usuario con rol Propietario")
+            .When(_ => Registers(string.Empty), "Cuando se registra sin nombre")
+            .Then(_ => FailsValidationOn("Name"), "Entonces la validación falla en el nombre")
+            .BDDfy("El registro exige el nombre");
 
     private void AUserWithRole(UserRole role)
     {
@@ -81,22 +89,38 @@ public class RegisterNaturalOwnerHandlerTests : ApplicationScenario
         UserReservation().Returns(true);
     }
 
-    private void TheDocumentIsFree() => Reservation().Returns(true);
+    private void TheContactIsFree()
+    {
+        EmailReservation().Returns(true);
+        PhoneReservation().Returns(true);
+    }
 
-    private void TheDocumentIsTaken() => Reservation().Returns(false);
+    private void TheEmailIsTaken()
+    {
+        EmailReservation().Returns(false);
+        PhoneReservation().Returns(true);
+    }
+
+    private void ThePhoneIsTaken()
+    {
+        EmailReservation().Returns(true);
+        PhoneReservation().Returns(false);
+    }
 
     private void TheUserIsAlreadyAnOwner() => UserReservation().Returns(false);
 
     private Task<bool> UserReservation()
         => Owners.TryReserveUserAsync(Arg.Any<Guid>(), _userId, Arg.Any<CancellationToken>());
 
-    private Task<bool> Reservation()
-        => Owners.TryReserveNaturalAsync(Arg.Any<Guid>(), Arg.Any<IdentityDocument>(), Arg.Any<CancellationToken>());
+    private Task<bool> EmailReservation()
+        => Owners.TryReserveEmailAsync(Arg.Any<Guid>(), "ana@example.com", Arg.Any<CancellationToken>());
 
-    private Task Registers(string firstNames)
-        => TryAsync(async () => _ownerId = await Handler<RegisterNaturalOwnerHandler>().HandleAsync(
-            new RegisterNaturalOwnerCommand(
-                firstNames, "Gómez Rincón", DocumentType.CitizenshipCard, "52123456", "Ana@Example.com", "3001234567"),
+    private Task<bool> PhoneReservation()
+        => Owners.TryReservePhoneAsync(Arg.Any<Guid>(), "+573001234567", Arg.Any<CancellationToken>());
+
+    private Task Registers(string name)
+        => TryAsync(async () => _ownerId = await Handler<RegisterOwnerHandler>().HandleAsync(
+            new RegisterOwnerCommand(name, "Ana@Example.com", "3001234567"),
             User,
             CancellationToken.None));
 

@@ -54,7 +54,7 @@ public class DraftListingHandlerTests : ApplicationScenario
             .Then(_ => FailsValidationOn("OwnerId"), "Entonces la validación falla en el propietario")
             .BDDfy("La publicación exige indicar el propietario");
 
-    private void ARegisteredOwner() => Exists(OwnerFactory.Natural(ListingFactory.Owner));
+    private void ARegisteredOwner() => Exists(OwnerFactory.Registered(ListingFactory.Owner));
 
     private void AUser(UserRole role, bool isTheOwner) => UserIs(role, isTheOwner ? ListingFactory.Owner : Guid.NewGuid());
 

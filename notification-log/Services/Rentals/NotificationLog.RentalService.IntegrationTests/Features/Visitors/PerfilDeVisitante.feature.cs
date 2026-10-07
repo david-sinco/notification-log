@@ -194,14 +194,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table12 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table10 = new global::Reqnroll.Table(new string[] {
                             "nombres",
                             "apellidos",
                             "tipo documento",
                             "documento",
                             "correo",
                             "teléfono"});
-                table12.AddRow(new string[] {
+                table10.AddRow(new string[] {
                             "Víctor",
                             "Rojas Peña",
                             "CitizenshipCard",
@@ -209,22 +209,22 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
                             "victor@example.com",
                             "3109876543"});
 #line 16
-    await testRunner.WhenAsync("\"Víctor\" completa su perfil de visitante con:", ((string)(null)), table12, "Cuando ");
+    await testRunner.WhenAsync("\"Víctor\" completa su perfil de visitante con:", ((string)(null)), table10, "Cuando ");
 #line hidden
-                global::Reqnroll.Table table13 = new global::Reqnroll.Table(new string[] {
+                global::Reqnroll.Table table11 = new global::Reqnroll.Table(new string[] {
                             "estado",
                             "nombre",
                             "documento",
                             "correo",
                             "teléfono"});
-                table13.AddRow(new string[] {
+                table11.AddRow(new string[] {
                             "Registered",
                             "Víctor Rojas Peña",
                             "1020304",
                             "victor@example.com",
                             "+573109876543"});
 #line 19
-    await testRunner.ThenAsync("\"Víctor\" consulta su registro de visitante y ve:", ((string)(null)), table13, "Entonces ");
+    await testRunner.ThenAsync("\"Víctor\" consulta su registro de visitante y ve:", ((string)(null)), table11, "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();

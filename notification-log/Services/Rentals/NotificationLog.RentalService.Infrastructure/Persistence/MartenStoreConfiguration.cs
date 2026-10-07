@@ -35,8 +35,8 @@ internal static class MartenStoreConfiguration
             .Duplicate(x => x.VisitorId)
             .Duplicate(x => x.ListingId);
 
-        options.Schema.For<OwnerDocumentReservation>();
-        options.Schema.For<OwnerNitReservation>();
+        options.Schema.For<OwnerEmailReservation>();
+        options.Schema.For<OwnerPhoneReservation>();
         options.Schema.For<OwnerUserReservation>();
         options.Schema.For<VisitorDocumentReservation>();
     }

@@ -3,8 +3,7 @@ using API.Shared.Extensions;
 using Application.Shared.Pagination;
 using NotificationLog.RentalService.Api.Contracts.Owners;
 using NotificationLog.RentalService.Application.Owners.Commands.ClaimOwner;
-using NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
-using NotificationLog.RentalService.Application.Owners.Commands.RegisterNaturalOwner;
+using NotificationLog.RentalService.Application.Owners.Commands.RegisterOwner;
 using NotificationLog.RentalService.Application.Owners.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
 using NotificationLog.RentalService.Application.Owners.Queries.Filters;
@@ -19,17 +18,9 @@ public static class OwnerEndpoints
             .WithTags("Owners")
             .RequireAuthorization(AuthorizationExtensions.RentalsScopePolicy);
 
-        group.MapPost("/natural", RegisterNaturalAsync)
-            .WithName("RegisterNaturalOwner")
-            .WithSummary("Registra un propietario persona natural")
-            .Produces<CreatedOwnerResponse>(StatusCodes.Status201Created)
-            .ProducesValidationProblem()
-            .ProducesProblem(StatusCodes.Status403Forbidden)
-            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
-
-        group.MapPost("/company", RegisterCompanyAsync)
-            .WithName("RegisterCompanyOwner")
-            .WithSummary("Registra un propietario persona jurídica")
+        group.MapPost("/", RegisterAsync)
+            .WithName("RegisterOwner")
+            .WithSummary("Registra un propietario con su nombre, correo y teléfono")
             .Produces<CreatedOwnerResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status403Forbidden)
@@ -70,26 +61,13 @@ public static class OwnerEndpoints
         return app;
     }
 
-    private static async Task<IResult> RegisterNaturalAsync(
-        RegisterNaturalOwnerRequest body,
+    private static async Task<IResult> RegisterAsync(
+        RegisterOwnerRequest body,
         ClaimsPrincipal user,
-        RegisterNaturalOwnerHandler handler,
+        RegisterOwnerHandler handler,
         CancellationToken ct)
     {
-        var command = new RegisterNaturalOwnerCommand(
-            body.FirstNames, body.LastNames, body.DocumentType, body.DocumentNumber, body.Email, body.Phone);
-        var id = await handler.HandleAsync(command, user, ct);
-
-        return Results.Created($"/api/owners/{id}", new CreatedOwnerResponse(id));
-    }
-
-    private static async Task<IResult> RegisterCompanyAsync(
-        RegisterCompanyOwnerRequest body,
-        ClaimsPrincipal user,
-        RegisterCompanyOwnerHandler handler,
-        CancellationToken ct)
-    {
-        var id = await handler.HandleAsync(new RegisterCompanyOwnerCommand(body.LegalName, body.Nit, body.Email, body.Phone), user, ct);
+        var id = await handler.HandleAsync(new RegisterOwnerCommand(body.Name, body.Email, body.Phone), user, ct);
 
         return Results.Created($"/api/owners/{id}", new CreatedOwnerResponse(id));
     }

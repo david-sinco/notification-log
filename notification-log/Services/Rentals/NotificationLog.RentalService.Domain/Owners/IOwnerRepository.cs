@@ -1,6 +1,3 @@
-using NotificationLog.RentalService.Domain.Common.ValueObjects;
-using NotificationLog.RentalService.Domain.Owners.ValueObjects;
-
 namespace NotificationLog.RentalService.Domain.Owners;
 
 public interface IOwnerRepository
@@ -9,9 +6,9 @@ public interface IOwnerRepository
 
     Task AppendAsync(Owner owner, CancellationToken cancellationToken = default);
 
-    Task<bool> TryReserveNaturalAsync(Guid ownerId, IdentityDocument document, CancellationToken cancellationToken = default);
+    Task<bool> TryReserveEmailAsync(Guid ownerId, string email, CancellationToken cancellationToken = default);
 
-    Task<bool> TryReserveCompanyAsync(Guid ownerId, Nit nit, CancellationToken cancellationToken = default);
+    Task<bool> TryReservePhoneAsync(Guid ownerId, string phone, CancellationToken cancellationToken = default);
 
     Task<bool> TryReserveUserAsync(Guid ownerId, Guid userId, CancellationToken cancellationToken = default);
 }

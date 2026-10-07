@@ -152,7 +152,7 @@ Wolverine crea un esquema `wolverine` **dentro de la base de Identity**, y ahí 
     mark={['await _bus.PublishAsync(message);']}
 />
 
-Rentals tiene mensajería durable configurada —`IntegrateWithWolverine()` sobre Marten hace que los mensajes se persistan—, pero mira **quién llama a este método**: `RegisterNaturalOwnerHandler` lo invoca **después** de `SaveChangesAsync`, con un `IMessageBus` que no está enlazado a esa transacción.
+Rentals tiene mensajería durable configurada —`IntegrateWithWolverine()` sobre Marten hace que los mensajes se persistan—, pero mira **quién llama a este método**: `RegisterOwnerHandler` lo invoca **después** de `SaveChangesAsync`, con un `IMessageBus` que no está enlazado a esa transacción.
 
 O sea: el propietario se guarda, y luego se publica. Si el proceso muere justo en medio, queda un propietario en Rentals sin cuenta en Identity, y nada lo va a reintentar.
 

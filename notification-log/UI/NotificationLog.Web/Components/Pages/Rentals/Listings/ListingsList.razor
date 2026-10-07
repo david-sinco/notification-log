@@ -41,7 +41,7 @@
                             <option value="@Guid.Empty">Selecciona un propietario</option>
                             @foreach (var owner in owners)
                             {
-                                <option value="@owner.Id">@OwnerLabels.Name(owner) · @OwnerLabels.Identification(owner)</option>
+                                <option value="@owner.Id">@owner.Name · @owner.Email</option>
                             }
                         </select>
                         @if (Actor.IsStaff)
@@ -224,7 +224,7 @@
         try
         {
             owners = Actor.IsStaff
-                ? (await OwnersApi.ListAsync(null, null, null, 1, 100, CancellationToken.None)).Items
+                ? (await OwnersApi.ListAsync(null, null, 1, 100, CancellationToken.None)).Items
                 : await OwnersApi.ListMineAsync(CancellationToken.None);
 
             if (!Actor.IsStaff && owners.Count == 1)

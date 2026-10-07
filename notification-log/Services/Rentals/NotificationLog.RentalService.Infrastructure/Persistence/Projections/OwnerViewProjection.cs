@@ -2,7 +2,6 @@ using Domain.Shared.EventSourcing;
 using JasperFx.Events;
 using Marten.Events.Projections;
 using NotificationLog.RentalService.Domain.Listings.Events;
-using NotificationLog.RentalService.Domain.Owners.Enums;
 using NotificationLog.RentalService.Domain.Owners.Events;
 using NotificationLog.RentalService.Infrastructure.Persistence.Views;
 
@@ -12,8 +11,7 @@ public sealed class OwnerViewProjection : MultiStreamProjection<OwnerView, Guid>
 {
     public OwnerViewProjection()
     {
-        Identity<NaturalOwnerRegistered>(e => e.OwnerId);
-        Identity<CompanyOwnerRegistered>(e => e.OwnerId);
+        Identity<OwnerRegistered>(e => e.OwnerId);
         Identity<OwnerClaimed>(e => e.OwnerId);
         Identity<ListingDrafted>(e => e.OwnerId);
     }
@@ -24,33 +22,15 @@ public sealed class OwnerViewProjection : MultiStreamProjection<OwnerView, Guid>
 
         switch (e.Data)
         {
-            case NaturalOwnerRegistered n:
+            case OwnerRegistered r:
                 return new OwnerView
                 {
                     Id = id,
-                    CreatedBy = n.CreatedBy,
-                    RelatedUserId = n.RelatedUserId,
-                    Type = OwnerType.Natural,
-                    FirstNames = n.FirstNames,
-                    LastNames = n.LastNames,
-                    DocumentType = n.DocumentType,
-                    DocumentNumber = n.DocumentNumber,
-                    Email = n.Email,
-                    Phone = n.Phone,
-                    RegisteredAt = at
-                };
-            case CompanyOwnerRegistered c:
-                return new OwnerView
-                {
-                    Id = id,
-                    CreatedBy = c.CreatedBy,
-                    RelatedUserId = c.RelatedUserId,
-                    Type = OwnerType.Company,
-                    LegalName = c.LegalName,
-                    Nit = c.Nit,
-                    NitCheckDigit = c.NitCheckDigit,
-                    Email = c.Email,
-                    Phone = c.Phone,
+                    CreatedBy = r.CreatedBy,
+                    RelatedUserId = r.RelatedUserId,
+                    Name = r.Name,
+                    Email = r.Email,
+                    Phone = r.Phone,
                     RegisteredAt = at
                 };
             case OwnerClaimed claimed when snapshot is not null:

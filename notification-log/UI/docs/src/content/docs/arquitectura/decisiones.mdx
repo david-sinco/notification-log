@@ -74,7 +74,7 @@ Todas salen de `notification-log/todo.md` o son comprobables abriendo el archivo
 | 1 | **Notifications no valida tokens.** | Cualquiera con acceso de red a `:7506` puede llamar a su API. Es la deuda de seguridad más grande. | `ApiService/Program.cs` |
 | 2 | **Las visitas reciben `ActorId` en el cuerpo.** | El cliente dice quién es él mismo. Publicaciones y propietarios ya lo toman del token. | `ConfirmVisitCommand.cs` |
 | 3 | **El panel no renueva el access token.** | A los quince minutos de sesión, un `401` que se muestra como error genérico. | `AccessTokenHandler.cs` |
-| 4 | **Rentals publica después del commit.** | Ventana pequeña en la que un propietario queda sin cuenta si el proceso muere. | `RegisterNaturalOwnerHandler.cs` |
+| 4 | **Rentals publica después del commit.** | Ventana pequeña en la que un propietario queda sin cuenta si el proceso muere. | `RegisterOwnerHandler.cs` |
 | 5 | **`rentals-person-verification` no está enlazada a su exchange.** | El consumidor existe y nunca se ejecuta; la réplica se queda vacía. | `RabbitMqMessagingExtensions.cs` de Rentals |
 | 6 | **La base de Rentals no se puede reconstruir.** | Hay eventos de funcionalidades borradas y un evento que cambió de forma. Hay que reiniciar el esquema. | [Event Sourcing · módulo 11](/event-sourcing/evolucion) |
 | 7 | **No hay log reproducible entre servicios.** | RabbitMQ garantiza entrega, no relectura: un servicio nuevo no puede reconstruirse desde la historia. | `todo.md` |

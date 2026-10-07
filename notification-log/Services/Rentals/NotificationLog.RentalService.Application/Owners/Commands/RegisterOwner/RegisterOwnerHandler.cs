@@ -7,32 +7,34 @@ using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
-namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterCompanyOwner;
+namespace NotificationLog.RentalService.Application.Owners.Commands.RegisterOwner;
 
-public sealed class RegisterCompanyOwnerHandler(
+public sealed class RegisterOwnerHandler(
     IOwnerRepository owners,
     IUnitOfWork uow,
-    IValidator<RegisterCompanyOwnerCommand> validator)
+    IValidator<RegisterOwnerCommand> validator)
 {
     private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
-    private readonly IValidator<RegisterCompanyOwnerCommand> _validator = validator;
+    private readonly IValidator<RegisterOwnerCommand> _validator = validator;
 
-    public async Task<Guid> HandleAsync(RegisterCompanyOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
+    public async Task<Guid> HandleAsync(RegisterOwnerCommand cmd, ClaimsPrincipal user, CancellationToken ct)
     {
         var ownerId = Guid.NewGuid();
         var relatedUserId = await RelatedUserResolver.ResolveAsync(_owners, ownerId, user, ct);
 
         await _validator.ValidateAndThrowAppAsync(cmd, ct);
 
-        var legalName = LegalName.Create(cmd.LegalName);
-        var nit = Nit.Create(cmd.Nit);
+        var name = OwnerName.Create(cmd.Name);
         var contact = ContactInfo.Create(cmd.Email, cmd.Phone);
 
-        if (!await _owners.TryReserveCompanyAsync(ownerId, nit, ct))
-            throw new AppValidationException("Ya existe un propietario con ese NIT.");
+        if (!await _owners.TryReserveEmailAsync(ownerId, contact.Email, ct))
+            throw new AppValidationException("Ya existe un propietario con ese correo.");
 
-        var owner = Owner.RegisterCompany(ownerId, user.GetUserId(), relatedUserId, legalName, nit, contact);
+        if (!await _owners.TryReservePhoneAsync(ownerId, contact.Phone, ct))
+            throw new AppValidationException("Ya existe un propietario con ese teléfono.");
+
+        var owner = Owner.Register(ownerId, user.GetUserId(), relatedUserId, name, contact);
 
         await _owners.AppendAsync(owner, ct);
         await _uow.SaveChangesAsync(ct);

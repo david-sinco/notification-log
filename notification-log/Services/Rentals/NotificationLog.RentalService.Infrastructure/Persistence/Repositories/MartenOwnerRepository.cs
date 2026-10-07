@@ -1,8 +1,6 @@
 using NotificationLog.RentalService.Infrastructure.Persistence.Reservations;
 using Marten;
-using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Owners;
-using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
 namespace NotificationLog.RentalService.Infrastructure.Persistence.Repositories;
 
@@ -23,14 +21,11 @@ internal sealed class MartenOwnerRepository : IOwnerRepository
         return Task.CompletedTask;
     }
 
-    public Task<bool> TryReserveNaturalAsync(Guid ownerId, IdentityDocument document, CancellationToken cancellationToken = default)
-    {
-        var id = $"{document.Type}:{document.Number}";
-        return TryInsertAsync(id, new OwnerDocumentReservation { Id = id, OwnerId = ownerId }, cancellationToken);
-    }
+    public Task<bool> TryReserveEmailAsync(Guid ownerId, string email, CancellationToken cancellationToken = default)
+        => TryInsertAsync(email, new OwnerEmailReservation { Id = email, OwnerId = ownerId }, cancellationToken);
 
-    public Task<bool> TryReserveCompanyAsync(Guid ownerId, Nit nit, CancellationToken cancellationToken = default)
-        => TryInsertAsync(nit.Number, new OwnerNitReservation { Id = nit.Number, OwnerId = ownerId }, cancellationToken);
+    public Task<bool> TryReservePhoneAsync(Guid ownerId, string phone, CancellationToken cancellationToken = default)
+        => TryInsertAsync(phone, new OwnerPhoneReservation { Id = phone, OwnerId = ownerId }, cancellationToken);
 
     public Task<bool> TryReserveUserAsync(Guid ownerId, Guid userId, CancellationToken cancellationToken = default)
     {

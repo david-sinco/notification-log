@@ -9,8 +9,7 @@
         <h2 class="h2">¿Eres este propietario?</h2>
         <p class="muted">Hay un propietario registrado con tu correo o tu teléfono confirmado. Si eres tú, sus publicaciones quedan a tu nombre.</p>
         <div class="stack" style="--gap: 2px">
-            <span class="strong">@OwnerLabels.Name(candidate)</span>
-            <span class="mono smaller muted">@OwnerLabels.Identification(candidate)</span>
+            <span class="strong">@candidate.Name</span>
             <span class="small muted wrap-any">@candidate.Email · @candidate.Phone</span>
         </div>
         <div class="row row-end">

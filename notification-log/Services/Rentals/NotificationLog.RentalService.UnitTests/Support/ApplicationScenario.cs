@@ -81,13 +81,13 @@ public abstract class ApplicationScenario : DomainScenario
     protected void AnyListingIs(Listing listing)
     {
         Listings.LoadAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(listing);
-        Exists(OwnerFactory.Natural(listing.OwnerId));
+        Exists(OwnerFactory.Registered(listing.OwnerId));
     }
 
     protected void Exists(Listing listing)
     {
         Listings.LoadAsync(listing.Id, Arg.Any<CancellationToken>()).Returns(listing);
-        Exists(OwnerFactory.Natural(listing.OwnerId));
+        Exists(OwnerFactory.Registered(listing.OwnerId));
     }
 
     protected void Exists(Visit visit) => Visits.LoadAsync(visit.Id, Arg.Any<CancellationToken>()).Returns(visit);

@@ -10,7 +10,7 @@ import Callout from '../../../components/Callout.astro';
 import { Code } from '@astrojs/starlight/components';
 import { whole, span, member } from '../../../lib/code';
 import ownerEndpoints from '@code/Services/Rentals/NotificationLog.RentalService.Api/Endpoints/OwnerEndpoints.cs?raw';
-import registerHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs?raw';
+import registerHandler from '@code/Services/Rentals/NotificationLog.RentalService.Application/Owners/Commands/RegisterOwner/RegisterOwnerHandler.cs?raw';
 import accountProvisioner from '@code/Services/Rentals/NotificationLog.RentalService.Infrastructure/Messaging/Publishers/WolverineAccountProvisioner.cs?raw';
 import accountHandler from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/Consumers/AccountCreationRequestedHandler.cs?raw';
 import createAccount from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/CreateAccount/CreateAccountHandler.cs?raw';
@@ -66,7 +66,7 @@ Lo único que este endpoint decide es **el código de respuesta**. Todo lo demá
 <Code
     code={member(registerHandler, 'public async Task<Guid> HandleAsync')}
     lang="csharp"
-    title="Rentals · Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs"
+    title="Rentals · Application/Owners/Commands/RegisterOwner/RegisterOwnerHandler.cs"
     mark={['await _uow.SaveChangesAsync(ct);', 'await _accounts.RequestAccountAsync(']}
 />
 
@@ -81,7 +81,7 @@ Seis operaciones, y cada una es de un tipo distinto:
 | `Owner.RegisterNatural` | Crea el agregado levantando un hecho | **El agregado** |
 | `AppendAsync` + `SaveChangesAsync` | Escribe el evento y sus vistas, en una transacción | `Infrastructure` |
 
-Al terminar `SaveChangesAsync`, en la base `rentals` hay **una fila nueva en `mt_events`** con un `NaturalOwnerRegistered`, y las vistas de lectura ya actualizadas en la misma transacción.
+Al terminar `SaveChangesAsync`, en la base `rentals` hay **una fila nueva en `mt_events`** con un `OwnerRegistered`, y las vistas de lectura ya actualizadas en la misma transacción.
 
 ## Paso 4 · El mensaje sale hacia Identity
 
@@ -91,7 +91,7 @@ Al terminar `SaveChangesAsync`, en la base `rentals` hay **una fila nueva en `mt
     title="Rentals · Messaging/Publishers/WolverineAccountProvisioner.cs"
 />
 
-El evento de dominio `NaturalOwnerRegistered` **no sale de Rentals**. Lo que sale es un contrato público, construido a propósito: `AccountCreationRequested`, con su `EventId`, su marca de tiempo, su `SchemaVersion` y el rol `Propietario` ya traducido a texto.
+El evento de dominio `OwnerRegistered` **no sale de Rentals**. Lo que sale es un contrato público, construido a propósito: `AccountCreationRequested`, con su `EventId`, su marca de tiempo, su `SchemaVersion` y el rol `Propietario` ya traducido a texto.
 
 Fíjate en el `UserId`: es **el mismo `Guid` del propietario**. Esa coincidencia deliberada es lo que hará que, tres saltos más adelante, las tres bases hablen de la misma persona sin ninguna relación entre ellas.
 

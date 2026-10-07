@@ -21,18 +21,13 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
         if (filter.CreatedBy is { } createdBy)
             owners = owners.Where(x => x.CreatedBy == createdBy);
 
-        if (filter.Type is { } type)
-            owners = owners.Where(x => x.Type == type);
-
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var search = filter.Search.Trim();
             owners = owners.Where(x =>
-                x.FirstNames!.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || x.LastNames!.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || x.LegalName!.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || x.DocumentNumber!.Contains(search, StringComparison.OrdinalIgnoreCase)
-                || x.Nit!.Contains(search, StringComparison.OrdinalIgnoreCase));
+                x.Name.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || x.Email.Contains(search, StringComparison.OrdinalIgnoreCase)
+                || x.Phone.Contains(search, StringComparison.OrdinalIgnoreCase));
         }
 
         var items = await ((IMartenQueryable<OwnerView>)owners)
@@ -78,13 +73,7 @@ internal sealed class MartenOwnerReadModel : IOwnerReadModel
         x.Id,
         x.CreatedBy,
         x.RelatedUserId,
-        x.Type.ToString(),
-        x.FirstNames,
-        x.LastNames,
-        x.DocumentType?.ToString(),
-        x.DocumentNumber,
-        x.LegalName,
-        x.Nit is null ? null : $"{x.Nit}-{x.NitCheckDigit}",
+        x.Name,
         x.Email,
         x.Phone,
         x.RegisteredAt,

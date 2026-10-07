@@ -38,6 +38,8 @@ storage.AddBlobs("blobs")
 AddSqlClient();
 
 var rabbitmq = builder.AddRabbitMQ("rabbitmq")
+    .WithDataVolume()
+    .WithLifetime(ContainerLifetime.Persistent)
     .WithManagementPlugin()
     .WithParentRelationship(messaging);
 

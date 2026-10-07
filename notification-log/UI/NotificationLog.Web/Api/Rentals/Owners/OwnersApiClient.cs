@@ -2,12 +2,11 @@ namespace NotificationLog.Web.Api.Rentals.Owners;
 
 public sealed class OwnersApiClient(HttpClient http)
 {
-    public Task<PagedResult<OwnerDto>> ListAsync(Guid? createdBy, string? search, string? type, int page, int pageSize, CancellationToken ct)
+    public Task<PagedResult<OwnerDto>> ListAsync(Guid? createdBy, string? search, int page, int pageSize, CancellationToken ct)
     {
         var query = QueryString.Build(
             ("createdBy", createdBy?.ToString()),
             ("search", search),
-            ("type", type),
             ("page", page.ToString()),
             ("pageSize", pageSize.ToString()));
 
@@ -26,9 +25,6 @@ public sealed class OwnersApiClient(HttpClient http)
     public Task<OwnerDto> GetByIdAsync(Guid id, CancellationToken ct)
         => http.GetJsonAsync<OwnerDto>($"/api/owners/{id}", ct);
 
-    public Task<Guid> RegisterNaturalAsync(RegisterNaturalOwnerRequest request, CancellationToken ct)
-        => http.SendForIdAsync(HttpMethod.Post, "/api/owners/natural", request, ct);
-
-    public Task<Guid> RegisterCompanyAsync(RegisterCompanyOwnerRequest request, CancellationToken ct)
-        => http.SendForIdAsync(HttpMethod.Post, "/api/owners/company", request, ct);
+    public Task<Guid> RegisterAsync(RegisterOwnerRequest request, CancellationToken ct)
+        => http.SendForIdAsync(HttpMethod.Post, "/api/owners", request, ct);
 }

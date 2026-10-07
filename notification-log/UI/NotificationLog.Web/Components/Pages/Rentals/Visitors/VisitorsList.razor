@@ -49,7 +49,15 @@
 
     private static string Identification(VisitorDto visitor) => visitor.DocumentNumber is null
         ? "Sin documento todavía"
-        : $"{OwnerLabels.Document(visitor.DocumentType)} {visitor.DocumentNumber}";
+        : $"{Document(visitor.DocumentType)} {visitor.DocumentNumber}";
+
+    private static string Document(string? type) => type switch
+    {
+        "CitizenshipCard" => "Cédula de ciudadanía",
+        "ForeignerId" => "Cédula de extranjería",
+        "Passport" => "Pasaporte",
+        _ => type ?? "—"
+    };
 
     private static string Contact(VisitorDto visitor) =>
         string.Join(" · ", new[] { visitor.Email, visitor.Phone }.Where(value => !string.IsNullOrWhiteSpace(value)));

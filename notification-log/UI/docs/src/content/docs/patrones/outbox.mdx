@@ -13,7 +13,7 @@ import outboxUow from '@code/Services/Identity/NotificationLog.IdentityService.I
 import identityOutbox from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/IdentityOutbox.cs?raw';
 import identityMessaging from '@code/Services/Identity/NotificationLog.IdentityService.Infrastructure/Messaging/RabbitMqMessagingExtensions.cs?raw';
 import createAccount from '@code/Services/Identity/NotificationLog.IdentityService.Application/Users/Commands/CreateAccount/CreateAccountHandler.cs?raw';
-import registerOwner from '@code/Services/Rentals/NotificationLog.RentalService.Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs?raw';
+import registerOwner from '@code/Services/Rentals/NotificationLog.RentalService.Application/Owners/Commands/RegisterOwner/RegisterOwnerHandler.cs?raw';
 
 <p class="ddd-lede">
 Un caso de uso hace dos escrituras en sitios distintos: guarda el usuario en su base y publica un
@@ -106,7 +106,7 @@ Eso es lo mejor de este patrón aquí: el que escribe casos de uso no puede olvi
 <Code
     code={member(registerOwner, 'public async Task<Guid> HandleAsync')}
     lang="csharp"
-    title="Rentals · Application/Owners/Commands/RegisterNaturalOwner/RegisterNaturalOwnerHandler.cs"
+    title="Rentals · Application/Owners/Commands/RegisterOwner/RegisterOwnerHandler.cs"
     mark={['await _uow.SaveChangesAsync(ct);', 'await _accounts.RequestAccountAsync(']}
 />
 
@@ -218,7 +218,7 @@ Que estén juntas no es una casualidad de configuración: **es el patrón**. Ver
 <Callout kind="ejercicio" title="Comprueba que lo entendiste">
 
 1. Explica por qué "publicar primero y guardar después" es **peor** que "guardar primero y publicar después", con un ejemplo concreto de este sistema.
-2. `RegisterNaturalOwnerHandler` publica después del commit. Propón el cambio mínimo para que use el outbox y di qué tendría que cambiar en la infraestructura de Rentals.
+2. `RegisterOwnerHandler` publica después del commit. Propón el cambio mínimo para que use el outbox y di qué tendría que cambiar en la infraestructura de Rentals.
 3. El outbox garantiza "al menos una vez". Localiza en el código de Identity la línea que hace que recibir dos veces `AccountCreationRequested` no cree dos cuentas.
 
 </Callout>

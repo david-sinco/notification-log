@@ -3,7 +3,6 @@ using Domain.Shared.EventSourcing;
 using Domain.Shared.Exceptions;
 using NotificationLog.RentalService.Domain.Common;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
-using NotificationLog.RentalService.Domain.Owners.Enums;
 using NotificationLog.RentalService.Domain.Owners.Events;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
@@ -15,46 +14,21 @@ public sealed class Owner : AggregateRoot
 
     public Guid CreatedBy { get; private set; }
     public Guid? RelatedUserId { get; private set; }
-    public OwnerType Type { get; private set; }
-    public PersonName? Name { get; private set; }
-    public IdentityDocument? Document { get; private set; }
-    public LegalName? LegalName { get; private set; }
-    public Nit? Nit { get; private set; }
+    public OwnerName? Name { get; private set; }
     public ContactInfo? Contact { get; private set; }
 
     public Guid HostUserId => RelatedUserId ?? CreatedBy;
 
-    public static Owner RegisterNatural(
-        Guid id, Guid createdBy, Guid? relatedUserId, PersonName name, IdentityDocument document, ContactInfo contact)
+    public static Owner Register(Guid id, Guid createdBy, Guid? relatedUserId, OwnerName name, ContactInfo contact)
     {
         Guard.RequireId(id, "El identificador del propietario es obligatorio.");
         Guard.RequireId(createdBy, "El usuario que registra al propietario es obligatorio.");
         ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(document);
         ArgumentNullException.ThrowIfNull(contact);
 
         var owner = new Owner();
 
-        owner.Raise(new NaturalOwnerRegistered(
-            id, createdBy, name.FirstNames, name.LastNames, document.Type, document.Number,
-            contact.Email, contact.Phone, relatedUserId));
-
-        return owner;
-    }
-
-    public static Owner RegisterCompany(
-        Guid id, Guid createdBy, Guid? relatedUserId, LegalName legalName, Nit nit, ContactInfo contact)
-    {
-        Guard.RequireId(id, "El identificador del propietario es obligatorio.");
-        Guard.RequireId(createdBy, "El usuario que registra al propietario es obligatorio.");
-        ArgumentNullException.ThrowIfNull(legalName);
-        ArgumentNullException.ThrowIfNull(nit);
-        ArgumentNullException.ThrowIfNull(contact);
-
-        var owner = new Owner();
-
-        owner.Raise(new CompanyOwnerRegistered(
-            id, createdBy, legalName.Value, nit.Number, nit.CheckDigit, contact.Email, contact.Phone, relatedUserId));
+        owner.Raise(new OwnerRegistered(id, createdBy, name.Value, contact.Email, contact.Phone, relatedUserId));
 
         return owner;
     }
@@ -79,8 +53,7 @@ public sealed class Owner : AggregateRoot
     {
         switch (domainEvent)
         {
-            case NaturalOwnerRegistered e: When(e); break;
-            case CompanyOwnerRegistered e: When(e); break;
+            case OwnerRegistered e: When(e); break;
             case OwnerClaimed e: When(e); break;
 
             default:
@@ -89,25 +62,12 @@ public sealed class Owner : AggregateRoot
         }
     }
 
-    private void When(NaturalOwnerRegistered e)
+    private void When(OwnerRegistered e)
     {
         Id = e.OwnerId;
         CreatedBy = e.CreatedBy;
         RelatedUserId = e.RelatedUserId;
-        Type = OwnerType.Natural;
-        Name = PersonName.FromStorage(e.FirstNames, e.LastNames);
-        Document = IdentityDocument.FromStorage(e.DocumentType, e.DocumentNumber);
-        Contact = ContactInfo.FromStorage(e.Email, e.Phone);
-    }
-
-    private void When(CompanyOwnerRegistered e)
-    {
-        Id = e.OwnerId;
-        CreatedBy = e.CreatedBy;
-        RelatedUserId = e.RelatedUserId;
-        Type = OwnerType.Company;
-        LegalName = LegalName.FromStorage(e.LegalName);
-        Nit = Nit.FromStorage(e.Nit, e.NitCheckDigit);
+        Name = OwnerName.FromStorage(e.Name);
         Contact = ContactInfo.FromStorage(e.Email, e.Phone);
     }
 

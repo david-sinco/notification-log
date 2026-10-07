@@ -1,7 +1,5 @@
-using NotificationLog.RentalService.Domain.Common.Enums;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Owners;
-using NotificationLog.RentalService.Domain.Owners.Enums;
 using NotificationLog.RentalService.Domain.Owners.Events;
 using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 
@@ -15,63 +13,38 @@ public class OwnerRegistrationTests : DomainScenario
     private Owner _owner = null!;
 
     [TestMethod]
-    public void ANaturalPersonRegistersWithNameAndDocument() =>
-        this.When(_ => ANaturalPersonIsRegistered(Guid.NewGuid()),
-                "Cuando se registra a Ana Gómez Rincón con cédula 52123456, correo ana@example.com y teléfono 3001234567")
-            .Then(_ => TypeIs(OwnerType.Natural), "Entonces el propietario es persona natural")
-            .And(_ => NameIs("Ana Gómez Rincón"), "Y se llama Ana Gómez Rincón")
-            .And(_ => DocumentIs("52123456"), "Y su documento es 52123456")
-            .And(_ => ContactIs("ana@example.com", "+573001234567"), "Y su contacto es ana@example.com y +573001234567")
-            .And(_ => WasRegisteredByTheUser(), "Y queda registrado qué usuario lo creó")
-            .And(_ => NaturalRegistrationIsRecorded(), "Y se registra el alta de persona natural")
-            .BDDfy("Una persona natural se registra con su nombre y documento");
-
-    [TestMethod]
-    public void ACompanyRegistersWithLegalNameAndNit() =>
-        this.When(_ => ACompanyIsRegistered(),
-                "Cuando se registra a Inmobiliaria Andes con NIT 900123456-8, correo andes@example.com y teléfono 6011234567")
-            .Then(_ => TypeIs(OwnerType.Company), "Entonces el propietario es persona jurídica")
-            .And(_ => LegalNameIs("Inmobiliaria Andes"), "Y su razón social es Inmobiliaria Andes")
-            .And(_ => NitIs("900123456-8"), "Y su NIT es 900123456-8")
+    public void AnOwnerRegistersWithNameAndContact() =>
+        this.When(_ => AnOwnerIsRegistered(Guid.NewGuid(), "Inmobiliaria Andes"),
+                "Cuando se registra a Inmobiliaria Andes con correo andes@example.com y teléfono 6011234567")
+            .Then(_ => NameIs("Inmobiliaria Andes"), "Entonces se llama Inmobiliaria Andes")
             .And(_ => ContactIs("andes@example.com", "+576011234567"), "Y su contacto es andes@example.com y +576011234567")
             .And(_ => WasRegisteredByTheUser(), "Y queda registrado qué usuario lo creó")
-            .And(_ => CompanyRegistrationIsRecorded(), "Y se registra el alta de persona jurídica")
-            .BDDfy("Una persona jurídica se registra con su razón social y NIT");
+            .And(_ => TheRegistrationIsRecorded(), "Y se registra el alta del propietario")
+            .BDDfy("Un propietario se registra con su nombre y sus datos de contacto");
 
     [TestMethod]
     public void AnOwnerNeedsAnIdentifier() =>
-        this.When(_ => ANaturalPersonIsRegistered(Guid.Empty), "Cuando se registra una persona natural sin identificador")
+        this.When(_ => AnOwnerIsRegistered(Guid.Empty, "Inmobiliaria Andes"), "Cuando se registra un propietario sin identificador")
             .Then(_ => IsRejectedWith("El identificador del propietario es obligatorio."),
                 "Entonces se rechaza: El identificador del propietario es obligatorio.")
             .BDDfy("Un propietario necesita identificador");
 
-    private void ANaturalPersonIsRegistered(Guid id)
-        => Try(() => _owner = Owner.RegisterNatural(
+    [TestMethod]
+    public void AnOwnerNeedsAName() =>
+        this.When(_ => AnOwnerIsRegistered(Guid.NewGuid(), " "), "Cuando se registra un propietario sin nombre")
+            .Then(_ => IsRejectedWith("El nombre del propietario es obligatorio."),
+                "Entonces se rechaza: El nombre del propietario es obligatorio.")
+            .BDDfy("Un propietario necesita nombre");
+
+    private void AnOwnerIsRegistered(Guid id, string name)
+        => Try(() => _owner = Owner.Register(
             id,
             User,
             null,
-            PersonName.Create("Ana", "Gómez Rincón"),
-            IdentityDocument.Create(DocumentType.CitizenshipCard, "52123456"),
-            ContactInfo.Create("ana@example.com", "3001234567")));
-
-    private void ACompanyIsRegistered()
-        => Try(() => _owner = Owner.RegisterCompany(
-            Guid.NewGuid(),
-            User,
-            null,
-            LegalName.Create("Inmobiliaria Andes"),
-            Nit.Create("900123456-8"),
+            OwnerName.Create(name),
             ContactInfo.Create("andes@example.com", "6011234567")));
 
-    private void TypeIs(OwnerType expected) => Assert.AreEqual(expected, _owner.Type);
-
-    private void NameIs(string name) => Assert.AreEqual(name, _owner.Name?.ToString());
-
-    private void DocumentIs(string number) => Assert.AreEqual(number, _owner.Document?.Number);
-
-    private void LegalNameIs(string legalName) => Assert.AreEqual(legalName, _owner.LegalName?.Value);
-
-    private void NitIs(string nit) => Assert.AreEqual(nit, _owner.Nit?.ToString());
+    private void NameIs(string name) => Assert.AreEqual(name, _owner.Name?.Value);
 
     private void ContactIs(string email, string phone)
     {
@@ -81,9 +54,6 @@ public class OwnerRegistrationTests : DomainScenario
 
     private void WasRegisteredByTheUser() => Assert.AreEqual(User, _owner.CreatedBy);
 
-    private void NaturalRegistrationIsRecorded()
-        => Assert.IsInstanceOfType<NaturalOwnerRegistered>(_owner.DomainEvents.Single());
-
-    private void CompanyRegistrationIsRecorded()
-        => Assert.IsInstanceOfType<CompanyOwnerRegistered>(_owner.DomainEvents.Single());
+    private void TheRegistrationIsRecorded()
+        => Assert.IsInstanceOfType<OwnerRegistered>(_owner.DomainEvents.Single());
 }

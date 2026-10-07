@@ -51,9 +51,9 @@ public class OwnerClaimTests : DomainScenario
             .Then(_ => TheHostIs(_owner.CreatedBy), "Entonces el anfitrión de sus publicaciones es quien lo registró")
             .BDDfy("Sin usuario, el anfitrión es quien registró al propietario");
 
-    private void AnUnclaimedOwner() => _owner = OwnerFactory.Natural(Guid.NewGuid(), null);
+    private void AnUnclaimedOwner() => _owner = OwnerFactory.Registered(Guid.NewGuid(), null);
 
-    private void AnOwnerClaimedBy(Guid userId) => _owner = OwnerFactory.Natural(Guid.NewGuid(), userId);
+    private void AnOwnerClaimedBy(Guid userId) => _owner = OwnerFactory.Registered(Guid.NewGuid(), userId);
 
     private void IsClaimed(Guid userId, string? email, string? phone) => Try(() => _owner.Claim(userId, email, phone));
 

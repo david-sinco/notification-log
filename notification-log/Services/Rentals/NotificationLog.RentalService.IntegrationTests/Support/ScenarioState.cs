@@ -7,6 +7,7 @@ public sealed class ScenarioState
     private readonly Dictionary<string, TestUser> _users = [];
     private readonly Dictionary<string, Guid> _owners = [];
     private int _documents;
+    private int _phones;
 
     public TestUser Staff { get; } = new("Moderación interna", Guid.NewGuid(), UserRole.Moderador);
 
@@ -33,4 +34,6 @@ public sealed class ScenarioState
             : throw new InvalidOperationException($"El escenario no registra un propietario para '{name}'.");
 
     public string NextDocument() => $"5212{++_documents:0000}";
+
+    public string NextPhone() => $"300{++_phones:0000000}";
 }
