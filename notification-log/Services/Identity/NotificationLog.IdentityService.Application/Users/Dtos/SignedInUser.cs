@@ -13,5 +13,13 @@ public sealed record SignedInUser(
     public string DisplayName => string.IsNullOrWhiteSpace(Name) ? Email ?? Phone ?? Id.ToString() : Name;
 
     public static SignedInUser From(User user) =>
-        new(user.Id, user.Name, user.Email, user.Phone, user.SecurityStamp, user.Role?.ToString());
+        new(
+            user.Id,
+            user.Name,
+            NullIfEmpty(user.VerifiedEmail),
+            NullIfEmpty(user.VerifiedPhone),
+            user.SecurityStamp,
+            user.Role?.ToString());
+
+    private static string? NullIfEmpty(string value) => string.IsNullOrEmpty(value) ? null : value;
 }
