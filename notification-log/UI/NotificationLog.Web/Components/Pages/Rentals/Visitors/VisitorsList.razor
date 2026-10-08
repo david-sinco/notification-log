@@ -21,13 +21,12 @@
         @foreach (var visitor in page?.Items ?? [])
         {
             <article class="card card-tight row" style="padding: 16px; flex-direction: row; --gap: 14px">
-                <span class="avatar @(visitor.Status == "Registered" ? "avatar-lime" : "")" aria-hidden="true">@RentalsFormat.Initials(visitor.DisplayName)</span>
+                <span class="avatar avatar-lime" aria-hidden="true">@RentalsFormat.Initials(visitor.Name)</span>
                 <div class="stack grow" style="--gap: 2px">
-                    <span class="strong">@visitor.DisplayName</span>
-                    <span class="mono smaller muted">@Identification(visitor)</span>
+                    <span class="strong">@visitor.Name</span>
+                    <span class="mono smaller muted">Registrado el @RentalsFormat.Date(visitor.RegisteredAt)</span>
                     <span class="small muted wrap-any">@Contact(visitor)</span>
                 </div>
-                <RentalStatusPill Status="@visitor.Status" />
                 <a class="link" href="rentals/visits">@(visitor.VisitCount == 0 ? "Sin visitas" : visitor.VisitCount == 1 ? "1 visita" : $"{visitor.VisitCount} visitas")</a>
             </article>
         }
@@ -46,18 +45,6 @@
     private ApiException? error;
 
     protected override Task OnInitializedAsync() => LoadAsync();
-
-    private static string Identification(VisitorDto visitor) => visitor.DocumentNumber is null
-        ? "Sin documento todavía"
-        : $"{Document(visitor.DocumentType)} {visitor.DocumentNumber}";
-
-    private static string Document(string? type) => type switch
-    {
-        "CitizenshipCard" => "Cédula de ciudadanía",
-        "ForeignerId" => "Cédula de extranjería",
-        "Passport" => "Pasaporte",
-        _ => type ?? "—"
-    };
 
     private static string Contact(VisitorDto visitor) =>
         string.Join(" · ", new[] { visitor.Email, visitor.Phone }.Where(value => !string.IsNullOrWhiteSpace(value)));
