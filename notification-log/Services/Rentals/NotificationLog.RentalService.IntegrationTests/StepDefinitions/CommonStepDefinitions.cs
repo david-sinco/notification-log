@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text.Json;
 using Domain.Shared.Authorization;
+using Timestamp = Google.Protobuf.WellKnownTypes.Timestamp;
+using NotificationLog.Contracts.Identity;
 
 namespace NotificationLog.RentalService.IntegrationTests.StepDefinitions;
 
@@ -22,7 +24,22 @@ public sealed class CommonStepDefinitions(RentalsApi api, RentalsClient client, 
     public void DaysPass(int days) => _api.Clock.Advance(TimeSpan.FromDays(days));
 
     [Given("el usuario {string} con rol {word}")]
-    public void AddUser(string name, string role) => _state.AddUser(name, Enum.Parse<UserRole>(role));
+    public Task AddUser(string name, string role)
+    {
+        var user = _state.AddUser(name, Enum.Parse<UserRole>(role));
+
+        return _api.PublishAsync(new UserCreated
+        {
+            EventId = Guid.NewGuid().ToString(),
+            OccurredAt = Timestamp.FromDateTimeOffset(_api.Clock.GetUtcNow()),
+            SchemaVersion = 1,
+            UserId = user.Id.ToString(),
+            Name = user.Name,
+            Email = user.Email,
+            Phone = user.Phone,
+            Role = user.Role.ToString()
+        });
+    }
 
     [Then("la solicitud se acepta")]
     public async Task RequestIsAccepted()

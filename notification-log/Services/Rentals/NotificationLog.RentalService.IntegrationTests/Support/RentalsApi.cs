@@ -26,6 +26,13 @@ public sealed class RentalsApi(string connectionString) : WebApplicationFactory<
         Photos.Clear();
     }
 
+    public async Task PublishAsync(object message)
+    {
+        await using var scope = Services.CreateAsyncScope();
+
+        await scope.ServiceProvider.GetRequiredService<IMessageBus>().InvokeAsync(message);
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:rentals", connectionString);

@@ -136,9 +136,6 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 11
     await testRunner.AndAsync("una publicación de arriendo de \"Ana\" en estado \"Publicada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 12
-    await testRunner.AndAsync("que \"Víctor\" completó su perfil de visitante", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
@@ -157,7 +154,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión cancela una visita en negociación", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Una visita en negociación o agendada se puede cancelar indicando el motivo", null, tagsOfRule);
-#line 16
+#line 15
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -170,21 +167,21 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 17
+#line 16
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00" +
                         "\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 18
+#line 17
       await testRunner.WhenAsync("\"Ana\" cancela la visita con el motivo \"El inmueble ya no está disponible\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 19
+#line 18
       await testRunner.ThenAsync("la visita queda en estado \"Cancelada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 20
+#line 19
       await testRunner.AndAsync("la visita fue cancelada por el anfitrión con el motivo \"El inmueble ya no está di" +
                         "sponible\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 21
+#line 20
       await testRunner.AndAsync("se notifica \"visita.cancelada\" a \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -202,7 +199,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Cancelar exige un motivo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Una visita en negociación o agendada se puede cancelar indicando el motivo", null, tagsOfRule);
-#line 23
+#line 22
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -215,14 +212,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 24
+#line 23
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00" +
                         "\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 25
+#line 24
       await testRunner.WhenAsync("\"Víctor\" cancela la visita con el motivo \"\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 26
+#line 25
       await testRunner.ThenAsync("la solicitud se rechaza por validación", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -240,7 +237,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Cancelar una visita ya cancelada no tiene efecto", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Una visita en negociación o agendada se puede cancelar indicando el motivo", null, tagsOfRule);
-#line 28
+#line 27
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -253,19 +250,19 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 29
+#line 28
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" cancelada por \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 30
+#line 29
       await testRunner.WhenAsync("\"Víctor\" cancela la visita con el motivo \"Ya no me interesa\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 31
+#line 30
       await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 32
+#line 31
       await testRunner.AndAsync("la visita fue cancelada por el anfitrión", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 33
+#line 32
       await testRunner.AndAsync("no se envía ninguna notificación nueva", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -289,7 +286,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Cancelación de una visita agendada", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Es cancelación tardía si el visitante cancela a menos de 12 horas de la visita", null, tagsOfRule);
-#line 40
+#line 39
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -302,20 +299,20 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 38
+#line 37
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 41
+#line 40
       await testRunner.WhenAsync(string.Format("el reloj avanza hasta las \"{0}\"", momento), ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 42
+#line 41
       await testRunner.AndAsync(string.Format("\"{0}\" cancela la visita con el motivo \"No puedo asistir\"", quien), ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 43
+#line 42
       await testRunner.ThenAsync("la visita queda en estado \"Cancelada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 44
+#line 43
       await testRunner.AndAsync(string.Format("la cancelación {0}", resultado), ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -333,7 +330,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede cancelar una visita que ya empezó", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Es cancelación tardía si el visitante cancela a menos de 12 horas de la visita", null, tagsOfRule);
-#line 52
+#line 51
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -346,17 +343,17 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 38
+#line 37
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 53
+#line 52
       await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-07 10:30\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 54
+#line 53
       await testRunner.AndAsync("\"Víctor\" cancela la visita con el motivo \"No puedo asistir\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 55
+#line 54
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"La visita ya empezó;" +
                         " no se puede cancelar.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -375,7 +372,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión marca la visita como realizada", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo el anfitrión cierra la visita, y solo después de la hora agendada", null, tagsOfRule);
-#line 62
+#line 61
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -388,20 +385,20 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 60
+#line 59
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 63
+#line 62
       await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-07 11:30\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 64
+#line 63
       await testRunner.AndAsync("\"Ana\" marca la visita como realizada", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 65
+#line 64
       await testRunner.ThenAsync("la visita queda en estado \"Realizada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 66
+#line 65
       await testRunner.AndAsync("se notifica \"visita.realizada\" a \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -419,7 +416,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión marca que el visitante no asistió", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo el anfitrión cierra la visita, y solo después de la hora agendada", null, tagsOfRule);
-#line 68
+#line 67
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -432,20 +429,20 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 60
+#line 59
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 69
+#line 68
       await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-07 11:30\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 70
+#line 69
       await testRunner.AndAsync("\"Ana\" marca que el visitante no asistió", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 71
+#line 70
       await testRunner.ThenAsync("la visita queda en estado \"No asistió\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 72
+#line 71
       await testRunner.AndAsync("se notifica \"visita.inasistencia\" a \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -463,7 +460,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede cerrar una visita que todavía no ha empezado", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo el anfitrión cierra la visita, y solo después de la hora agendada", null, tagsOfRule);
-#line 74
+#line 73
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -476,14 +473,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 60
+#line 59
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 75
+#line 74
       await testRunner.WhenAsync("\"Ana\" marca la visita como realizada", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 76
+#line 75
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"La visita todavía no" +
                         " ha empezado.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -502,7 +499,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El visitante no puede cerrar la visita", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo el anfitrión cierra la visita, y solo después de la hora agendada", null, tagsOfRule);
-#line 78
+#line 77
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -515,17 +512,17 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 60
+#line 59
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 79
+#line 78
       await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-07 11:30\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 80
+#line 79
       await testRunner.AndAsync("\"Víctor\" marca la visita como realizada", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 81
+#line 80
       await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -543,7 +540,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Una visita cerrada no se puede volver a cerrar", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo el anfitrión cierra la visita, y solo después de la hora agendada", null, tagsOfRule);
-#line 83
+#line 82
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -556,20 +553,20 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 60
+#line 59
       await testRunner.GivenAsync("una visita de \"Víctor\" a la publicación de \"Ana\" agendada para el \"2026-10-07 10:" +
                         "00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dada ");
 #line hidden
-#line 84
+#line 83
       await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-07 11:30\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 85
+#line 84
       await testRunner.AndAsync("\"Ana\" marca la visita como realizada", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 86
+#line 85
       await testRunner.AndAsync("\"Ana\" marca que el visitante no asistió", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 87
+#line 86
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Solo se puede cerrar" +
                         " una visita agendada.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden

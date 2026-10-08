@@ -10,8 +10,7 @@ namespace NotificationLog.RentalService.UnitTests.Application.Visits.Commands.Re
 public class RequestVisitHandlerTests : ApplicationScenario
 {
     private const string NoProfile = "sin registro de visitante";
-    private const string PendingProfile = "con el perfil pendiente";
-    private const string CompleteProfile = "con el perfil completo";
+    private const string CompleteProfile = "con registro de visitante";
 
     private Listing _listing = null!;
     private Guid _visitId;
@@ -25,7 +24,7 @@ public class RequestVisitHandlerTests : ApplicationScenario
     [TestMethod]
     public void ARegisteredVisitorRequestsAVisitToAPublishedListing() =>
         this.Given(_ => AListingInStatus(ListingStatus.Published), "Dada una publicación publicada")
-            .And(_ => AVisitor(CompleteProfile), "Y un visitante con el perfil completo que inicia sesión")
+            .And(_ => AVisitor(CompleteProfile), "Y un visitante registrado que inicia sesión")
             .When(_ => RequestsAVisitWithSlots(1), "Cuando pide una visita proponiendo una franja")
             .Then(_ => ResultIs(Accepted), "Entonces se acepta")
             .And(_ => TheVisitIsSavedBetweenHostAndVisitor(), "Y se guarda la visita entre el propietario de la publicación y el visitante")
@@ -33,7 +32,7 @@ public class RequestVisitHandlerTests : ApplicationScenario
             .BDDfy("Un visitante registrado pide una visita a una publicación publicada");
 
     [TestMethod]
-    public void OnlyAVisitorWithACompleteProfileCanRequest() =>
+    public void OnlyARegisteredVisitorCanRequest() =>
         this.Given(_ => AListingInStatus(ListingStatus.Published), "Dada una publicación publicada")
             .And(_ => AVisitor(Profile), "Y un usuario <profile>")
             .When(_ => RequestsAVisitWithSlots(1), "Cuando pide una visita")
@@ -41,15 +40,14 @@ public class RequestVisitHandlerTests : ApplicationScenario
             .WithExamples(new ExampleTable("profile", "result")
             {
                 { CompleteProfile, Accepted },
-                { PendingProfile, "Completa tu perfil de visitante antes de pedir una visita." },
-                { NoProfile, "Completa tu perfil de visitante antes de pedir una visita." },
+                { NoProfile, "Solo los visitantes pueden pedir una visita." },
             })
-            .BDDfy("Solo un visitante con el perfil completo puede pedir visita");
+            .BDDfy("Solo un visitante registrado puede pedir visita");
 
     [TestMethod]
     public void OnlyPublishedListingsCanBeVisited() =>
         this.Given(_ => AListingInStatus(Status), "Dada una publicación en estado <status>")
-            .And(_ => AVisitor(CompleteProfile), "Y un visitante con el perfil completo")
+            .And(_ => AVisitor(CompleteProfile), "Y un visitante registrado")
             .When(_ => RequestsAVisitWithSlots(1), "Cuando pide una visita")
             .Then(_ => ResultIs(Result), "Entonces <result>")
             .WithExamples(new ExampleTable("status", "result")
@@ -64,7 +62,7 @@ public class RequestVisitHandlerTests : ApplicationScenario
     [TestMethod]
     public void SlotsAreCheckedAgainstTheClock() =>
         this.Given(_ => AListingInStatus(ListingStatus.Published), "Dada una publicación publicada")
-            .And(_ => AVisitor(CompleteProfile), "Y un visitante con el perfil completo")
+            .And(_ => AVisitor(CompleteProfile), "Y un visitante registrado")
             .And(_ => ItIs("2026-10-06 10:01"), "Y son las 2026-10-06 10:01")
             .When(_ => RequestsAVisitWithSlots(1), "Cuando pide una visita para el 2026-10-07 10:00")
             .Then(_ => IsRejectedWith("Cada franja debe empezar en al menos 24 horas."),
@@ -76,7 +74,7 @@ public class RequestVisitHandlerTests : ApplicationScenario
     [TestMethod]
     public void TheCommandIsValidated() =>
         this.Given(_ => AListingInStatus(ListingStatus.Published), "Dada una publicación publicada")
-            .And(_ => AVisitor(CompleteProfile), "Y un visitante con el perfil completo")
+            .And(_ => AVisitor(CompleteProfile), "Y un visitante registrado")
             .When(_ => RequestsAVisitWithSlots(Slots), "Cuando pide una visita proponiendo <slots> franjas")
             .Then(_ => FailsValidationOn(Field), "Entonces la validación falla en <field>")
             .WithExamples(new ExampleTable("slots", "field")
@@ -89,7 +87,7 @@ public class RequestVisitHandlerTests : ApplicationScenario
     [TestMethod]
     public void AMissingListingIsNotFound() =>
         this.Given(_ => AMissingListing(), "Dada una publicación que no existe")
-            .And(_ => AVisitor(CompleteProfile), "Y un visitante con el perfil completo")
+            .And(_ => AVisitor(CompleteProfile), "Y un visitante registrado")
             .When(_ => RequestsAVisitWithSlots(1), "Cuando pide una visita")
             .Then(_ => IsNotFound(), "Entonces la publicación no se encuentra")
             .BDDfy("No se puede pedir visita a una publicación que no existe");
@@ -104,8 +102,6 @@ public class RequestVisitHandlerTests : ApplicationScenario
 
         if (profile == CompleteProfile)
             Exists(VisitorFactory.Registered(VisitFactory.Visitor));
-        else if (profile == PendingProfile)
-            Exists(VisitorFactory.Pending(VisitFactory.Visitor));
         else
             Visitors.LoadAsync(VisitFactory.Visitor, Arg.Any<CancellationToken>()).Returns((NotificationLog.RentalService.Domain.Visitors.Visitor?)null);
     }

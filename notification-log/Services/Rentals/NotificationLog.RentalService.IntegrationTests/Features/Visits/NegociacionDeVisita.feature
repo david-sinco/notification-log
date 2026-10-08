@@ -11,7 +11,6 @@ Característica: Negociación de una visita
     Y el usuario "Marta" con rol Moderador
     Y que "Ana" está registrada como propietaria
     Y una publicación de arriendo de "Ana" en estado "Publicada"
-    Y que "Víctor" completó su perfil de visitante
 
   Regla: Solo un visitante registrado puede pedir visita a una publicación publicada
 
@@ -25,20 +24,14 @@ Característica: Negociación de una visita
       Y el plazo para responder vence el "2026-10-06 10:00"
       Y se notifica "visita.solicitada" a "Ana"
 
-    Escenario: Un usuario sin perfil de visitante no puede pedir visita
-      Dado el usuario "Valeria" con rol Visitor
-      Cuando "Valeria" pide una visita a la publicación de "Ana" para el "2026-10-07 10:00"
-      Entonces la solicitud se rechaza por validación con el mensaje "Completa tu perfil de visitante antes de pedir una visita."
+    Escenario: Un usuario que no es visitante no puede pedir visita
+      Cuando "Pedro" pide una visita a la publicación de "Ana" para el "2026-10-07 10:00"
+      Entonces la solicitud se rechaza por validación con el mensaje "Solo los visitantes pueden pedir una visita."
 
     Escenario: No se puede pedir visita a una publicación que no está publicada
       Dado que "Ana" pausó la publicación
       Cuando "Víctor" pide una visita a la publicación de "Ana" para el "2026-10-07 10:00"
       Entonces la solicitud se rechaza por validación con el mensaje "Solo se pueden visitar publicaciones publicadas."
-
-    Escenario: El anfitrión no puede pedir visita a su propia publicación
-      Dado que "Ana" completó su perfil de visitante
-      Cuando "Ana" pide una visita a la publicación de "Ana" para el "2026-10-07 10:00"
-      Entonces la solicitud se rechaza por regla de negocio con el mensaje "No puedes pedir una visita a tu propia publicación."
 
   Regla: Las franjas duran una hora, entre 24 horas y 14 días de antelación, en horario de 7:00 a 19:00
 

@@ -18,7 +18,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
     [global::System.CodeDom.Compiler.GeneratedCodeAttribute("Reqnroll", "3.0.0.0")]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestClassAttribute()]
-    public partial class PerfilDeVisitanteFeature
+    public partial class RegistroDeVisitantesFeature
     {
         
         private global::Reqnroll.ITestRunner testRunner;
@@ -27,10 +27,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
         
         private static string[] featureTags = ((string[])(null));
         
-        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("es"), "Features/Visitors", "Perfil de visitante", "  Un usuario se convierte en visitante registrado al completar su perfil.\r\n  El p" +
-                "erfil se completa una sola vez y el documento es único entre visitantes.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
+        private static global::Reqnroll.FeatureInfo featureInfo = new global::Reqnroll.FeatureInfo(new global::System.Globalization.CultureInfo("es"), "Features/Visitors", "Registro de visitantes", "  Todo usuario con rol Visitor es un visitante, con una copia de su nombre, corre" +
+                "o y teléfono.\r\n  Los datos del visitante siguen a los del usuario y no se editan" +
+                " desde Rentals.", global::Reqnroll.ProgrammingLanguage.CSharp, featureTags, InitializeCucumberMessages());
         
-#line 1 "PerfilDeVisitante.feature"
+#line 1 "RegistroDeVisitantes.feature"
 #line hidden
         
         public virtual Microsoft.VisualStudio.TestTools.UnitTesting.TestContext TestContext
@@ -127,27 +128,30 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
     await testRunner.AndAsync("el usuario \"Valeria\" con rol Visitor", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
 #line 9
+    await testRunner.AndAsync("el usuario \"Ana\" con rol Propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 10
     await testRunner.AndAsync("el usuario \"Marta\" con rol Moderador", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Visitors/PerfilDeVisitante.feature.ndjson", 10);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Visitors/RegistroDeVisitantes.feature.ndjson", 10);
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un usuario sin perfil todavía no es visitante")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un usuario sin perfil todavía no es visitante")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
-        public async global::System.Threading.Tasks.Task UnUsuarioSinPerfilTodaviaNoEsVisitante()
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un usuario con rol Visitor es visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un usuario con rol Visitor es visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
+        public async global::System.Threading.Tasks.Task UnUsuarioConRolVisitorEsVisitante()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "0";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un usuario sin perfil todavía no es visitante", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un usuario con rol Visitor es visitante", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 11
+#line 12
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -160,28 +164,70 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 12
+#line 13
     await testRunner.WhenAsync("\"Víctor\" consulta su registro de visitante", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 13
+                global::Reqnroll.Table table10 = new global::Reqnroll.Table(new string[] {
+                            "nombre",
+                            "correo",
+                            "teléfono"});
+                table10.AddRow(new string[] {
+                            "Víctor",
+                            "víctor@example.com",
+                            "+573109876543"});
+#line 14
+    await testRunner.ThenAsync("\"Víctor\" consulta su registro de visitante y ve:", ((string)(null)), table10, "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un usuario con otro rol no es visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un usuario con otro rol no es visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
+        public async global::System.Threading.Tasks.Task UnUsuarioConOtroRolNoEsVisitante()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "1";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un usuario con otro rol no es visitante", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 18
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 19
+    await testRunner.WhenAsync("\"Ana\" consulta su registro de visitante", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 20
     await testRunner.ThenAsync("el registro de visitante no se encuentra", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un visitante completa su perfil")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un visitante completa su perfil")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
-        public async global::System.Threading.Tasks.Task UnVisitanteCompletaSuPerfil()
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Solo los usuarios con rol Visitor aparecen como visitantes")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Solo los usuarios con rol Visitor aparecen como visitantes")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
+        public async global::System.Threading.Tasks.Task SoloLosUsuariosConRolVisitorAparecenComoVisitantes()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "1";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un visitante completa su perfil", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string pickleIndex = "2";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Solo los usuarios con rol Visitor aparecen como visitantes", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 15
+#line 22
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -194,130 +240,70 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-                global::Reqnroll.Table table10 = new global::Reqnroll.Table(new string[] {
-                            "nombres",
-                            "apellidos",
-                            "tipo documento",
-                            "documento",
-                            "correo",
-                            "teléfono"});
-                table10.AddRow(new string[] {
-                            "Víctor",
-                            "Rojas Peña",
-                            "CitizenshipCard",
-                            "1020304",
-                            "victor@example.com",
-                            "3109876543"});
-#line 16
-    await testRunner.WhenAsync("\"Víctor\" completa su perfil de visitante con:", ((string)(null)), table10, "Cuando ");
+#line 23
+    await testRunner.WhenAsync("\"Marta\" lista los visitantes", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 24
+    await testRunner.ThenAsync("la lista contiene 2 visitantes", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El visitante toma el correo que el usuario confirma")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El visitante toma el correo que el usuario confirma")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
+        public async global::System.Threading.Tasks.Task ElVisitanteTomaElCorreoQueElUsuarioConfirma()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "3";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El visitante toma el correo que el usuario confirma", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 26
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 27
+    await testRunner.WhenAsync("\"Víctor\" confirma el correo \"nuevo@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
                 global::Reqnroll.Table table11 = new global::Reqnroll.Table(new string[] {
-                            "estado",
                             "nombre",
-                            "documento",
                             "correo",
                             "teléfono"});
                 table11.AddRow(new string[] {
-                            "Registered",
-                            "Víctor Rojas Peña",
-                            "1020304",
-                            "victor@example.com",
+                            "Víctor",
+                            "nuevo@example.com",
                             "+573109876543"});
-#line 19
+#line 28
     await testRunner.ThenAsync("\"Víctor\" consulta su registro de visitante y ve:", ((string)(null)), table11, "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El perfil solo se completa una vez")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El perfil solo se completa una vez")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
-        public async global::System.Threading.Tasks.Task ElPerfilSoloSeCompletaUnaVez()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "2";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El perfil solo se completa una vez", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = null;
-#line 23
-  this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 24
-    await testRunner.GivenAsync("que \"Víctor\" completó su perfil de visitante con documento \"1020304\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 25
-    await testRunner.WhenAsync("\"Víctor\" completa su perfil de visitante con documento \"9080706\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 26
-    await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El visitante ya comp" +
-                        "letó su registro.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se admiten dos visitantes con el mismo documento")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se admiten dos visitantes con el mismo documento")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
-        public async global::System.Threading.Tasks.Task NoSeAdmitenDosVisitantesConElMismoDocumento()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "3";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos visitantes con el mismo documento", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = null;
-#line 28
-  this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 29
-    await testRunner.GivenAsync("que \"Víctor\" completó su perfil de visitante con documento \"1020304\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 30
-    await testRunner.WhenAsync("\"Valeria\" completa su perfil de visitante con documento \"1020304\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 31
-    await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya existe un visitante con" +
-                        " ese documento.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un documento con formato inválido se rechaza")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un documento con formato inválido se rechaza")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
-        public async global::System.Threading.Tasks.Task UnDocumentoConFormatoInvalidoSeRechaza()
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Confirmar el mismo correo no cambia al visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Confirmar el mismo correo no cambia al visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
+        public async global::System.Threading.Tasks.Task ConfirmarElMismoCorreoNoCambiaAlVisitante()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "4";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un documento con formato inválido se rechaza", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Confirmar el mismo correo no cambia al visitante", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 33
+#line 32
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -330,12 +316,19 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 34
-    await testRunner.WhenAsync("\"Víctor\" completa su perfil de visitante con documento \"12AB\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line 33
+    await testRunner.WhenAsync("\"Víctor\" confirma el correo \"víctor@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 35
-    await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El número de documen" +
-                        "to no tiene un formato válido.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+                global::Reqnroll.Table table12 = new global::Reqnroll.Table(new string[] {
+                            "nombre",
+                            "correo",
+                            "teléfono"});
+                table12.AddRow(new string[] {
+                            "Víctor",
+                            "víctor@example.com",
+                            "+573109876543"});
+#line 34
+    await testRunner.ThenAsync("\"Víctor\" consulta su registro de visitante y ve:", ((string)(null)), table12, "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -343,7 +336,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
         
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un visitante no puede consultar el registro de otro")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un visitante no puede consultar el registro de otro")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
         public async global::System.Threading.Tasks.Task UnVisitanteNoPuedeConsultarElRegistroDeOtro()
         {
             string[] tagsOfScenario = ((string[])(null));
@@ -352,7 +345,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un visitante no puede consultar el registro de otro", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 37
+#line 38
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -364,9 +357,6 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
                 await this.ScenarioStartAsync();
 #line 6
   await this.FeatureBackgroundAsync();
-#line hidden
-#line 38
-    await testRunner.GivenAsync("que \"Víctor\" completó su perfil de visitante con documento \"1020304\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 39
     await testRunner.WhenAsync("\"Valeria\" consulta el registro de visitante de \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
@@ -380,7 +370,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
         
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Moderación puede consultar y listar visitantes")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Moderación puede consultar y listar visitantes")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
         public async global::System.Threading.Tasks.Task ModeracionPuedeConsultarYListarVisitantes()
         {
             string[] tagsOfScenario = ((string[])(null));
@@ -403,19 +393,10 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
   await this.FeatureBackgroundAsync();
 #line hidden
 #line 43
-    await testRunner.GivenAsync("que \"Víctor\" completó su perfil de visitante con documento \"1020304\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 44
     await testRunner.WhenAsync("\"Marta\" consulta el registro de visitante de \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 45
-    await testRunner.ThenAsync("el visitante está en estado Registered", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-#line 46
-    await testRunner.WhenAsync("\"Marta\" lista los visitantes", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 47
-    await testRunner.ThenAsync("la lista contiene 1 visitante", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 44
+    await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
@@ -423,7 +404,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
         
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un visitante no puede listar los visitantes")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un visitante no puede listar los visitantes")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Perfil de visitante")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de visitantes")]
         public async global::System.Threading.Tasks.Task UnVisitanteNoPuedeListarLosVisitantes()
         {
             string[] tagsOfScenario = ((string[])(null));
@@ -432,7 +413,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un visitante no puede listar los visitantes", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 49
+#line 46
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -445,10 +426,10 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visitors
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 50
+#line 47
     await testRunner.WhenAsync("\"Víctor\" lista los visitantes", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 51
+#line 48
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }

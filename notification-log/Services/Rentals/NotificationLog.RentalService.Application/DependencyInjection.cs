@@ -24,7 +24,7 @@ using NotificationLog.RentalService.Application.Owners.Commands.RegisterOwner;
 using NotificationLog.RentalService.Application.Dashboard.Queries;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Owners.Queries;
-using NotificationLog.RentalService.Application.Visitors.Commands.CompleteVisitorProfile;
+using NotificationLog.RentalService.Application.Visitors.Commands.UpsertVisitor;
 using NotificationLog.RentalService.Application.Visitors.Queries;
 using NotificationLog.RentalService.Application.Visits.Commands.CancelVisit;
 using NotificationLog.RentalService.Application.Visits.Commands.CounterProposeVisit;
@@ -67,7 +67,7 @@ public static class DependencyInjection
         services.AddScoped<RegisterOwnerHandler>();
         services.AddScoped<ClaimOwnerHandler>();
 
-        services.AddScoped<CompleteVisitorProfileHandler>();
+        services.AddScoped<UpsertVisitorHandler>();
 
         services.AddScoped<CancelVisitHandler>();
         services.AddScoped<CounterProposeVisitHandler>();

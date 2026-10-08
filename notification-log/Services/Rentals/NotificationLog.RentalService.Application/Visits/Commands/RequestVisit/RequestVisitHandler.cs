@@ -10,7 +10,6 @@ using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Listings.Enums;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Visitors;
-using NotificationLog.RentalService.Domain.Visitors.Enums;
 using NotificationLog.RentalService.Domain.Visits;
 
 namespace NotificationLog.RentalService.Application.Visits.Commands.RequestVisit;
@@ -40,8 +39,8 @@ public sealed class RequestVisitHandler(
 
         var visitorId = user.GetUserId();
 
-        if (await _visitors.LoadAsync(visitorId, ct) is not { Status: VisitorStatus.Registered } visitor)
-            throw new AppValidationException("Completa tu perfil de visitante antes de pedir una visita.");
+        if (await _visitors.LoadAsync(visitorId, ct) is not { } visitor)
+            throw new AppValidationException("Solo los visitantes pueden pedir una visita.");
 
         var listing = await _listings.GetAsync(cmd.ListingId, ct);
 
@@ -67,7 +66,7 @@ public sealed class RequestVisitHandler(
             visit.HostId,
             new Dictionary<string, string>(VisitNotificationData.For(visit, listing))
             {
-                ["visitor_name"] = visitor.DisplayName,
+                ["visitor_name"] = visitor.Name,
                 ["slots"] = string.Join(", ", visit.ProposedSlots)
             },
             ct);

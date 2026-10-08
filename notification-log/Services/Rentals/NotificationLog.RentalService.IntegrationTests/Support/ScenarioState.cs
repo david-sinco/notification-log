@@ -19,7 +19,7 @@ public sealed class ScenarioState
     public Guid VisitId { get; set; }
     public IReadOnlyList<string> PhotosBeforeLastChange { get; set; } = [];
 
-    public void AddUser(string name, UserRole role) => _users[name] = new TestUser(name, Guid.NewGuid(), role);
+    public TestUser AddUser(string name, UserRole role) => _users[name] = new TestUser(name, Guid.NewGuid(), role);
 
     public TestUser User(string name)
         => _users.TryGetValue(name, out var user)

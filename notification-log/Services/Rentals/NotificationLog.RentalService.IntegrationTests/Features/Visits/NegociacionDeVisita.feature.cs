@@ -142,14 +142,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 13
     await testRunner.AndAsync("una publicación de arriendo de \"Ana\" en estado \"Publicada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 14
-    await testRunner.AndAsync("que \"Víctor\" completó su perfil de visitante", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
         }
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Visits/NegociacionDeVisita.feature.ndjson", 23);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Visits/NegociacionDeVisita.feature.ndjson", 22);
         }
         
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un visitante pide una visita")]
@@ -163,215 +160,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un visitante pide una visita", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo un visitante registrado puede pedir visita a una publicación publicada", null, tagsOfRule);
-#line 18
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-                global::Reqnroll.Table table12 = new global::Reqnroll.Table(new string[] {
-                            "franja"});
-                table12.AddRow(new string[] {
-                            "2026-10-07 10:00"});
-                table12.AddRow(new string[] {
-                            "2026-10-08 15:00"});
-#line 19
-      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table12, "Cuando ");
-#line hidden
-#line 23
-      await testRunner.ThenAsync("la visita queda en estado \"Esperando al anfitrión\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-#line 24
-      await testRunner.AndAsync("la visita tiene 2 franjas propuestas", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
-#line 25
-      await testRunner.AndAsync("el plazo para responder vence el \"2026-10-06 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
-#line 26
-      await testRunner.AndAsync("se notifica \"visita.solicitada\" a \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un usuario sin perfil de visitante no puede pedir visita")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un usuario sin perfil de visitante no puede pedir visita")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task UnUsuarioSinPerfilDeVisitanteNoPuedePedirVisita()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "1";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un usuario sin perfil de visitante no puede pedir visita", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo un visitante registrado puede pedir visita a una publicación publicada", null, tagsOfRule);
-#line 28
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 29
-      await testRunner.GivenAsync("el usuario \"Valeria\" con rol Visitor", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 30
-      await testRunner.WhenAsync("\"Valeria\" pide una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 31
-      await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Completa tu perfil de visi" +
-                        "tante antes de pedir una visita.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se puede pedir visita a una publicación que no está publicada")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se puede pedir visita a una publicación que no está publicada")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task NoSePuedePedirVisitaAUnaPublicacionQueNoEstaPublicada()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "2";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede pedir visita a una publicación que no está publicada", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo un visitante registrado puede pedir visita a una publicación publicada", null, tagsOfRule);
-#line 33
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 34
-      await testRunner.GivenAsync("que \"Ana\" pausó la publicación", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 35
-      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 36
-      await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Solo se pueden visitar pub" +
-                        "licaciones publicadas.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El anfitrión no puede pedir visita a su propia publicación")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El anfitrión no puede pedir visita a su propia publicación")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task ElAnfitrionNoPuedePedirVisitaASuPropiaPublicacion()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "3";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión no puede pedir visita a su propia publicación", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo un visitante registrado puede pedir visita a una publicación publicada", null, tagsOfRule);
-#line 38
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 39
-      await testRunner.GivenAsync("que \"Ana\" completó su perfil de visitante", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 40
-      await testRunner.WhenAsync("\"Ana\" pide una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 41
-      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"No puedes pedir una " +
-                        "visita a tu propia publicación.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Una franja inválida se rechaza")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Una franja inválida se rechaza")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("2026-10-06 08:00", "Cada franja debe empezar en al menos 24 horas.", "4", null, DisplayName="Una franja inválida se rechaza(2026-10-06 08:00,Cada franja debe empezar en al me" +
-            "nos 24 horas.,4)")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("2026-10-20 10:00", "Las franjas no pueden estar a más de 14 días.", "5", null, DisplayName="Una franja inválida se rechaza(2026-10-20 10:00,Las franjas no pueden estar a más" +
-            " de 14 días.,5)")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("2026-10-07 19:00", "La franja dura una hora y debe empezar entre las 7:00 y las 18:00 hora de Colombi" +
-            "a.", "6", null, DisplayName="Una franja inválida se rechaza(2026-10-07 19:00,La franja dura una hora y debe em" +
-            "pezar entre las 7:00 y las 18:00 hora de Colombia.,6)")]
-        public async global::System.Threading.Tasks.Task UnaFranjaInvalidaSeRechaza(string franja, string mensaje, string @__pickleIndex, string[] exampleTags)
-        {
-            string[] tagsOfScenario = exampleTags;
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            argumentsOfScenario.Add("franja", franja);
-            argumentsOfScenario.Add("mensaje", mensaje);
-            string pickleIndex = @__pickleIndex;
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Una franja inválida se rechaza", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Las franjas duran una hora, entre 24 horas y 14 días de antelación, en horario de" +
-                    " 7:00 a 19:00", null, tagsOfRule);
-#line 45
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 46
-      await testRunner.WhenAsync(string.Format("\"Víctor\" pide una visita a la publicación de \"Ana\" para el \"{0}\"", franja), ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 47
-      await testRunner.ThenAsync(string.Format("la solicitud se rechaza por regla de negocio con el mensaje \"{0}\"", mensaje), ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se pueden proponer más de 3 franjas")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se pueden proponer más de 3 franjas")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task NoSePuedenProponerMasDe3Franjas()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "7";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se pueden proponer más de 3 franjas", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Las franjas duran una hora, entre 24 horas y 14 días de antelación, en horario de" +
-                    " 7:00 a 19:00", null, tagsOfRule);
-#line 55
+#line 17
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -389,34 +178,156 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                 table13.AddRow(new string[] {
                             "2026-10-07 10:00"});
                 table13.AddRow(new string[] {
-                            "2026-10-07 12:00"});
-                table13.AddRow(new string[] {
-                            "2026-10-08 10:00"});
-                table13.AddRow(new string[] {
-                            "2026-10-08 12:00"});
-#line 56
+                            "2026-10-08 15:00"});
+#line 18
       await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table13, "Cuando ");
 #line hidden
-#line 62
-      await testRunner.ThenAsync("la solicitud se rechaza por validación", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 22
+      await testRunner.ThenAsync("la visita queda en estado \"Esperando al anfitrión\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 23
+      await testRunner.AndAsync("la visita tiene 2 franjas propuestas", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 24
+      await testRunner.AndAsync("el plazo para responder vence el \"2026-10-06 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 25
+      await testRunner.AndAsync("se notifica \"visita.solicitada\" a \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Las franjas propuestas no pueden repetirse")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Las franjas propuestas no pueden repetirse")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un usuario que no es visitante no puede pedir visita")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un usuario que no es visitante no puede pedir visita")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task LasFranjasPropuestasNoPuedenRepetirse()
+        public async global::System.Threading.Tasks.Task UnUsuarioQueNoEsVisitanteNoPuedePedirVisita()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "8";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Las franjas propuestas no pueden repetirse", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string pickleIndex = "1";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un usuario que no es visitante no puede pedir visita", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo un visitante registrado puede pedir visita a una publicación publicada", null, tagsOfRule);
+#line 27
+    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 28
+      await testRunner.WhenAsync("\"Pedro\" pide una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 29
+      await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Solo los visitantes pueden" +
+                        " pedir una visita.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se puede pedir visita a una publicación que no está publicada")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se puede pedir visita a una publicación que no está publicada")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
+        public async global::System.Threading.Tasks.Task NoSePuedePedirVisitaAUnaPublicacionQueNoEstaPublicada()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "2";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede pedir visita a una publicación que no está publicada", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo un visitante registrado puede pedir visita a una publicación publicada", null, tagsOfRule);
+#line 31
+    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 32
+      await testRunner.GivenAsync("que \"Ana\" pausó la publicación", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 33
+      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 34
+      await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Solo se pueden visitar pub" +
+                        "licaciones publicadas.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Una franja inválida se rechaza")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Una franja inválida se rechaza")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("2026-10-06 08:00", "Cada franja debe empezar en al menos 24 horas.", "3", null, DisplayName="Una franja inválida se rechaza(2026-10-06 08:00,Cada franja debe empezar en al me" +
+            "nos 24 horas.,3)")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("2026-10-20 10:00", "Las franjas no pueden estar a más de 14 días.", "4", null, DisplayName="Una franja inválida se rechaza(2026-10-20 10:00,Las franjas no pueden estar a más" +
+            " de 14 días.,4)")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("2026-10-07 19:00", "La franja dura una hora y debe empezar entre las 7:00 y las 18:00 hora de Colombi" +
+            "a.", "5", null, DisplayName="Una franja inválida se rechaza(2026-10-07 19:00,La franja dura una hora y debe em" +
+            "pezar entre las 7:00 y las 18:00 hora de Colombia.,5)")]
+        public async global::System.Threading.Tasks.Task UnaFranjaInvalidaSeRechaza(string franja, string mensaje, string @__pickleIndex, string[] exampleTags)
+        {
+            string[] tagsOfScenario = exampleTags;
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            argumentsOfScenario.Add("franja", franja);
+            argumentsOfScenario.Add("mensaje", mensaje);
+            string pickleIndex = @__pickleIndex;
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Una franja inválida se rechaza", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Las franjas duran una hora, entre 24 horas y 14 días de antelación, en horario de" +
                     " 7:00 a 19:00", null, tagsOfRule);
-#line 64
+#line 38
+    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 39
+      await testRunner.WhenAsync(string.Format("\"Víctor\" pide una visita a la publicación de \"Ana\" para el \"{0}\"", franja), ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 40
+      await testRunner.ThenAsync(string.Format("la solicitud se rechaza por regla de negocio con el mensaje \"{0}\"", mensaje), ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se pueden proponer más de 3 franjas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se pueden proponer más de 3 franjas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
+        public async global::System.Threading.Tasks.Task NoSePuedenProponerMasDe3Franjas()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "6";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se pueden proponer más de 3 franjas", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Las franjas duran una hora, entre 24 horas y 14 días de antelación, en horario de" +
+                    " 7:00 a 19:00", null, tagsOfRule);
+#line 48
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -434,30 +345,34 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                 table14.AddRow(new string[] {
                             "2026-10-07 10:00"});
                 table14.AddRow(new string[] {
-                            "2026-10-07 10:00"});
-#line 65
+                            "2026-10-07 12:00"});
+                table14.AddRow(new string[] {
+                            "2026-10-08 10:00"});
+                table14.AddRow(new string[] {
+                            "2026-10-08 12:00"});
+#line 49
       await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table14, "Cuando ");
 #line hidden
-#line 69
-      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Las franjas propuest" +
-                        "as no pueden solaparse.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 55
+      await testRunner.ThenAsync("la solicitud se rechaza por validación", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El anfitrión acepta una de las franjas")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El anfitrión acepta una de las franjas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Las franjas propuestas no pueden repetirse")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Las franjas propuestas no pueden repetirse")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task ElAnfitrionAceptaUnaDeLasFranjas()
+        public async global::System.Threading.Tasks.Task LasFranjasPropuestasNoPuedenRepetirse()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "9";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión acepta una de las franjas", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string pickleIndex = "7";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Las franjas propuestas no pueden repetirse", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
-#line 79
+            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Las franjas duran una hora, entre 24 horas y 14 días de antelación, en horario de" +
+                    " 7:00 a 19:00", null, tagsOfRule);
+#line 57
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -475,38 +390,30 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                 table15.AddRow(new string[] {
                             "2026-10-07 10:00"});
                 table15.AddRow(new string[] {
-                            "2026-10-08 15:00"});
-#line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table15, "Dado ");
+                            "2026-10-07 10:00"});
+#line 58
+      await testRunner.WhenAsync("\"Víctor\" pide una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table15, "Cuando ");
 #line hidden
-#line 80
-      await testRunner.WhenAsync("\"Ana\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 81
-      await testRunner.ThenAsync("la visita queda en estado \"Agendada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-#line 82
-      await testRunner.AndAsync("la visita está agendada de \"2026-10-07 10:00\" a \"2026-10-07 11:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
-#line 83
-      await testRunner.AndAsync("se notifica \"visita.agendada\" a \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line 62
+      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Las franjas propuest" +
+                        "as no pueden solaparse.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El anfitrión propone otras franjas y el visitante acepta")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El anfitrión propone otras franjas y el visitante acepta")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El anfitrión acepta una de las franjas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El anfitrión acepta una de las franjas")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task ElAnfitrionProponeOtrasFranjasYElVisitanteAcepta()
+        public async global::System.Threading.Tasks.Task ElAnfitrionAceptaUnaDeLasFranjas()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "10";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión propone otras franjas y el visitante acepta", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string pickleIndex = "8";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión acepta una de las franjas", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
-#line 85
+#line 72
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -525,32 +432,81 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                             "2026-10-07 10:00"});
                 table16.AddRow(new string[] {
                             "2026-10-08 15:00"});
-#line 74
+#line 67
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table16, "Dado ");
+#line hidden
+#line 73
+      await testRunner.WhenAsync("\"Ana\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 74
+      await testRunner.ThenAsync("la visita queda en estado \"Agendada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 75
+      await testRunner.AndAsync("la visita está agendada de \"2026-10-07 10:00\" a \"2026-10-07 11:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 76
+      await testRunner.AndAsync("se notifica \"visita.agendada\" a \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El anfitrión propone otras franjas y el visitante acepta")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El anfitrión propone otras franjas y el visitante acepta")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
+        public async global::System.Threading.Tasks.Task ElAnfitrionProponeOtrasFranjasYElVisitanteAcepta()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "9";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El anfitrión propone otras franjas y el visitante acepta", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
+#line 78
+    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
 #line hidden
                 global::Reqnroll.Table table17 = new global::Reqnroll.Table(new string[] {
                             "franja"});
                 table17.AddRow(new string[] {
-                            "2026-10-09 08:00"});
-#line 86
-      await testRunner.WhenAsync("\"Ana\" propone otras franjas:", ((string)(null)), table17, "Cuando ");
+                            "2026-10-07 10:00"});
+                table17.AddRow(new string[] {
+                            "2026-10-08 15:00"});
+#line 67
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table17, "Dado ");
 #line hidden
-#line 89
+                global::Reqnroll.Table table18 = new global::Reqnroll.Table(new string[] {
+                            "franja"});
+                table18.AddRow(new string[] {
+                            "2026-10-09 08:00"});
+#line 79
+      await testRunner.WhenAsync("\"Ana\" propone otras franjas:", ((string)(null)), table18, "Cuando ");
+#line hidden
+#line 82
       await testRunner.ThenAsync("la visita queda en estado \"Esperando al visitante\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 90
+#line 83
       await testRunner.AndAsync("se notifica \"visita.contrapropuesta\" a \"Víctor\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 91
+#line 84
       await testRunner.WhenAsync("\"Víctor\" agenda la visita para el \"2026-10-09 08:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 92
+#line 85
       await testRunner.ThenAsync("la visita queda en estado \"Agendada\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 93
+#line 86
       await testRunner.AndAsync("se notifica \"visita.agendada\" a \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 94
+#line 87
       await testRunner.AndAsync("el historial de la visita tiene 3 entradas", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -564,55 +520,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "11";
+            string pickleIndex = "10";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede responder fuera de turno", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
-#line 96
-    this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 6
-  await this.FeatureBackgroundAsync();
-#line hidden
-                global::Reqnroll.Table table18 = new global::Reqnroll.Table(new string[] {
-                            "franja"});
-                table18.AddRow(new string[] {
-                            "2026-10-07 10:00"});
-                table18.AddRow(new string[] {
-                            "2026-10-08 15:00"});
-#line 74
-      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table18, "Dado ");
-#line hidden
-#line 97
-      await testRunner.WhenAsync("\"Víctor\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 98
-      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"No es tu turno de re" +
-                        "sponder a esta visita.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Solo se puede aceptar una franja propuesta")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Solo se puede aceptar una franja propuesta")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task SoloSePuedeAceptarUnaFranjaPropuesta()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "12";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Solo se puede aceptar una franja propuesta", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
-#line 100
+#line 89
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -631,32 +543,32 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                             "2026-10-07 10:00"});
                 table19.AddRow(new string[] {
                             "2026-10-08 15:00"});
-#line 74
+#line 67
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table19, "Dado ");
 #line hidden
-#line 101
-      await testRunner.WhenAsync("\"Ana\" agenda la visita para el \"2026-10-09 08:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line 90
+      await testRunner.WhenAsync("\"Víctor\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 102
-      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"La franja elegida no" +
-                        " está entre las propuestas.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 91
+      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"No es tu turno de re" +
+                        "sponder a esta visita.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se puede responder cuando el plazo ya venció")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se puede responder cuando el plazo ya venció")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Solo se puede aceptar una franja propuesta")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Solo se puede aceptar una franja propuesta")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task NoSePuedeResponderCuandoElPlazoYaVencio()
+        public async global::System.Threading.Tasks.Task SoloSePuedeAceptarUnaFranjaPropuesta()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "13";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede responder cuando el plazo ya venció", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string pickleIndex = "11";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Solo se puede aceptar una franja propuesta", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
-#line 104
+#line 93
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -675,35 +587,32 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                             "2026-10-07 10:00"});
                 table20.AddRow(new string[] {
                             "2026-10-08 15:00"});
-#line 74
+#line 67
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table20, "Dado ");
 #line hidden
-#line 105
-      await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-06 11:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line 94
+      await testRunner.WhenAsync("\"Ana\" agenda la visita para el \"2026-10-09 08:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 106
-      await testRunner.AndAsync("\"Ana\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
-#line 107
-      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El plazo para respon" +
-                        "der a esta visita ya venció.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line 95
+      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"La franja elegida no" +
+                        " está entre las propuestas.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Una visita agendada ya no admite más propuestas")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Una visita agendada ya no admite más propuestas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se puede responder cuando el plazo ya venció")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se puede responder cuando el plazo ya venció")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        public async global::System.Threading.Tasks.Task UnaVisitaAgendadaYaNoAdmiteMasPropuestas()
+        public async global::System.Threading.Tasks.Task NoSePuedeResponderCuandoElPlazoYaVencio()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "14";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Una visita agendada ya no admite más propuestas", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string pickleIndex = "12";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se puede responder cuando el plazo ya venció", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
-#line 109
+#line 97
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -722,20 +631,67 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
                             "2026-10-07 10:00"});
                 table21.AddRow(new string[] {
                             "2026-10-08 15:00"});
-#line 74
+#line 67
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table21, "Dado ");
 #line hidden
-#line 110
-      await testRunner.GivenAsync("que \"Ana\" agendó la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line 98
+      await testRunner.WhenAsync("el reloj avanza hasta las \"2026-10-06 11:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 99
+      await testRunner.AndAsync("\"Ana\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 100
+      await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El plazo para respon" +
+                        "der a esta visita ya venció.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Una visita agendada ya no admite más propuestas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Una visita agendada ya no admite más propuestas")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
+        public async global::System.Threading.Tasks.Task UnaVisitaAgendadaYaNoAdmiteMasPropuestas()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "13";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Una visita agendada ya no admite más propuestas", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Quien tiene el turno acepta una franja propuesta o propone otras", null, tagsOfRule);
+#line 102
+    this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 6
+  await this.FeatureBackgroundAsync();
 #line hidden
                 global::Reqnroll.Table table22 = new global::Reqnroll.Table(new string[] {
                             "franja"});
                 table22.AddRow(new string[] {
-                            "2026-10-09 08:00"});
-#line 111
-      await testRunner.WhenAsync("\"Víctor\" propone otras franjas:", ((string)(null)), table22, "Cuando ");
+                            "2026-10-07 10:00"});
+                table22.AddRow(new string[] {
+                            "2026-10-08 15:00"});
+#line 67
+      await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" proponiendo las franjas:", ((string)(null)), table22, "Dado ");
 #line hidden
-#line 114
+#line 103
+      await testRunner.GivenAsync("que \"Ana\" agendó la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+                global::Reqnroll.Table table23 = new global::Reqnroll.Table(new string[] {
+                            "franja"});
+                table23.AddRow(new string[] {
+                            "2026-10-09 08:00"});
+#line 104
+      await testRunner.WhenAsync("\"Víctor\" propone otras franjas:", ((string)(null)), table23, "Cuando ");
+#line hidden
+#line 107
       await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"La visita ya no está" +
                         " en negociación.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -750,11 +706,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "15";
+            string pickleIndex = "14";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un tercero no puede consultar la visita", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo los participantes y moderación ven la visita", null, tagsOfRule);
-#line 121
+#line 114
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -767,14 +723,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 119
+#line 112
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00" +
                         "\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 122
+#line 115
       await testRunner.WhenAsync("\"Pedro\" consulta la visita", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 123
+#line 116
       await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -788,11 +744,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "16";
+            string pickleIndex = "15";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un tercero no puede responder a la visita", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo los participantes y moderación ven la visita", null, tagsOfRule);
-#line 125
+#line 118
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -805,14 +761,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 119
+#line 112
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00" +
                         "\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 126
+#line 119
       await testRunner.WhenAsync("\"Pedro\" agenda la visita para el \"2026-10-07 10:00\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 127
+#line 120
       await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -822,10 +778,10 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Cada usuario lista solo las visitas en las que participa")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Cada usuario lista solo las visitas en las que participa")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Negociación de una visita")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Víctor", "1", "17", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Víctor,1,17)")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Ana", "1", "18", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Ana,1,18)")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Pedro", "0", "19", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Pedro,0,19)")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Marta", "1", "20", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Marta,1,20)")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Víctor", "1", "16", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Víctor,1,16)")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Ana", "1", "17", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Ana,1,17)")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Pedro", "0", "18", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Pedro,0,18)")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DataRowAttribute("Marta", "1", "19", null, DisplayName="Cada usuario lista solo las visitas en las que participa(Marta,1,19)")]
         public async global::System.Threading.Tasks.Task CadaUsuarioListaSoloLasVisitasEnLasQueParticipa(string usuario, string visitas, string @__pickleIndex, string[] exampleTags)
         {
             string[] tagsOfScenario = exampleTags;
@@ -836,7 +792,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Cada usuario lista solo las visitas en las que participa", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = new global::Reqnroll.RuleInfo("Solo los participantes y moderación ven la visita", null, tagsOfRule);
-#line 129
+#line 122
     this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -849,14 +805,14 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Visits
 #line 6
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 119
+#line 112
       await testRunner.GivenAsync("que \"Víctor\" pidió una visita a la publicación de \"Ana\" para el \"2026-10-07 10:00" +
                         "\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 130
+#line 123
       await testRunner.WhenAsync(string.Format("\"{0}\" lista las visitas", usuario), ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 131
+#line 124
       await testRunner.ThenAsync(string.Format("la lista contiene {0} visitas", visitas), ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }

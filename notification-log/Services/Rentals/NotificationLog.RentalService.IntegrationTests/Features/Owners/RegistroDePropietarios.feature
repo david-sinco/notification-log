@@ -32,6 +32,11 @@ Característica: Registro de propietarios
     Cuando "Ana" se registra como propietaria
     Entonces la solicitud se rechaza por validación con el mensaje "Ya estás registrado como propietario."
 
+  Escenario: Un propietario no puede registrar a otro propietario
+    Dado que "Ana" está registrada como propietaria
+    Cuando "Ana" registra un propietario
+    Entonces la solicitud se rechaza por validación con el mensaje "Ya estás registrado como propietario."
+
   Escenario: No se admiten dos propietarios con el mismo correo
     Dado que "Ana" está registrada como propietaria con correo "ana@example.com"
     Cuando "Pedro" se registra como propietario con correo "ana@example.com"

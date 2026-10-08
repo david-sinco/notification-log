@@ -30,7 +30,7 @@ public sealed class VisitViewProjection : SingleStreamProjection<VisitView, Guid
                 ListingType = listing?.Type,
                 ListingNeighborhood = listing?.Neighborhood,
                 ListingCity = listing?.City,
-                VisitorName = visitor?.DisplayName ?? string.Empty,
+                VisitorName = visitor?.Name ?? string.Empty,
                 HostName = listing?.OwnerName ?? string.Empty,
                 Status = VisitStatus.AwaitingHost,
                 ProposedSlots = [.. requested.Slots],

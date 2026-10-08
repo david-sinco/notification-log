@@ -139,7 +139,7 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         
         private static global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages InitializeCucumberMessages()
         {
-            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Owners/RegistroDePropietarios.feature.ndjson", 17);
+            return new global::Reqnroll.Formatters.RuntimeSupport.FeatureLevelCucumberMessages("Features/Owners/RegistroDePropietarios.feature.ndjson", 18);
         }
         
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un propietario se registra con su nombre y sus datos de contacto")]
@@ -273,15 +273,15 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se admiten dos propietarios con el mismo correo")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se admiten dos propietarios con el mismo correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un propietario no puede registrar a otro propietario")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un propietario no puede registrar a otro propietario")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
-        public async global::System.Threading.Tasks.Task NoSeAdmitenDosPropietariosConElMismoCorreo()
+        public async global::System.Threading.Tasks.Task UnPropietarioNoPuedeRegistrarAOtroPropietario()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "3";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos propietarios con el mismo correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario no puede registrar a otro propietario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 35
@@ -298,28 +298,28 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
   await this.FeatureBackgroundAsync();
 #line hidden
 #line 36
-    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con correo \"ana@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 37
-    await testRunner.WhenAsync("\"Pedro\" se registra como propietario con correo \"ana@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+    await testRunner.WhenAsync("\"Ana\" registra un propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
 #line 38
-    await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya existe un propietario c" +
-                        "on ese correo.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+    await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya estás registrado como p" +
+                        "ropietario.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se admiten dos propietarios con el mismo teléfono")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se admiten dos propietarios con el mismo teléfono")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se admiten dos propietarios con el mismo correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se admiten dos propietarios con el mismo correo")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
-        public async global::System.Threading.Tasks.Task NoSeAdmitenDosPropietariosConElMismoTelefono()
+        public async global::System.Threading.Tasks.Task NoSeAdmitenDosPropietariosConElMismoCorreo()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "4";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos propietarios con el mismo teléfono", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos propietarios con el mismo correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 40
@@ -336,28 +336,28 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
   await this.FeatureBackgroundAsync();
 #line hidden
 #line 41
-    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con teléfono \"3001234567\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con correo \"ana@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 42
-    await testRunner.WhenAsync("\"Pedro\" se registra como propietario con teléfono \"300 123 4567\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+    await testRunner.WhenAsync("\"Pedro\" se registra como propietario con correo \"ana@example.com\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
 #line 43
     await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya existe un propietario c" +
-                        "on ese teléfono.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+                        "on ese correo.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un teléfono con formato inválido se rechaza")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un teléfono con formato inválido se rechaza")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("No se admiten dos propietarios con el mismo teléfono")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("No se admiten dos propietarios con el mismo teléfono")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
-        public async global::System.Threading.Tasks.Task UnTelefonoConFormatoInvalidoSeRechaza()
+        public async global::System.Threading.Tasks.Task NoSeAdmitenDosPropietariosConElMismoTelefono()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "5";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un teléfono con formato inválido se rechaza", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se admiten dos propietarios con el mismo teléfono", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 45
@@ -374,9 +374,47 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
   await this.FeatureBackgroundAsync();
 #line hidden
 #line 46
-    await testRunner.WhenAsync("\"Ana\" se registra como propietaria con teléfono \"12AB\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria con teléfono \"3001234567\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 47
+    await testRunner.WhenAsync("\"Pedro\" se registra como propietario con teléfono \"300 123 4567\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 48
+    await testRunner.ThenAsync("la solicitud se rechaza por validación con el mensaje \"Ya existe un propietario c" +
+                        "on ese teléfono.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Un teléfono con formato inválido se rechaza")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Un teléfono con formato inválido se rechaza")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task UnTelefonoConFormatoInvalidoSeRechaza()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "6";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un teléfono con formato inválido se rechaza", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 50
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 9
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 51
+    await testRunner.WhenAsync("\"Ana\" se registra como propietaria con teléfono \"12AB\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 52
     await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El teléfono no tiene" +
                         " un formato válido.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -391,11 +429,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "6";
+            string pickleIndex = "7";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un visitante no puede registrar propietarios", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 49
+#line 54
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -408,10 +446,10 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
 #line 9
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 50
+#line 55
     await testRunner.WhenAsync("\"Víctor\" se registra como propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 51
+#line 56
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -425,45 +463,8 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "7";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario no puede consultar a otro propietario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = null;
-#line 53
-  this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 9
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 54
-    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 55
-    await testRunner.WhenAsync("\"Pedro\" consulta el propietario de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 56
-    await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Solo moderación puede listar los propietarios")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Solo moderación puede listar los propietarios")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
-        public async global::System.Threading.Tasks.Task SoloModeracionPuedeListarLosPropietarios()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "8";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Solo moderación puede listar los propietarios", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario no puede consultar a otro propietario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 58
@@ -483,15 +484,52 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
     await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 60
-    await testRunner.WhenAsync("\"Ana\" lista los propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+    await testRunner.WhenAsync("\"Pedro\" consulta el propietario de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
 #line 61
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 62
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Solo moderación puede listar los propietarios")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Solo moderación puede listar los propietarios")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task SoloModeracionPuedeListarLosPropietarios()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "9";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Solo moderación puede listar los propietarios", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
+#line 63
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 9
+  await this.FeatureBackgroundAsync();
+#line hidden
+#line 64
+    await testRunner.GivenAsync("que \"Ana\" está registrada como propietaria", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 65
+    await testRunner.WhenAsync("\"Ana\" lista los propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 66
+    await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 67
     await testRunner.WhenAsync("\"Marta\" lista los propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 63
+#line 68
     await testRunner.ThenAsync("la lista contiene 1 propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -505,45 +543,8 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "9";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El propietario aparece para reclamar a quien tiene su correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
-            string[] tagsOfRule = ((string[])(null));
-            global::Reqnroll.RuleInfo ruleInfo = null;
-#line 65
-  this.ScenarioInitialize(scenarioInfo, ruleInfo);
-#line hidden
-            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
-            {
-                await testRunner.SkipScenarioAsync();
-            }
-            else
-            {
-                await this.ScenarioStartAsync();
-#line 9
-  await this.FeatureBackgroundAsync();
-#line hidden
-#line 66
-    await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
-#line hidden
-#line 67
-    await testRunner.WhenAsync("\"Ana\" consulta los propietarios que puede reclamar", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
-#line hidden
-#line 68
-    await testRunner.ThenAsync("la respuesta contiene solo ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
-#line hidden
-            }
-            await this.ScenarioCleanupAsync();
-        }
-        
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El propietario no aparece para reclamar a quien tiene otro correo")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El propietario no aparece para reclamar a quien tiene otro correo")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
-        public async global::System.Threading.Tasks.Task ElPropietarioNoApareceParaReclamarAQuienTieneOtroCorreo()
-        {
-            string[] tagsOfScenario = ((string[])(null));
-            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "10";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El propietario no aparece para reclamar a quien tiene otro correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El propietario aparece para reclamar a quien tiene su correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 70
@@ -563,24 +564,24 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
     await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 72
-    await testRunner.WhenAsync("\"Pedro\" consulta los propietarios que puede reclamar", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+    await testRunner.WhenAsync("\"Ana\" consulta los propietarios que puede reclamar", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
 #line 73
-    await testRunner.ThenAsync("la respuesta no contiene propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+    await testRunner.ThenAsync("la respuesta contiene solo ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
             await this.ScenarioCleanupAsync();
         }
         
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Reclamar relaciona al propietario con el usuario")]
-        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Reclamar relaciona al propietario con el usuario")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("El propietario no aparece para reclamar a quien tiene otro correo")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("El propietario no aparece para reclamar a quien tiene otro correo")]
         [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
-        public async global::System.Threading.Tasks.Task ReclamarRelacionaAlPropietarioConElUsuario()
+        public async global::System.Threading.Tasks.Task ElPropietarioNoApareceParaReclamarAQuienTieneOtroCorreo()
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
             string pickleIndex = "11";
-            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Reclamar relaciona al propietario con el usuario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("El propietario no aparece para reclamar a quien tiene otro correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
 #line 75
@@ -600,18 +601,55 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
     await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
 #line 77
-    await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+    await testRunner.WhenAsync("\"Pedro\" consulta los propietarios que puede reclamar", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
 #line 78
-    await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+    await testRunner.ThenAsync("la respuesta no contiene propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 79
-    await testRunner.AndAsync("el propietario queda relacionado con \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
-#line hidden
+            }
+            await this.ScenarioCleanupAsync();
+        }
+        
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestMethodAttribute("Reclamar relaciona al propietario con el usuario")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.DescriptionAttribute("Reclamar relaciona al propietario con el usuario")]
+        [global::Microsoft.VisualStudio.TestTools.UnitTesting.TestPropertyAttribute("FeatureTitle", "Registro de propietarios")]
+        public async global::System.Threading.Tasks.Task ReclamarRelacionaAlPropietarioConElUsuario()
+        {
+            string[] tagsOfScenario = ((string[])(null));
+            global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
+            string pickleIndex = "12";
+            global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Reclamar relaciona al propietario con el usuario", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
+            string[] tagsOfRule = ((string[])(null));
+            global::Reqnroll.RuleInfo ruleInfo = null;
 #line 80
-    await testRunner.WhenAsync("\"Ana\" consulta sus propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+  this.ScenarioInitialize(scenarioInfo, ruleInfo);
+#line hidden
+            if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
+            {
+                await testRunner.SkipScenarioAsync();
+            }
+            else
+            {
+                await this.ScenarioStartAsync();
+#line 9
+  await this.FeatureBackgroundAsync();
 #line hidden
 #line 81
+    await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
+#line hidden
+#line 82
+    await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 83
+    await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
+#line hidden
+#line 84
+    await testRunner.AndAsync("el propietario queda relacionado con \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
+#line hidden
+#line 85
+    await testRunner.WhenAsync("\"Ana\" consulta sus propietarios", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
+#line hidden
+#line 86
     await testRunner.ThenAsync("la respuesta contiene solo ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }
@@ -625,11 +663,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "12";
+            string pickleIndex = "13";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Un propietario reclamado no se puede reclamar otra vez", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 83
+#line 88
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -642,16 +680,16 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
 #line 9
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 84
+#line 89
     await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 85
+#line 90
     await testRunner.AndAsync("que \"Ana\" reclamó ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 86
+#line 91
     await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 87
+#line 92
     await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"El propietario ya fu" +
                         "e reclamado.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
@@ -666,11 +704,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "13";
+            string pickleIndex = "14";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("No se reclama un propietario con otro correo", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 89
+#line 94
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -683,17 +721,17 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
 #line 9
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 90
+#line 95
     await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 91
+#line 96
     await testRunner.WhenAsync("\"Pedro\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 92
+#line 97
     await testRunner.ThenAsync("la solicitud se rechaza por regla de negocio con el mensaje \"Tu correo o teléfono" +
                         " confirmado no coincide con el del propietario.\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 93
+#line 98
     await testRunner.AndAsync("el propietario queda sin usuario relacionado", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
             }
@@ -707,11 +745,11 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
         {
             string[] tagsOfScenario = ((string[])(null));
             global::System.Collections.Specialized.OrderedDictionary argumentsOfScenario = new global::System.Collections.Specialized.OrderedDictionary();
-            string pickleIndex = "14";
+            string pickleIndex = "15";
             global::Reqnroll.ScenarioInfo scenarioInfo = new global::Reqnroll.ScenarioInfo("Quien reclama al propietario gestiona las publicaciones que creó el moderador", null, tagsOfScenario, argumentsOfScenario, featureTags, pickleIndex);
             string[] tagsOfRule = ((string[])(null));
             global::Reqnroll.RuleInfo ruleInfo = null;
-#line 95
+#line 100
   this.ScenarioInitialize(scenarioInfo, ruleInfo);
 #line hidden
             if ((global::Reqnroll.TagHelper.ContainsIgnoreTag(scenarioInfo.CombinedTags) || global::Reqnroll.TagHelper.ContainsIgnoreTag(featureTags)))
@@ -724,25 +762,25 @@ namespace NotificationLog.RentalService.IntegrationTests.Features.Owners
 #line 9
   await this.FeatureBackgroundAsync();
 #line hidden
-#line 96
+#line 101
     await testRunner.GivenAsync("que \"Marta\" registró un propietario para \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Dado ");
 #line hidden
-#line 97
+#line 102
     await testRunner.WhenAsync("\"Marta\" crea una publicación de arriendo a nombre de \"Ana\"", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 98
+#line 103
     await testRunner.AndAsync("\"Ana\" fija el precio en 1800000", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 99
+#line 104
     await testRunner.ThenAsync("la solicitud se rechaza por permisos", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
-#line 100
+#line 105
     await testRunner.WhenAsync("\"Ana\" reclama ese propietario", ((string)(null)), ((global::Reqnroll.Table)(null)), "Cuando ");
 #line hidden
-#line 101
+#line 106
     await testRunner.AndAsync("\"Ana\" fija el precio en 1800000", ((string)(null)), ((global::Reqnroll.Table)(null)), "Y ");
 #line hidden
-#line 102
+#line 107
     await testRunner.ThenAsync("la solicitud se acepta", ((string)(null)), ((global::Reqnroll.Table)(null)), "Entonces ");
 #line hidden
             }

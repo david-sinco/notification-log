@@ -2,9 +2,8 @@ using Domain.Shared.Common;
 using Domain.Shared.EventSourcing;
 using Domain.Shared.Exceptions;
 using NotificationLog.RentalService.Domain.Common;
-using NotificationLog.RentalService.Domain.Common.ValueObjects;
-using NotificationLog.RentalService.Domain.Visitors.Enums;
 using NotificationLog.RentalService.Domain.Visitors.Events;
+using NotificationLog.RentalService.Domain.Visitors.Exceptions;
 
 namespace NotificationLog.RentalService.Domain.Visitors;
 
@@ -12,11 +11,9 @@ public sealed class Visitor : AggregateRoot
 {
     private Visitor() { }
 
-    public VisitorStatus Status { get; private set; }
-    public string DisplayName { get; private set; } = string.Empty;
-    public PersonName? Name { get; private set; }
-    public IdentityDocument? Document { get; private set; }
-    public ContactInfo? Contact { get; private set; }
+    public string Name { get; private set; } = string.Empty;
+    public string Email { get; private set; } = string.Empty;
+    public string Phone { get; private set; } = string.Empty;
 
     public static Visitor Register(Guid id, string name, string email, string phone)
     {
@@ -29,18 +26,16 @@ public sealed class Visitor : AggregateRoot
         return visitor;
     }
 
-    public void CompleteProfile(PersonName name, IdentityDocument document, ContactInfo contact)
+    public void Update(string name, string email, string phone)
     {
-        ArgumentNullException.ThrowIfNull(name);
-        ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(contact);
+        var newName = string.IsNullOrWhiteSpace(name) ? Name : name.Trim();
+        var newEmail = string.IsNullOrWhiteSpace(email) ? Email : email.Trim();
+        var newPhone = string.IsNullOrWhiteSpace(phone) ? Phone : phone.Trim();
 
-        if (Status == VisitorStatus.Registered)
-            throw new DomainException("El visitante ya completó su registro.");
+        if (newName == Name && newEmail == Email && newPhone == Phone)
+            throw new VisitorUnchangedException(Id);
 
-        Raise(new VisitorProfileCompleted(
-            Id, name.FirstNames, name.LastNames, document.Type, document.Number,
-            contact.Email, contact.Phone));
+        Raise(new VisitorUpdated(Id, newName, newEmail, newPhone));
     }
 
     public override void Apply(IDomainEvent domainEvent)
@@ -48,7 +43,7 @@ public sealed class Visitor : AggregateRoot
         switch (domainEvent)
         {
             case VisitorRegistered e: When(e); break;
-            case VisitorProfileCompleted e: When(e); break;
+            case VisitorUpdated e: When(e); break;
 
             default:
                 throw new DomainException(
@@ -59,16 +54,15 @@ public sealed class Visitor : AggregateRoot
     private void When(VisitorRegistered e)
     {
         Id = e.VisitorId;
-        Status = VisitorStatus.PendingProfile;
-        DisplayName = e.Name;
+        Name = e.Name;
+        Email = e.Email;
+        Phone = e.Phone;
     }
 
-    private void When(VisitorProfileCompleted e)
+    private void When(VisitorUpdated e)
     {
-        Status = VisitorStatus.Registered;
-        Name = PersonName.FromStorage(e.FirstNames, e.LastNames);
-        DisplayName = Name.ToString();
-        Document = IdentityDocument.FromStorage(e.DocumentType, e.DocumentNumber);
-        Contact = ContactInfo.FromStorage(e.Email, e.Phone);
+        Name = e.Name;
+        Email = e.Email;
+        Phone = e.Phone;
     }
 }

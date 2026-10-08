@@ -9,7 +9,6 @@ Característica: Cancelación y cierre de una visita
     Y el usuario "Víctor" con rol Visitor
     Y que "Ana" está registrada como propietaria
     Y una publicación de arriendo de "Ana" en estado "Publicada"
-    Y que "Víctor" completó su perfil de visitante
 
   Regla: Una visita en negociación o agendada se puede cancelar indicando el motivo
 
