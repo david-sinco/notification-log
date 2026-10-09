@@ -6,7 +6,6 @@ using NotificationLog.IdentityService.Api.Endpoints;
 using API.Shared.Exceptions;
 using NotificationLog.IdentityService.Application;
 using NotificationLog.IdentityService.Infrastructure;
-using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +28,7 @@ builder.Services.AddCors(options => options.AddDefaultPolicy(policy => policy
 
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
+builder.Services.AddOAuthOpenApi([OidcScope.Identity]);
 
 var app = builder.Build();
 
@@ -37,11 +36,7 @@ await app.Services.MigrateIdentityDatabaseAsync();
 
 app.UseExceptionHandler();
 
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.MapScalarApiReference();
-}
+app.MapOAuthScalar();
 
 app.UseCors();
 

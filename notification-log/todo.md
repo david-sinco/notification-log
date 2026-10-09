@@ -7,7 +7,6 @@
 - [ ] Recuperar y cambiar la contraseña.
 - [ ] Páginas de error del protocolo, acceso denegado y confirmación de cierre de sesión.
 - [ ] Apariencia por cliente en el login, según el `client_id` validado.
-- [ ] Scalar con OAuth para probar `/api/users` sin la Web.
 
 ## Web
 
@@ -18,14 +17,12 @@
 
 ## Portal (Next.js)
 
-- [ ] Primera foto en `ListingSummaryDto` para que las tarjetas del catálogo muestren imagen en lugar del logo.
 - [ ] Renovar el access token con refresh token; hoy, cuando vence (1 h), la sesión del portal termina y hay que volver a iniciar sesión (Identity la recuerda, así que es solo una redirección).
 - [ ] El catálogo público devuelve `ListingDto` completo (incluye dirección y `OwnerId`); decidir qué datos se muestran sin iniciar sesión.
 
 ## Integración y negocio
 
 - [ ] **Log de eventos reproducible** (estilo Kafka) para reconstruir estado o alimentar servicios nuevos; hoy RabbitMQ solo garantiza la entrega.
-- [ ] **Servicio de Personas** (con capas): `Person` con o sin cuenta, consentimientos y verificación de documento. Reemplaza la réplica dev de `/rentals/identity`.
 - [ ] **Recordatorios programados en Notification** (reemplaza `WarnListingExpiryCommand` y `WarnListingExpiryHandler`; el porqué está en `EventSourcingProblems.md`, caso 1).
   - **Idea.** Un agregado nuevo en Notification (`Reminder`, o `ScheduledReminder`) que funciona como `Notification`, pero diferido: se registra ahora y se envía después. El productor no dice cómo ni cuándo enviar; eso ya está configurado en Notification. Rentals solo manda tres cosas: la **clave** de la configuración (por ejemplo `publicacion.vence.pronto`), el **id del flujo** que origina el recordatorio (el `ListingId`) y el **payload** con los valores que reemplazan los placeholders de la plantilla.
   - **Configuración** (lado de Notification, como `NotificationTrigger`).
@@ -65,13 +62,16 @@
   - **Cierre automático.** 72 h después de que termine la franja agendada, llamar a `visit.AutoComplete(now)` (emite `VisitCompleted` con `System`). El método ya existe; faltan el comando y programarlo tras `VisitScheduled`.
   - **Recordatorios de la visita agendada** a las dos partes (por ejemplo, 24 h antes). Solo notifican, no cambian el estado (`visita.recordatorio`).
   - Los dos métodos del dominio no hacen nada si todavía no toca o la visita ya cambió de estado, así que un mensaje viejo o repetido es inofensivo. Encaja con el pendiente de *Schedules* de arriba.
-  - **Cancelar las visitas cuando la publicación deja de estar disponible** (cerrada, retirada, suspendida o vencida), con `visit.Cancel(VisitParty.System, ...)`, y avisar a las dos partes. Necesita una forma de encontrar las visitas activas de una publicación (proyección por `ListingId`).
   - **Reglas que no se validan todavía** (todas consultan varias visitas a la vez, contra una proyección):
     - máximo de visitas activas por visitante;
     - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
     - bloqueo por cancelaciones tardías o inasistencias repetidas (`IsLateCancellation`, `NoShow`);
     - que el anfitrión no agende dos visitas a la misma hora.
-- [ ] Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas futuras y avisar a los visitantes. Al cerrarlo o retirarlo ya se hace (`ListingLifecycleProcess.OnNoLongerAvailableAsync`).
+- [ ] **Cancelar las visitas cuando la publicación deja de recibirlas.** Hoy ninguna visita se cancela sola: solo existe `CancelVisitHandler`, que es la acción del usuario.
+  - **Estados sin visitas activas.** `Paused` (`ListingPaused`), `Closed` (`ListingClosed`), `Withdrawn` (`ListingWithdrawn`), `Suspended` (`ListingSuspended`) y `Expired` (`ListingExpired`). `Draft` e `InReview` nunca las tienen, porque solo se piden en `Published`.
+  - **Cómo.** Un proceso que reaccione a esos eventos, busque las visitas activas de la publicación (proyección por `ListingId`) y llame a `visit.Cancel(VisitParty.System, ...)` en cada una, avisando a las dos partes.
+  - **Reanudar o rehabilitar** (`ListingResumed`, `ListingReinstated`) no revive las visitas canceladas; el visitante vuelve a pedirlas.
+  - **Programación.** Solo el caso de `Expired` depende de *Schedules*, porque `ListingExpired` debe emitirlo una tarea programada. Pausar, cerrar, retirar y suspender los dispara una persona, así que esos se pueden hacer ya.
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).
 - [ ] Publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`).
 - [ ] **Owner reclamable: lo que quedó pendiente.** Rentals ya no crea cuentas: `Owner.Id` siempre es nuevo, el que registra un moderador queda con `RelatedUserId` vacío y lo reclama (`POST /api/owners/{id}/claim`, evento `OwnerClaimed`) quien confirmó su correo o su teléfono.
@@ -102,5 +102,4 @@
 
 - [ ] Buggregator: quitar `localhost:1025` y `localhost:8000` fijos del appsettings de Notification y tomarlos de Aspire.
 - [ ] Redirect URIs y audiences con puertos fijos en `AppHost/appsettings.json`: mantenerlos alineados con los `launchSettings`.
-- [ ] Actualizar `Person.md`, que describe el diseño anterior.
 - [ ] Tests para Identity, el login de la Web y el outbox.

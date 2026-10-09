@@ -121,6 +121,7 @@ IResourceBuilder<ProjectResource> AddNotification() =>
         .WaitFor(buggregator)
         .WithEnvironment("Oidc__Issuer", oidcConfig["Issuer"])
         .WithEnvironment("Oidc__Audience", oidcConfig["Audiences:Notifications"])
+        .WithEnvironment("Scalar__ClientId", scalarClientConfig["ClientId"])
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 
@@ -148,6 +149,8 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Seed__Clients__1__Scopes__1", scalarClientConfig["Scopes:1"])
         .WithEnvironment("Seed__Clients__1__Scopes__2", scalarClientConfig["Scopes:2"])
         .WithEnvironment("Seed__Clients__1__RedirectUris__0", scalarClientConfig["RedirectUris:0"])
+        .WithEnvironment("Seed__Clients__1__RedirectUris__1", scalarClientConfig["RedirectUris:1"])
+        .WithEnvironment("Seed__Clients__1__RedirectUris__2", scalarClientConfig["RedirectUris:2"])
         .WithEnvironment("Seed__Clients__2__ClientId", portalClientConfig["ClientId"])
         .WithEnvironment("Seed__Clients__2__ClientSecret", portalClientSecret)
         .WithEnvironment("Seed__Clients__2__Scopes__0", portalClientConfig["Scopes:0"])
@@ -155,6 +158,8 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Seed__Clients__2__PostLogoutRedirectUris__0", portalClientConfig["PostLogoutRedirectUris:0"])
         .WithEnvironment("Seed__Clients__2__RegistrationRole", portalClientConfig["RegistrationRole"])
         .WithEnvironment("Cors__Origins__0", scalarClientConfig["Origins:0"])
+        .WithEnvironment("Cors__Origins__1", scalarClientConfig["Origins:1"])
+        .WithEnvironment("Scalar__ClientId", scalarClientConfig["ClientId"])
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 

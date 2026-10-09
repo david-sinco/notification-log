@@ -7,7 +7,6 @@ using NotificationLog.NotificationService.Application;
 using NotificationLog.NotificationService.Application.Recipients.Commands.CreateRecipient;
 using NotificationLog.NotificationService.Infrastructure;
 using NotificationLog.NotificationService.Infrastructure.Persistence.Context;
-using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -21,8 +20,7 @@ builder.Services.AddOpenIdDictAuthorization(builder.Configuration, [OidcScope.No
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
+builder.Services.AddOAuthOpenApi([OidcScope.Notifications]);
 
 var app = builder.Build();
 
@@ -37,11 +35,11 @@ app.UseExceptionHandler();
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapOAuthScalar();
+app.MapRootToScalar();
+
 if (app.Environment.IsDevelopment())
 {
-    app.MapOpenApi();
-    app.MapScalarApiReference();
-
     app.MapPost("/api/dev/recipients", async (
         CreateRecipientCommand cmd,
         CreateRecipientHandler handler,

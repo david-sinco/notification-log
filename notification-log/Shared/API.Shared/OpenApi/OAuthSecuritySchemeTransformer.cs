@@ -1,10 +1,10 @@
-using Domain.Shared.Authorization;
 using Microsoft.AspNetCore.OpenApi;
+using Microsoft.Extensions.Configuration;
 using Microsoft.OpenApi;
 
-namespace NotificationLog.RentalService.Api.OpenApi;
+namespace API.Shared.OpenApi;
 
-internal sealed class OAuthSecuritySchemeTransformer(IConfiguration configuration) : IOpenApiDocumentTransformer
+internal sealed class OAuthSecuritySchemeTransformer(IConfiguration configuration, OAuthScalarScopes scopes) : IOpenApiDocumentTransformer
 {
     public const string SchemeName = "OAuth2";
 
@@ -23,12 +23,7 @@ internal sealed class OAuthSecuritySchemeTransformer(IConfiguration configuratio
                 {
                     AuthorizationUrl = new Uri($"{issuer}/connect/authorize"),
                     TokenUrl = new Uri($"{issuer}/connect/token"),
-                    Scopes = new Dictionary<string, string>
-                    {
-                        ["openid"] = "Identidad del usuario",
-                        ["roles"] = "Roles del usuario",
-                        [OidcScope.Rentals.ToScopeName()] = "API de Arriendos"
-                    }
+                    Scopes = new Dictionary<string, string>(scopes.Descriptions)
                 }
             }
         };
