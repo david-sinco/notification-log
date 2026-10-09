@@ -100,6 +100,5 @@
 
 ## Configuración y limpieza
 
-- [ ] Buggregator: quitar `localhost:1025` y `localhost:8000` fijos del appsettings de Notification y tomarlos de Aspire.
 - [ ] Redirect URIs y audiences con puertos fijos en `AppHost/appsettings.json`: mantenerlos alineados con los `launchSettings`.
 - [ ] Tests para Identity, el login de la Web y el outbox.
