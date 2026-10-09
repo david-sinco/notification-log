@@ -1,4 +1,4 @@
-﻿using NotificationLog.NotificationService.Application.Common;
+﻿using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Domain.Triggers;
 
 namespace NotificationLog.NotificationService.Application.Triggers.Queries.ListTriggers;
@@ -9,11 +9,10 @@ public sealed class ListTriggersHandler(INotificationTriggerRepository triggers)
 
     public async Task<PagedResult<TriggerSummaryDto>> HandleAsync(ListTriggersQuery query, CancellationToken ct)
     {
-        var page = Math.Max(query.Page, 1);
-        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var paging = new PageRequest(query.Page, query.PageSize);
 
         var (items, total) = await _triggers.ListAsync(
-            query.Search, query.IsEnabled, page, pageSize, ct);
+            query.Search, query.IsEnabled, paging.Page, paging.PageSize, ct);
 
         var dtos = items
             .Select(t => new TriggerSummaryDto(
@@ -25,6 +24,6 @@ public sealed class ListTriggersHandler(INotificationTriggerRepository triggers)
                 t.Configurations.Where(c => c.IsEnabled).Select(c => c.Channel.ToString()).ToList()))
             .ToList();
 
-        return new PagedResult<TriggerSummaryDto>(dtos, page, pageSize, total);
+        return new PagedResult<TriggerSummaryDto>(dtos, paging, total);
     }
 }

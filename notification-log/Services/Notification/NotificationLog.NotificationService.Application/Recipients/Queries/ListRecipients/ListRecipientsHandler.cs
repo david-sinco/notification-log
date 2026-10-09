@@ -1,4 +1,4 @@
-﻿using NotificationLog.NotificationService.Application.Common;
+﻿using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Application.Recipients.Dtos;
 using NotificationLog.NotificationService.Domain.Recipients;
 
@@ -14,17 +14,16 @@ public sealed class ListRecipientsHandler
     public async Task<PagedResult<RecipientSummaryDto>> HandleAsync(
         ListRecipientsQuery query, CancellationToken ct)
     {
-        var page = Math.Max(query.Page, 1);
-        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var paging = new PageRequest(query.Page, query.PageSize);
 
         var (items, total) = await _recipients.ListAsync(
-            query.Search, query.IsActive, page, pageSize, ct);
+            query.Search, query.IsActive, paging.Page, paging.PageSize, ct);
 
         var dtos = items
             .Select(r => new RecipientSummaryDto(
                 r.Id, r.Name, r.Email, r.Phone, r.IsActive, r.AcceptsNotifications))
             .ToList();
 
-        return new PagedResult<RecipientSummaryDto>(dtos, page, pageSize, total);
+        return new PagedResult<RecipientSummaryDto>(dtos, paging, total);
     }
 }

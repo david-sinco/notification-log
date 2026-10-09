@@ -1,6 +1,6 @@
 ﻿using API.Shared.Extensions;
 using Domain.Shared.Authorization;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Application.Recipients.Dtos;
 using NotificationLog.NotificationService.Application.Recipients.Queries.GetRecipientById;
 using NotificationLog.NotificationService.Application.Recipients.Queries.ListRecipients;

@@ -1,7 +1,7 @@
 ﻿using API.Shared.Extensions;
 using Domain.Shared.Authorization;
 using NotificationLog.ApiService.Contracts.Templates;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Application.Templates.Commands.CreateTemplate;
 using NotificationLog.NotificationService.Application.Templates.Commands.PublishTemplateVersion;
 using NotificationLog.NotificationService.Application.Templates.Commands.SetTemplateStatus;

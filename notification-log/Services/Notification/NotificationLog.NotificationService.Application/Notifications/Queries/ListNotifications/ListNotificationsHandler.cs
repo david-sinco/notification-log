@@ -1,4 +1,4 @@
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Application.Notifications.Dtos;
 using NotificationLog.NotificationService.Domain.Notifications;
 
@@ -14,11 +14,10 @@ public sealed class ListNotificationsHandler
     public async Task<PagedResult<NotificationDto>> HandleAsync(
         ListNotificationsQuery query, CancellationToken ct)
     {
-        var page = Math.Max(query.Page, 1);
-        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var paging = new PageRequest(query.Page, query.PageSize);
 
         var (items, total) = await _notifications.ListAsync(
-            query.RecipientId, query.EventKey, query.Status, query.Channel, query.Search, page, pageSize, ct);
+            query.RecipientId, query.EventKey, query.Status, query.Channel, query.Search, paging.Page, paging.PageSize, ct);
 
         var dtos = items
             .Select(n => new NotificationDto(
@@ -38,6 +37,6 @@ public sealed class ListNotificationsHandler
                 n.Payload))
             .ToList();
 
-        return new PagedResult<NotificationDto>(dtos, page, pageSize, total);
+        return new PagedResult<NotificationDto>(dtos, paging, total);
     }
 }

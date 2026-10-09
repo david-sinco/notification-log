@@ -1,4 +1,4 @@
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Application.Templates.Dtos;
 using NotificationLog.NotificationService.Domain.Templates;
 
@@ -14,17 +14,16 @@ public sealed class ListTemplatesHandler
     public async Task<PagedResult<TemplateSummaryDto>> HandleAsync(
         ListTemplatesQuery query, CancellationToken ct)
     {
-        var page = Math.Max(query.Page, 1);
-        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var paging = new PageRequest(query.Page, query.PageSize);
 
         var (items, total) = await _templates.ListAsync(
-            query.Search, query.Channel, query.IsEnabled, page, pageSize, ct);
+            query.Search, query.Channel, query.IsEnabled, paging.Page, paging.PageSize, ct);
 
         var dtos = items
             .Select(t => new TemplateSummaryDto(
                 t.Id, t.Name.Value, t.Channel.ToString(), t.CurrentVersion.Number, t.IsEnabled))
             .ToList();
 
-        return new PagedResult<TemplateSummaryDto>(dtos, page, pageSize, total);
+        return new PagedResult<TemplateSummaryDto>(dtos, paging, total);
     }
 }

@@ -1,7 +1,7 @@
 using API.Shared.Extensions;
 using Domain.Shared.Authorization;
 using NotificationLog.ApiService.Contracts.Triggers;
-using NotificationLog.NotificationService.Application.Common;
+using Application.Shared.Pagination;
 using NotificationLog.NotificationService.Application.Triggers.Commands.AddConfiguration;
 using NotificationLog.NotificationService.Application.Triggers.Commands.ChangeConfigurationTemplate;
 using NotificationLog.NotificationService.Application.Triggers.Commands.CreateTrigger;
