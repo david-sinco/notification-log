@@ -1,0 +1,17 @@
+@page "/authentication/access-denied"
+@attribute [AllowAnonymous]
+
+<PageTitle>Acceso denegado · Llave</PageTitle>
+
+<AccessDeniedNotice />
+
+@code {
+    [CascadingParameter]
+    public HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is { Response.HasStarted: false })
+            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+    }
+}

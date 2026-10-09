@@ -4,9 +4,8 @@
             <NotAuthorized>
                 @if (context.User.Identity?.IsAuthenticated == true)
                 {
-                    <div class="page">
-                        <EmptyState Text="No tienes permiso para ver esta página." />
-                    </div>
+                    <PageTitle>Acceso denegado · Llave</PageTitle>
+                    <AccessDeniedNotice />
                 }
                 else
                 {

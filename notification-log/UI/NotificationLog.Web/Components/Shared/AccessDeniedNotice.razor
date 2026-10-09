@@ -1,0 +1,76 @@
+@using System.Security.Claims
+@inject NavigationManager Nav
+
+<div class="page">
+    <section class="card card-dark denied" aria-labelledby="denied-title">
+        <span class="denied-mark">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 11h14v10H5zM8 11V7a4 4 0 018 0v4M12 15v2"></path></svg>
+        </span>
+        <header class="page-head">
+            <p class="eyebrow muted">Error 403 · Acceso denegado</p>
+            <h1 id="denied-title" class="title">Esta sección no está abierta para tu rol</h1>
+            <p class="muted">Tu sesión es válida, pero la página que pediste exige un rol que tu cuenta no tiene. No se cambió nada.</p>
+        </header>
+        @if (requested is not null)
+        {
+            <span class="tag denied-path"><span class="muted">Intentaste abrir</span>@requested</span>
+        }
+        <div class="row" style="--gap: 8px">
+            <a class="btn btn-lime" href="">Ir al panel</a>
+            <AuthorizeView>
+                <Authorized>
+                    <a class="btn btn-on-dark" href="users/me">Ver mi perfil</a>
+                    <form action="authentication/logout" method="post">
+                        <AntiforgeryToken />
+                        <input type="hidden" name="returnUrl" value="@(requested ?? "/")" />
+                        <button type="submit" class="btn btn-on-dark">Entrar con otra cuenta</button>
+                    </form>
+                </Authorized>
+                <NotAuthorized>
+                    <a class="btn btn-on-dark" href="authentication/login">Iniciar sesión</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </section>
+
+    <AuthorizeView>
+        <section class="card" aria-label="Tu sesión">
+            <h2 class="h2 h2-sm">Tu sesión</h2>
+            <div class="grid-auto">
+                <div class="fact fact-box">
+                    <span class="fact-label">Cuenta</span>
+                    <span class="fact-value">@(context.User.Identity?.Name ?? "Mi cuenta")</span>
+                </div>
+                <div class="fact fact-box">
+                    <span class="fact-label">Roles</span>
+                    <span class="row" style="--gap: 6px">
+                        @foreach (var role in Roles(context.User))
+                        {
+                            <StatusPill Text="@role" Variant="ink" />
+                        }
+                        @if (!Roles(context.User).Any())
+                        {
+                            <span class="fact-value">Sin rol</span>
+                        }
+                    </span>
+                </div>
+            </div>
+            <p class="small muted">Si crees que deberías tener acceso, pídele a un administrador que revise tus roles en Usuarios.</p>
+        </section>
+    </AuthorizeView>
+</div>
+
+@code {
+    [SupplyParameterFromQuery] public string? ReturnUrl { get; set; }
+
+    private string? requested;
+
+    protected override void OnParametersSet()
+    {
+        var path = "/" + Nav.ToBaseRelativePath(Nav.Uri).Split('?')[0];
+        requested = ReturnUrl ?? (path.StartsWith("/authentication/") ? null : path);
+    }
+
+    private static IEnumerable<string> Roles(ClaimsPrincipal user) =>
+        user.FindAll(IdentityClaims.Role).Select(claim => claim.Value);
+}

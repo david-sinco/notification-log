@@ -8,12 +8,10 @@
 - [ ] Páginas de error del protocolo, acceso denegado y confirmación de cierre de sesión.
 - [ ] Apariencia por cliente en el login, según el `client_id` validado.
 - [ ] Scalar con OAuth para probar `/api/users` sin la Web.
-- [ ] **Rol según dónde se registre la cuenta.** Quien se registra en la plataforma pública (solo quiere ver contenido) queda como `Cliente`; quien se registra desde el backoffice queda como `Propietario`. Después solo un administrador puede cambiarle el rol. Hace falta el rol `Cliente`: el enum `UserRole` hoy solo tiene `Administrador`, `Propietario` y `Moderador`.
 
 ## Web
 
 - [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro), en `Web/wwwroot/app.css` y en `UI/portal/app/globals.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
-- [ ] Página propia de acceso denegado: `/authentication/access-denied` todavía responde texto plano.
 - [ ] **Título del inmueble dentro de `VisitView`.** `VisitViewProjection` copia tipo, barrio y ciudad de la publicación cuando se pide la visita; si después llega un `ListingDetailsUpdated`, las visitas ya existentes conservan el título anterior. Propagarlo a las visitas de esa publicación.
 - [ ] **Nombre de quien creó la publicación.** `ListingView.CreatedBy` es un id de usuario de Identity y Rentals no conoce nombres de usuarios; la Web muestra «Tú», el propietario o el id corto.
 - [ ] **Renovar el access token dentro del circuito.** `CookieOidcRefresher` solo renueva en una petición HTTP. Con `InteractiveServer` global, un circuito abierto más de 15 min (vida del access token) sin recargar la página sigue enviando el token vencido y las APIs responden 401.
@@ -73,27 +71,6 @@
     - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
     - bloqueo por cancelaciones tardías o inasistencias repetidas (`IsLateCancellation`, `NoShow`);
     - que el anfitrión no agende dos visitas a la misma hora.
-- [ ] **Quitar la réplica de Identity (`IIdentityReplica`) y cambiar antes la regla de visitas.**
-  - **Qué es hoy.** `IIdentityReplica` **no** consulta la base de Identity: lee la base de *Rentals* (Marten,
-    esquema `rentals`), el documento `PersonVerificationDocument`. Es una copia local de un dato ajeno.
-  - **Cómo se llena.** Identity publica `PersonVerificationChanged` al exchange fanout `identity.users` cuando
-    alguien confirma su correo o su teléfono; Rentals lo escucha en la cola `rentals-person-verification` y
-    `PersonVerificationChangedHandler` hace upsert del documento. `MartenIdentityReplica` después lo lee por `UserId`.
-  - **Para qué sirve.** Para una sola regla: `ListingAccess.RequireVerifiedUserAsync`, que solo usa
-    `RequestVisitHandler` (nadie pide una visita sin teléfono verificado). La idea era no llamar a Identity por
-    HTTP en cada comando y que Rentals siguiera funcionando si Identity está caído; el precio es consistencia eventual.
-  - **Por qué sobra.** Cuando alguien pide una visita se le crea su usuario, y ese usuario ya trae el teléfono
-    verificado, así que la regla se puede validar contra la cuenta —o contra el propio flujo de creación del
-    usuario— en vez de contra una réplica que hay que mantener sincronizada.
-  - **Orden.** Primero cambiar la regla en visitas; solo después borrar la réplica.
-  - **Qué se borra al final.** `IIdentityReplica`, `PersonVerification`, `MartenIdentityReplica`,
-    `PersonVerificationDocument`, `PersonVerificationChangedHandler`, la cola `rentals-person-verification` en
-    `RabbitMqMessagingExtensions`, el índice de `MartenStoreConfiguration`, el registro en `DependencyInjection`,
-    y `DevIdentityEndpoints` con sus contratos `DevIdentityResponse` y `DevPersonVerificationRequest` (la página
-    `/rentals/identity` de la Web ya no existe). `ListingAccess` se queda sin dependencias y vuelve a ser estático.
-  - **De dónde viene el nombre.** `Person` e `IsDocumentVerified` —que ningún mensaje llena, solo el endpoint dev—
-    venían del servicio de Personas que iba a reemplazar esto, también pendiente más abajo.
-- [ ] Rol `Asesor` en la base de Identity: el seeder crea `Moderador`, pero el rol viejo y sus asignaciones siguen ahí. Borrarlo o migrar a sus usuarios.
 - [ ] Al vencer un `Listing` (`ListingExpired`), cancelar sus visitas futuras y avisar a los visitantes. Al cerrarlo o retirarlo ya se hace (`ListingLifecycleProcess.OnNoLongerAvailableAsync`).
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).
 - [ ] Publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`).

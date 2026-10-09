@@ -22,10 +22,6 @@ public static class AuthenticationEndpoints
                 new AuthenticationProperties { RedirectUri = LocalUrl(returnUrl) },
                 [CookieAuthenticationDefaults.AuthenticationScheme, OpenIdConnectDefaults.AuthenticationScheme]));
 
-        group.MapGet("/access-denied", () =>
-                TypedResults.Content("No tienes permiso para ver esta página.", "text/plain; charset=utf-8", statusCode: StatusCodes.Status403Forbidden))
-            .AllowAnonymous();
-
         return app;
     }
 
