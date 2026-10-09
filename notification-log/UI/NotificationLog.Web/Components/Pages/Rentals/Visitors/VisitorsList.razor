@@ -8,58 +8,181 @@
     <header class="page-head">
         <p class="eyebrow">Arriendos</p>
         <h1 class="title">Visitantes</h1>
-        <p class="muted">Las personas registradas en Llave para solicitar visitas a los inmuebles publicados.</p>
     </header>
+
+    <div class="kpis">
+        <div class="kpi kpi-dark">
+            Visitantes
+            <span class="kpi-value">@Count(summary?.Total)</span>
+        </div>
+        <div class="kpi kpi-lime">
+            Nuevos en los últimos 7 días
+            <span class="kpi-value">@Count(summary?.NewLastWeek)</span>
+        </div>
+        <div class="kpi">
+            Sin ninguna visita
+            <span class="kpi-value">@Count(summary?.WithoutVisits)</span>
+        </div>
+    </div>
+
+    <div class="row row-bottom" style="--gap: 12px">
+        <div class="field grow" style="--basis: 260px">
+            <label class="label" for="visitor-search">Buscar</label>
+            <input id="visitor-search" type="search" class="input input-search" placeholder="Nombre, correo o teléfono"
+                   @bind="search" @bind:after="RefreshAsync" />
+        </div>
+        <div class="segmented" role="group" aria-label="Filtrar por visitas">
+            @foreach (var (filter, text) in Filters)
+            {
+                <button type="button" aria-pressed="@(hasVisits == filter ? "true" : "false")" @onclick="() => FilterAsync(filter)">@text</button>
+            }
+        </div>
+        <div class="field grow" style="--basis: 180px">
+            <label class="label" for="visitor-sort">Ordenar por</label>
+            <select id="visitor-sort" class="select" @bind="sort" @bind:after="RefreshAsync">
+                <option value="@VisitorSort.Recent">Más recientes</option>
+                <option value="@VisitorSort.MostVisits">Más visitas</option>
+                <option value="@VisitorSort.Name">Nombre</option>
+            </select>
+        </div>
+    </div>
 
     <ErrorAlert Exception="error" />
 
-    <section class="stack" aria-label="Lista de visitantes" style="--gap: 10px">
-        @if (page is { Items.Count: 0 })
-        {
-            <EmptyState Text="No se encontraron visitantes." />
-        }
-        @foreach (var visitor in page?.Items ?? [])
-        {
-            <article class="card card-tight row" style="padding: 16px; flex-direction: row; --gap: 14px">
-                <span class="avatar avatar-lime" aria-hidden="true">@RentalsFormat.Initials(visitor.Name)</span>
-                <div class="stack grow" style="--gap: 2px">
-                    <span class="strong">@visitor.Name</span>
-                    <span class="mono smaller muted">Registrado el @RentalsFormat.Date(visitor.RegisteredAt)</span>
-                    <span class="small muted wrap-any">@Contact(visitor)</span>
-                </div>
-                <a class="link" href="rentals/visits">@(visitor.VisitCount == 0 ? "Sin visitas" : visitor.VisitCount == 1 ? "1 visita" : $"{visitor.VisitCount} visitas")</a>
-            </article>
-        }
-        @if (page is { TotalPages: > 1 })
-        {
-            <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="visitantes" OnPageChange="GoToPageAsync" />
-        }
-    </section>
+    @if (page is { Items.Count: 0 })
+    {
+        <EmptyState Text="No se encontraron visitantes." />
+    }
+    else if (page is not null)
+    {
+        <div class="table-box">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th scope="col">Visitante</th>
+                        <th scope="col">Contacto</th>
+                        <th scope="col">Visitas</th>
+                        <th scope="col">Qué sigue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var visitor in page.Items)
+                    {
+                        var next = NextStep(visitor);
+                        <tr>
+                            <td>
+                                <a class="row link-plain" href="rentals/visitors/@visitor.Id" style="flex-wrap: nowrap; min-height: 44px; text-decoration: none">
+                                    <span class="avatar avatar-lime" style="width: 36px; height: 36px; font-size: 12px" aria-hidden="true">@RentalsFormat.Initials(visitor.Name)</span>
+                                    <span class="stack" style="--gap: 0">
+                                        <span class="strong">@visitor.Name</span>
+                                        <span class="id">desde @RentalsFormat.Date(visitor.RegisteredAt)</span>
+                                    </span>
+                                </a>
+                            </td>
+                            <td>
+                                <ContactLine Value="@visitor.Email" Missing="Sin correo confirmado" Label="correo" />
+                                <ContactLine Value="@visitor.Phone" Missing="Sin teléfono confirmado" Label="teléfono" Mono="true" />
+                            </td>
+                            <td>
+                                <div class="row" style="--gap: 8px">
+                                    <span class="strong">@visitor.VisitCount</span>
+                                    @if (visitor.NoShowCount > 0)
+                                    {
+                                        <span class="pill pill-danger">@visitor.NoShowCount no asistió</span>
+                                    }
+                                </div>
+                            </td>
+                            <td>
+                                <div class="stack" style="--gap: 2px; align-items: flex-start">
+                                    @if (visitor.NextStep is { } step)
+                                    {
+                                        <a href="rentals/visits/@step.VisitId" class="pill pill-@next.Variant" style="text-decoration: none">@next.Text</a>
+                                    }
+                                    else
+                                    {
+                                        <StatusPill Text="@next.Text" Variant="@next.Variant" />
+                                    }
+                                    <span class="id">@next.Detail</span>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (page is { TotalPages: > 1 })
+    {
+        <Pager Page="page.Page" TotalPages="page.TotalPages" TotalCount="page.TotalCount" Shown="page.Items.Count" Noun="visitantes" OnPageChange="GoToPageAsync" />
+    }
 </div>
 
 @code {
     private const int PageSize = 20;
 
+    private static readonly (bool? Filter, string Text)[] Filters =
+    [
+        (null, "Todos"),
+        (true, "Con visitas"),
+        (false, "Sin visitas")
+    ];
+
     private PagedResult<VisitorDto>? page;
+    private VisitorsSummaryDto? summary;
+    private string? search;
+    private bool? hasVisits;
+    private VisitorSort sort = VisitorSort.Recent;
     private int currentPage = 1;
     private ApiException? error;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
 
-    private static string Contact(VisitorDto visitor) =>
-        string.Join(" · ", new[] { visitor.Email, visitor.Phone }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        try
+        {
+            summary = await Api.GetSummaryAsync(CancellationToken.None);
+        }
+        catch (ApiException ex)
+        {
+            error = ex;
+        }
+    }
+
+    private static string Count(int? value) => value?.ToString() ?? "—";
+
+    private static (string Text, string Variant, string Detail) NextStep(VisitorDto visitor) => visitor.NextStep switch
+    {
+        { Status: "Scheduled" } step => ($"Visita el {RentalsFormat.Day(step.At)}", "success", $"{step.ListingNeighborhood} · {RentalsFormat.Range(step.At)}"),
+        { Status: "AwaitingVisitor" } step => ("Debe responder", "warning", $"antes de {RentalsFormat.Moment(step.At)}"),
+        { Status: "AwaitingHost" } step => ("Espera al anfitrión", "info", $"{step.ListingNeighborhood} · desde {RentalsFormat.Moment(step.At)}"),
+        _ => ("Nada pendiente", "neutral", visitor.VisitCount == 0 ? "aún no pide visitas" : "")
+    };
 
     private async Task LoadAsync()
     {
         try
         {
-            page = await Api.ListAsync(currentPage, PageSize, CancellationToken.None);
+            page = await Api.ListAsync(search, hasVisits, sort, currentPage, PageSize, CancellationToken.None);
             error = null;
         }
         catch (ApiException ex)
         {
             error = ex;
         }
+    }
+
+    private Task RefreshAsync()
+    {
+        currentPage = 1;
+        return LoadAsync();
+    }
+
+    private Task FilterAsync(bool? filter)
+    {
+        hasVisits = filter;
+        return RefreshAsync();
     }
 
     private Task GoToPageAsync(int target)

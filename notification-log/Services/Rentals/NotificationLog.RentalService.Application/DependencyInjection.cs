@@ -84,6 +84,7 @@ public static class DependencyInjection
         services.AddScoped<ListClaimableOwnersHandler>();
         services.AddScoped<GetVisitorByIdHandler>();
         services.AddScoped<ListVisitorsHandler>();
+        services.AddScoped<GetVisitorsSummaryHandler>();
         services.AddScoped<GetVisitByIdHandler>();
         services.AddScoped<ListVisitsHandler>();
         services.AddScoped<GetDashboardHandler>();

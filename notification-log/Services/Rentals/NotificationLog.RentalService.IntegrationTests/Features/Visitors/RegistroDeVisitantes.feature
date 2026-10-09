@@ -46,3 +46,15 @@ Característica: Registro de visitantes
   Escenario: Un visitante no puede listar los visitantes
     Cuando "Víctor" lista los visitantes
     Entonces la solicitud se rechaza por permisos
+
+  Escenario: Moderación busca visitantes por nombre, correo o teléfono
+    Cuando "Marta" busca visitantes con "valeria"
+    Entonces la lista contiene 1 visitante
+
+  Escenario: Moderación consulta el resumen de visitantes
+    Cuando "Marta" consulta el resumen de visitantes
+    Entonces el resumen tiene 2 visitantes, 2 nuevos y 2 sin visitas
+
+  Escenario: Un visitante no puede consultar el resumen
+    Cuando "Víctor" consulta el resumen de visitantes
+    Entonces la solicitud se rechaza por permisos

@@ -21,6 +21,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (account) {
         return {
           ...token,
+          userId: typeof profile?.sub === "string" ? profile.sub : undefined,
+          role: typeof profile?.role === "string" ? profile.role : undefined,
           phone: typeof profile?.phone_number === "string" ? profile.phone_number : undefined,
           accessToken: account.access_token,
           idToken: account.id_token,
@@ -28,10 +30,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         };
       }
 
-      return token.expiresAt && Date.now() < token.expiresAt * 1000 ? token : null;
+      return token.userId && token.expiresAt && Date.now() < token.expiresAt * 1000 ? token : null;
     },
     session({ session, token }) {
-      session.user.id = token.sub ?? "";
+      session.user.id = token.userId ?? "";
+      session.user.role = token.role;
       session.user.phone = token.phone;
       return session;
     },

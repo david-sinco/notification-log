@@ -5,14 +5,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { getToken } from "next-auth/jwt";
 import { issuer, signIn, signOut } from "@/auth";
-import {
-  ApiError,
-  cancelVisit,
-  completeMyProfile,
-  counterProposeVisit,
-  requestVisit,
-  scheduleVisit,
-} from "@/lib/rentals";
+import { ApiError, cancelVisit, counterProposeVisit, requestVisit, scheduleVisit } from "@/lib/rentals";
 import type { ActionResult } from "@/lib/types";
 
 export async function login(redirectTo: string) {
@@ -35,25 +28,31 @@ export async function logout() {
   redirect(endSession.href);
 }
 
-async function attempt(action: () => Promise<unknown>): Promise<ActionResult> {
-  try {
-    await action();
-    return {};
-  } catch (error) {
-    return { error: error instanceof ApiError ? error.message : "Ocurrió un error inesperado. Intenta de nuevo." };
-  }
-}
+const errorMessage = (error: unknown) =>
+  error instanceof ApiError ? error.message : "Ocurrió un error inesperado. Intenta de nuevo.";
 
 export async function requestVisitAction(listingId: string, slots: string[]): Promise<ActionResult> {
-  const result = await attempt(() => requestVisit(listingId, slots));
-  if (result.error) return result;
-  redirect("/visitas");
+  let visitId: string;
+
+  try {
+    visitId = (await requestVisit(listingId, slots)).id;
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath("/", "layout");
+  redirect(`/visitas/${visitId}`);
 }
 
 async function visitAction(action: () => Promise<unknown>): Promise<ActionResult> {
-  const result = await attempt(action);
-  revalidatePath("/visitas");
-  return result;
+  try {
+    await action();
+  } catch (error) {
+    return { error: errorMessage(error) };
+  }
+
+  revalidatePath("/", "layout");
+  return {};
 }
 
 export const cancelVisitAction = async (visitId: string, reason: string) =>
@@ -64,23 +63,3 @@ export const scheduleVisitAction = async (visitId: string, startsAt: string) =>
 
 export const counterProposeVisitAction = async (visitId: string, slots: string[]) =>
   visitAction(() => counterProposeVisit(visitId, slots));
-
-export async function completeProfileAction(_: ActionResult, form: FormData): Promise<ActionResult> {
-  const field = (name: string) => String(form.get(name) ?? "").trim();
-
-  const result = await attempt(() =>
-    completeMyProfile({
-      firstNames: field("firstNames"),
-      lastNames: field("lastNames"),
-      documentType: Number(field("documentType")),
-      documentNumber: field("documentNumber"),
-      email: field("email"),
-      phone: field("phone"),
-    }),
-  );
-
-  if (result.error) return result;
-
-  const next = field("next");
-  redirect(next.startsWith("/") && !next.startsWith("//") ? next : "/");
-}

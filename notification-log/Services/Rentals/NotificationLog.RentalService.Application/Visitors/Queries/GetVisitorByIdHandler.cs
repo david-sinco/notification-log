@@ -11,7 +11,7 @@ public sealed class GetVisitorByIdHandler(IVisitorReadModel visitors)
 {
     private readonly IVisitorReadModel _visitors = visitors;
 
-    public async Task<VisitorDto> HandleAsync(Guid id, ClaimsPrincipal user, CancellationToken ct)
+    public async Task<VisitorDetailDto> HandleAsync(Guid id, ClaimsPrincipal user, CancellationToken ct)
     {
         if (!user.IsAdministrador() && !user.IsModerador() && id != user.GetUserId())
             throw new ForbiddenException("Solo puedes consultar tu propio registro de visitante.");

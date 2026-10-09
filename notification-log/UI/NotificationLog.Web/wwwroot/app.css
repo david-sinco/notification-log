@@ -1518,6 +1518,116 @@ a.line-row {
         color: var(--ink);
     }
 
+/* Visitantes */
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr));
+    gap: 12px;
+}
+
+.kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 18px;
+    border-radius: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    font-size: 13px;
+    color: var(--muted);
+}
+
+.kpi-dark {
+    background: var(--ink);
+    border-color: var(--ink);
+    color: var(--muted-dark);
+}
+
+.kpi-lime {
+    background: var(--lime);
+    border-color: var(--lime);
+    color: var(--ink);
+}
+
+.kpi-value {
+    font: 700 34px/1 var(--font-display);
+    color: var(--ink);
+}
+
+.kpi-dark .kpi-value {
+    color: #FFFFFF;
+}
+
+.table-box {
+    overflow-x: auto;
+    border-radius: 18px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+}
+
+.table {
+    width: 100%;
+    min-width: 820px;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+    .table th {
+        padding: 14px 10px;
+        text-align: left;
+        font: 500 11px var(--font-mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--muted);
+    }
+
+    .table td {
+        padding: 10px;
+        border-top: 1px solid var(--line-soft);
+        vertical-align: middle;
+    }
+
+        .table th:first-child, .table td:first-child {
+            padding-left: 18px;
+        }
+
+        .table th:last-child, .table td:last-child {
+            padding-right: 18px;
+        }
+
+.icon-btn {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--muted);
+}
+
+    .icon-btn:hover {
+        background: var(--line-soft);
+        color: var(--ink);
+    }
+
+.card-dark .fact-box {
+    background: var(--ink-2);
+}
+
+.card-dark .icon-btn {
+    color: var(--muted-dark);
+}
+
+    .card-dark .icon-btn:hover {
+        background: var(--ink-line);
+        color: #FFFFFF;
+    }
+
 /* Envíos y plantillas */
 
 .send {

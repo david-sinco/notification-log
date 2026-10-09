@@ -1,7 +1,7 @@
 import "server-only";
 import { headers } from "next/headers";
 import { getToken } from "next-auth/jwt";
-import type { Listing, ListingSummary, PagedResult, Visit, Visitor } from "@/lib/types";
+import type { Listing, ListingSummary, PagedResult, Visit, VisitorDetail } from "@/lib/types";
 
 const baseUrl =
   process.env.services__rental__https__0 ?? process.env.services__rental__http__0 ?? "https://localhost:7057";
@@ -60,31 +60,18 @@ export const listCatalog = (search: string | undefined, operation: string | unde
 
 export const getCatalogListing = (id: string) => request<Listing>(`/api/catalog/${id}`);
 
-export const getListing = (id: string) => request<Listing>(`/api/listings/${id}`, { authenticated: true });
+export const getMyVisitorDetail = (userId: string) =>
+  request<VisitorDetail>(`/api/visitors/${userId}`, { authenticated: true });
 
-export async function getMyVisitor() {
-  try {
-    return await request<Visitor>("/api/visitors/me", { authenticated: true });
-  } catch (error) {
-    if (error instanceof ApiError && error.status === 404) return null;
-    throw error;
-  }
-}
+export const listMyVisits = (filter: { status?: string; page?: number; pageSize?: number } = {}) =>
+  request<PagedResult<Visit>>(`/api/visits?${query({ status: filter.status, page: filter.page, pageSize: filter.pageSize })}`, {
+    authenticated: true,
+  });
 
-export const completeMyProfile = (profile: {
-  firstNames: string;
-  lastNames: string;
-  documentType: number;
-  documentNumber: string;
-  email: string;
-  phone: string;
-}) => request<void>("/api/visitors/me/profile", { method: "PUT", body: JSON.stringify(profile), authenticated: true });
+export const getVisit = (id: string) => request<Visit>(`/api/visits/${id}`, { authenticated: true });
 
 const post = <T>(path: string, body: unknown) =>
   request<T>(path, { method: "POST", body: JSON.stringify(body), authenticated: true });
-
-export const listMyVisits = (page: number) =>
-  request<PagedResult<Visit>>(`/api/visits?${query({ page, pageSize: 20 })}`, { authenticated: true });
 
 export const requestVisit = (listingId: string, slots: string[]) =>
   post<{ id: string }>("/api/visits", { listingId, slots });

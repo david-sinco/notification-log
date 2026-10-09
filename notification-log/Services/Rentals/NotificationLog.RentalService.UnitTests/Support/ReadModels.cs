@@ -23,7 +23,10 @@ public static class ReadModels
             id, createdBy, relatedUserId, "Ana Gómez Rincón", "ana@example.com", "+573001234567", Clock.Now, 0);
 
     public static VisitorDto Visitor(Guid id)
-        => new(id, "Víctor Rojas Peña", "victor@example.com", "+573109876543", Clock.Now, 0);
+        => new(id, "Víctor Rojas Peña", "victor@example.com", "+573109876543", Clock.Now, 0, 0, null);
+
+    public static VisitorDetailDto VisitorDetail(Guid id)
+        => new(Visitor(id), [], []);
 
     public static VisitDto Visit(Guid id)
         => new(

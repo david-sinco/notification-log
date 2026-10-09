@@ -46,7 +46,7 @@ public class GetVisitorByIdHandlerTests : ApplicationScenario
             .BDDfy("Un visitante que no existe no se encuentra");
 
     private void AVisitorInTheReadModel()
-        => VisitorViews.GetAsync(_visitorId, Arg.Any<CancellationToken>()).Returns(ReadModels.Visitor(_visitorId));
+        => VisitorViews.GetAsync(_visitorId, Arg.Any<CancellationToken>()).Returns(ReadModels.VisitorDetail(_visitorId));
 
     private void AUser(UserRole role, bool isTheVisitor) => UserIs(role, isTheVisitor ? _visitorId : Guid.NewGuid());
 

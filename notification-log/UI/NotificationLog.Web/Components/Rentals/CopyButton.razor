@@ -1,0 +1,25 @@
+@inject IJSRuntime Js
+
+<button type="button" class="icon-btn" aria-label="@(copied ? $"{Label} copiado" : $"Copiar {Label}")" title="@(copied ? "Copiado" : "Copiar")" @onclick="CopyAsync">
+    @if (copied)
+    {
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l5 5 9-10" /></svg>
+    }
+    else
+    {
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 9h11v11H9zM5 15H4V4h11v1" /></svg>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    private bool copied;
+
+    private async Task CopyAsync()
+    {
+        await Js.InvokeVoidAsync("navigator.clipboard.writeText", Value);
+        copied = true;
+    }
+}

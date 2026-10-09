@@ -3,6 +3,7 @@ using API.Shared.Extensions;
 using Application.Shared.Pagination;
 using NotificationLog.RentalService.Application.Visitors.Queries;
 using NotificationLog.RentalService.Application.Visitors.Queries.Dtos;
+using NotificationLog.RentalService.Application.Visitors.Queries.Filters;
 
 namespace NotificationLog.RentalService.Api.Endpoints;
 
@@ -20,10 +21,16 @@ public static class VisitorEndpoints
             .WithSummary("Lista todos los visitantes")
             .Produces<PagedResult<VisitorDto>>();
 
+        group.MapGet("/summary", GetSummaryAsync)
+            .RequireAuthorization(AuthorizationExtensions.ModeracionPolicy)
+            .WithName("GetVisitorsSummary")
+            .WithSummary("Resume cuántos visitantes hay, cuántos son nuevos en los últimos 7 días y cuántos no han pedido visitas")
+            .Produces<VisitorsSummaryDto>();
+
         group.MapGet("/{id:guid}", GetByIdAsync)
             .WithName("GetVisitorById")
             .WithSummary("Obtiene tu registro de visitante, o cualquiera si eres administrador o moderador")
-            .Produces<VisitorDto>()
+            .Produces<VisitorDetailDto>()
             .ProducesProblem(StatusCodes.Status403Forbidden)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
@@ -31,10 +38,14 @@ public static class VisitorEndpoints
     }
 
     private static async Task<IResult> ListAsync(
+        [AsParameters] VisitorFilter filter,
         [AsParameters] PageRequest paging,
         ListVisitorsHandler handler,
         CancellationToken ct)
-        => Results.Ok(await handler.HandleAsync(paging, ct));
+        => Results.Ok(await handler.HandleAsync(filter, paging, ct));
+
+    private static async Task<IResult> GetSummaryAsync(GetVisitorsSummaryHandler handler, CancellationToken ct)
+        => Results.Ok(await handler.HandleAsync(ct));
 
     private static async Task<IResult> GetByIdAsync(
         Guid id,

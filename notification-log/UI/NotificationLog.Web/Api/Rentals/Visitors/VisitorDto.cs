@@ -6,4 +6,6 @@ public sealed record VisitorDto(
     string Email,
     string Phone,
     DateTimeOffset RegisteredAt,
-    int VisitCount);
+    int VisitCount,
+    int NoShowCount,
+    VisitorNextStepDto? NextStep);

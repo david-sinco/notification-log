@@ -8,4 +8,7 @@ public sealed class VisitorView
     public string Phone { get; set; } = string.Empty;
     public DateTimeOffset RegisteredAt { get; set; }
     public int VisitCount { get; set; }
+    public int NoShowCount { get; set; }
+    public List<VisitorVisitEntry> Visits { get; set; } = [];
+    public List<VisitorActivityEntry> Activity { get; set; } = [];
 }
