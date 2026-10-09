@@ -1,0 +1,75 @@
+@switch (Channel)
+{
+    case NotificationChannel.Email:
+        <article class="mail @(Mobile ? "mail-mobile" : "") @(Recipient.Email.Length == 0 ? "undeliverable" : "")">
+            <div class="mail-head">
+                <span class="brand-mark" aria-hidden="true">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4" /><path d="M11 12l9-9M16 7l3 3M14 9l2 2" /></svg>
+                </span>
+                <div class="stack grow smaller muted" style="--gap: 0">
+                    <strong>Llave</strong>
+                    <span class="truncate">Para: @Recipient.Name &lt;@(Recipient.Email.Length > 0 ? Recipient.Email : "sin correo")&gt;</span>
+                </div>
+            </div>
+            <div class="mail-content">
+                <h3 class="mail-subject"><PreviewText Text="@Subject" Values="Values" /></h3>
+                @if (TemplateRendering.IsHtml(Body))
+                {
+                    <iframe class="mail-frame" sandbox="" referrerpolicy="no-referrer" title="Contenido del correo" srcdoc="@TemplateRendering.RenderHtml(Body, Values)"></iframe>
+                }
+                else
+                {
+                    <div class="mail-body"><PreviewText Text="@Body" Values="Values" /></div>
+                }
+            </div>
+        </article>
+        break;
+
+    case NotificationChannel.Sms:
+        <div class="phone">
+            <div class="phone-head">
+                <span class="avatar" aria-hidden="true">LL</span>
+                <span class="smaller strong">Para @Recipient.Phone</span>
+            </div>
+            <div class="phone-body">
+                <span class="smaller muted" style="align-self: center">Mensaje de texto</span>
+                <div class="bubble"><PreviewText Text="@Body" Values="Values" /></div>
+            </div>
+        </div>
+        break;
+
+    case NotificationChannel.Push:
+        <div class="phone phone-dark">
+            <div class="push-card">
+                <div class="row smaller muted" style="--gap: 8px">
+                    <span class="push-icon" aria-hidden="true"></span>
+                    <span class="grow strong" style="letter-spacing: 0.04em">LLAVE</span>
+                    <span>ahora</span>
+                </div>
+                <div class="strong wrap-any"><PreviewText Text="@Subject" Values="Values" /></div>
+                <div class="push-body"><PreviewText Text="@Body" Values="Values" /></div>
+            </div>
+        </div>
+        break;
+
+    default:
+        <div class="phone phone-chat">
+            <div class="phone-head phone-head-dark">
+                <span class="avatar avatar-lime" aria-hidden="true">LL</span>
+                <span class="strong">Llave</span>
+            </div>
+            <div class="phone-body">
+                <div class="bubble bubble-light"><PreviewText Text="@Body" Values="Values" /></div>
+            </div>
+        </div>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public NotificationChannel Channel { get; set; }
+    [Parameter] public string Subject { get; set; } = "";
+    [Parameter, EditorRequired] public string Body { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, string> Values { get; set; } = default!;
+    [Parameter, EditorRequired] public SampleRecipient Recipient { get; set; } = default!;
+    [Parameter] public bool Mobile { get; set; }
+}

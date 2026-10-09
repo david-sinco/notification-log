@@ -27,7 +27,7 @@ internal sealed class NotificationTemplateRepository : INotificationTemplateRepo
         int page, int pageSize, CancellationToken ct)
     {
         var query = _db.Templates
-            .Include(t => t.Versions)
+            .Include(t => t.Versions.Where(v => v.IsCurrent))
             .AsNoTracking();
 
         if (!string.IsNullOrWhiteSpace(search))
@@ -46,6 +46,7 @@ internal sealed class NotificationTemplateRepository : INotificationTemplateRepo
 
         var items = await query
             .OrderBy(t => EF.Property<string>(t, "Name"))
+            .ThenBy(t => t.Id)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(ct);

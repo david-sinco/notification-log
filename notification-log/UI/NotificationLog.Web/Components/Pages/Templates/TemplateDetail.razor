@@ -1,0 +1,400 @@
+@page "/templates/new"
+@page "/templates/{Id:guid}"
+@attribute [Authorize(Roles = IdentityRoles.Administrador)]
+@inject TemplatesApiClient Api
+@inject NavigationManager Nav
+
+<PageTitle>@(IsNew ? "Nueva plantilla" : current?.Name ?? "Plantilla") · Llave</PageTitle>
+
+<div class="page page-wide" style="gap: 18px">
+    <header class="row row-between row-bottom" style="--gap: 16px">
+        <div class="page-head">
+            <a class="link btn-start" href="templates" style="gap: 6px">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+                Plantillas
+            </a>
+            @if (IsNew)
+            {
+                <h1 class="title title-detail">Nueva plantilla</h1>
+            }
+            else if (current is not null)
+            {
+                <h1 class="title title-detail">@current.Name</h1>
+                <span class="row" style="--gap: 10px">
+                    <ChannelBadge Channel="@current.Channel" />
+                    <span class="small muted">Versión actual v@(current.CurrentVersion.Number) · @Published(current.CurrentVersion)</span>
+                </span>
+            }
+        </div>
+
+        @if (IsNew || current is not null)
+        {
+            <div class="row row-end" style="--gap: 12px">
+                @if (current is not null)
+                {
+                    <Switch Checked="current.IsEnabled" OnLabel="Habilitada" OffLabel="Deshabilitada" Disabled="busy" OnToggle="ToggleStatusAsync" />
+                }
+                @if (editing)
+                {
+                    <button type="button" class="btn btn-lg" disabled="@busy" @onclick="Discard">@(IsNew ? "Cancelar" : "Descartar borrador")</button>
+                    <button type="button" class="btn btn-lg btn-primary" disabled="@(busy || !CanPublish)" @onclick="PublishAsync">
+                        @(IsNew ? "Crear plantilla" : $"Publicar v{current!.CurrentVersion.Number + 1}")
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="btn btn-lg btn-primary" style="gap: 8px" @onclick="() => StartEdit(Selected)">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4" /></svg>
+                        Editar · nueva versión
+                    </button>
+                }
+            </div>
+        }
+    </header>
+
+    <ErrorAlert Exception="loadError" />
+    <ErrorAlert Exception="actionError" />
+
+    @if (IsNew || current is not null)
+    {
+        <div class="row row-top" style="--gap: 18px; align-items: stretch">
+            @if (!editing)
+            {
+                <section class="card tpl-versions" aria-label="Versiones" style="--gap: 4px">
+                    <h2 class="h2 h2-xs" style="margin: 0 6px 10px">Versiones</h2>
+                    @foreach (var version in current!.History.OrderByDescending(version => version.Number))
+                    {
+                        <button type="button" class="tpl-version" aria-pressed="@(version.Id == Selected.Id ? "true" : "false")" @onclick="() => selectedId = version.Id">
+                            <span class="tpl-version-dot @(version.IsCurrent ? "current" : "")" aria-hidden="true"></span>
+                            <span class="stack grow" style="--gap: 3px">
+                                <span class="row" style="--gap: 8px">
+                                    <span class="mono">v@(version.Number)</span>
+                                    @if (version.IsCurrent)
+                                    {
+                                        <StatusPill Text="Actual" Variant="success" />
+                                    }
+                                </span>
+                                <span class="smaller muted">@Published(version)</span>
+                                <span class="smaller truncate">@Excerpt(version)</span>
+                            </span>
+                        </button>
+                    }
+                </section>
+            }
+            else
+            {
+                <section class="card grow" aria-label="Editor" style="--basis: 380px; --gap: 16px; padding: 20px">
+                    @if (IsNew)
+                    {
+                        <div class="field">
+                            <label class="label" for="tpl-name">Nombre</label>
+                            <input id="tpl-name" class="input" placeholder="Visita cancelada" @bind="newName" @bind:event="oninput" />
+                        </div>
+                        <div class="field" role="group" aria-label="Canal">
+                            <span class="label">Canal · no se puede cambiar después</span>
+                            <div class="choices" style="gap: 6px">
+                                @foreach (var option in Enum.GetValues<NotificationChannel>())
+                                {
+                                    <button type="button" class="choice" aria-pressed="@(newChannel == option ? "true" : "false")" @onclick="() => newChannel = option">@ChannelLabels.Name(option.ToString())</button>
+                                }
+                            </div>
+                        </div>
+                    }
+                    else if (draftBase is not null)
+                    {
+                        <div class="note row smaller" style="--gap: 8px">
+                            <span class="tpl-draft-dot" aria-hidden="true"></span>
+                            @(Changed ? $"Borrador basado en la v{draftBase.Number} · sin publicar" : $"Borrador igual a la v{draftBase.Number} · edita para publicar")
+                        </div>
+                    }
+
+                    @if (NeedsSubject)
+                    {
+                        <div class="field">
+                            <div class="row row-between">
+                                <label class="label" for="tpl-subject">@(Channel == NotificationChannel.Push ? "Título" : "Asunto")</label>
+                                <span class="counter">@subject.Length / @TemplateLimits.SubjectMaxLength</span>
+                            </div>
+                            <input id="tpl-subject" class="input" maxlength="@TemplateLimits.SubjectMaxLength" @bind="subject" @bind:event="oninput" />
+                        </div>
+                    }
+
+                    <div class="field grow">
+                        <div class="row row-between">
+                            <label class="label" for="tpl-body">@(Channel == NotificationChannel.Push ? "Mensaje" : "Cuerpo")</label>
+                            <span class="counter">@body.Length.ToString("N0") / @TemplateLimits.BodyMaxLength.ToString("N0")</span>
+                        </div>
+                        <textarea id="tpl-body" class="textarea textarea-mono tpl-body" rows="16" maxlength="@TemplateLimits.BodyMaxLength" @bind="body" @bind:event="oninput"></textarea>
+                    </div>
+
+                    <div class="stack" role="group" aria-label="Insertar dato" style="--gap: 8px">
+                        <span class="label">Insertar dato</span>
+                        <div class="chips" style="gap: 6px">
+                            @foreach (var key in SampleRecipient.All[0].Values.Keys)
+                            {
+                                <button type="button" class="chip chip-mono tpl-key" @onclick="() => Insert(key)">@key</button>
+                            }
+                            @foreach (var key in TemplateRendering.EventKeys(body))
+                            {
+                                <button type="button" class="chip chip-mono tpl-key tpl-key-event" @onclick="() => Insert(key)">@key</button>
+                            }
+                        </div>
+                        <span class="smaller muted">
+                            Blancos: del destinatario, siempre presentes, incluidos sus atributos propios (<span class="mono">recipient.atributo</span>).
+                            Grises: del evento, dependen del trigger y se escriben a mano.
+                        </span>
+                    </div>
+                </section>
+            }
+
+            <section class="tpl-stage" aria-label="Vista previa">
+                <div class="tpl-stage-bar">
+                    <span class="pill pill-lg @StageVariant">@StageTag</span>
+                    <label class="smaller muted" for="tpl-recipient" style="margin-left: auto">Destinatario de ejemplo</label>
+                    <select id="tpl-recipient" class="select tpl-select" @bind="recipientKey">
+                        @foreach (var sample in SampleRecipient.All)
+                        {
+                            <option value="@sample.Key">@sample.Label</option>
+                        }
+                    </select>
+                    @if (Channel == NotificationChannel.Email)
+                    {
+                        <div class="segmented" role="group" aria-label="Tamaño">
+                            <button type="button" aria-pressed="@(mobile ? "false" : "true")" aria-label="Escritorio" @onclick="() => mobile = false">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 5h18v11H3zM8 20h8M12 16v4" /></svg>
+                            </button>
+                            <button type="button" aria-pressed="@(mobile ? "true" : "false")" aria-label="Móvil" @onclick="() => mobile = true">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18H7zM11 18h2" /></svg>
+                            </button>
+                        </div>
+                    }
+                </div>
+
+                <div class="tpl-stage-body">
+                    @if (Channel == NotificationChannel.Email && Recipient.Email.Length == 0)
+                    {
+                        <div class="note note-danger tpl-stage-note" role="status">
+                            <span>@Recipient.Name no tiene un correo confirmado: con este destinatario el envío no sale y queda registrado como fallido.</span>
+                        </div>
+                    }
+
+                    <MessagePreview Channel="Channel" Subject="@ShownSubject" Body="@ShownBody" Values="Values" Recipient="Recipient" Mobile="mobile" />
+
+                    @if (!editing && !Selected.IsCurrent)
+                    {
+                        <div class="row tpl-stage-actions" style="--gap: 10px">
+                            <span class="small muted">Esta versión ya no se usa.</span>
+                            <button type="button" class="btn btn-sm btn-primary" @onclick="() => StartEdit(Selected)">Partir de la v@(Selected.Number)</button>
+                            <button type="button" class="btn btn-sm" @onclick="() => selectedId = null">Ver la actual</button>
+                        </div>
+                    }
+                </div>
+
+                <div class="tpl-stage-data">
+                    <div class="row smaller muted" style="--gap: 8px 16px">
+                        <span class="strong" style="color: var(--ink)">Datos del evento</span>
+                        @if (Channel == NotificationChannel.Sms)
+                        {
+                            var sms = TemplateRendering.Sms(TemplateRendering.Render(ShownBody, Values));
+                            <span>@sms.Length caracteres · @sms.Segments segmento(s) · @(sms.Gsm ? "GSM-7" : "Unicode")</span>
+                        }
+                        else if (Channel == NotificationChannel.Push)
+                        {
+                            <span>La pantalla de bloqueo corta el mensaje en 4 líneas</span>
+                        }
+                        else if (Channel == NotificationChannel.WhatsApp)
+                        {
+                            <span>Sin proveedor: los envíos por WhatsApp quedan como fallidos</span>
+                        }
+                        @if (Missing.Count > 0)
+                        {
+                            <span class="pill pill-warning">Sin valor: @string.Join(", ", Missing) → el envío fallaría</span>
+                        }
+                    </div>
+                    @if (EventKeys.Count == 0)
+                    {
+                        <span class="smaller muted">Esta versión no usa datos del evento.</span>
+                    }
+                    else
+                    {
+                        <div class="grid-fill" style="--min: 190px; --gap: 10px">
+                            @foreach (var key in EventKeys)
+                            {
+                                <div class="field" style="gap: 4px">
+                                    <label class="mono smaller" for="tpl-ev-@key">@key</label>
+                                    <input id="tpl-ev-@key" class="input tpl-input-sm" placeholder="Sin valor: el envío fallaría"
+                                           value="@eventValues.GetValueOrDefault(key)" @oninput="e => eventValues[key] = e.Value?.ToString() ?? string.Empty" />
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </section>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private TemplateDto? current;
+    private Guid? selectedId;
+    private bool editing;
+    private TemplateVersionDto? draftBase;
+    private string subject = "";
+    private string body = "";
+    private string newName = "";
+    private NotificationChannel newChannel = NotificationChannel.Email;
+    private string recipientKey = SampleRecipient.All[0].Key;
+    private readonly Dictionary<string, string> eventValues = [];
+    private bool mobile;
+    private bool busy;
+    private ApiException? loadError;
+    private ApiException? actionError;
+
+    private bool IsNew => Id is null;
+
+    private NotificationChannel Channel => IsNew ? newChannel : Enum.Parse<NotificationChannel>(current!.Channel);
+
+    private bool NeedsSubject => TemplateLimits.RequiresSubject(Channel);
+
+    private TemplateVersionDto Selected =>
+        current!.History.FirstOrDefault(version => version.Id == selectedId) ?? current.CurrentVersion;
+
+    private string ShownSubject => editing ? subject : Selected.Subject ?? "";
+
+    private string ShownBody => editing ? body : Selected.Body;
+
+    private SampleRecipient Recipient => SampleRecipient.All.First(sample => sample.Key == recipientKey);
+
+    private IReadOnlyDictionary<string, string> Values =>
+        Recipient.Values.Concat(eventValues).ToDictionary(pair => pair.Key, pair => pair.Value);
+
+    private string ShownText => (NeedsSubject ? ShownSubject + "\n" : "") + ShownBody;
+
+    private IReadOnlyList<string> EventKeys => TemplateRendering.EventKeys(ShownText);
+
+    private IReadOnlyList<string> Missing => TemplateRendering.MissingKeys(ShownText, Values);
+
+    private bool Changed =>
+        IsNew || body != current!.CurrentVersion.Body || (NeedsSubject && subject != (current.CurrentVersion.Subject ?? ""));
+
+    private bool CanPublish =>
+        editing
+        && Changed
+        && !string.IsNullOrWhiteSpace(body)
+        && (!NeedsSubject || !string.IsNullOrWhiteSpace(subject))
+        && (!IsNew || !string.IsNullOrWhiteSpace(newName));
+
+    private string StageTag =>
+        editing ? "Borrador · se actualiza mientras escribes"
+        : Selected.IsCurrent ? $"v{Selected.Number} · la que se envía hoy"
+        : $"v{Selected.Number} · retirada";
+
+    private string StageVariant => editing ? "pill-lime" : Selected.IsCurrent ? "pill-success" : "";
+
+    protected override Task OnParametersSetAsync()
+    {
+        selectedId = null;
+        draftBase = null;
+        actionError = null;
+        editing = IsNew;
+        subject = body = newName = "";
+        return LoadAsync();
+    }
+
+    private static string Published(TemplateVersionDto version) =>
+        RentalsFormat.Moment(new DateTimeOffset(DateTime.SpecifyKind(version.CreatedAt, DateTimeKind.Utc)));
+
+    private string Excerpt(TemplateVersionDto version) =>
+        TemplateRendering.Render(NeedsSubject ? version.Subject ?? "" : version.Body, SampleRecipient.All[0].Values);
+
+    private async Task LoadAsync()
+    {
+        if (IsNew)
+        {
+            current = null;
+            loadError = null;
+            return;
+        }
+
+        try
+        {
+            current = await Api.GetByIdAsync(Id!.Value, CancellationToken.None);
+            loadError = null;
+        }
+        catch (ApiException ex)
+        {
+            loadError = ex;
+        }
+    }
+
+    private void StartEdit(TemplateVersionDto version)
+    {
+        draftBase = version;
+        subject = version.Subject ?? "";
+        body = version.Body;
+        editing = true;
+    }
+
+    private void Discard()
+    {
+        if (IsNew)
+        {
+            Nav.NavigateTo("/templates");
+            return;
+        }
+
+        editing = false;
+        draftBase = null;
+        actionError = null;
+    }
+
+    private void Insert(string key) =>
+        body += (body.Length > 0 && !char.IsWhiteSpace(body[^1]) ? " " : "") + "{{ " + key + " }}";
+
+    private Task ToggleStatusAsync() =>
+        RunAsync(async () =>
+        {
+            await Api.SetStatusAsync(current!.Id, !current.IsEnabled, CancellationToken.None);
+            await LoadAsync();
+        });
+
+    private Task PublishAsync() =>
+        RunAsync(async () =>
+        {
+            var versionSubject = NeedsSubject ? subject : null;
+
+            if (IsNew)
+            {
+                var id = await Api.CreateAsync(new CreateTemplateRequest(newName.Trim(), newChannel, versionSubject, body), CancellationToken.None);
+                Nav.NavigateTo($"/templates/{id}");
+            }
+            else
+            {
+                await Api.PublishVersionAsync(current!.Id, versionSubject, body, CancellationToken.None);
+                await LoadAsync();
+                editing = false;
+                draftBase = null;
+                selectedId = null;
+            }
+        });
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        busy = true;
+        try
+        {
+            await action();
+            actionError = null;
+        }
+        catch (ApiException ex)
+        {
+            actionError = ex;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

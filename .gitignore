@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Carpeta temporal de trabajo de Claude Code
+notification-log/.scratch/

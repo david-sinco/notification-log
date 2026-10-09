@@ -1,0 +1,12 @@
+@foreach (var segment in TemplateRendering.Segments(Text, Values))
+{
+    <span class="@CssClass(segment)">@segment.Text</span>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyDictionary<string, string> Values { get; set; } = default!;
+
+    private static string? CssClass(PreviewSegment segment) =>
+        segment.Key is null ? null : segment.IsMissing ? "seg-missing" : "seg-filled";
+}

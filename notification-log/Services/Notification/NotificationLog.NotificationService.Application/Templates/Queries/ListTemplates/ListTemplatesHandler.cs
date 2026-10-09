@@ -21,7 +21,8 @@ public sealed class ListTemplatesHandler
 
         var dtos = items
             .Select(t => new TemplateSummaryDto(
-                t.Id, t.Name.Value, t.Channel.ToString(), t.CurrentVersion.Number, t.IsEnabled))
+                t.Id, t.Name.Value, t.Channel.ToString(), t.CurrentVersion.Number, t.IsEnabled,
+                t.CurrentVersion.Subject, t.CurrentVersion.Body, t.CurrentVersion.CreatedAt))
             .ToList();
 
         return new PagedResult<TemplateSummaryDto>(dtos, paging, total);
