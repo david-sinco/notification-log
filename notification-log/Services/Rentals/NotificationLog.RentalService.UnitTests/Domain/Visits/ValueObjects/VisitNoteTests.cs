@@ -3,6 +3,7 @@ using NotificationLog.RentalService.Domain.Visits.ValueObjects;
 namespace NotificationLog.RentalService.UnitTests.Domain.Visits.ValueObjects;
 
 [TestClass]
+[TestCategory("Domain-Visits")]
 public class VisitNoteTests : DomainScenario
 {
     private const string HasContactData = "El mensaje de la visita no puede contener teléfonos, correos ni enlaces.";

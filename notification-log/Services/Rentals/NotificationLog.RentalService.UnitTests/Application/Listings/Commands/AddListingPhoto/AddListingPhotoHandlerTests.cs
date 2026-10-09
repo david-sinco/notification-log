@@ -6,6 +6,7 @@ using NSubstitute.ExceptionExtensions;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.AddListingPhoto;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class AddListingPhotoHandlerTests : ApplicationScenario
 {
     private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0];

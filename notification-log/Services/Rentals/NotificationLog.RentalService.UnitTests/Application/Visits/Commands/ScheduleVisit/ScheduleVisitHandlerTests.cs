@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Commands.ScheduleVisit;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class ScheduleVisitHandlerTests : ApplicationScenario
 {
     private Visit _visit = null!;

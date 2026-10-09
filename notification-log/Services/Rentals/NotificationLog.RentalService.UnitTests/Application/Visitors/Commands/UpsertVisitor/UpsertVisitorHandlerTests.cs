@@ -6,6 +6,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visitors.Commands.UpsertVisitor;
 
 [TestClass]
+[TestCategory("Application-Visitors")]
 public class UpsertVisitorHandlerTests : ApplicationScenario
 {
     private readonly Guid _userId = Guid.NewGuid();

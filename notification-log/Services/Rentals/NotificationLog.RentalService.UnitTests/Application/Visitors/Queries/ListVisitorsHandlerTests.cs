@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visitors.Queries;
 
 [TestClass]
+[TestCategory("Application-Visitors")]
 public class ListVisitorsHandlerTests : ApplicationScenario
 {
     private readonly PageRequest _paging = new(1, 20);

@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.ExpireListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class ExpireListingHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

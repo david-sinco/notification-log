@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Domain.Listings.Events;
 namespace NotificationLog.RentalService.UnitTests.Domain.Listings;
 
 [TestClass]
+[TestCategory("Domain-Listings")]
 public class ListingModerationTests : DomainScenario
 {
     private Listing _listing = null!;

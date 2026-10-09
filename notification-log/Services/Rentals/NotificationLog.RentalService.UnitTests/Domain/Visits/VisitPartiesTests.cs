@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Visits.Enums;
 namespace NotificationLog.RentalService.UnitTests.Domain.Visits;
 
 [TestClass]
+[TestCategory("Domain-Visits")]
 public class VisitPartiesTests : DomainScenario
 {
     private Visit _visit = null!;

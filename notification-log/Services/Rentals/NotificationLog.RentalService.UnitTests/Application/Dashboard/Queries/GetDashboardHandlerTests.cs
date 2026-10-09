@@ -5,6 +5,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Dashboard.Queries;
 
 [TestClass]
+[TestCategory("Application-Dashboard")]
 public class GetDashboardHandlerTests : ApplicationScenario
 {
     private Guid _userId;

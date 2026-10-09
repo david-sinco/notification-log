@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.ReinstateListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class ReinstateListingHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

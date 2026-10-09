@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.RenewListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class RenewListingHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

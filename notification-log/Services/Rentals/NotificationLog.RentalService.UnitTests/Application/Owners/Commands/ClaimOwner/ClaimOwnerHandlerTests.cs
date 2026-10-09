@@ -6,6 +6,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Owners.Commands.ClaimOwner;
 
 [TestClass]
+[TestCategory("Application-Owners")]
 public class ClaimOwnerHandlerTests : ApplicationScenario
 {
     private readonly Guid _userId = Guid.NewGuid();

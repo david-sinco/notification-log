@@ -6,6 +6,7 @@ using NotificationLog.RentalService.Domain.Owners.ValueObjects;
 namespace NotificationLog.RentalService.UnitTests.Domain.Owners;
 
 [TestClass]
+[TestCategory("Domain-Owners")]
 public class OwnerRegistrationTests : DomainScenario
 {
     private static readonly Guid User = Guid.NewGuid();

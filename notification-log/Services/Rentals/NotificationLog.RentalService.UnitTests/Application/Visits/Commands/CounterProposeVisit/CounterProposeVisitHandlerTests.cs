@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Commands.CounterProposeVisit;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class CounterProposeVisitHandlerTests : ApplicationScenario
 {
     private Visit _visit = null!;

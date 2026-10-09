@@ -6,6 +6,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Owners.Commands.RegisterOwner;
 
 [TestClass]
+[TestCategory("Application-Owners")]
 public class RegisterOwnerHandlerTests : ApplicationScenario
 {
     private readonly Guid _userId = Guid.NewGuid();

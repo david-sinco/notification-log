@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Domain.Listings;
 
 [TestClass]
+[TestCategory("Domain-Listings")]
 public class ListingEditingTests : DomainScenario
 {
     private const string NewDetails = "cambiar los datos";

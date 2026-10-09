@@ -5,6 +5,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visitors.Queries;
 
 [TestClass]
+[TestCategory("Application-Visitors")]
 public class GetVisitorByIdHandlerTests : ApplicationScenario
 {
     private readonly Guid _visitorId = Guid.NewGuid();

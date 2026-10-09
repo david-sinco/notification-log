@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Owners.Events;
 namespace NotificationLog.RentalService.UnitTests.Domain.Owners;
 
 [TestClass]
+[TestCategory("Domain-Owners")]
 public class OwnerClaimTests : DomainScenario
 {
     private static readonly Guid User = Guid.NewGuid();

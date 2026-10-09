@@ -3,6 +3,7 @@ using NotificationLog.RentalService.Domain.Common.ValueObjects;
 namespace NotificationLog.RentalService.UnitTests.Domain.Common.ValueObjects;
 
 [TestClass]
+[TestCategory("Domain-Common")]
 public class ContactInfoTests : DomainScenario
 {
     private ContactInfo _contact = null!;

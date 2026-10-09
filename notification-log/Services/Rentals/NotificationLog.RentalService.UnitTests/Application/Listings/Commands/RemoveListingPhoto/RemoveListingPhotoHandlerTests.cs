@@ -5,6 +5,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.RemoveListingPhoto;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class RemoveListingPhotoHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

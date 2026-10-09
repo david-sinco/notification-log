@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Listings;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.ReorderListingPhotos;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class ReorderListingPhotosHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

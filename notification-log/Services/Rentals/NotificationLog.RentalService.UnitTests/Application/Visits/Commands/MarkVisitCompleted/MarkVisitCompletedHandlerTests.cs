@@ -6,6 +6,7 @@ using NotificationLog.RentalService.Domain.Visits.Enums;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Commands.MarkVisitCompleted;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class MarkVisitCompletedHandlerTests : ApplicationScenario
 {
     private Visit _visit = null!;

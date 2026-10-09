@@ -8,6 +8,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Queries;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class ListVisitsHandlerTests : ApplicationScenario
 {
     private readonly Guid _userId = Guid.NewGuid();

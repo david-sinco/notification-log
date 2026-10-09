@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Commands.RequestVisit;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class RequestVisitHandlerTests : ApplicationScenario
 {
     private const string NoProfile = "sin registro de visitante";

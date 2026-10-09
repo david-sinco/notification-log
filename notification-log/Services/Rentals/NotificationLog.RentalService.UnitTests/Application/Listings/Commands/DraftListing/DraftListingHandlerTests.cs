@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.DraftListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class DraftListingHandlerTests : ApplicationScenario
 {
     private Guid _listingId;

@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.CloseListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class CloseListingHandlerTests : ApplicationScenario
 {
     private static readonly DateOnly Today = new(2026, 10, 5);

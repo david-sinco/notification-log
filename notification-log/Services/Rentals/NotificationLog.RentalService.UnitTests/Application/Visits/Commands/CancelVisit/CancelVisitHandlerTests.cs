@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Commands.CancelVisit;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class CancelVisitHandlerTests : ApplicationScenario
 {
     private Visit _visit = null!;

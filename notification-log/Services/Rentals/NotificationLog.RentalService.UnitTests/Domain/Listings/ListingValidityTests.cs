@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Domain.Listings;
 
 [TestClass]
+[TestCategory("Domain-Listings")]
 public class ListingValidityTests : DomainScenario
 {
     private const string OutOfRenewalWindow =

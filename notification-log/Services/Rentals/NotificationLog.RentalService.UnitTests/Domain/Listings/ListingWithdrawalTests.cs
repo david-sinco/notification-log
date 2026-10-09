@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Domain.Listings;
 
 [TestClass]
+[TestCategory("Domain-Listings")]
 public class ListingWithdrawalTests : DomainScenario
 {
     private Listing _listing = null!;

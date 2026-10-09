@@ -7,6 +7,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Owners.Queries;
 
 [TestClass]
+[TestCategory("Application-Owners")]
 public class ListOwnersHandlerTests : ApplicationScenario
 {
     private readonly OwnerFilter _filter = new(Search: "Ana");

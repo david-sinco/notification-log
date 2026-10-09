@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Domain.Listings.Enums;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.PauseListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class PauseListingHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

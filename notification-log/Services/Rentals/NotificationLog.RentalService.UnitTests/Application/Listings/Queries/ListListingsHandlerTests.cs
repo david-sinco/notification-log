@@ -8,6 +8,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Queries;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class ListListingsHandlerTests : ApplicationScenario
 {
     private readonly ListingFilter _filter = new("Chapinero", ListingStatus.Published, Operation.Rent);

@@ -4,6 +4,7 @@ using NotificationLog.RentalService.Domain.Visitors.Events;
 namespace NotificationLog.RentalService.UnitTests.Domain.Visitors;
 
 [TestClass]
+[TestCategory("Domain-Visitors")]
 public class VisitorTests : DomainScenario
 {
     private Visitor _visitor = null!;

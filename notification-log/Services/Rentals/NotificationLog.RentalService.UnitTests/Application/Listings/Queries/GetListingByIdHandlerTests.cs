@@ -5,6 +5,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Queries;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class GetListingByIdHandlerTests : ApplicationScenario
 {
     private readonly Guid _id = Guid.NewGuid();

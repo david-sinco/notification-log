@@ -6,6 +6,7 @@ using NotificationLog.RentalService.Domain.Listings.Events;
 namespace NotificationLog.RentalService.UnitTests.Application.Listings.Commands.RejectListing;
 
 [TestClass]
+[TestCategory("Application-Listings")]
 public class RejectListingHandlerTests : ApplicationScenario
 {
     private Listing _listing = null!;

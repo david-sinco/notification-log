@@ -5,6 +5,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visits.Queries;
 
 [TestClass]
+[TestCategory("Application-Visits")]
 public class GetVisitByIdHandlerTests : ApplicationScenario
 {
     private const string Host = "el anfitrión";

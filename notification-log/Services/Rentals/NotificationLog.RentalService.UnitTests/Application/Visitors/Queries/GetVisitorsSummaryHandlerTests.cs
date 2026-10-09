@@ -5,6 +5,7 @@ using NSubstitute;
 namespace NotificationLog.RentalService.UnitTests.Application.Visitors.Queries;
 
 [TestClass]
+[TestCategory("Application-Visitors")]
 public class GetVisitorsSummaryHandlerTests : ApplicationScenario
 {
     private VisitorsSummaryDto _summary = null!;

@@ -3,6 +3,7 @@ using NotificationLog.RentalService.Domain.Listings.ValueObjects;
 namespace NotificationLog.RentalService.UnitTests.Domain.Listings.ValueObjects;
 
 [TestClass]
+[TestCategory("Domain-Listings")]
 public class ListingDescriptionTests : DomainScenario
 {
     private int Length { get; set; }
