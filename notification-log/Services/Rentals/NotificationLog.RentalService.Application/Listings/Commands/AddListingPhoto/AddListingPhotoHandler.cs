@@ -5,6 +5,7 @@ using NotificationLog.RentalService.Application.Common.Storage;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
+using NotificationLog.RentalService.Application.Common.Producers;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.AddListingPhoto;
 
@@ -12,11 +13,13 @@ public sealed class AddListingPhotoHandler(
     IListingRepository listings,
     IOwnerRepository owners,
     IUnitOfWork uow,
+    INotificationProducer notifications,
     IPhotoStorage storage)
 {
     private readonly IListingRepository _listings = listings;
     private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
+    private readonly INotificationProducer _notifications = notifications;
     private readonly IPhotoStorage _storage = storage;
 
     public async Task<string> HandleAsync(AddListingPhotoCommand cmd, ClaimsPrincipal user, CancellationToken ct)
@@ -40,6 +43,15 @@ public sealed class AddListingPhotoHandler(
             await _storage.DeleteAsync(listing.Id, photo.FileName, CancellationToken.None);
             throw;
         }
+
+        await _notifications.NotifyAsync(
+            ListingNotificationKeys.PhotosUpdated,
+            owner.HostUserId,
+            new Dictionary<string, string>(ListingNotificationData.For(listing))
+            {
+                ["photo_count"] = listing.Photos.Count.ToString()
+            },
+            ct);
 
         return photo.FileName;
     }

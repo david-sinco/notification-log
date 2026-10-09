@@ -6,6 +6,7 @@ using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
+using NotificationLog.RentalService.Application.Common.Producers;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.CloseListing;
 
@@ -13,12 +14,14 @@ public sealed class CloseListingHandler(
     IListingRepository listings,
     IOwnerRepository owners,
     IUnitOfWork uow,
+    INotificationProducer notifications,
     IValidator<CloseListingCommand> validator,
     TimeProvider time)
 {
     private readonly IListingRepository _listings = listings;
     private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
+    private readonly INotificationProducer _notifications = notifications;
     private readonly IValidator<CloseListingCommand> _validator = validator;
     private readonly TimeProvider _time = time;
 
@@ -34,5 +37,15 @@ public sealed class CloseListingHandler(
 
         await _listings.AppendAsync(listing, ct);
         await _uow.SaveChangesAsync(ct);
+
+        await _notifications.NotifyAsync(
+            ListingNotificationKeys.Closed,
+            owner.HostUserId,
+            new Dictionary<string, string>(ListingNotificationData.For(listing))
+            {
+                ["final_price"] = Money.Create(cmd.FinalPrice).ToString(),
+                ["signed_on"] = cmd.SignedOn.ToString("yyyy-MM-dd")
+            },
+            ct);
     }
 }

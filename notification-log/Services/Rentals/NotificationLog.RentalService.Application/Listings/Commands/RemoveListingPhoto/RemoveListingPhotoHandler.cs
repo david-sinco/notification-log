@@ -6,6 +6,7 @@ using NotificationLog.RentalService.Application.Common;
 using NotificationLog.RentalService.Application.Common.Storage;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
+using NotificationLog.RentalService.Application.Common.Producers;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.RemoveListingPhoto;
 
@@ -13,12 +14,14 @@ public sealed class RemoveListingPhotoHandler(
     IListingRepository listings,
     IOwnerRepository owners,
     IUnitOfWork uow,
+    INotificationProducer notifications,
     IPhotoStorage storage,
     IValidator<RemoveListingPhotoCommand> validator)
 {
     private readonly IListingRepository _listings = listings;
     private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
+    private readonly INotificationProducer _notifications = notifications;
     private readonly IPhotoStorage _storage = storage;
     private readonly IValidator<RemoveListingPhotoCommand> _validator = validator;
 
@@ -36,5 +39,14 @@ public sealed class RemoveListingPhotoHandler(
         await _uow.SaveChangesAsync(ct);
 
         await _storage.DeleteAsync(listing.Id, cmd.FileName, ct);
+
+        await _notifications.NotifyAsync(
+            ListingNotificationKeys.PhotosUpdated,
+            owner.HostUserId,
+            new Dictionary<string, string>(ListingNotificationData.For(listing))
+            {
+                ["photo_count"] = listing.Photos.Count.ToString()
+            },
+            ct);
     }
 }

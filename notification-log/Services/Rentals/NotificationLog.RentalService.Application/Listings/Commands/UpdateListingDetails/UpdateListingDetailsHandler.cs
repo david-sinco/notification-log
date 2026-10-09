@@ -7,6 +7,7 @@ using NotificationLog.RentalService.Domain.Common.ValueObjects;
 using NotificationLog.RentalService.Domain.Listings;
 using NotificationLog.RentalService.Domain.Owners;
 using NotificationLog.RentalService.Domain.Listings.ValueObjects;
+using NotificationLog.RentalService.Application.Common.Producers;
 
 namespace NotificationLog.RentalService.Application.Listings.Commands.UpdateListingDetails;
 
@@ -14,11 +15,13 @@ public sealed class UpdateListingDetailsHandler(
     IListingRepository listings,
     IOwnerRepository owners,
     IUnitOfWork uow,
+    INotificationProducer notifications,
     IValidator<UpdateListingDetailsCommand> validator)
 {
     private readonly IListingRepository _listings = listings;
     private readonly IOwnerRepository _owners = owners;
     private readonly IUnitOfWork _uow = uow;
+    private readonly INotificationProducer _notifications = notifications;
     private readonly IValidator<UpdateListingDetailsCommand> _validator = validator;
 
     public async Task HandleAsync(UpdateListingDetailsCommand cmd, ClaimsPrincipal user, CancellationToken ct)
@@ -45,7 +48,16 @@ public sealed class UpdateListingDetailsHandler(
             Location.Create(cmd.City, cmd.Neighborhood, cmd.Address),
             ListingDescription.Create(cmd.Description));
 
+        if (listing.DomainEvents.Count == 0)
+            return;
+
         await _listings.AppendAsync(listing, ct);
         await _uow.SaveChangesAsync(ct);
+
+        await _notifications.NotifyAsync(
+            ListingNotificationKeys.DetailsUpdated,
+            owner.HostUserId,
+            ListingNotificationData.For(listing),
+            ct);
     }
 }
