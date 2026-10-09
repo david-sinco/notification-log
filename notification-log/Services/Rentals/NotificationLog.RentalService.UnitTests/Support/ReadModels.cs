@@ -1,3 +1,4 @@
+using NotificationLog.RentalService.Application.Dashboard.Queries.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 using NotificationLog.RentalService.Application.Owners.Queries.Dtos;
 using NotificationLog.RentalService.Application.Visitors.Queries.Dtos;
@@ -17,6 +18,9 @@ public static class ReadModels
         => new(
             Guid.NewGuid(), "Rent", "Published", "Apartment", "Bogotá", "Chapinero", 1_800_000, 2, 68m,
             ListingFactory.Owner, ListingFactory.Owner, Clock.Now, "Ana Gómez Rincón", null, 5);
+
+    public static DashboardDto Dashboard()
+        => new(0, null, 0, null, 0, 0, null, null, [ListingSummary()], 0, []);
 
     public static OwnerDto Owner(Guid id, Guid createdBy, Guid? relatedUserId = null)
         => new(

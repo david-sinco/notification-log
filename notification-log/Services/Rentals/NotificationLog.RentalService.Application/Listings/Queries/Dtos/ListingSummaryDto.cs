@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 
 public sealed record ListingSummaryDto(
@@ -15,4 +17,5 @@ public sealed record ListingSummaryDto(
     DateTimeOffset UpdatedAt,
     string? OwnerName,
     string? CoverUrl,
-    int PhotoCount);
+    int PhotoCount,
+    [property: JsonIgnore] string? CoverFileName = null);

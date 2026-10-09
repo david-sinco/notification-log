@@ -72,6 +72,18 @@
   - **Cómo.** Un proceso que reaccione a esos eventos, busque las visitas activas de la publicación (proyección por `ListingId`) y llame a `visit.Cancel(VisitParty.System, ...)` en cada una, avisando a las dos partes.
   - **Reanudar o rehabilitar** (`ListingResumed`, `ListingReinstated`) no revive las visitas canceladas; el visitante vuelve a pedirlas.
   - **Programación.** Solo el caso de `Expired` depende de *Schedules*, porque `ListingExpired` debe emitirlo una tarea programada. Pausar, cerrar, retirar y suspender los dispara una persona, así que esos se pueden hacer ya.
+- [ ] **Datos de la publicación y filtros del catálogo.** El análisis completo está en `propertyDetail.md`.
+  - **Fase 1.** Normalizar ciudad y barrio, agregar `PublishedAt` a `ListingView` con ordenamiento en el catálogo, y separar `CatalogCriteria` de `ListingFilter` con los filtros de prioridad alta.
+  - **Fase 2.** Título, área privada y construida, antigüedad y `RentalTerms` (disponible desde, mascotas, administración incluida).
+  - **Fase 3.** Características del inmueble y amenidades del conjunto.
+  - **Fase 4.** Coordenadas, búsqueda por mapa y ubicación aproximada en el catálogo público (detallada en el pendiente del mapa, abajo).
+  - **Decidir.** Eventos por sección o ampliar `ListingDetailsUpdated`, qué cambios vuelven a revisión, y qué pasa con las publicaciones ya publicadas a las que les faltan datos obligatorios nuevos.
+- [ ] **Mapa de publicaciones con Leaflet.** El análisis completo está en `listingMap.md`.
+  - **Dominio y lectura.** VO `GeoPoint`, evento `ListingLocated` y comando `LocateListing`. `ListingView` guarda la coordenada exacta y una aproximada (desplazamiento determinista de unos 200–300 m); el catálogo público solo devuelve la aproximada.
+  - **Web.** Componente `LocationPicker` con un módulo JS propio de Leaflet, para que el propietario o el moderador arrastre el pin. El mapa se centra geocodificando la ciudad y el barrio, no la dirección.
+  - **Portal.** `react-leaflet` sin SSR: círculo aproximado en la ficha y vista de mapa en el catálogo, con filtro por zona visible, endpoint `GET /api/catalog/map` y agrupación de marcadores.
+  - **Teselas.** OSM solo en desarrollo; la URL y la atribución van en configuración para cambiar de proveedor sin tocar código.
+  - **Decidir.** Si el pin es obligatorio para enviar a revisión, si moverlo devuelve la publicación a revisión, y si mostrar la ubicación exacta en la visita ya agendada.
 - [ ] Reportes de publicaciones como agregado propio (antes vivían en `Listing`: un reporte por usuario y suspensión automática al tercero).
 - [ ] Publicar un evento hacia facturación cuando un `Listing` se arrienda o se vende (`ListingClosed`).
 - [ ] **Owner reclamable: lo que quedó pendiente.** Rentals ya no crea cuentas: `Owner.Id` siempre es nuevo, el que registra un moderador queda con `RelatedUserId` vacío y lo reclama (`POST /api/owners/{id}/claim`, evento `OwnerClaimed`) quien confirmó su correo o su teléfono.

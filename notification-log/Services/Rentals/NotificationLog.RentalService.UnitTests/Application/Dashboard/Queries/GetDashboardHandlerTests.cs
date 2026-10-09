@@ -26,7 +26,11 @@ public class GetDashboardHandlerTests : ApplicationScenario
             })
             .BDDfy("El panel se construye para el usuario según sea o no personal interno");
 
-    private void AUserWithRole(UserRole role) => UserIs(role, _userId = Guid.NewGuid());
+    private void AUserWithRole(UserRole role)
+    {
+        UserIs(role, _userId = Guid.NewGuid());
+        Dashboard.GetAsync(_userId, Arg.Any<bool>(), Arg.Any<CancellationToken>()).Returns(ReadModels.Dashboard());
+    }
 
     private Task TheDashboardIsQueried() => Handler<GetDashboardHandler>().HandleAsync(User, CancellationToken.None);
 

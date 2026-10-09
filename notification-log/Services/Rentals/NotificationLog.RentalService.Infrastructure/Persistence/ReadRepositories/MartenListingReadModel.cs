@@ -1,7 +1,6 @@
 using Application.Shared.Pagination;
 using Marten;
 using Marten.Linq;
-using NotificationLog.RentalService.Application.Common.Storage;
 using NotificationLog.RentalService.Application.Listings.Queries;
 using NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 using NotificationLog.RentalService.Application.Listings.Queries.Filters;
@@ -12,13 +11,8 @@ namespace NotificationLog.RentalService.Infrastructure.Persistence.ReadRepositor
 internal sealed class MartenListingReadModel : IListingReadModel
 {
     private readonly IQuerySession _session;
-    private readonly IPhotoUrlProvider _photoUrls;
 
-    public MartenListingReadModel(IQuerySession session, IPhotoUrlProvider photoUrls)
-    {
-        _session = session;
-        _photoUrls = photoUrls;
-    }
+    public MartenListingReadModel(IQuerySession session) => _session = session;
 
     public async Task<(IReadOnlyList<ListingSummaryDto> Items, int TotalCount)> ListAsync(ListingFilter filter, PageRequest paging, CancellationToken ct)
     {
@@ -53,7 +47,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
             .Take(paging.PageSize)
             .ToListAsync(ct);
 
-        return (items.Select(x => ToSummary(x, _photoUrls)).ToList(), (int)stats.TotalResults);
+        return (items.Select(ToSummary).ToList(), (int)stats.TotalResults);
     }
 
     public async Task<ListingDto?> GetAsync(Guid id, CancellationToken ct)
@@ -84,7 +78,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
             x.Address,
             x.Description,
             x.Price,
-            x.Photos.Select(fileName => new ListingPhotoDto(fileName, _photoUrls.ReadUrlFor(x.Id, fileName))).ToList(),
+            x.Photos.Select(fileName => new ListingPhotoDto(fileName)).ToList(),
             x.ExpiresAt,
             x.RejectionReasons.Select(r => r.ToString()).ToList(),
             x.StatusReason,
@@ -95,7 +89,7 @@ internal sealed class MartenListingReadModel : IListingReadModel
             x.OwnerName);
     }
 
-    internal static ListingSummaryDto ToSummary(ListingView x, IPhotoUrlProvider photoUrls) =>
+    internal static ListingSummaryDto ToSummary(ListingView x) =>
         new(
             x.Id,
             x.Operation.ToString(),
@@ -110,8 +104,9 @@ internal sealed class MartenListingReadModel : IListingReadModel
             x.CreatedBy,
             x.UpdatedAt,
             x.OwnerName,
-            x.Photos.Count > 0 ? photoUrls.ReadUrlFor(x.Id, x.Photos[0]) : null,
-            x.Photos.Count);
+            null,
+            x.Photos.Count,
+            x.Photos.Count > 0 ? x.Photos[0] : null);
 
     private async Task<Guid[]> OwnerIdsRelatedToAsync(Guid userId, CancellationToken ct)
         => [.. await _session.Query<OwnerView>()

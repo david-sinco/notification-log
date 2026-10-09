@@ -38,6 +38,7 @@ public abstract class ApplicationScenario : DomainScenario
             .AddSingleton(UnitOfWork)
             .AddSingleton(Notifications)
             .AddSingleton(PhotoStorage)
+            .AddSingleton(PhotoUrls)
             .AddSingleton(ListingViews)
             .AddSingleton(OwnerViews)
             .AddSingleton(VisitorViews)
@@ -54,6 +55,7 @@ public abstract class ApplicationScenario : DomainScenario
     protected IUnitOfWork UnitOfWork { get; } = Substitute.For<IUnitOfWork>();
     protected INotificationProducer Notifications { get; } = Substitute.For<INotificationProducer>();
     protected IPhotoStorage PhotoStorage { get; } = Substitute.For<IPhotoStorage>();
+    protected IPhotoUrlProvider PhotoUrls { get; } = Substitute.For<IPhotoUrlProvider>();
     protected IListingReadModel ListingViews { get; } = Substitute.For<IListingReadModel>();
     protected IOwnerReadModel OwnerViews { get; } = Substitute.For<IOwnerReadModel>();
     protected IVisitorReadModel VisitorViews { get; } = Substitute.For<IVisitorReadModel>();

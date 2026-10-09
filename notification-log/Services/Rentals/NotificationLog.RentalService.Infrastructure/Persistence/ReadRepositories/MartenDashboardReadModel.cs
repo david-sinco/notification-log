@@ -1,5 +1,4 @@
 using Marten;
-using NotificationLog.RentalService.Application.Common.Storage;
 using NotificationLog.RentalService.Application.Dashboard.Queries;
 using NotificationLog.RentalService.Application.Dashboard.Queries.Dtos;
 using NotificationLog.RentalService.Domain.Listings.Enums;
@@ -13,13 +12,8 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
     private const int RecentCount = 5;
 
     private readonly IQuerySession _session;
-    private readonly IPhotoUrlProvider _photoUrls;
 
-    public MartenDashboardReadModel(IQuerySession session, IPhotoUrlProvider photoUrls)
-    {
-        _session = session;
-        _photoUrls = photoUrls;
-    }
+    public MartenDashboardReadModel(IQuerySession session) => _session = session;
 
     public async Task<DashboardDto> GetAsync(Guid userId, bool isStaff, CancellationToken ct)
     {
@@ -73,7 +67,7 @@ internal sealed class MartenDashboardReadModel : IDashboardReadModel
             (int)await published,
             owners is null ? null : (int)await owners,
             closed is null ? null : (int)await closed,
-            (await recent).Select(x => MartenListingReadModel.ToSummary(x, _photoUrls)).ToList(),
+            (await recent).Select(MartenListingReadModel.ToSummary).ToList(),
             (int)await visits,
             (await recentVisits).Select(MartenVisitReadModel.ToDto).ToList());
     }

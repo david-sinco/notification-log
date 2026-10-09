@@ -1,3 +1,3 @@
 namespace NotificationLog.RentalService.Application.Listings.Queries.Dtos;
 
-public sealed record ListingPhotoDto(string FileName, string Url);
+public sealed record ListingPhotoDto(string FileName, string? Url = null);
