@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 # Carpeta temporal de trabajo de Claude Code
 notification-log/.scratch/
+
+notification-log/LoadTests/results/*
+!notification-log/LoadTests/results/.gitkeep

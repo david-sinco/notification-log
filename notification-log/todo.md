@@ -13,6 +13,7 @@
 - [ ] **Compartir la hoja de estilos de "Llave".** Los mismos tokens de marca viven duplicados en `IdentityService.Api/wwwroot/css/llave.css` (login y registro), en `Web/wwwroot/app.css` y en `UI/portal/app/globals.css`; unificarlos para que un cambio de marca se haga en un solo sitio.
 - [ ] **Título del inmueble dentro de `VisitView`.** `VisitViewProjection` copia tipo, barrio y ciudad de la publicación cuando se pide la visita; si después llega un `ListingDetailsUpdated`, las visitas ya existentes conservan el título anterior. Propagarlo a las visitas de esa publicación.
 - [ ] **Nombre de quien creó la publicación.** `ListingView.CreatedBy` es un id de usuario de Identity y Rentals no conoce nombres de usuarios; la Web muestra «Tú», el propietario o el id corto.
+- [ ] **Pruebas de carga del Web en Blazor.** Los circuitos de SignalR no se prueban con HTTP simple; usar el módulo de navegador de k6 con 20 a 50 usuarios como un perfil más en `LoadTests/`.
 - [ ] **Renovar el access token dentro del circuito.** `CookieOidcRefresher` solo renueva en una petición HTTP. Con `InteractiveServer` global, un circuito abierto más de 15 min (vida del access token) sin recargar la página sigue enviando el token vencido y las APIs responden 401.
 
 ## Portal (Next.js)
@@ -26,17 +27,22 @@
 
 ## Rentals
 
-- [ ] **Schedules para tareas programadas** (vencer una publicación, avisar que está por vencer, recordatorios de visita). Reemplaza el `ApplyExpiry` calculado en `Listing.Status` y en `MartenListingReadModel`, y también `ICommandScheduler`, `WolverineCommandScheduler`, `ScheduledCommandsHandler` y `ExpireListingCommand`.
-  - **Datos del dominio.** Por ahora solo `StreamId`, `ScheduledTo` (fecha y hora) y `Kind` (string que identifica cómo se procesa, por ejemplo `listing.expire` o `listing.warn-expiry`). El agregado declara sus schedules a partir de su estado; `Listing` los deriva de `IsVisible` y `ExpiresAt`.
-  - **Programar.** Mensaje programado de Wolverine por el outbox (`IMartenOutbox` enrolado en la misma sesión de Marten), para que sea atómico con los eventos. La dependencia queda invertida: la interfaz en Application y la implementación en Infrastructure. `AggregateStreams` compara los schedules del agregado al cargarlo y al hacer append, y programa solo los nuevos.
-  - **Validar al ejecutarse.** Recargar el agregado y seguir solo si el schedule `(Kind, ScheduledTo)` todavía está entre los que declara; si no, descartarlo. Los mensajes programados no se cancelan, así que renovar, cerrar, retirar o suspender dejan mensajes viejos que se descartan al llegar.
-  - **Duplicados.** Suspender y rehabilitar con el mismo `ExpiresAt` vuelve a programar el aviso y el original sigue vivo. Expirar es idempotente en el dominio; para avisar, usar un `event_id` determinista (`StreamId + Kind + ScheduledTo`) y que Notification ignore los repetidos.
-  - **Estructura en Application (por definir).** Nombre de la carpeta y de las clases que reciben el schedule vencido, lo enrutan por `Kind` al handler que corresponde y disparan comandos o notificaciones. Es parecido a un consumer, pero ese nombre no encaja para esta lógica. También hay que decidir si hay un handler por `Kind` o uno por agregado.
+- [ ] **Jobs: trabajos asíncronos programados** (vencer publicaciones, avisar las que están por vencer; después visitas y resúmenes).
+  - **Estado actual.** `ApplyExpiry`, `ICommandScheduler`, `WolverineCommandScheduler` y `ScheduledCommandsHandler` ya se quitaron. `ExpireListingCommand` y `ExpireListingHandler` siguen registrados, pero nada los dispara: hoy ninguna publicación vence sola, salvo al rehabilitarla (`Reinstate` llama a `Expire`).
+  - **Enfoque: barrido, no programar por adelantado.** El estado ya dice qué toca (`ExpiresAt` en el agregado y en `ListingView`), así que no hay schedules que guardar, cancelar ni deduplicar. Se descartó la tabla compartida de schedules con locks y los mensajes programados de Wolverine.
+  - **Proyecto `Jobs/NotificationLog.Jobs`.** App de consola que ejecuta un job (`--job <nombre>`) y termina, con código de salida 0 o 1. Pensada para Cloud Run Jobs o Container Apps Jobs: misma imagen, un job por argumento y cron. No referencia proyectos de los servicios (solo `Contracts` y `ServiceDefaults`) y no tiene base de datos ni outbox.
+  - **Cómo trabaja un job.** Consulta un endpoint interno del servicio dueño (client credentials, scope propio como `rentals.jobs`) que devuelve solo ids, y publica un comando por id a RabbitMQ. El servicio ejecuta el comando recargando el agregado.
+  - **Por qué no hay condición de carrera.** La vista solo sugiere candidatos; el agregado decide (`Expire` no hace nada si ya se renovó o no está visible). Las escrituras simultáneas (otra instancia, el dueño renovando) las rechaza la concurrencia optimista de `AggregateStreams`; el consumer reintenta y el agregado vuelve a decidir. Si un mensaje se pierde, el próximo barrido lo vuelve a encontrar: el barrido es el reintento.
+  - **Jobs iniciales.** `rentals.listings.expire` (cada ~10 min) y `rentals.listings.warn-expiry` (una vez al día, por ejemplo 8:00).
+  - **Aviso de vencimiento en el dominio.** Como el job no tiene estado, el agregado recuerda que ya avisó: `Listing.WarnExpiry(now)` emite `ListingExpiryWarned(ExpiresAt)` solo si está visible, dentro de `RenewalWindow` y sin aviso para ese `ExpiresAt`. `ListingView.ExpiryWarnedFor` lo excluye del barrido; al renovar cambia `ExpiresAt` y vuelve a avisar. La notificación sale del handler en Rentals, no del job.
+  - **Piezas.** Contracts: `ExpireListing` y `WarnListingExpiry`. Rentals: `WarnExpiry` + evento + prueba, `ExpiryWarnedFor` en la vista, comando `WarnListingExpiry`, dos consumers con sus colas y los endpoints internos `expiry-due` y `expiry-warning-due`. Identity: cliente `jobs` con el scope `rentals.jobs`. Jobs: proyecto, `IJob`, cliente de Rentals y los dos jobs. AppHost: un recurso por job con `WithArgs("--job", ...)` y `WithExplicitStart()`.
+  - **Arranque.** Marten y Wolverine no van en el job, así que el arranque en frío debería ser corto; revisar si Wolverine solo con RabbitMQ o `RabbitMQ.Client` directo.
+- [ ] **Outbox para las notificaciones de Rentals.** Todos los handlers publican con `IMessageBus` después de `SaveChangesAsync`, fuera de la transacción: si el proceso se cae entre las dos líneas, el evento queda guardado y el aviso se pierde (el reintento no lo repite porque el agregado ya cambió). Usar `IMartenOutbox` enrolado en la sesión en `WolverineNotificationDispatcher` y publicar antes del commit.
 - [ ] **Visitas: tareas programadas, cancelación automática y reglas sin validar.** El dominio (`Visit`) y los comandos de usuario ya existen; falta lo que no dispara una persona.
   - **Vencer la visita sin respuesta.** Al llegar el `RespondBy` de cada propuesta, llamar a `visit.Expire(now)` (emite `VisitExpired`). El método ya existe; faltan el comando `ExpireVisit` y programarlo tras `VisitRequested` y `VisitCounterProposed`. Avisar a las dos partes (`visita.vencida`).
   - **Cierre automático.** 72 h después de que termine la franja agendada, llamar a `visit.AutoComplete(now)` (emite `VisitCompleted` con `System`). El método ya existe; faltan el comando y programarlo tras `VisitScheduled`.
   - **Recordatorios de la visita agendada** a las dos partes (por ejemplo, 24 h antes). Solo notifican, no cambian el estado (`visita.recordatorio`).
-  - Los dos métodos del dominio no hacen nada si todavía no toca o la visita ya cambió de estado, así que un mensaje viejo o repetido es inofensivo. Encaja con el pendiente de *Schedules* de arriba.
+  - Los dos métodos del dominio no hacen nada si todavía no toca o la visita ya cambió de estado, así que un mensaje viejo o repetido es inofensivo. Encaja con el pendiente de *Jobs* de arriba (barrido por `RespondBy` y por fin de la franja).
   - **Reglas que no se validan todavía** (todas consultan varias visitas a la vez, contra una proyección):
     - máximo de visitas activas por visitante;
     - una sola visita activa por visitante y publicación (hoy se puede pedir dos veces la misma);
@@ -46,7 +52,7 @@
   - **Estados sin visitas activas.** `Paused` (`ListingPaused`), `Closed` (`ListingClosed`), `Withdrawn` (`ListingWithdrawn`), `Suspended` (`ListingSuspended`) y `Expired` (`ListingExpired`). `Draft` e `InReview` nunca las tienen, porque solo se piden en `Published`.
   - **Cómo.** Un proceso que reaccione a esos eventos, busque las visitas activas de la publicación (proyección por `ListingId`) y llame a `visit.Cancel(VisitParty.System, ...)` en cada una, avisando a las dos partes.
   - **Reanudar o rehabilitar** (`ListingResumed`, `ListingReinstated`) no revive las visitas canceladas; el visitante vuelve a pedirlas.
-  - **Programación.** Solo el caso de `Expired` depende de *Schedules*, porque `ListingExpired` debe emitirlo una tarea programada. Pausar, cerrar, retirar y suspender los dispara una persona, así que esos se pueden hacer ya.
+  - **Programación.** Solo el caso de `Expired` depende de *Jobs*, porque `ListingExpired` lo emite el job de vencimiento. Pausar, cerrar, retirar y suspender los dispara una persona, así que esos se pueden hacer ya.
 - [ ] **Datos de la publicación y filtros del catálogo.** El análisis completo está en `propertyDetail.md`.
   - **Fase 1.** Normalizar ciudad y barrio, agregar `PublishedAt` a `ListingView` con ordenamiento en el catálogo, y separar `CatalogCriteria` de `ListingFilter` con los filtros de prioridad alta.
   - **Fase 2.** Título, área privada y construida, antigüedad y `RentalTerms` (disponible desde, mascotas, administración incluida).
@@ -84,8 +90,10 @@
   - Eventos: `SavedSearchCreated(SearchId, Name, Criteria, Frequency)`, `SavedSearchUpdated(...)`, `SavedSearchDeleted(SearchId)`.
   - Alertas inmediatas al aprobar una publicación o bajar su precio (`busqueda.coincidencia`); resumen diario con las publicaciones nuevas que coinciden (`busqueda.resumen`), con una tarea recurrente.
   - Solo se envían alertas con el consentimiento `Alertas` vigente en Identity (se quitó la réplica `AlertsConsentChanged`; hay que volver a publicarla desde Identity).
+  - **Lo difícil es la búsqueda inversa.** Dada una publicación aprobada o con precio rebajado, encontrar todas las búsquedas guardadas que coinciden y avisar a cada dueño; necesita una proyección de búsquedas indexada por criterios. Aplica a la alerta inmediata y al resumen. El resumen diario además es una tarea recurrente para todos los usuarios, distinta de los schedules puntuales de un agregado.
 
 ## Configuración y limpieza
 
 - [ ] Redirect URIs y audiences con puertos fijos en `AppHost/appsettings.json`: mantenerlos alineados con los `launchSettings`.
 - [ ] Tests para Identity, el login de la Web y el outbox.
+- [ ] **Documentación del scheduler borrado.** `UI/docs/.../event-sourcing/procesos.mdx` importa con `?raw` `ICommandScheduler.cs`, `WolverineCommandScheduler.cs` y `ScheduledCommandsHandler.cs`, que ya no existen, y `tareas.mdx` todavía menciona `ICommandScheduler`. Reescribirlas con el enfoque de *Jobs*.

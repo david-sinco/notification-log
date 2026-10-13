@@ -64,6 +64,7 @@ public static class DependencyInjection
 
         services.AddScoped<IdentityOutbox>();
         services.AddHostedService<IdentitySeeder>();
+        services.AddHostedService<LoadTestSeeder>();
 
         return services;
     }

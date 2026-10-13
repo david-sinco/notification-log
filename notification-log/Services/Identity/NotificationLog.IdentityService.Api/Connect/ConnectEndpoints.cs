@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore;
 using Microsoft.AspNetCore.Authentication;
+using NotificationLog.IdentityService.Application.Users.Commands.SignIn;
 using NotificationLog.IdentityService.Application.Users.Dtos;
 using NotificationLog.IdentityService.Application.Users.Queries.ValidateSession;
 using OpenIddict.Abstractions;
@@ -62,8 +63,16 @@ public static class ConnectEndpoints
     private static async Task<IResult> ExchangeAsync(
         HttpContext context,
         ValidateSessionHandler sessions,
+        SignInHandler signIn,
+        IOpenIddictScopeManager scopes,
         CancellationToken ct)
     {
+        var request = context.GetOpenIddictServerRequest()
+            ?? throw new InvalidOperationException("La solicitud OpenID Connect no es válida.");
+
+        if (request.IsPasswordGrantType())
+            return await ExchangePasswordAsync(request, signIn, scopes, ct);
+
         var principal = (await context.AuthenticateAsync(OpenIddictServerAspNetCoreDefaults.AuthenticationScheme)).Principal;
         var user = principal is null ? null : await ValidateAsync(principal, sessions, ct);
 
@@ -72,6 +81,25 @@ public static class ConnectEndpoints
 
         return Results.SignIn(
             OidcPrincipalFactory.CreateToken(user, principal.GetScopes(), principal.GetResources()),
+            authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
+    }
+
+    private static async Task<IResult> ExchangePasswordAsync(
+        OpenIddictRequest request,
+        SignInHandler signIn,
+        IOpenIddictScopeManager scopes,
+        CancellationToken ct)
+    {
+        var attempt = await signIn.HandleAsync(new SignInCommand(request.Username ?? string.Empty, request.Password ?? string.Empty), ct);
+
+        if (attempt.Status != SignInStatus.Succeeded)
+            return Forbid(Errors.InvalidGrant, "El usuario o la contraseña no son correctos.");
+
+        var requestedScopes = request.GetScopes();
+        var resources = await scopes.ListResourcesAsync(requestedScopes, ct).ToListAsync(ct);
+
+        return Results.SignIn(
+            OidcPrincipalFactory.CreateToken(attempt.User!, requestedScopes, resources),
             authenticationScheme: OpenIddictServerAspNetCoreDefaults.AuthenticationScheme);
     }
 

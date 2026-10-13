@@ -7,6 +7,7 @@ var messaging = AddGroup("messaging").WithIconName("ChatMultiple");
 var apis = AddGroup("apis").WithIconName("PlugConnected");
 var ui = AddGroup("ui").WithIconName("Desktop");
 var tools = AddGroup("tools").WithIconName("Toolbox");
+var loadTests = AddGroup("loadtests").WithIconName("TopSpeed");
 
 var cache = builder.AddRedis("cache")
     .WithParentRelationship(databases);
@@ -88,6 +89,9 @@ AddWeb();
 AddPortal();
 AddDocs();
 
+if (builder.LoadTestsEnabled())
+    builder.AddLoadTests(loadTests, identity, rental, notification);
+
 builder.Build().Run();
 
 void AddSqlClient() =>
@@ -163,6 +167,7 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Cors__Origins__0", scalarClientConfig["Origins:0"])
         .WithEnvironment("Cors__Origins__1", scalarClientConfig["Origins:1"])
         .WithEnvironment("Scalar__ClientId", scalarClientConfig["ClientId"])
+        .WithEnvironment("Seed__LoadTest__Enabled", builder.LoadTestsEnabled().ToString())
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 
