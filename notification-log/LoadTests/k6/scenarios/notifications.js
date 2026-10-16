@@ -1,7 +1,7 @@
 import { sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 import { probeEventKey, urls } from '../lib/config.js';
-import { email, session } from '../lib/auth.js';
+import { adminSession, email, session } from '../lib/auth.js';
 import { get, send, json } from '../lib/http.js';
 import { rentPrice } from '../lib/data.js';
 
@@ -13,7 +13,7 @@ const pollMs = 500;
 export function notifications(data) {
   if (!data.probe) return;
 
-  const admin = session(email('admin', 1));
+  const admin = adminSession();
   const owner = session(email('owner', data.probe.ownerIndex));
   const query = `${urls.notification}/api/notifications?recipientId=${data.probe.recipientId}&eventKey=${probeEventKey}&page=1&pageSize=1`;
 

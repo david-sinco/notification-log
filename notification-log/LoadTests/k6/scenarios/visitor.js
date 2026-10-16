@@ -1,11 +1,11 @@
 import { sleep } from 'k6';
-import { accounts, urls } from '../lib/config.js';
+import { profile, urls } from '../lib/config.js';
 import { email, session } from '../lib/auth.js';
 import { get, send } from '../lib/http.js';
 import { pick, randomInt, slots } from '../lib/data.js';
 
 export function visitor(data) {
-  const index = ((__VU - 1) % (accounts.visitors / 2)) + 1;
+  const index = ((__VU - 1) % profile.vus.visitor) + 1;
   const user = session(email('visitor', index));
   const listing = pick(data.listings);
 

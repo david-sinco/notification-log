@@ -1,7 +1,8 @@
 import { marker, probeEventKey, profile, urls } from './config.js';
-import { email, login } from './auth.js';
+import { adminSession, email, login } from './auth.js';
 import { duringSetup, get, send, json } from './http.js';
 import { Channel } from './data.js';
+import { ensureAccounts } from './accounts.js';
 import { approve, draftListing, ensureOwner, prepareForReview } from './rentals.js';
 
 export function seed() {
@@ -9,6 +10,8 @@ export function seed() {
 }
 
 function seedData() {
+  ensureAccounts();
+
   const moderator = login(email('moderator', 1));
   const owners = [];
   const listings = [];
@@ -53,7 +56,7 @@ function publishedListings(session, ownerId, moderator) {
 }
 
 function prepareProbe(owner) {
-  const admin = login(email('admin', 1));
+  const admin = adminSession();
 
   if (!ensureProbeTrigger(admin)) return null;
 

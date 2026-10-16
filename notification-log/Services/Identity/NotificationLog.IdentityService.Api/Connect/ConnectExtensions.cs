@@ -1,6 +1,5 @@
 using Domain.Shared.Authorization;
 using NotificationLog.IdentityService.Infrastructure.Security;
-using NotificationLog.IdentityService.Infrastructure.Seeding;
 using OpenIddict.Abstractions;
 using OpenIddict.Validation.AspNetCore;
 using static OpenIddict.Abstractions.OpenIddictConstants;
@@ -9,11 +8,13 @@ namespace NotificationLog.IdentityService.Api.Connect;
 
 public static class ConnectExtensions
 {
-    public static IServiceCollection AddConnect(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddConnect(
+        this IServiceCollection services,
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         var oidc = configuration.GetSection(OidcOptions.SectionName).Get<OidcOptions>();
         var identityScope = OidcScope.Identity.ToScopeName();
-        var loadTest = configuration.GetSection(IdentitySeedOptions.SectionName).Get<IdentitySeedOptions>()?.LoadTest;
 
         if (string.IsNullOrWhiteSpace(oidc?.Issuer) || !oidc.Audiences.TryGetValue(identityScope, out var identityAudience))
             throw new InvalidOperationException(
@@ -41,7 +42,7 @@ public static class ConnectExtensions
                     .AllowRefreshTokenFlow()
                     .RequireProofKeyForCodeExchange();
 
-                if (loadTest?.Enabled == true)
+                if (environment.IsDevelopment())
                     options.AllowPasswordFlow();
 
                 options.RegisterScopes(

@@ -17,12 +17,19 @@ namespace NotificationLog.IdentityService.Infrastructure.Seeding;
 
 public sealed class IdentitySeeder : IHostedService
 {
+    private const string PasswordClientId = "loadtest";
+
     private readonly IServiceScopeFactory _scopes;
     private readonly IdentitySeedOptions _options;
     private readonly OidcOptions _oidc;
+    private readonly IHostEnvironment _environment;
 
-    public IdentitySeeder(IServiceScopeFactory scopes, IOptions<IdentitySeedOptions> options, IOptions<OidcOptions> oidc)
-        => (_scopes, _options, _oidc) = (scopes, options.Value, oidc.Value);
+    public IdentitySeeder(
+        IServiceScopeFactory scopes,
+        IOptions<IdentitySeedOptions> options,
+        IOptions<OidcOptions> oidc,
+        IHostEnvironment environment)
+        => (_scopes, _options, _oidc, _environment) = (scopes, options.Value, oidc.Value, environment);
 
     public async Task StartAsync(CancellationToken ct)
     {
@@ -38,6 +45,9 @@ public sealed class IdentitySeeder : IHostedService
             ct);
         await SeedScopesAsync(services.GetRequiredService<IOpenIddictScopeManager>(), ct);
         await SeedClientsAsync(services.GetRequiredService<IOpenIddictApplicationManager>(), ct);
+
+        if (_environment.IsDevelopment())
+            await SeedPasswordClientAsync(services.GetRequiredService<IOpenIddictApplicationManager>(), ct);
     }
 
     public Task StopAsync(CancellationToken ct) => Task.CompletedTask;
@@ -151,5 +161,33 @@ public sealed class IdentitySeeder : IHostedService
             else
                 await applications.UpdateAsync(existing, descriptor, ct);
         }
+    }
+
+    private static async Task SeedPasswordClientAsync(IOpenIddictApplicationManager applications, CancellationToken ct)
+    {
+        var descriptor = new OpenIddictApplicationDescriptor
+        {
+            ClientId = PasswordClientId,
+            ClientType = ClientTypes.Public,
+            DisplayName = "Pruebas de carga (solo desarrollo)",
+            Permissions =
+            {
+                Permissions.Endpoints.Token,
+                Permissions.GrantTypes.Password,
+                Permissions.Scopes.Email,
+                Permissions.Scopes.Phone,
+                Permissions.Scopes.Roles,
+                Permissions.Prefixes.Scope + OidcScope.Identity.ToScopeName(),
+                Permissions.Prefixes.Scope + OidcScope.Rentals.ToScopeName(),
+                Permissions.Prefixes.Scope + OidcScope.Notifications.ToScopeName()
+            }
+        };
+
+        var existing = await applications.FindByClientIdAsync(PasswordClientId, ct);
+
+        if (existing is null)
+            await applications.CreateAsync(descriptor, ct);
+        else
+            await applications.UpdateAsync(existing, descriptor, ct);
     }
 }

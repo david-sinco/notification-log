@@ -6,5 +6,4 @@ public sealed class IdentitySeedOptions
 
     public AdminSeedOptions Admin { get; init; } = new();
     public List<ClientSeedOptions> Clients { get; init; } = [];
-    public LoadTestSeedOptions LoadTest { get; init; } = new();
 }

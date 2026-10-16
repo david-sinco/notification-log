@@ -1,12 +1,12 @@
 import http from 'k6/http';
 import { sleep } from 'k6';
-import { accounts, urls } from '../lib/config.js';
+import { profile, urls } from '../lib/config.js';
 import { email, session } from '../lib/auth.js';
 import { conflicts, send, json } from '../lib/http.js';
 import { pick, randomInt, slots } from '../lib/data.js';
 
 export function negotiation(data) {
-  const index = accounts.visitors / 2 + ((__VU - 1) % (accounts.visitors / 2)) + 1;
+  const index = profile.vus.visitor + ((__VU - 1) % profile.vus.negotiation) + 1;
   const visitor = session(email('visitor', index));
   const listing = pick(data.listings);
   const host = session(email('owner', listing.owner));
@@ -14,7 +14,10 @@ export function negotiation(data) {
 
   const created = json(send('POST', base, { listingId: listing.id, slots: slots() }, visitor, 'POST /api/visits'));
 
-  if (!created) return;
+  if (!created) {
+    sleep(randomInt(1, 2));
+    return;
+  }
 
   sleep(randomInt(1, 2));
 

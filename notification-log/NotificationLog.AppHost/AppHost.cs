@@ -89,8 +89,7 @@ AddWeb();
 AddPortal();
 AddDocs();
 
-if (builder.LoadTestsEnabled())
-    builder.AddLoadTests(loadTests, identity, rental, notification);
+builder.AddLoadTests(loadTests, identity, rental, notification, buggregator);
 
 builder.Build().Run();
 
@@ -167,7 +166,6 @@ IResourceBuilder<ProjectResource> AddIdentity() =>
         .WithEnvironment("Cors__Origins__0", scalarClientConfig["Origins:0"])
         .WithEnvironment("Cors__Origins__1", scalarClientConfig["Origins:1"])
         .WithEnvironment("Scalar__ClientId", scalarClientConfig["ClientId"])
-        .WithEnvironment("Seed__LoadTest__Enabled", builder.LoadTestsEnabled().ToString())
         .WithHttpsUrlsOnly()
         .WithParentRelationship(apis);
 

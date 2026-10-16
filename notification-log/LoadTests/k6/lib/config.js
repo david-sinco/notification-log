@@ -15,22 +15,26 @@ export const profile = profiles[profileName];
 
 if (!profile) throw new Error(`El perfil '${profileName}' no existe. Usa: ${Object.keys(profiles).join(', ')}.`);
 
-export const target = __ENV.TARGET || 'local';
 export const urls = {
   identity: required('IDENTITY_URL'),
   rental: required('RENTAL_URL'),
   notification: required('NOTIFICATION_URL'),
+  mailbox: required('MAILBOX_URL'),
 };
 
 export const insecureTls = __ENV.INSECURE_TLS === 'true';
-export const summaryPath = __ENV.SUMMARY_PATH || `/results/${target}-${profileName}-summary.json`;
+export const summaryPath = __ENV.SUMMARY_PATH || `/results/${profileName}-summary.json`;
 
 export const accounts = {
   clientId: __ENV.LOADTEST_CLIENT_ID || 'loadtest',
+  ownerClientId: __ENV.OWNER_CLIENT_ID || 'web',
   password: __ENV.LOADTEST_PASSWORD || 'LoadTest12345',
   domain: __ENV.LOADTEST_EMAIL_DOMAIN || 'loadtest.local',
-  visitors: 1000,
-  moderators: 5,
+  adminEmail: __ENV.ADMIN_EMAIL || 'admin@notificationlog.local',
+  adminPassword: __ENV.ADMIN_PASSWORD || 'Admin12345',
+  visitors: profile.vus.visitor + profile.vus.negotiation,
+  owners: profile.owners,
+  moderators: Math.min(profile.vus.moderator, 5),
 };
 
 export const marker = 'LoadTest';

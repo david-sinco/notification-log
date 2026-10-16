@@ -15,8 +15,8 @@ Scripts de [k6](https://grafana.com/docs/k6/) que se ejecutan como contenedores 
 
 Mientras corre, el endpoint `dashboard` del recurso abre el web dashboard de k6 con las gráficas en vivo. Al terminar quedan en `LoadTests/results/`:
 
-- `<destino>-<perfil>-report.html`: reporte HTML.
-- `<destino>-<perfil>-summary.json`: resumen completo con todas las métricas.
+- `<perfil>-report.html`: reporte HTML.
+- `<perfil>-summary.json`: resumen completo con todas las métricas.
 
 Para ver **dónde** se va el tiempo de una petición lenta, usa las trazas del dashboard de Aspire (OpenTelemetry de cada servicio).
 
@@ -42,30 +42,21 @@ Límites de aceptación (si alguno se supera, k6 termina con código 99):
 
 ## Datos de prueba
 
-- **Usuarios.** Identity los siembra al arrancar si `LoadTests:Enabled` es `true` en el AppHost (lo es por defecto). Son visitantes, propietarios, moderadores y un administrador, ya verificados (`visitor-0001@loadtest.local` … `visitor-1000@loadtest.local`, `owner-0001@loadtest.local` … `owner-0100@loadtest.local`, `moderator-0001@loadtest.local` … `moderator-0005@loadtest.local`, `admin-0001@loadtest.local`), con contraseña `LoadTest12345`.
-- **Password grant.** El mismo flag habilita el password grant para el cliente `loadtest`.
-- **Publicaciones.** El `setup()` de k6 registra los propietarios en Rentals y crea las publicaciones aprobadas que falten, a través de la API. Todas llevan `LoadTest` en el barrio y la descripción.
+Los servicios no saben que existen estas pruebas: el `setup()` de k6 crea sus datos por los flujos reales.
+
+- **Usuarios.** Se registran por las páginas de Identity (`/Account/Register` y `/Account/Verify`), igual que una persona. El código de verificación se lee del correo que llega a Buggregator. Solo se registran los que el perfil necesita y que todavía no existen:
+  - visitantes `visitor-0001@loadtest.local` en adelante (los de `visitor` y luego los de `negotiation`);
+  - propietarios `owner-0001@loadtest.local` en adelante, registrados desde el cliente `web` para que reciban el rol de propietario;
+  - hasta 5 moderadores `moderator-0001@loadtest.local`, registrados como visitantes y promovidos con `PUT /api/users/{id}/role`.
+
+  Todos usan la contraseña `LoadTest12345`.
+- **Administrador.** Se usa el que siembra Identity en desarrollo (`admin@notificationlog.local`; se cambia con `ADMIN_EMAIL` y `ADMIN_PASSWORD`).
+- **Tokens.** k6 pide los tokens con el password grant del cliente `loadtest`. Identity solo habilita ese grant y crea ese cliente cuando corre en `Development`.
+- **Réplicas.** Antes de empezar, el setup espera a que Rentals conozca al último visitante y Notification al propietario de la sonda; si no llegan en 2 minutos, la prueba termina con un error.
+- **Publicaciones.** El setup registra los propietarios en Rentals y crea las publicaciones aprobadas que falten, a través de la API. Todas llevan `LoadTest` en el barrio y la descripción.
 - **Sonda de notificaciones.** Si no existe el trigger `publicacion.precio.cambiado`, el setup lo crea con la plantilla `pruebas_carga_precio_cambiado`.
 
-Los datos quedan en las bases de desarrollo y se reutilizan en la siguiente corrida. Para no sembrar nada, pon `LoadTests:Enabled` en `false`.
-
-## Contra un ambiente publicado
-
-Agrega el ambiente en la configuración del AppHost (por ejemplo, en user secrets):
-
-```json
-"LoadTests": {
-  "Environments": {
-    "staging": {
-      "IdentityUrl": "https://identity.staging.example",
-      "RentalUrl": "https://rentals.staging.example",
-      "NotificationUrl": "https://notifications.staging.example"
-    }
-  }
-}
-```
-
-Aparecerán `loadtest-staging-100` y `loadtest-staging-1000`. Ese ambiente debe tener `Seed__LoadTest__Enabled=true` en Identity. Nunca lo actives en producción: habilita el password grant y crea usuarios con una contraseña conocida.
+Los datos quedan en las bases de desarrollo y se reutilizan en la siguiente corrida.
 
 ## Estructura
 

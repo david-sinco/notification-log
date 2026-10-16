@@ -1,5 +1,5 @@
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.1.0/index.js';
-import { insecureTls, profile, profileName, summaryPath, target } from './lib/config.js';
+import { insecureTls, profile, profileName, summaryPath } from './lib/config.js';
 import { seed } from './lib/setup.js';
 
 export { catalog } from './scenarios/catalog.js';
@@ -75,7 +75,7 @@ export const options = {
 };
 
 export function setup() {
-  console.log(`Perfil '${profileName}' contra '${target}'. Preparando datos...`);
+  console.log(`Perfil '${profileName}'. Preparando datos...`);
   return seed();
 }
 
